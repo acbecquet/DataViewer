@@ -1,0 +1,7 @@
+.vs/
+
+__pycache__/
+
+clean_env/
+release_env/
+*.log
