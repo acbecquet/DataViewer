@@ -9,22 +9,19 @@ to separate modules for better modularity and scalability.
 import queue
 import os
 import threading
-import copy
-import shutil
 import tkinter as tk
 import pandas as pd
 import processing
 import numpy as np
 from typing import Optional, Dict, List, Any
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox, Toplevel, Label, Button
+from tkinter import ttk, messagebox, Toplevel
 from tkintertable import TableCanvas, TableModel
 import matplotlib
 matplotlib.use('TkAgg')  # Ensure Matplotlib uses TkAgg backend
-import matplotlib.pyplot as plt
 
 # Import our new manager classes and utility functions.
-
+from processing import get_valid_plot_options
 from plot_manager import PlotManager
 from file_manager import FileManager
 from report_generator import ReportGenerator
@@ -81,39 +78,51 @@ class TestingGUI:
         self.progress_dialog = ProgressDialog(self.root)
         # (TrendAnalysisGUI will be created when needed)
 
+    def configure_ui(self) -> None:
+        """Configure the UI appearance and set application properties."""
+        icon_path = get_resource_path('resources/ccell_icon.png')
+        self.root.iconphoto(False, tk.PhotoImage(file=icon_path))
+        self.set_app_colors()
+        self.set_window_size(0.8, 0.8)
+        self.root.minsize(1200,800)
+        self.center_window(self.root)
+
+        self.create_static_frames()
+        self.add_menu()
+        self.file_manager.add_or_update_file_dropdown()
+        self.add_static_controls()
+
     # === New Centralized Frame Creation Methods ===
     def add_static_controls(self) -> None:
         """Add static controls (Add Data and Trend Analysis buttons) to the top_frame."""
-        print("DEBUG: Adding static controls to top_frame...")
-        # Create a container frame for the static controls if not already created.
+        #print("DEBUG: Adding static controls to top_frame...")
+        
         if not hasattr(self, 'controls_frame') or not self.controls_frame:
             self.controls_frame = ttk.Frame(self.top_frame)
-            # Pack the controls_frame to the right so it aligns with the file dropdown on the same row.
+            
             self.controls_frame.pack(side="right", fill="x", padx=5, pady=5)
-            print("DEBUG: controls_frame created in top_frame.")
+            #print("DEBUG: controls_frame created in top_frame.")
         # Add the "Add Data" button
         add_data_btn = ttk.Button(self.controls_frame, text="Add Data", command=self.file_manager.add_data)
         add_data_btn.pack(side="left", padx=(5, 5), pady=(5, 5))
-        print("DEBUG: 'Add Data' button added to static controls.")
+        #print("DEBUG: 'Add Data' button added to static controls.")
         # Add the "Trend Analysis" button
         trend_button = ttk.Button(self.controls_frame, text="Trend Analysis", command=self.open_trend_analysis_window)
         trend_button.pack(side="left", padx=(5, 5), pady=(5, 5))
-        print("DEBUG: 'Trend Analysis' button added to static controls.")
+        #print("DEBUG: 'Trend Analysis' button added to static controls.")
 
         self.add_report_buttons(self.controls_frame)
 
-
-
     def create_static_frames(self) -> None:
         """Create persistent (static) frames that remain for the lifetime of the UI."""
-        print("DEBUG: Creating static frames...")
+        #print("DEBUG: Creating static frames...")
 
         # Create top_frame for dropdowns and control buttons.
         if not hasattr(self, 'top_frame') or not self.top_frame:
             self.top_frame = ttk.Frame(self.root,height = 80)
             self.top_frame.pack(side="top", fill="x", pady=(10, 5), padx=10)
             self.top_frame.pack_propagate(False) # Prevent height changes
-            print("DEBUG: top_frame created.")
+            #print("DEBUG: top_frame created.")
 
         # Create bottom_frame to hold the image button and image display area.
         if not hasattr(self, 'bottom_frame') or not self.bottom_frame:
@@ -121,15 +130,15 @@ class TestingGUI:
             self.bottom_frame.pack(side="bottom", fill = "x", padx=10, pady=(0,10))
             self.bottom_frame.pack_propagate(False)
             self.bottom_frame.grid_propagate(False)
-            print(f"DEBUG: Created bottom_frame with fixed height 150 | "
-              f"Current height: {self.bottom_frame.winfo_height()}")
+            #print(f"DEBUG: Created bottom_frame with fixed height 150 | "
+              #f"Current height: {self.bottom_frame.winfo_height()}")
 
         # Create a static frame for the Load Images button within bottom_frame.
         if not hasattr(self, 'image_button_frame') or not self.image_button_frame:
             self.image_button_frame = ttk.Frame(self.bottom_frame)
             # Pack it to the left.
             self.image_button_frame.pack(side="left", fill="y", padx=5, pady=5)
-            print("DEBUG: image_button_frame created.")
+            #print("DEBUG: image_button_frame created.")
 
             self.crop_enabled = tk.BooleanVar(value=False) # Default: Cropping is enabled
             self.crop_checkbox = ttk.Checkbutton(
@@ -146,7 +155,7 @@ class TestingGUI:
                 command=lambda: self.image_loader.add_images() if self.image_loader else None
             )
             load_image_button.pack(side="left", padx=5, pady=5)
-            print("DEBUG: Static 'Load Images' button added to image_button_frame.")
+            #print("DEBUG: Static 'Load Images' button added to image_button_frame.")
 
         # Create the dynamic image display frame within bottom_frame.
         if not hasattr(self, 'image_frame') or not self.image_frame:
@@ -156,33 +165,30 @@ class TestingGUI:
             self.image_frame.grid_propagate(False)
             # Prevent the image_frame from shrinking.
             #self.image_frame.pack_propagate(True)
-            print("DEBUG: Dynamic image_frame created with fixed height 300.")
+            #print("DEBUG: Dynamic image_frame created with fixed height 300.")
 
 
         # Create display_frame for the table/plot area.
         if not hasattr(self, 'display_frame') or not self.display_frame:
             self.display_frame = ttk.Frame(self.root)
             self.display_frame.pack(fill="both", expand=True, padx=10, pady=10)
-            print("DEBUG: display_frame created.")
+            #print("DEBUG: display_frame created.")
 
         # Create a dynamic subframe inside display_frame for table and plot content.
         if not hasattr(self, 'dynamic_frame') or not self.dynamic_frame:
             self.dynamic_frame = ttk.Frame(self.display_frame)
             self.dynamic_frame.pack(fill="both", expand=True)
-            print("DEBUG: dynamic_frame created.")
-
-        
-
+            #print("DEBUG: dynamic_frame created.")
 
     def clear_dynamic_frame(self) -> None:
         """Clear all children widgets from the dynamic frame."""
-        print("DEBUG: Clearing dynamic_frame contents...")
+        #print("DEBUG: Clearing dynamic_frame contents...")
         for widget in self.dynamic_frame.winfo_children():
             widget.destroy()
 
     def setup_dynamic_frames(self, is_plotting_sheet: bool = False) -> None:
         """Create frames inside the dynamic_frame based on sheet type."""
-        print(f"DEBUG: Setting up dynamic frames for sheet. Plotting: {is_plotting_sheet}")
+        #print(f"DEBUG: Setting up dynamic frames for sheet. Plotting: {is_plotting_sheet}")
 
         # Ensure that any previous frames are cleared before adding new ones
         for widget in self.dynamic_frame.winfo_children():
@@ -196,9 +202,9 @@ class TestingGUI:
         display_height = window_height - top_height - bottom_height - padding
         display_height = max(display_height, 100)  # Ensure it never becomes too small
 
-        print(f"DEBUG: [setup_dynamic_frames] Window: {window_height}px | "
-          f"Top: {top_height}px | Bottom: {bottom_height}px | "
-          f"Available for display: {window_height - top_height - bottom_height}px")
+        #print(f"DEBUG: [setup_dynamic_frames] Window: {window_height}px | "
+          #f"Top: {top_height}px | Bottom: {bottom_height}px | "
+          #f"Available for display: {window_height - top_height - bottom_height}px")
 
         if is_plotting_sheet:
             # Table takes 40%, Plot takes 60%
@@ -208,15 +214,12 @@ class TestingGUI:
             self.plot_frame = ttk.Frame(self.dynamic_frame, height=int(display_height * 0.6))
             self.plot_frame.pack(side="right", fill="both", expand=True, padx=5, pady=5)
 
-            print("DEBUG: Dynamic frames for plotting sheet created (table_frame, plot_frame).")
+            #print("DEBUG: Dynamic frames for plotting sheet created (table_frame, plot_frame).")
         else:
             # Non-plotting sheets should use the full space
             self.table_frame = ttk.Frame(self.dynamic_frame, height=display_height)
             self.table_frame.pack(fill="both", expand=True, padx=5, pady=5)
-            print("DEBUG: Dynamic frame for non-plotting sheet created (table_frame).")
-
-    # === End of New Centralized Frame Methods ===
-
+            #print("DEBUG: Dynamic frame for non-plotting sheet created (table_frame).")
 
     def show_startup_menu(self) -> None:
         """Display a startup menu with 'New' and 'Load' options."""
@@ -274,20 +277,6 @@ class TestingGUI:
         # Set the geometry with the calculated position
         window.geometry(f"{window_width}x{window_height}+{position_x}+{position_y}")
 
-    def configure_ui(self) -> None:
-        """Configure the UI appearance and set application properties."""
-        icon_path = get_resource_path('resources/ccell_icon.png')
-        self.root.iconphoto(False, tk.PhotoImage(file=icon_path))
-        self.set_app_colors()
-        self.set_window_size(0.8, 0.8)
-        self.root.minsize(1200,800)
-        self.center_window(self.root)
-
-        self.create_static_frames()
-        self.add_menu()
-        self.file_manager.add_or_update_file_dropdown()
-        self.add_static_controls()
-
     def populate_or_update_sheet_dropdown(self) -> None:
         """Populate or update the dropdown for sheet selection."""
         if not hasattr(self, 'drop_down_menu') or not self.drop_down_menu:
@@ -306,15 +295,12 @@ class TestingGUI:
                 "<<ComboboxSelected>>",
                 lambda event: self.update_displayed_sheet(self.selected_sheet.get())
             )
-        self.drop_down_menu
+
         # Update dropdown values with sheet names
         all_sheet_names = list(self.filtered_sheets.keys())
         self.drop_down_menu["values"] = all_sheet_names
         current_selection = self.selected_sheet.get()
-        if current_selection in all_sheet_names:
-            self.selected_sheet.set(current_selection)
-        elif all_sheet_names:
-            # if the current selection is invalid, default to the first sheet
+        if current_selection not in all_sheet_names and all_sheet_names:
             self.selected_sheet.set(all_sheet_names[0])
 
     def on_file_selection(self, event) -> None:
@@ -343,7 +329,8 @@ class TestingGUI:
         try:
             for thread in self.threads:
                 if thread.is_alive():
-                    print(f"Stopping thread {thread.name}")
+                    #print(f"Stopping thread {thread.name}")
+                    pass
             self.root.destroy()
             os._exit(0)
         except Exception as e:
@@ -369,7 +356,7 @@ class TestingGUI:
 
     def show_about(self) -> None:
         """Display about dialog."""
-        messagebox.showinfo("About", "SDR DataView Alpha Version 1.0\nDeveloped by Charlie Becquet")
+        messagebox.showinfo("About", "SDR DataViewer Beta Version 3.0\nDeveloped by Charlie Becquet")
 
     def set_app_colors(self) -> None:
         """Set consistent color theme and fonts for the application."""
@@ -482,19 +469,19 @@ class TestingGUI:
         Update the displayed sheet and dynamically manage the plot options and plot type dropdown.
         Clears the plot area if the sheet is empty.
         """
-        print(f"DEBUG: [update_displayed_sheet] START | Current frame heights - "
-          f"top: {self.top_frame.winfo_height()}, "
-          f"display: {self.display_frame.winfo_height()}, "
-          f"bottom: {self.bottom_frame.winfo_height()}")
+        #print(f"DEBUG: [update_displayed_sheet] START | Current frame heights - "
+        #  f"top: {self.top_frame.winfo_height()}, "
+        #  f"display: {self.display_frame.winfo_height()}, "
+        #  f"bottom: {self.bottom_frame.winfo_height()}")
 
         if not sheet_name or sheet_name not in self.filtered_sheets:
             return
 
-        print(f"DEBUG: Attempting to update displayed sheet: {sheet_name}")
-        if not hasattr(self, 'display_frame') or self.display_frame is None:
-            print("ERROR: display_frame is missing! This may cause issues.")
-        else:
-            print("DEBUG: Existing display_frame widgets:", self.display_frame.winfo_children())
+        #print(f"DEBUG: Attempting to update displayed sheet: {sheet_name}")
+        #if not hasattr(self, 'display_frame') or self.display_frame is None:
+            #print("ERROR: display_frame is missing! This may cause issues.")
+        #else:
+            #print("DEBUG: Existing display_frame widgets:", self.display_frame.winfo_children())
 
         sheet_info = self.filtered_sheets.get(sheet_name)
         if not sheet_info:
@@ -509,9 +496,7 @@ class TestingGUI:
         self.clear_dynamic_frame()
         self.setup_dynamic_frames(is_plotting_sheet)
 
-        print("DEBUG: Creating ImageLoader...")
-
-         
+        #print("DEBUG: Creating ImageLoader...")
 
         # Clear existing ImageLoader properly
         if hasattr(self, 'image_loader'):
@@ -531,7 +516,7 @@ class TestingGUI:
                 if img_path in self.image_crop_states:
                     self.image_loader.image_crop_states[img_path] = self.image_crop_states[img_path]
 
-            print(f"DEBUG: Restored images and crop states for sheet: {sheet_name}")
+            #print(f"DEBUG: Restored images and crop states for sheet: {sheet_name}")
 
         # **Force the frame to refresh**
         self.image_loader.display_images()
@@ -539,7 +524,7 @@ class TestingGUI:
 
 
         if is_empty:
-            print("DEBUG: Sheet is empty. Displaying message.")
+            #print("DEBUG: Sheet is empty. Displaying message.")
             empty_label = tk.Label(
                 self.display_frame,
                 text="This sheet is empty.",
@@ -550,34 +535,34 @@ class TestingGUI:
             return
 
         try:
-            print(f"DEBUG: Retrieving processing function for {sheet_name}...")
+            #print(f"DEBUG: Retrieving processing function for {sheet_name}...")
             process_function = processing.get_processing_function(sheet_name)
             processed_data, _, full_sample_data = process_function(data)
         except Exception as e:
             messagebox.showerror("Processing Error", f"Error processing sheet '{sheet_name}': {e}")
-            print(f"ERROR: Processing function failed for {sheet_name}: {e}")
+            #print(f"ERROR: Processing function failed for {sheet_name}: {e}")
             return
 
-        print(f"DEBUG: Displaying table for {sheet_name}...")
+        #print(f"DEBUG: Displaying table for {sheet_name}...")
         self.display_table(self.table_frame, processed_data, sheet_name, is_plotting_sheet)
-        print(f"DEBUG: Sheet name: {sheet_name}, is_plotting_sheet: {is_plotting_sheet}")
+        #print(f"DEBUG: Sheet name: {sheet_name}, is_plotting_sheet: {is_plotting_sheet}")
 
         if is_plotting_sheet:
-            print(f"DEBUG: Displaying plot for sheet: {sheet_name}")
+            #print(f"DEBUG: Displaying plot for sheet: {sheet_name}")
             self.display_plot(full_sample_data)
 
-        print("DEBUG: Successfully updated displayed sheet.")
+        #print("DEBUG: Successfully updated displayed sheet.")
         self.root.update_idletasks()
         
-        print(f"DEBUG: [update_displayed_sheet] END | Current frame heights - "
-              f"top: {self.top_frame.winfo_height()}, "
-              f"display: {self.display_frame.winfo_height()}, "
-              f"bottom: {self.bottom_frame.winfo_height()}\n")
+        #print(f"DEBUG: [update_displayed_sheet] END | Current frame heights - "
+              #f"top: {self.top_frame.winfo_height()}, "
+              #f"display: {self.display_frame.winfo_height()}, "
+              #f"bottom: {self.bottom_frame.winfo_height()}\n")
 
     def load_images(self, is_plotting_sheet):
         """Load and display images in the dynamic image_frame."""
         if not hasattr(self, 'image_frame') or not self.image_frame.winfo_exists():
-            print("Error: image_frame does not exist, recreating...")
+            #print("Error: image_frame does not exist, recreating...")
             # Recreate image_frame in bottom_frame if needed.
             self.image_frame = ttk.Frame(self.bottom_frame, height=150)
             self.image_frame.pack(side="left", fill="both", expand=True, padx=5, pady=5)
@@ -591,7 +576,7 @@ class TestingGUI:
         if not sheet_name:
             return
 
-        print(f"DEBUG: Storing images for sheet: {sheet_name}")
+        #print(f"DEBUG: Storing images for sheet: {sheet_name}")
         
         # Ensure the file key exists in the sheet_images dictionary
         if self.current_file not in self.sheet_images:
@@ -608,8 +593,8 @@ class TestingGUI:
             if img_path not in self.image_crop_states:
                 self.image_crop_states[img_path] = self.crop_enabled.get()
 
-        print(f"DEBUG: Stored image paths: {self.sheet_images[self.current_file][sheet_name]}")
-        print(f"DEBUG: Stored crop states: {self.image_crop_states}")
+        #print(f"DEBUG: Stored image paths: {self.sheet_images[self.current_file][sheet_name]}")
+        #print(f"DEBUG: Stored crop states: {self.image_crop_states}")
 
 
     def display_plot(self, full_sample_data):
@@ -726,6 +711,15 @@ class TestingGUI:
 
     def update_plot_dropdown(self):
         """Update the plot type dropdown with only the valid options and manage visibility."""
+        current_sheet = self.selected_sheet.get()
+        # If available, use self.full_sample_data; otherwise, fall back to the raw data
+        if current_sheet not in self.filtered_sheets:
+            self.plot_dropdown.pack_forget()
+            return
+
+        sheet_data = self.filtered_sheets[current_sheet]["data"]
+        valid_plot_options = get_valid_plot_options(self.plot_options, sheet_data)
+
         if valid_plot_options:
             # Update the plot type dropdown with available plot options
             self.plot_dropdown['values'] = valid_plot_options
