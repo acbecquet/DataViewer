@@ -1,5 +1,6 @@
 # report_generator.py
 import os
+import traceback
 import shutil
 import pandas as pd
 import math
@@ -207,7 +208,8 @@ class ReportGenerator:
             if is_plotting:
                 self.add_plots_to_excel(writer, sheet_name, full_sample_data, images_to_delete, valid_plot_options)
         except Exception as e:
-            print(f"Error writing Excel report for sheet '{sheet_name}': {e}")
+            print(f"Error writing Excel report for sheet '{sheet_name}': {e}")  
+            traceback.print_exc()
 
     def write_powerpoint_report_for_test(self, ppt_save_path: str, images_to_delete: list, sheet_name: str, 
                                     processed_data, full_sample_data, plot_options: list) -> None:
@@ -273,6 +275,7 @@ class ReportGenerator:
             if os.path.exists(ppt_save_path):
                 os.remove(ppt_save_path)
             raise
+            traceback.print_exc()
 
     def write_powerpoint_report(self, ppt_save_path: str, images_to_delete: list, plot_options: list, progress_callback = None) -> None:
         try:
@@ -360,8 +363,13 @@ class ReportGenerator:
                 try:
                     data = self.gui.sheets.get(sheet_name)
                     if data is None or data.empty:
-                        print(f"Skipping sheet '{sheet_name}': No data available.")
-                        continue
+                        # Try to get data from filtered_sheets instead
+                        sheet_info = self.gui.filtered_sheets.get(sheet_name)
+                        if sheet_info and "data" in sheet_info:
+                            data = sheet_info["data"]
+                        else:
+                            print(f"Skipping sheet '{sheet_name}': No data available.")
+                            continue
 
                     process_function = processing.get_processing_function(sheet_name)
                     processed_data, _, full_sample_data = process_function(data)
@@ -425,9 +433,10 @@ class ReportGenerator:
                         print("Images Exist! Adding a slide...")
                         current_file = self.gui.current_file
                         image_paths = self.gui.sheet_images.get(current_file, {}).get(sheet_name, [])
+                        valid_image_paths = [path for path in image_paths if os.path.exists(path)]
                         img_slide = prs.slides.add_slide(prs.slide_layouts[6])
                         self.setup_image_slide(prs, img_slide, sheet_name)
-                        self.add_images_to_slide(img_slide, image_paths)
+                        self.add_images_to_slide(img_slide, valid_image_paths)
 
                         # Update progress after image slide
                         processed_slides += 1
@@ -437,11 +446,15 @@ class ReportGenerator:
                 except Exception as sheet_error:
                     print(f"Error processing sheet '{sheet_name}': {sheet_error}")
                     processed_slides += 1
+                    traceback.print_exc()
+                    continue
             processing.clean_presentation_tables(prs)
             prs.save(ppt_save_path)
             print(f"PowerPoint report saved successfully at {ppt_save_path}.")
         except Exception as e:
             print(f"Error writing PowerPoint report: {e}")
+            traceback.print_exc()
+              # Skip this sheet and continue with others
         finally:
             for image_path in set(images_to_delete):
                 if os.path.exists(image_path):

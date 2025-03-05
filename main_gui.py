@@ -103,15 +103,15 @@ class TestingGUI:
             self.controls_frame.pack(side="right", fill="x", padx=5, pady=5)
             #print("DEBUG: controls_frame created in top_frame.")
         # Add the "Add Data" button
-        add_data_btn = ttk.Button(self.controls_frame, text="Add Data", command=self.file_manager.add_data)
-        add_data_btn.pack(side="left", padx=(5, 5), pady=(5, 5))
+        #add_data_btn = ttk.Button(self.controls_frame, text="Add Data", command=self.file_manager.add_data)
+        #add_data_btn.pack(side="left", padx=(5, 5), pady=(5, 5))
         #print("DEBUG: 'Add Data' button added to static controls.")
         # Add the "Trend Analysis" button
-        trend_button = ttk.Button(self.controls_frame, text="Trend Analysis", command=self.open_trend_analysis_window)
-        trend_button.pack(side="left", padx=(5, 5), pady=(5, 5))
+        #trend_button = ttk.Button(self.controls_frame, text="Trend Analysis", command=self.open_trend_analysis_window)
+        #trend_button.pack(side="left", padx=(5, 5), pady=(5, 5))
         #print("DEBUG: 'Trend Analysis' button added to static controls.")
 
-        self.add_report_buttons(self.controls_frame)
+        #self.add_report_buttons(self.controls_frame)
 
     def create_static_frames(self) -> None:
         """Create persistent (static) frames that remain for the lifetime of the UI."""
@@ -119,8 +119,8 @@ class TestingGUI:
 
         # Create top_frame for dropdowns and control buttons.
         if not hasattr(self, 'top_frame') or not self.top_frame:
-            self.top_frame = ttk.Frame(self.root,height = 80)
-            self.top_frame.pack(side="top", fill="x", pady=(10, 5), padx=10)
+            self.top_frame = ttk.Frame(self.root,height = 30)
+            self.top_frame.pack(side="top", fill="x", pady=(10, 0), padx=10)
             self.top_frame.pack_propagate(False) # Prevent height changes
             #print("DEBUG: top_frame created.")
 
@@ -281,15 +281,16 @@ class TestingGUI:
         """Populate or update the dropdown for sheet selection."""
         if not hasattr(self, 'drop_down_menu') or not self.drop_down_menu:
             # Create a dropdown for sheet selection
+            sheet_label = ttk.Label(self.top_frame, text = "Select Test:", font=FONT, foreground='white', background = APP_BACKGROUND_COLOR)
+            sheet_label.pack(side = "left", padx = (0,5))
             self.drop_down_menu = ttk.Combobox(
                 self.top_frame,
                 textvariable=self.selected_sheet,
                 state="readonly",
                 font=FONT
             )
-            self.drop_down_menu.pack(pady=(10, 10))
-            self.drop_down_menu.place(relx=0.25, rely=0.5, anchor="center")
-
+            self.drop_down_menu.pack(side = "left", pady=(5, 5))
+            
             # Bind selection event to update the displayed sheet
             self.drop_down_menu.bind(
                 "<<ComboboxSelected>>",
@@ -338,17 +339,73 @@ class TestingGUI:
             os._exit(1)
 
     def add_menu(self) -> None:
-        """Create a top-level menu with Help and About options."""
+        """Create a top-level menu with File, Help, and About options."""
         menubar = tk.Menu(self.root)
-        
+    
+        # File menu
+        filemenu = tk.Menu(menubar, tearoff=0)
+        filemenu.add_command(label="New", command=self.show_new_template_dialog)
+        filemenu.add_command(label="Load Excel", command=self.file_manager.load_initial_file)
+        filemenu.add_command(label="Load VAP3", command=self.open_vap3_file)
+        filemenu.add_separator()
+        filemenu.add_command(label="Save As VAP3", command=self.save_as_vap3)
+        filemenu.add_separator()
+        filemenu.add_command(label="Exit", command=self.on_app_close)
+        menubar.add_cascade(label="File", menu=filemenu)
+    
+        # View menu
+        viewmenu = tk.Menu(menubar, tearoff=0)
+        viewmenu.add_command(label="View Raw Data", 
+                             command=lambda: self.file_manager.open_raw_data_in_excel(self.selected_sheet.get()))
+        viewmenu.add_command(label="Trend Analysis", command=self.open_trend_analysis_window)
+        menubar.add_cascade(label="View", menu=viewmenu)
+
+        # Compare menu (empty for now)
+        comparemenu = tk.Menu(menubar, tearoff=0)
+        # Future comparison functionality will go here
+        menubar.add_cascade(label="Compare", menu=comparemenu)
+
+
+
+        # Reports menu
+        reportmenu = tk.Menu(menubar, tearoff=0)
+        reportmenu.add_command(label="Generate Test Report", command=self.generate_test_report)
+        reportmenu.add_command(label="Generate Full Report", command=self.generate_full_report)
+        menubar.add_cascade(label="Reports", menu=reportmenu)
+    
         # Help menu
         helpmenu = tk.Menu(menubar, tearoff=0)
         helpmenu.add_command(label="Help", command=self.show_help)
         helpmenu.add_separator()
         helpmenu.add_command(label="About", command=self.show_about)
         menubar.add_cascade(label="Help", menu=helpmenu)
-        
+    
         self.root.config(menu=menubar)
+
+    def show_new_template_dialog(self) -> None:
+        """Show a dialog to create a new template file."""
+        startup_menu = Toplevel(self.root)
+        startup_menu.title("New File")
+        startup_menu.geometry("300x100")
+        startup_menu.transient(self.root)
+        startup_menu.grab_set()  # Make the window modal
+    
+        new_button = ttk.Button(
+            startup_menu,
+            text="Create New Template",
+            command=lambda: self.file_manager.create_new_template(startup_menu)
+        )
+        new_button.pack(pady=20)
+    
+        self.center_window(startup_menu)
+
+    def open_vap3_file(self) -> None:
+        """Open a .vap3 file using the file manager."""
+        self.file_manager.load_vap3_file()
+
+    def save_as_vap3(self) -> None:
+        """Save the current session as a .vap3 file."""
+        self.file_manager.save_as_vap3()
 
     def show_help(self):
         """Display help dialog."""
@@ -697,13 +754,13 @@ class TestingGUI:
         #print("DEBUG: Table displayed successfully.")
 
         # Add the "View Raw Data" button below the table
-        button_frame = ttk.Frame(frame)
-        button_frame.pack(fill='x', pady=(10,10))
+        #button_frame = ttk.Frame(frame)
+        #button_frame.pack(fill='x', pady=(10,10))
 
         #print("DEBUG: Button frame created.")
 
-        view_raw_button = ttk.Button(button_frame, text="View Raw Data", command=lambda: self.file_manager.open_raw_data_in_excel(sheet_name))
-        view_raw_button.pack(anchor='center')
+        #view_raw_button = ttk.Button(button_frame, text="View Raw Data", command=lambda: self.file_manager.open_raw_data_in_excel(sheet_name))
+        #view_raw_button.pack(anchor='center')
 
         #print("DEBUG: View Raw Data button added.")
 
@@ -783,6 +840,18 @@ class TestingGUI:
             # Force GUI to update progress dialog IMMEDIATELY
             self.root.update_idletasks()  
 
+            # Add detailed logging
+            import logging
+            logging.basicConfig(filename='report_generation.log', level=logging.DEBUG)
+            logging.info("Starting full report generation")
+
+             # Add this before generating the report
+            logging.info(f"Sheets: {list(self.filtered_sheets.keys())}")
+            for sheet_name, sheet_info in self.filtered_sheets.items():
+                logging.info(f"Sheet {sheet_name} - empty: {sheet_info.get('is_empty', 'unknown')}")
+                if 'data' in sheet_info:
+                    logging.info(f"  Data shape: {sheet_info['data'].shape}")
+
             # Generate report (blocks UI, but ensures dialog stays visible)
             self.report_generator.generate_full_report(
                 self.filtered_sheets, 
@@ -791,7 +860,11 @@ class TestingGUI:
             success = True
 
         except Exception as e:
+            import traceback
+            error_details = traceback.format_exc()
+            logging.error(f"Report generation error: {str(e)}\n{error_details}")
             messagebox.showerror("Error", f"An error occurred: {e}")
+
         finally:
             # Hide progress AFTER processing
             self.progress_dialog.hide_progress_bar()  
