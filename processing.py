@@ -1,39 +1,30 @@
 ﻿"""
 Processing module for the DataViewer Application. Developed by Charlie Becquet.
 """
-import re
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import os
-import sys
-from typing import Optional, Dict, List
-from collections import Counter
+from typing import Optional, List, Tuple, Any
 from openpyxl import load_workbook
 from pptx.util import Inches
 from utils import (
     round_values,
     remove_empty_columns,
     wrap_text,
-    FONT,
-    APP_BACKGROUND_COLOR,
-    BUTTON_COLOR,
-    PLOT_CHECKBOX_TITLE,
-    get_plot_sheet_names,
     plotting_sheet_test,
     extract_metadata,
     map_metadata_to_template,
-    copy_data_rows,
     read_sheet_with_values,
-    read_sheet_with_values_standards,
     unmerge_all_cells,
-    get_resource_path
+    validate_sheet_data,
+    header_matches
 )
 
 #pd.set_option('future.no_silent_downcasting', True)
 
-def get_valid_plot_options(plot_options,full_sample_data):
+def get_valid_plot_options(plot_options: List[str], full_sample_data: pd.DataFrame) -> List[str]:
     """
     Check which plot options have valid, non-empty data and return the valid options.
 
@@ -44,7 +35,6 @@ def get_valid_plot_options(plot_options,full_sample_data):
     Returns:
         list: Valid plot options.
     """
-    
     valid_options = []
     for plot_type in plot_options:
         y_data = get_y_data_for_plot_type(full_sample_data, plot_type)
@@ -52,53 +42,47 @@ def get_valid_plot_options(plot_options,full_sample_data):
             valid_options.append(plot_type)
     return valid_options
 
-def resource_path(relative_path):
+
+# ==================== PLOTTING FUNCTIONS ====================
+
+def get_y_data_for_plot_type(sample_data, plot_type):
     """
-    Get the absolute path to the resource, compatible with PyInstaller.
+    Extract y-data for the specified plot type.
 
     Args:
-        relative_path (str): Relative path to the resource.
+        sample_data (pd.DataFrame): DataFrame containing the sample data.
+        plot_type (str): The type of plot to generate.
 
     Returns:
-        str: Absolute path to the resource.
+        pd.Series: y-data for plotting.
     """
-    try:
-        # PyInstaller creates a temp folder and stores path in _MEIPASS
-        base_path = sys._MEIPASS
-    except AttributeError:
-        base_path = os.path.abspath(".")
-    return os.path.join(base_path, relative_path)
+    plot_type_mapping = {
+        "TPM": sample_data.iloc[3:, 8],
+        "Draw Pressure": sample_data.iloc[3:, 3],
+        "Resistance": sample_data.iloc[3:, 4],
+        "Power Efficiency": sample_data.iloc[3:, 9],
+    }
+    return plot_type_mapping.get(plot_type, sample_data.iloc[3:, 8])  # Default to TPM
 
-def is_valid_excel_file(filename: str) -> bool:
+def get_y_label_for_plot_type(plot_type):
     """
-    Checks if the given filename is a valid Excel file that should be processed.
-    Excludes temporary Excel files which often start with '~$'.
-    
-    Args:
-        filename (str): The name of the file.
-    
-    Returns:
-        bool: True if valid, False otherwise.
-    """
-    return filename.endswith('.xlsx') and not filename.startswith('~$')
-
-def load_excel_file(file_path):
-    """
-    Load an Excel file and return its sheets.
+    Get the y-axis label for the specified plot type.
 
     Args:
-        file_path (str): Path to the Excel file.
+        plot_type (str): The type of plot.
 
     Returns:
-        dict: Dictionary of sheet names and DataFrames.
+        str: y-axis label.
     """
-    try:
-        sheets = pd.read_excel(file_path, sheet_name=None,engine = 'openpyxl')
-        return sheets
-    except Exception as e:
-        raise ValueError(f"Error loading Excel file {file_path}: {e}")
+    y_label_mapping = {
+        "TPM": 'TPM (mg/puff)',
+        "Draw Pressure": 'Draw Pressure (kPa)',
+        "Resistance": 'Resistance (Ohms)',
+        "Power Efficiency": 'Power Efficiency (mg/W)',
+    }
+    return y_label_mapping.get(plot_type, 'TPM (mg/puff)')  # Default to TPM
 
-def plot_all_samples(full_sample_data: pd.DataFrame, num_columns_per_sample: int, plot_type: str) -> plt.Figure:
+def plot_all_samples(full_sample_data: pd.DataFrame, num_columns_per_sample: int, plot_type: str) -> Tuple[plt.Figure, List[str]]:
     """Generate the plot for all samples and return the figure."""
 
     num_samples = full_sample_data.shape[1] // num_columns_per_sample
@@ -115,14 +99,12 @@ def plot_all_samples(full_sample_data: pd.DataFrame, num_columns_per_sample: int
             sample_data = full_sample_data.iloc[:, start_col:start_col + num_columns_per_sample]
 
             x_data = sample_data.iloc[3:, 0].dropna()
-            print(plot_type)
             y_data = get_y_data_for_plot_type(sample_data, plot_type)
-            y_data = pd.to_numeric(y_data, errors = 'coerce').dropna()
+            y_data = pd.to_numeric(y_data, errors='coerce').dropna()
 
             common_index = x_data.index.intersection(y_data.index)
             x_data = x_data.loc[common_index]
             y_data = y_data.loc[common_index]
-
 
             if not x_data.empty and not y_data.empty:
                 sample_name = sample_data.columns[5]
@@ -142,9 +124,54 @@ def plot_all_samples(full_sample_data: pd.DataFrame, num_columns_per_sample: int
         else:
             ax.set_ylim(0, 9)
 
+    return fig, sample_names
 
-    
-    return fig, sample_names  # Return only the figure (embedding handled in GUI)
+def plot_tpm_bar_chart(ax, full_sample_data, num_samples, num_columns_per_sample):
+    """
+    Generate a bar chart of the average TPM for each sample with wrapped sample names.
+
+    Args:
+        ax (matplotlib.axes.Axes): Matplotlib axis to draw on.
+        full_sample_data (pd.DataFrame): DataFrame of sample data.
+        num_samples (int): Number of samples.
+        num_columns_per_sample (int): Columns per sample.
+
+    Returns:
+        list: Sample names.
+    """
+    averages = []
+    labels = []
+    sample_names = []
+
+    for i in range(num_samples):
+        start_col = i * num_columns_per_sample
+        end_col = start_col + num_columns_per_sample
+        sample_data = full_sample_data.iloc[:, start_col:end_col]
+
+        if pd.isna(sample_data.iloc[3, 1]):
+            continue
+
+        tpm_data = sample_data.iloc[3:, 8].dropna()  # TPM column (adjust if needed)
+        average_tpm = tpm_data.mean()
+        averages.append(average_tpm)
+
+        sample_name = sample_data.columns[5]
+        sample_names.append(sample_name)  # Add original sample name
+        wrapped_name = wrap_text(text=sample_name, max_width=10)  # Use `wrap_text` to dynamically wrap names
+        labels.append(wrapped_name)
+
+    # Create a colormap with unique colors
+    num_bars = len(averages)
+    colors = cm.get_cmap('tab10', num_bars)(np.linspace(0, 1, num_bars))
+
+    # Plot the bar chart with unique colors
+    ax.bar(labels, averages, color=colors)
+    ax.set_xlabel('Samples')
+    ax.set_ylabel('Average TPM (mg/puff)')
+    ax.set_title('Average TPM per Sample')
+    ax.tick_params(axis='x', labelsize=8)  # Rotate x-axis labels for better readability
+
+    return sample_names
 
 def clean_presentation_tables(presentation):
     """
@@ -198,120 +225,26 @@ def clean_presentation_tables(presentation):
                     for row in table.rows:
                         row._tr.remove(row.cells[col_idx]._tc)  # Remove column cell from XML
 
-def validate_sheet_data(data, required_columns=None, required_rows=None):
-    """
-    Validate the sheet data for common issues like empty DataFrame, missing columns, or missing rows.
+# ==================== DATA PROCESSING FUNCTIONS ====================
 
+def process_sheet(data, headers_row=3, data_start_row=4):
+    """
+    Process a sheet by extracting headers and data.
+    
     Args:
-        data (pd.DataFrame): The DataFrame to validate.
-        required_columns (list, optional): List of columns that must exist. Defaults to None.
-        required_rows (int, optional): Minimum number of rows required. Defaults to None.
-
+        data (pd.DataFrame): Input data from the sheet.
+        headers_row (int): Row index for headers.
+        data_start_row (int): Row index where data starts.
+        
     Returns:
-        bool: True if the sheet is valid, False otherwise.
+        tuple: (processed_data, table_data)
     """
-    if data.empty:
-        print("Sheet is empty.")
-        return False
-
-    # Check required columns
-    if required_columns:
-        missing_columns = [col for col in required_columns if col not in data.columns]
-        if missing_columns:
-            print(f"Missing required columns: {missing_columns}")
-            return False
-
-    # Check required rows
-    if required_rows is not None and data.shape[0] < required_rows:
-        print(f"Not enough rows. Expected at least {required_rows}, found {data.shape[0]}.")
-        return False
-
-    return True
-
-def get_y_data_for_plot_type(sample_data, plot_type):
-    """
-    Extract y-data for the specified plot type.
-
-    Args:
-        sample_data (pd.DataFrame): DataFrame containing the sample data.
-        plot_type (str): The type of plot to generate.
-
-    Returns:
-        pd.Series: y-data for plotting.
-    """
-    plot_type_mapping = {
-        "TPM": sample_data.iloc[3:, 8],
-        "Draw Pressure": sample_data.iloc[3:, 3],
-        "Resistance": sample_data.iloc[3:, 4],
-        "Power Efficiency": sample_data.iloc[3:, 9],
-    }
-    return plot_type_mapping.get(plot_type, sample_data.iloc[3:, 8])  # Default to TPM
-
-def get_y_label_for_plot_type(plot_type):
-    """
-    Get the y-axis label for the specified plot type.
-
-    Args:
-        plot_type (str): The type of plot.
-
-    Returns:
-        str: y-axis label.
-    """
-    y_label_mapping = {
-        "TPM": 'TPM (mg/puff)',
-        "Draw Pressure": 'Draw Pressure (kPa)',
-        "Resistance": 'Resistance (Ohms)',
-        "Power Efficiency": 'Power Efficiency (mg/W)',
-    }
-    return y_label_mapping.get(plot_type, 'TPM (mg/puff)')  # Default to TPM
-
-def plot_tpm_bar_chart(ax, full_sample_data, num_samples, num_columns_per_sample):
-    """
-    Generate a bar chart of the average TPM for each sample with wrapped sample names.
-
-    Args:
-        ax (matplotlib.axes.Axes): Matplotlib axis to draw on.
-        full_sample_data (pd.DataFrame): DataFrame of sample data.
-        num_samples (int): Number of samples.
-        num_columns_per_sample (int): Columns per sample.
-
-    Returns:
-        list: Sample names.
-    """
-    averages = []
-    labels = []
-    sample_names = []
-
-    for i in range(num_samples):
-        start_col = i * num_columns_per_sample
-        end_col = start_col + num_columns_per_sample
-        sample_data = full_sample_data.iloc[:, start_col:end_col]
-
-        if pd.isna(sample_data.iloc[3, 1]):
-            continue
-
-        tpm_data = sample_data.iloc[3:, 8].dropna()  # TPM column (adjust if needed)
-        average_tpm = tpm_data.mean()
-        averages.append(average_tpm)
-
-        sample_name = sample_data.columns[5]
-        sample_names.append(sample_name)  # Add original sample name
-        wrapped_name = wrap_text(text=sample_name,max_width=10)  # Use `wrap_text` to dynamically wrap names
-        labels.append(wrapped_name)
-
-    # Create a colormap with unique colors
-    num_bars = len(averages)
-    colors = cm.get_cmap('tab10', num_bars)(np.linspace(0, 1, num_bars))
-
-    # Plot the bar chart with unique colors
-    ax.bar(labels, averages, color=colors)
-    ax.set_xlabel('Samples')
-    ax.set_ylabel('Average TPM (mg/puff)')
-    ax.set_title('Average TPM per Sample')
-    ax.tick_params(axis='x', labelsize=8)  # Rotate x-axis labels for better readability
-
-
-    return sample_names
+    data = remove_empty_columns(data)
+    headers = data.iloc[headers_row, :].tolist()
+    table_data = data.iloc[data_start_row:, :]
+    table_data = table_data.replace(0, np.nan)
+    processed_data = pd.DataFrame(table_data.values, columns=headers)
+    return processed_data, table_data
 
 def process_plot_sheet(data, headers_row=3, data_start_row=4, num_columns_per_sample=12, custom_extracted_data_fn=None):
     """
@@ -398,33 +331,96 @@ def process_plot_sheet(data, headers_row=3, data_start_row=4, num_columns_per_sa
         print(f"Error processing plot sheet: {e}")
         return pd.DataFrame(), {}, pd.DataFrame()
 
-def is_sheet_empty_or_zero(data: pd.DataFrame) -> bool:
+def no_efficiency_extracted_data(sample_data):
     """
-    Check if the specified sheet has any data in columns C through H (columns 2 to 7)
-    in rows 5 through 20 (indices 4 to 19 in Python).
+    Custom function to extract data without efficiency metrics.
 
     Args:
-        data (pd.DataFrame): The sheet data to check.
+        sample_data (pd.DataFrame): The DataFrame containing the sample data.
 
     Returns:
-        bool: True if the sheet is empty or all zero, False otherwise.
+        dict: Extracted data without efficiency metrics.
     """
-    # Define the range of rows and columns to check (rows 5 to 20, columns C to H)
-    rows_to_check = data.iloc[4:20, 2:8]  # Rows 5-20, Columns C-H (Python uses 0-based index)
+    return {
+        "Sample Name": sample_data.columns[5],
+        "Media": sample_data.iloc[0, 1],
+        "Viscosity": sample_data.iloc[1, 1],
+        "Voltage, Resistance, Power": f"{sample_data.iloc[1, 5]} V, "
+                                       f"{round_values(sample_data.iloc[0, 3])} Ω, "
+                                       f"{round_values(sample_data.iloc[0, 5])} W",
+        "Average TPM": round_values(sample_data.iloc[0, 11]),
+        "Standard Deviation": round_values(sample_data.iloc[1, 11]),
+        "Burn?": sample_data.columns[10],
+        "Clog?": sample_data.iloc[0, 10],
+        "Leak?": sample_data.iloc[1, 10],
+    }
 
-    # Check if all values in the selected range are NaN or 0
-    if rows_to_check.isna().all().all() or (rows_to_check == 0).all().all():
-        return True  # The sheet is considered empty or all zero
-    else:
-        return False  # There is some valid data in the specified range
+def process_generic_sheet(data, headers_row=3, data_start_row=4):
+    """
+    Process data for any sheet that doesn't match predefined sheet names.
+    
+    Args:
+        data (pd.DataFrame): Input data from the Excel sheet.
+    
+    Returns:
+        tuple: (display_df, additional_output, full_sample_data)
+            display_df (pd.DataFrame): Processed table data for display.
+            additional_output (dict): Any additional information that might be needed.
+            full_sample_data (pd.DataFrame): Full sample data concatenated for all samples.
+    """
+    # Check if data is empty or invalid
+    if data.empty or data.isna().all().all():
+        return pd.DataFrame(), {}, pd.DataFrame()  # Return empty data structures
+
+    try:
+        # Check for sufficient rows
+        if data.shape[0] <= headers_row or data.shape[0] <= data_start_row:
+            print(f"Insufficient rows for processing (headers_row={headers_row}, data_start_row={data_start_row})")
+            return pd.DataFrame(), {}, pd.DataFrame()
+
+        # Extract headers and validate them
+        column_names = data.iloc[headers_row].fillna("").tolist()
+        
+        # Slice the data starting from the data_start_row and convert to strings
+        table_data = data.iloc[data_start_row:].copy()
+        table_data.columns = column_names
+        table_data = table_data.astype(str)  # Convert all data to strings
+
+        # Create a DataFrame with the extracted headers and data
+        display_df = table_data.copy()
+
+        # Collect all data into a single DataFrame for further use
+        full_sample_data_df = pd.concat([table_data], axis=1)
+        
+        return display_df, {}, full_sample_data_df
+    except Exception as e:
+        print(f"Error processing generic sheet: {e}")
+        return pd.DataFrame(), {}, pd.DataFrame()
+
+# ==================== SHEET PROCESSING DISPATCHER ====================
 
 def get_processing_function(sheet_name):
+    """
+    Get the appropriate processing function for a sheet based on its name.
+    
+    Args:
+        sheet_name (str): Name of the sheet.
+        
+    Returns:
+        callable: Function to process the sheet.
+    """
     functions = get_processing_functions()
     if "legacy" in sheet_name.lower():
         return process_legacy_test
     return functions.get(sheet_name, functions["default"])
 
 def get_processing_functions():
+    """
+    Get a dictionary mapping sheet names to their processing functions.
+    
+    Returns:
+        dict: Map of sheet names to processing functions.
+    """
     return {
         "Test Plan": process_test_plan,
         "Initial State Inspection": process_initial_state_inspection,
@@ -458,102 +454,20 @@ def get_processing_functions():
         "default": process_generic_sheet
     }
 
-def process_sheet(data, headers_row=3, data_start_row=4):
-    data = remove_empty_columns(data)
-    headers = data.iloc[headers_row, :].tolist()
-    table_data = data.iloc[data_start_row:, :]
-    table_data = table_data.replace(0, np.nan)
-    processed_data = pd.DataFrame(table_data.values, columns=headers)
-    return processed_data, table_data
+# ==================== SHEET-SPECIFIC PROCESSING FUNCTIONS ====================
+# These functions maintain compatibility with the rest of the codebase
+# Many are now simplified wrappers around the more general processing functions
 
 def process_test_plan(data):
-    if not validate_sheet_data(data):
-        print("Validation failed for 'test plan'.")
-        return pd.DataFrame(), {}, pd.DataFrame()  # Return empty structures if invalid
+    """Process data for the Test Plan sheet."""
+    return process_generic_sheet(data, headers_row=5, data_start_row=6)
 
-    try:
+def process_initial_state_inspection(data):
+    """Process data for the Initial State Inspection sheet."""
+    return process_generic_sheet(data, headers_row=3, data_start_row=4)
 
-        samples = []
-        headers_row = 5
-        data_start_row = 6
-
-        # Check for sufficient rows before processing
-        if data.shape[0] <= headers_row or data.shape[0] <= data_start_row:
-            print(f"Insufficient rows for processing (headers_row={headers_row}, data_start_row={data_start_row})")
-            return pd.DataFrame(), {}, pd.DataFrame()
-
-        # Extract headers and validate them
-        column_names = data.iloc[headers_row].fillna("").tolist()
-        
-
-        # Slice the data starting from the data_start_row and convert to strings
-        table_data = data.iloc[data_start_row:].copy()
-        table_data.columns = column_names
-        table_data = table_data.astype(str)  # Convert all data to strings
-
-        # Create a DataFrame with the extracted headers and data
-        display_df = table_data.copy()
-
-       # Collect all data into a single DataFrame for further use
-        full_sample_data_df = pd.concat([table_data], axis=1)
-
-        return display_df, {}, full_sample_data_df
-
-    except Exception as e:
-        print(f"Error processing 'Aerosol Temperature': {e}")
-        return pd.DataFrame(), {}, pd.DataFrame()
-
-def process_burn_protection_test(data):
-    if not validate_sheet_data(data):
-        print("Validation failed for 'burn protection'.")
-        return pd.DataFrame(), {}, pd.DataFrame()  # Return empty structures if invalid
-
-    try:
-
-        samples = []
-        headers_row = 3
-        data_start_row = 4
-
-        # Check for sufficient rows before processing
-        if data.shape[0] <= headers_row or data.shape[0] <= data_start_row:
-            print(f"Insufficient rows for processing (headers_row={headers_row}, data_start_row={data_start_row})")
-            return pd.DataFrame(), {}, pd.DataFrame()
-
-        # Extract headers and validate them
-        column_names = data.iloc[headers_row].fillna("").tolist()
-        
-
-        # Slice the data starting from the data_start_row and convert to strings
-        table_data = data.iloc[data_start_row:].copy()
-        table_data.columns = column_names
-        table_data = table_data.astype(str)  # Convert all data to strings
-
-        # Create a DataFrame with the extracted headers and data
-        display_df = table_data.copy()
-
-       # Collect all data into a single DataFrame for further use
-        full_sample_data_df = pd.concat([table_data], axis=1)
-
-        return display_df, {}, full_sample_data_df
-
-    except Exception as e:
-        print(f"Error processing 'Aerosol Temperature': {e}")
-        return pd.DataFrame(), {}, pd.DataFrame()
-
-def process_pocket_test(data):
-    """
-    Process data for the Extended Test.
-
-    Args:
-        data (pd.DataFrame): Input data from the sheet.
-
-    Returns:
-        tuple: (processed_data, sample_arrays, full_sample_data)
-            processed_data (pd.DataFrame): Processed data for display.
-            sample_arrays (dict): Extracted sample arrays for plotting.
-            full_sample_data (pd.DataFrame): Concatenated data for all samples.
-    """
-    # Use process_plot_sheet with the default extracted_data logic
+def process_quick_screening_test(data):
+    """Process data for the Quick Screening Test sheet."""
     return process_plot_sheet(
         data,
         headers_row=3,
@@ -562,80 +476,9 @@ def process_pocket_test(data):
         custom_extracted_data_fn=no_efficiency_extracted_data
     )
 
-def process_initial_state_inspection(data):
-    if not validate_sheet_data(data):
-        print("Validation failed for 'initial state'.")
-        return pd.DataFrame(), {}, pd.DataFrame()  # Return empty structures if invalid
-
-    try:
-
-        samples = []
-        headers_row = 3
-        data_start_row = 4
-
-        # Check for sufficient rows before processing
-        if data.shape[0] <= headers_row or data.shape[0] <= data_start_row:
-            print(f"Insufficient rows for processing (headers_row={headers_row}, data_start_row={data_start_row})")
-            return pd.DataFrame(), {}, pd.DataFrame()
-
-        # Extract headers and validate them
-        column_names = data.iloc[headers_row].fillna("").tolist()
-        
-
-        # Slice the data starting from the data_start_row and convert to strings
-        table_data = data.iloc[data_start_row:].copy()
-        table_data.columns = column_names
-        table_data = table_data.astype(str)  # Convert all data to strings
-
-        # Create a DataFrame with the extracted headers and data
-        display_df = table_data.copy()
-
-       # Collect all data into a single DataFrame for further use
-        full_sample_data_df = pd.concat([table_data], axis=1)
-
-        return display_df, {}, full_sample_data_df
-
-    except Exception as e:
-        print(f"Error processing 'Aerosol Temperature': {e}")
-        return pd.DataFrame(), {}, pd.DataFrame()
-
-def process_quick_screening_test(data):
-    """
-    Process data for the Extended Test.
-
-    Args:
-        data (pd.DataFrame): Input data from the sheet.
-
-    Returns:
-        tuple: (processed_data, sample_arrays, full_sample_data)
-            processed_data (pd.DataFrame): Processed data for display.
-            sample_arrays (dict): Extracted sample arrays for plotting.
-            full_sample_data (pd.DataFrame): Concatenated data for all samples.
-    """
-    # Use process_plot_sheet with the default extracted_data logic
-    return process_plot_sheet(
-        data,
-        headers_row=3,
-        data_start_row=4,
-        num_columns_per_sample=12,
-        custom_extracted_data_fn = no_efficiency_extracted_data
-    )
-
 def process_device_life_test(data):
-   """
-    Process data for the Device Life Test.
-
-    Args:
-        data (pd.DataFrame): Input data from the sheet.
-
-    Returns:
-        tuple: (processed_data, sample_arrays, full_sample_data)
-            processed_data (pd.DataFrame): Processed data for display.
-            sample_arrays (dict): Extracted sample arrays for plotting.
-            full_sample_data (pd.DataFrame): Concatenated data for all samples.
-    """
-    # Use process_plot_sheet with the default extracted_data logic
-   return process_plot_sheet(
+    """Process data for the Device Life Test sheet."""
+    return process_plot_sheet(
         data,
         headers_row=3,
         data_start_row=4,
@@ -643,167 +486,23 @@ def process_device_life_test(data):
     )
 
 def process_aerosol_temp_test(data):
-    if not validate_sheet_data(data):
-        print("Validation failed for 'Aerosol Temperature'.")
-        return pd.DataFrame(), {}, pd.DataFrame()  # Return empty structures if invalid
-
-    try:
-
-        samples = []
-        headers_row = 3
-        data_start_row = 4
-
-        # Check for sufficient rows before processing
-        if data.shape[0] <= headers_row or data.shape[0] <= data_start_row:
-            print(f"Insufficient rows for processing (headers_row={headers_row}, data_start_row={data_start_row})")
-            return pd.DataFrame(), {}, pd.DataFrame()
-
-        # Extract headers and validate them
-        column_names = data.iloc[headers_row].fillna("").tolist()
-        
-
-        # Slice the data starting from the data_start_row and convert to strings
-        table_data = data.iloc[data_start_row:].copy()
-        table_data.columns = column_names
-        table_data = table_data.astype(str)  # Convert all data to strings
-
-        # Create a DataFrame with the extracted headers and data
-        display_df = table_data.copy()
-
-       # Collect all data into a single DataFrame for further use
-        full_sample_data_df = pd.concat([table_data], axis=1)
-
-        return display_df, {}, full_sample_data_df
-
-    except Exception as e:
-        print(f"Error processing 'Aerosol Temperature': {e}")
-        return pd.DataFrame(), {}, pd.DataFrame()
+    """Process data for the Aerosol Temperature sheet."""
+    return process_generic_sheet(data, headers_row=3, data_start_row=4)
 
 def process_off_odor_score(data):
-    if not validate_sheet_data(data):
-        print("Validation failed for 'off odor'.")
-        return pd.DataFrame(), {}, pd.DataFrame()  # Return empty structures if invalid
-
-    try:
-
-        samples = []
-        headers_row = 3
-        data_start_row = 4
-
-        # Check for sufficient rows before processing
-        if data.shape[0] <= headers_row or data.shape[0] <= data_start_row:
-            print(f"Insufficient rows for processing (headers_row={headers_row}, data_start_row={data_start_row})")
-            return pd.DataFrame(), {}, pd.DataFrame()
-
-        # Extract headers and validate them
-        column_names = data.iloc[headers_row].fillna("").tolist()
-        
-
-        # Slice the data starting from the data_start_row and convert to strings
-        table_data = data.iloc[data_start_row:].copy()
-        table_data.columns = column_names
-        table_data = table_data.astype(str)  # Convert all data to strings
-
-        # Create a DataFrame with the extracted headers and data
-        display_df = table_data.copy()
-
-       # Collect all data into a single DataFrame for further use
-        full_sample_data_df = pd.concat([table_data], axis=1)
-
-        return display_df, {}, full_sample_data_df
-
-    except Exception as e:
-        print(f"Error processing 'Aerosol Temperature': {e}")
-        return pd.DataFrame(), {}, pd.DataFrame()
+    """Process data for the Off-odor Score sheet."""
+    return process_generic_sheet(data, headers_row=3, data_start_row=4)
 
 def process_sensory_consistency(data):
-    if not validate_sheet_data(data):
-        print("Validation failed for 'sensory consistency'.")
-        return pd.DataFrame(), {}, pd.DataFrame()  # Return empty structures if invalid
-
-    try:
-
-        samples = []
-        headers_row = 3
-        data_start_row = 4
-
-        # Check for sufficient rows before processing
-        if data.shape[0] <= headers_row or data.shape[0] <= data_start_row:
-            print(f"Insufficient rows for processing (headers_row={headers_row}, data_start_row={data_start_row})")
-            return pd.DataFrame(), {}, pd.DataFrame()
-
-        # Extract headers and validate them
-        column_names = data.iloc[headers_row].fillna("").tolist()
-        
-
-        # Slice the data starting from the data_start_row and convert to strings
-        table_data = data.iloc[data_start_row:].copy()
-        table_data.columns = column_names
-        table_data = table_data.astype(str)  # Convert all data to strings
-
-        # Create a DataFrame with the extracted headers and data
-        display_df = table_data.copy()
-
-       # Collect all data into a single DataFrame for further use
-        full_sample_data_df = pd.concat([table_data], axis=1)
-
-        return display_df, {}, full_sample_data_df
-
-    except Exception as e:
-        print(f"Error processing 'Aerosol Temperature': {e}")
-        return pd.DataFrame(), {}, pd.DataFrame()
+    """Process data for the Sensory Consistency sheet."""
+    return process_generic_sheet(data, headers_row=3, data_start_row=4)
 
 def process_user_test(data):
-    if not validate_sheet_data(data):
-        print("Validation failed for 'user'.")
-        return pd.DataFrame(), {}, pd.DataFrame()  # Return empty structures if invalid
-
-    try:
-
-        samples = []
-        headers_row = 3
-        data_start_row = 4
-
-        # Check for sufficient rows before processing
-        if data.shape[0] <= headers_row or data.shape[0] <= data_start_row:
-            print(f"Insufficient rows for processing (headers_row={headers_row}, data_start_row={data_start_row})")
-            return pd.DataFrame(), {}, pd.DataFrame()
-
-        # Extract headers and validate them
-        column_names = data.iloc[headers_row].fillna("").tolist()
-        
-
-        # Slice the data starting from the data_start_row and convert to strings
-        table_data = data.iloc[data_start_row:].copy()
-        table_data.columns = column_names
-        table_data = table_data.astype(str)  # Convert all data to strings
-
-        # Create a DataFrame with the extracted headers and data
-        display_df = table_data.copy()
-
-       # Collect all data into a single DataFrame for further use
-        full_sample_data_df = pd.concat([table_data], axis=1)
-
-        return display_df, {}, full_sample_data_df
-
-    except Exception as e:
-        print(f"Error processing 'Aerosol Temperature': {e}")
-        return pd.DataFrame(), {}, pd.DataFrame()
+    """Process data for the User Test sheet."""
+    return process_generic_sheet(data, headers_row=3, data_start_row=4)
 
 def process_horizontal_test(data):
-    """
-    Process data for the Extended Test.
-
-    Args:
-        data (pd.DataFrame): Input data from the sheet.
-
-    Returns:
-        tuple: (processed_data, sample_arrays, full_sample_data)
-            processed_data (pd.DataFrame): Processed data for display.
-            sample_arrays (dict): Extracted sample arrays for plotting.
-            full_sample_data (pd.DataFrame): Concatenated data for all samples.
-    """
-    # Use process_plot_sheet with the default extracted_data logic
+    """Process data for the Horizontal Puffing Test sheet."""
     return process_plot_sheet(
         data,
         headers_row=3,
@@ -812,19 +511,7 @@ def process_horizontal_test(data):
     )
 
 def process_extended_test(data):
-    """
-    Process data for the Extended Test.
-
-    Args:
-        data (pd.DataFrame): Input data from the sheet.
-
-    Returns:
-        tuple: (processed_data, sample_arrays, full_sample_data)
-            processed_data (pd.DataFrame): Processed data for display.
-            sample_arrays (dict): Extracted sample arrays for plotting.
-            full_sample_data (pd.DataFrame): Concatenated data for all samples.
-    """
-    # Use process_plot_sheet with the default extracted_data logic
+    """Process data for the Extended Test sheet."""
     return process_plot_sheet(
         data,
         headers_row=3,
@@ -833,64 +520,17 @@ def process_extended_test(data):
     )
 
 def process_long_puff_test(data):
-    """
-    Process data for the Extended Test.
-
-    Args:
-        data (pd.DataFrame): Input data from the sheet.
-
-    Returns:
-        tuple: (processed_data, sample_arrays, full_sample_data)
-            processed_data (pd.DataFrame): Processed data for display.
-            sample_arrays (dict): Extracted sample arrays for plotting.
-            full_sample_data (pd.DataFrame): Concatenated data for all samples.
-    """
-    # Use process_plot_sheet with the default extracted_data logic
+    """Process data for the Long Puff Test sheet."""
     return process_plot_sheet(
         data,
         headers_row=3,
         data_start_row=4,
         num_columns_per_sample=12,
-        custom_extracted_data_fn = no_efficiency_extracted_data
+        custom_extracted_data_fn=no_efficiency_extracted_data
     )
 
-def no_efficiency_extracted_data(sample_data):
-    """
-    Custom function to extract data for the Rapid Puff Test.
-
-    Args:
-        sample_data (pd.DataFrame): The DataFrame containing the sample data.
-
-    Returns:
-        dict: Extracted data specific to the Rapid Puff Test.
-    """
-    return {
-        "Sample Name": sample_data.columns[5],
-        "Media": sample_data.iloc[0, 1],
-        "Viscosity": sample_data.iloc[1, 1],
-        "Voltage, Resistance, Power": f"{sample_data.iloc[1, 5]} V, "
-                                       f"{round_values(sample_data.iloc[0, 3])} Ω, "
-                                       f"{round_values(sample_data.iloc[0, 5])} W",
-        "Average TPM": round_values(sample_data.iloc[0, 11]),
-        "Standard Deviation": round_values(sample_data.iloc[1, 11]),
-        "Burn?": sample_data.columns[10],
-        "Clog?": sample_data.iloc[0, 10],
-        "Leak?": sample_data.iloc[1, 10],
-    }
-
 def process_rapid_puff_test(data):
-    """
-    Process data for the Rapid Puff Test.
-
-    Args:
-        data (pd.DataFrame): Input data from the sheet.
-
-    Returns:
-        tuple: (processed_data, sample_arrays, full_sample_data)
-            processed_data (pd.DataFrame): Processed data for display.
-            sample_arrays (dict): Extracted sample arrays for plotting.
-            full_sample_data (pd.DataFrame): Concatenated data for all samples.
-    """
+    """Process data for the Rapid Puff Test sheet."""
     return process_plot_sheet(
         data,
         headers_row=3,
@@ -900,19 +540,7 @@ def process_rapid_puff_test(data):
     )
 
 def process_intense_test(data):
-    """
-    Process data for the Extended Test.
-
-    Args:
-        data (pd.DataFrame): Input data from the sheet.
-
-    Returns:
-        tuple: (processed_data, sample_arrays, full_sample_data)
-            processed_data (pd.DataFrame): Processed data for display.
-            sample_arrays (dict): Extracted sample arrays for plotting.
-            full_sample_data (pd.DataFrame): Concatenated data for all samples.
-    """
-    # Use process_plot_sheet with the default extracted_data logic
+    """Process data for the Intense Test sheet."""
     return process_plot_sheet(
         data,
         headers_row=3,
@@ -946,19 +574,7 @@ def process_legacy_test(data, headers_row=3, data_start_row=4, num_columns_per_s
     return processed_data, sample_arrays, full_sample_data
 
 def process_big_head_low_t_test(data):
-    """
-    Process data for the Extended Test.
-
-    Args:
-        data (pd.DataFrame): Input data from the sheet.
-
-    Returns:
-        tuple: (processed_data, sample_arrays, full_sample_data)
-            processed_data (pd.DataFrame): Processed data for display.
-            sample_arrays (dict): Extracted sample arrays for plotting.
-            full_sample_data (pd.DataFrame): Concatenated data for all samples.
-    """
-    # Use process_plot_sheet with the default extracted_data logic
+    """Process data for the Big Headspace Low T Test sheet."""
     return process_plot_sheet(
         data,
         headers_row=3,
@@ -967,20 +583,12 @@ def process_big_head_low_t_test(data):
         custom_extracted_data_fn=no_efficiency_extracted_data
     )
 
+def process_burn_protection_test(data):
+    """Process data for the Anti-Burn Protection Test sheet."""
+    return process_generic_sheet(data, headers_row=3, data_start_row=4)
+
 def process_big_head_high_t_test(data):
-    """
-    Process data for the Extended Test.
-
-    Args:
-        data (pd.DataFrame): Input data from the sheet.
-
-    Returns:
-        tuple: (processed_data, sample_arrays, full_sample_data)
-            processed_data (pd.DataFrame): Processed data for display.
-            sample_arrays (dict): Extracted sample arrays for plotting.
-            full_sample_data (pd.DataFrame): Concatenated data for all samples.
-    """
-    # Use process_plot_sheet with the default extracted_data logic
+    """Process data for the Big Headspace High T Test sheet."""
     return process_plot_sheet(
         data,
         headers_row=3,
@@ -990,19 +598,17 @@ def process_big_head_high_t_test(data):
     )
 
 def process_upside_down_test(data):
-    """
-    Process data for the Extended Test.
+    """Process data for the Upside Down Test sheet."""
+    return process_plot_sheet(
+        data,
+        headers_row=3,
+        data_start_row=4,
+        num_columns_per_sample=12,
+        custom_extracted_data_fn=no_efficiency_extracted_data
+    )
 
-    Args:
-        data (pd.DataFrame): Input data from the sheet.
-
-    Returns:
-        tuple: (processed_data, sample_arrays, full_sample_data)
-            processed_data (pd.DataFrame): Processed data for display.
-            sample_arrays (dict): Extracted sample arrays for plotting.
-            full_sample_data (pd.DataFrame): Concatenated data for all samples.
-    """
-    # Use process_plot_sheet with the default extracted_data logic
+def process_pocket_test(data):
+    """Process data for the Big Headspace Pocket Test sheet."""
     return process_plot_sheet(
         data,
         headers_row=3,
@@ -1012,93 +618,15 @@ def process_upside_down_test(data):
     )
 
 def process_temperature_cycling_test(data):
-    if not validate_sheet_data(data):
-        print("Validation failed for 'temp cycling'.")
-        return pd.DataFrame(), {}, pd.DataFrame()  # Return empty structures if invalid
-
-    try:
-
-        samples = []
-        headers_row = 3
-        data_start_row = 4
-
-        # Check for sufficient rows before processing
-        if data.shape[0] <= headers_row or data.shape[0] <= data_start_row:
-            print(f"Insufficient rows for processing (headers_row={headers_row}, data_start_row={data_start_row})")
-            return pd.DataFrame(), {}, pd.DataFrame()
-
-        # Extract headers and validate them
-        column_names = data.iloc[headers_row].fillna("").tolist()
-        
-
-        # Slice the data starting from the data_start_row and convert to strings
-        table_data = data.iloc[data_start_row:].copy()
-        table_data.columns = column_names
-        table_data = table_data.astype(str)  # Convert all data to strings
-
-        # Create a DataFrame with the extracted headers and data
-        display_df = table_data.copy()
-
-       # Collect all data into a single DataFrame for further use
-        full_sample_data_df = pd.concat([table_data], axis=1)
-
-        return display_df, {}, full_sample_data_df
-
-    except Exception as e:
-        print(f"Error processing 'Aerosol Temperature': {e}")
-        return pd.DataFrame(), {}, pd.DataFrame()
+    """Process data for the Temperature Cycling Test sheet."""
+    return process_generic_sheet(data, headers_row=3, data_start_row=4)
 
 def process_high_t_high_humidity_test(data):
-    if not validate_sheet_data(data):
-        print("Validation failed for 'high t high h'.")
-        return pd.DataFrame(), {}, pd.DataFrame()  # Return empty structures if invalid
-
-    try:
-
-        samples = []
-        headers_row = 3
-        data_start_row = 4
-
-        # Check for sufficient rows before processing
-        if data.shape[0] <= headers_row or data.shape[0] <= data_start_row:
-            print(f"Insufficient rows for processing (headers_row={headers_row}, data_start_row={data_start_row})")
-            return pd.DataFrame(), {}, pd.DataFrame()
-
-        # Extract headers and validate them
-        column_names = data.iloc[headers_row].fillna("").tolist()
-        
-
-        # Slice the data starting from the data_start_row and convert to strings
-        table_data = data.iloc[data_start_row:].copy()
-        table_data.columns = column_names
-        table_data = table_data.astype(str)  # Convert all data to strings
-
-        # Create a DataFrame with the extracted headers and data
-        display_df = table_data.copy()
-
-       # Collect all data into a single DataFrame for further use
-        full_sample_data_df = pd.concat([table_data], axis=1)
-
-        return display_df, {}, full_sample_data_df
-
-    except Exception as e:
-        print(f"Error processing 'Aerosol Temperature': {e}")
-        return pd.DataFrame(), {}, pd.DataFrame()
+    """Process data for the High T High Humidity Test sheet."""
+    return process_generic_sheet(data, headers_row=3, data_start_row=4)
 
 def process_cold_storage_test(data):
-    """
-    Process data for the Extended Test.
-
-    Args:
-        data (pd.DataFrame): Input data from the sheet.
-
-    Returns:
-        tuple: (processed_data, sample_arrays, full_sample_data)
-            processed_data (pd.DataFrame): Processed data for display.
-            sample_arrays (dict): Extracted sample arrays for plotting.
-            full_sample_data (pd.DataFrame): Concatenated data for all samples.
-    """
-    # Use process_plot_sheet with the default extracted_data logic
+    """Process data for the Low Temperature Stability sheet."""
     return process_plot_sheet(
         data,
         headers_row=3,
@@ -1108,19 +636,7 @@ def process_cold_storage_test(data):
     )
 
 def process_vacuum_test(data):
-    """
-    Process data for the Extended Test.
-
-    Args:
-        data (pd.DataFrame): Input data from the sheet.
-
-    Returns:
-        tuple: (processed_data, sample_arrays, full_sample_data)
-            processed_data (pd.DataFrame): Processed data for display.
-            sample_arrays (dict): Extracted sample arrays for plotting.
-            full_sample_data (pd.DataFrame): Concatenated data for all samples.
-    """
-    # Use process_plot_sheet with the default extracted_data logic
+    """Process data for the Vacuum Test sheet."""
     return process_plot_sheet(
         data,
         headers_row=3,
@@ -1130,19 +646,7 @@ def process_vacuum_test(data):
     )
 
 def process_viscosity_compatibility_test(data):
-    """
-    Process data for the Extended Test.
-
-    Args:
-        data (pd.DataFrame): Input data from the sheet.
-
-    Returns:
-        tuple: (processed_data, sample_arrays, full_sample_data)
-            processed_data (pd.DataFrame): Processed data for display.
-            sample_arrays (dict): Extracted sample arrays for plotting.
-            full_sample_data (pd.DataFrame): Concatenated data for all samples.
-    """
-    # Use process_plot_sheet with the default extracted_data logic
+    """Process data for the Viscosity Compatibility sheet."""
     return process_plot_sheet(
         data,
         headers_row=3,
@@ -1152,19 +656,7 @@ def process_viscosity_compatibility_test(data):
     )
 
 def process_various_oil_test(data):
-    """
-    Process data for the Extended Test.
-
-    Args:
-        data (pd.DataFrame): Input data from the sheet.
-
-    Returns:
-        tuple: (processed_data, sample_arrays, full_sample_data)
-            processed_data (pd.DataFrame): Processed data for display.
-            sample_arrays (dict): Extracted sample arrays for plotting.
-            full_sample_data (pd.DataFrame): Concatenated data for all samples.
-    """
-    # Use process_plot_sheet with the default extracted_data logic
+    """Process data for the Various Oil Compatibility sheet."""
     return process_plot_sheet(
         data,
         headers_row=3,
@@ -1174,105 +666,15 @@ def process_various_oil_test(data):
     )
 
 def process_quick_sensory_test(data):
-    if not validate_sheet_data(data):
-        print("Validation failed for 'quick sensory test'.")
-        return pd.DataFrame(), {}, pd.DataFrame()  # Return empty structures if invalid
-
-    try:
-
-        samples = []
-        headers_row = 3
-        data_start_row = 4
-
-        # Check for sufficient rows before processing
-        if data.shape[0] <= headers_row or data.shape[0] <= data_start_row:
-            print(f"Insufficient rows for processing (headers_row={headers_row}, data_start_row={data_start_row})")
-            return pd.DataFrame(), {}, pd.DataFrame()
-
-        # Extract headers and validate them
-        column_names = data.iloc[headers_row].fillna("").tolist()
-        
-
-        # Slice the data starting from the data_start_row and convert to strings
-        table_data = data.iloc[data_start_row:].copy()
-        table_data.columns = column_names
-        table_data = table_data.astype(str)  # Convert all data to strings
-
-        # Create a DataFrame with the extracted headers and data
-        display_df = table_data.copy()
-
-       # Collect all data into a single DataFrame for further use
-        full_sample_data_df = pd.concat([table_data], axis=1)
-
-        return display_df, {}, full_sample_data_df
-
-    except Exception as e:
-        print(f"Error processing 'Aerosol Temperature': {e}")
-        return pd.DataFrame(), {}, pd.DataFrame()
+    """Process data for the Quick Sensory Test sheet."""
+    return process_generic_sheet(data, headers_row=3, data_start_row=4)
 
 def process_leaching_test(data):
-    if not validate_sheet_data(data):
-        print("Validation failed for 'Leaching Test'.")
-        return pd.DataFrame(), {}, pd.DataFrame()  # Return empty structures if invalid
-
-    try:
-
-        samples = []
-        headers_row = 3
-        data_start_row = 4
-
-        # Check for sufficient rows before processing
-        if data.shape[0] <= headers_row or data.shape[0] <= data_start_row:
-            print(f"Insufficient rows for processing (headers_row={headers_row}, data_start_row={data_start_row})")
-            return pd.DataFrame(), {}, pd.DataFrame()
-
-        # Extract headers and validate them
-        column_names = data.iloc[headers_row].fillna("").tolist()
-        
-
-        # Slice the data starting from the data_start_row and convert to strings
-        table_data = data.iloc[data_start_row:].copy()
-        table_data.columns = column_names
-        table_data = table_data.astype(str)  # Convert all data to strings
-
-        # Create a DataFrame with the extracted headers and data
-        display_df = table_data.copy()
-
-       # Collect all data into a single DataFrame for further use
-        full_sample_data_df = pd.concat([table_data], axis=1)
-
-        return display_df, {}, full_sample_data_df
-
-    except Exception as e:
-        print(f"Error processing 'Aerosol Temperature': {e}")
-        return pd.DataFrame(), {}, pd.DataFrame()
+    """Process data for the Heavy Metal Leaching Test sheet."""
+    return process_generic_sheet(data, headers_row=3, data_start_row=4)
 
 def process_sheet1(data):
-    """
-    Process data for 'Sheet1' similarly to 'process_extended_test'.
-    
-    Args:
-        data (pd.DataFrame): Input data from the Excel sheet.
-
-    Returns:
-        tuple: (display_df, sample_arrays, full_sample_data)
-            display_df (pd.DataFrame): Processed table data for display.
-            sample_arrays (dict): Sample arrays for further analysis or plotting.
-            full_sample_data (pd.DataFrame): Full sample data concatenated for all samples.
-    """
-    """
-    Process data for the Extended Test.
-
-    Args:
-        data (pd.DataFrame): Input data from the sheet.
-
-    Returns:
-        tuple: (processed_data, sample_arrays, full_sample_data)
-            processed_data (pd.DataFrame): Processed data for display.
-            sample_arrays (dict): Extracted sample arrays for plotting.
-            full_sample_data (pd.DataFrame): Concatenated data for all samples.
-    """
-    # Use process_plot_sheet with the default extracted_data logic
+    """Process data for 'Sheet1' similarly to 'process_extended_test'."""
     return process_plot_sheet(
         data,
         headers_row=3,
@@ -1280,43 +682,7 @@ def process_sheet1(data):
         num_columns_per_sample=12
     )
 
-def process_generic_sheet(data):
-    """
-    Process data for any sheet that doesn't match predefined sheet names.
-    
-    Args:
-        data (pd.DataFrame): Input data from the Excel sheet.
-    
-    Returns:
-        tuple: (display_df, additional_output, full_sample_data)
-            display_df (pd.DataFrame): Processed table data for display.
-            additional_output (dict): Any additional information that might be needed.
-            full_sample_data (pd.DataFrame): Full sample data concatenated for all samples.
-    """
-
-    # Check if data is empty or invalid
-    if data.empty or data.isna().all().all():
-        return pd.DataFrame(), {}, pd.DataFrame()  # Return empty data structures
-
-    # Remove empty columns from the data
-    samples = []
-    full_sample_data = []
-    headers_row = 3
-    data_start_row = 4
-
-    # Create a DataFrame with the extracted headers and data
-    display_df, table_data = process_sheet(data, headers_row, data_start_row)
-    
-    # Add this table data to samples list for consistency with original code structure
-    samples.append(table_data)
-    
-    # Create a DataFrame to hold all sample data (just concatenating the same sample in this case)
-    full_sample_data_df = pd.concat([table_data], axis=1)  # Here, it's a single sample's data
-
-    # Empty dictionary, as in the original function
-    additional_output = {}
-    
-    return display_df, additional_output, full_sample_data_df
+# ==================== AGGREGATION FUNCTIONS ====================
 
 def aggregate_sheet_metrics(full_sample_data: pd.DataFrame, num_columns_per_sample: int = 12) -> pd.DataFrame:
     """
@@ -1359,9 +725,6 @@ def aggregate_sheet_metrics(full_sample_data: pd.DataFrame, num_columns_per_samp
         # and then take the value in the puffs column (index 0) at that row.
         # for draw pressure, take the value corresponding to the last non-empty row in after weight as well. If empty set value to nan
         # for smell, do the same. If empty just set the value to nan
-        #
-
-
         try:
             # Select rows starting at index 3 for the third column
             weight_series = sample_data.iloc[3:, 2]
@@ -1374,11 +737,11 @@ def aggregate_sheet_metrics(full_sample_data: pd.DataFrame, num_columns_per_samp
                 )
                 draw_pressure = pd.to_numeric(
                     sample_data.loc[last_valid_index, sample_data.columns[3]], 
-                    errors = 'coerce'
+                    errors='coerce'
                 )
                 smell = pd.to_numeric(
                     sample_data.loc[last_valid_index, sample_data.columns[5]], 
-                    errors = 'coerce'
+                    errors='coerce'
                 )
             else:
                 total_puffs = np.nan
@@ -1472,21 +835,9 @@ def plot_aggregate_trends(aggregate_df: pd.DataFrame) -> plt.Figure:
     plt.legend(loc='upper left')
     return fig
 
-# Robust header matching helper - FIXED
-def header_matches(cell_value, pattern: str) -> bool:
-    """
-    Check if the given cell value matches the regex pattern.
-    
-    Args:
-        cell_value: The value from the cell.
-        pattern (str): The regex pattern to search for.
-    
-    Returns:
-        bool: True if the pattern is found, False otherwise.
-    """
-    if pd.isna(cell_value):
-        return False
-    return re.search(pattern, str(cell_value), re.IGNORECASE) is not None
+# ==================== LEGACY FILE PROCESSING FUNCTIONS ====================
+
+
 
 def extract_samples_from_old_file(file_path: str, sheet_name: Optional[str] = None) -> list:
     """
@@ -1589,7 +940,7 @@ def extract_samples_from_old_file(file_path: str, sheet_name: Optional[str] = No
                     # Look to the right from the current header cell.
                     for j in range(col, ncols):
                         if header_matches(df.iat[row, j], pattern):
-                            raw_data = df.iloc[row + 1 :, j]
+                            raw_data = df.iloc[row + 1:, j]
                             if key in numeric_columns:
                                 data_cols[key] = pd.to_numeric(raw_data, errors='coerce').dropna()
                             else:
@@ -1601,7 +952,7 @@ def extract_samples_from_old_file(file_path: str, sheet_name: Optional[str] = No
                     samples.append(sample)
     return samples
 
-def convert_legacy_file_using_template(legacy_file_path: str, template_path: str = None, template_sheet: str = "Intense Test") -> pd.DataFrame:
+def convert_legacy_file_using_template(legacy_file_path: str, template_path: str = None) -> pd.DataFrame:
     """
     Converts a legacy Excel file to the standardized template format.
     - Uses 12-column blocks per sample.
@@ -1613,6 +964,8 @@ def convert_legacy_file_using_template(legacy_file_path: str, template_path: str
     if template_path is None:
         template_path = os.path.join(os.path.abspath("."), "resources", 
                                      "Standardized Test Template - LATEST VERSION - 2025 Jan.xlsx")
+    
+    template_sheet = "Intense Test"
     wb = load_workbook(template_path)
     if template_sheet not in wb.sheetnames:
         raise ValueError(f"Sheet '{template_sheet}' not found in template file.")
@@ -1629,16 +982,16 @@ def convert_legacy_file_using_template(legacy_file_path: str, template_path: str
             [r"cart\s*#:?", r"sample\s*(name|id):?"], 
             (1, 5)
         ),
-        "Voltage:" : ([r"voltage:?"], (3, 5)),
-        "Viscosity:" : ([r"viscosity:?"], (3, 1)),
+        "Voltage:": ([r"voltage:?"], (3, 5)),
+        "Viscosity:": ([r"viscosity:?"], (3, 1)),
         "Resistance (Ohms):": (
             [r"ri\s*\(\s*ohms?\s*\)", r"resistance\s*\(?ohms?\)?\s*:?\s*"], 
             (2, 3)
         ),
-        "Puffing Regime:" : ([r"puffing\s*regime:?", r"puff\s*regime:?"], (2, 7)),
-        "Initial Oil Mass:" : ([r"initial\s*oil\s*mass:?"], (3, 7)),
-        "Date:"           : ([r"date:?"], (1, 3)),
-        "Media:"          : ([r"media:?"], (2, 1))
+        "Puffing Regime:": ([r"puffing\s*regime:?", r"puff\s*regime:?"], (2, 7)),
+        "Initial Oil Mass:": ([r"initial\s*oil\s*mass:?"], (3, 7)),
+        "Date:": ([r"date:?"], (1, 3)),
+        "Media:": ([r"media:?"], (2, 1))
     }
 
     # Data column mapping relative to the sample block start.
@@ -1823,49 +1176,4 @@ def convert_legacy_standards_using_template(legacy_file_path: str, template_path
 
     wb_template.save(new_file_path)
     print(f"Saved legacy standards file to: {new_file_path}")
-    from processing import load_excel_file  # Adjust import if needed.
     return load_excel_file(new_file_path)
-
-def extract_block_metadata(legacy_ws, start_col, end_col, metadata_patterns):
-    """Extract all metadata fields from a sample block"""
-    metadata = {}
-    
-    # Search first 4 rows of the sample block
-    for row in range(1, 5):  # Rows 1-4 (1-indexed)
-        for col in range(start_col, end_col + 1):
-            cell = legacy_ws.cell(row=row, column=col)
-            cell_value = str(cell.value).lower() if cell.value else ""
-            
-            # Check ALL patterns for EVERY cell
-            for key, pattern in metadata_patterns.items():
-                # Only extract if we haven't found this metadata yet
-                if key not in metadata and re.search(pattern, cell_value, re.IGNORECASE):
-                    # Get value from next cell to the right
-                    if col + 1 <= end_col:
-                        metadata[key] = legacy_ws.cell(row=row, column=col+1).value
-                    # Continue checking other patterns even after a match
-                    
-    return metadata
-
-def detect_sample_columns(dataframe, COLUMNS_PER_SAMPLE = 12):
-    """Identify sample column ranges using header positions"""
-    try:
-        header_row = dataframe.iloc[3]  # Header row is row 4 (0-indexed)
-    except IndexError:
-        return []
-    
-    puff_cols = header_row[header_row.astype(str).str.contains(r'puffs', case=False)].index.tolist()
-    tpm_cols = header_row[header_row.astype(str).str.contains(r'tpm', case=False)].index.tolist()
-    
-    if not puff_cols or not tpm_cols:
-        return []
-    
-    first_puff = puff_cols[0]
-    last_tpm = tpm_cols[-1]
-    total_cols = last_tpm - first_puff + 1
-    num_samples = total_cols // COLUMNS_PER_SAMPLE
-    
-    return [
-        (first_puff + (i * COLUMNS_PER_SAMPLE),
-        first_puff + (i * COLUMNS_PER_SAMPLE) + COLUMNS_PER_SAMPLE - 1
-    ) for i in range(num_samples)]

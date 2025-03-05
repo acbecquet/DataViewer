@@ -9,7 +9,7 @@ from tkinter import filedialog, messagebox, Toplevel, Label, Button, ttk
 import processing
 import time
 import psutil
-from utils import plotting_sheet_test, get_resource_path, get_save_path, is_standard_file, clean_columns, FONT, APP_BACKGROUND_COLOR, BUTTON_COLOR, PLOT_CHECKBOX_TITLE
+from utils import is_valid_excel_file, get_resource_path, load_excel_file, get_save_path, is_standard_file, FONT, APP_BACKGROUND_COLOR
 
 class FileManager:
     """File Management Module for DataViewer.
@@ -32,7 +32,7 @@ class FileManager:
        
         try:
             # Ensure the file is a valid Excel file.
-            if not processing.is_valid_excel_file(os.path.basename(file_path)):
+            if not is_valid_excel_file(os.path.basename(file_path)):
                 raise ValueError(f"Invalid Excel file selected: {file_path}")
 
             if not is_standard_file(file_path):
@@ -105,7 +105,7 @@ class FileManager:
             else:
                 # Standard file processing.
                 print("Standard File. Processing")
-                self.gui.sheets = processing.load_excel_file(file_path)
+                self.gui.sheets = load_excel_file(file_path)
                 self.gui.filtered_sheets = {
                     name: {"data": data, "is_empty": data.empty}
                     for name, data in self.gui.sheets.items()

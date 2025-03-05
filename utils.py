@@ -345,3 +345,114 @@ def unmerge_all_cells(ws: Worksheet) -> None:
         for row in range(min_row, max_row + 1):
             for col in range(min_col, max_col + 1):
                 ws.cell(row=row, column=col, value=master_value)
+
+def resource_path(relative_path):
+    """
+    Get the absolute path to the resource, compatible with PyInstaller.
+
+    Args:
+        relative_path (str): Relative path to the resource.
+
+    Returns:
+        str: Absolute path to the resource.
+    """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except AttributeError:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
+def is_valid_excel_file(filename: str) -> bool:
+    """
+    Checks if the given filename is a valid Excel file that should be processed.
+    Excludes temporary Excel files which often start with '~$'.
+    
+    Args:
+        filename (str): The name of the file.
+    
+    Returns:
+        bool: True if valid, False otherwise.
+    """
+    return filename.endswith('.xlsx') and not filename.startswith('~$')
+
+def load_excel_file(file_path):
+    """
+    Load an Excel file and return its sheets.
+
+    Args:
+        file_path (str): Path to the Excel file.
+
+    Returns:
+        dict: Dictionary of sheet names and DataFrames.
+    """
+    try:
+        sheets = pd.read_excel(file_path, sheet_name=None, engine='openpyxl')
+        return sheets
+    except Exception as e:
+        raise ValueError(f"Error loading Excel file {file_path}: {e}")
+
+def validate_sheet_data(data, required_columns=None, required_rows=None):
+    """
+    Validate the sheet data for common issues like empty DataFrame, missing columns, or missing rows.
+
+    Args:
+        data (pd.DataFrame): The DataFrame to validate.
+        required_columns (list, optional): List of columns that must exist. Defaults to None.
+        required_rows (int, optional): Minimum number of rows required. Defaults to None.
+
+    Returns:
+        bool: True if the sheet is valid, False otherwise.
+    """
+    if data.empty:
+        print("Sheet is empty.")
+        return False
+
+    # Check required columns
+    if required_columns:
+        missing_columns = [col for col in required_columns if col not in data.columns]
+        if missing_columns:
+            print(f"Missing required columns: {missing_columns}")
+            return False
+
+    # Check required rows
+    if required_rows is not None and data.shape[0] < required_rows:
+        print(f"Not enough rows. Expected at least {required_rows}, found {data.shape[0]}.")
+        return False
+
+    return True
+
+def is_sheet_empty_or_zero(data: pd.DataFrame) -> bool:
+    """
+    Check if the specified sheet has any data in columns C through H (columns 2 to 7)
+    in rows 5 through 20 (indices 4 to 19 in Python).
+
+    Args:
+        data (pd.DataFrame): The sheet data to check.
+
+    Returns:
+        bool: True if the sheet is empty or all zero, False otherwise.
+    """
+    # Define the range of rows and columns to check (rows 5 to 20, columns C to H)
+    rows_to_check = data.iloc[4:20, 2:8]  # Rows 5-20, Columns C-H (Python uses 0-based index)
+
+    # Check if all values in the selected range are NaN or 0
+    if rows_to_check.isna().all().all() or (rows_to_check == 0).all().all():
+        return True  # The sheet is considered empty or all zero
+    else:
+        return False  # There is some valid data in the specified range
+    
+def header_matches(cell_value, pattern: str) -> bool:
+    """
+    Check if the given cell value matches the regex pattern.
+    
+    Args:
+        cell_value: The value from the cell.
+        pattern (str): The regex pattern to search for.
+    
+    Returns:
+        bool: True if the pattern is found, False otherwise.
+    """
+    if pd.isna(cell_value):
+        return False
+    return re.search(pattern, str(cell_value), re.IGNORECASE) is not None

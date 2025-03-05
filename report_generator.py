@@ -11,7 +11,7 @@ from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
 from datetime import datetime
 import processing
-from utils import get_resource_path, get_save_path, plotting_sheet_test
+from utils import get_resource_path, get_save_path, plotting_sheet_test, get_plot_sheet_names
 
 from tkinter import messagebox  # For showing info/errors
 
@@ -202,7 +202,7 @@ class ReportGenerator:
         try:
             processed_data.astype(str).replace([pd.NA], '')
             processed_data.to_excel(writer, sheet_name=sheet_name, index=False)
-            plot_sheet_names = processing.get_plot_sheet_names()
+            plot_sheet_names = get_plot_sheet_names()
             is_plotting = sheet_name in plot_sheet_names
             if is_plotting:
                 self.add_plots_to_excel(writer, sheet_name, full_sample_data, images_to_delete, valid_plot_options)
@@ -244,7 +244,7 @@ class ReportGenerator:
             p.font.bold = True
 
             # Add table/plots
-            plot_sheet_names = processing.get_plot_sheet_names()
+            plot_sheet_names = get_plot_sheet_names()
             is_plotting = sheet_name in plot_sheet_names
             table_width = Inches(8.07) if is_plotting else Inches(13.03)
             self.add_table_to_slide(main_slide, 
@@ -351,7 +351,7 @@ class ReportGenerator:
 
             background_path = get_resource_path("resources/ccell_background.png")
             logo_path = get_resource_path("resources/ccell_logo_full.png")
-            plot_sheet_names = processing.get_plot_sheet_names()
+            plot_sheet_names = get_plot_sheet_names()
 
             processed_slides += 1
             self._update_ppt_progress(processed_slides, total_slides)
