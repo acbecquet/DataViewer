@@ -99,14 +99,14 @@ class ReportGenerator:
                 total_slides = len(filtered_sheets)  # Adjust this based on actual slide count
                 current_slide = 0
             
-                def update_ppt_progress():
+                def update_ppt_prog():
                     nonlocal current_slide
                     base_progress = 60  # Excel phase complete
                     ppt_progress = int((current_slide / total_slides) * 40)
                     self.gui.progress_dialog.update_progress_bar(base_progress + ppt_progress)
                     self.gui.root.update_idletasks()
 
-                self.write_powerpoint_report(ppt_save_path, images_to_delete, plot_options, progress_callback=update_ppt_progress)
+                self.write_powerpoint_report(ppt_save_path, images_to_delete, plot_options, progress_callback=update_ppt_prog())
             
                 # Final progress update
                 self.gui.progress_dialog.update_progress_bar(100)
@@ -220,7 +220,7 @@ class ReportGenerator:
             image_paths = self.gui.sheet_images.get(sheet_name, [])
 
             # Create main content slide
-            main_slide = prs.slides.add_slide(prs.slide_layouts[5])
+            main_slide = prs.slides.add_slide(prs.slide_layouts[6])
         
             # Add background and logo
             background_path = get_resource_path("resources/ccell_background.png")
@@ -234,6 +234,9 @@ class ReportGenerator:
             title_shape = main_slide.shapes.add_textbox(Inches(0.45), Inches(0.45), 
                                                        Inches(10.72), Inches(0.64))
             text_frame = title_shape.text_frame
+
+            text_frame.clear()
+
             p = text_frame.add_paragraph()
             p.text = sheet_name
             p.font.name = "Montserrat"
@@ -257,7 +260,7 @@ class ReportGenerator:
 
             # Create image slide if needed
             if image_paths:
-                img_slide = prs.slides.add_slide(prs.slide_layouts[5])
+                img_slide = prs.slides.add_slide(prs.slide_layouts[6])
                 self.setup_image_slide(prs, img_slide, sheet_name)
                 self.add_images_to_slide(img_slide, image_paths)
 
@@ -343,6 +346,9 @@ class ReportGenerator:
             logo_path = get_resource_path("resources/ccell_logo_full_white.png")
             cover_slide.shapes.add_picture(logo_path, left=Inches(5.7), top=Inches(6.12),
                                              width=Inches(1.93), height=Inches(0.66))
+            
+            # start setting up main slides
+
             background_path = get_resource_path("resources/ccell_background.png")
             logo_path = get_resource_path("resources/ccell_logo_full.png")
             plot_sheet_names = processing.get_plot_sheet_names()
@@ -364,7 +370,7 @@ class ReportGenerator:
                         print(f"Skipping sheet '{sheet_name}': Processed data is empty.")
                         continue
                     try:
-                        slide_layout = prs.slide_layouts[5]
+                        slide_layout = prs.slide_layouts[6]
                         slide = prs.slides.add_slide(slide_layout)
                     except IndexError:
                         raise ValueError(f"Slide layout 5 not found in the PowerPoint template.")
@@ -372,28 +378,18 @@ class ReportGenerator:
                                              width=Inches(13.33), height=Inches(7.5))
                     slide.shapes.add_picture(logo_path, left=Inches(11.21), top=Inches(0.43),
                                              width=Inches(1.57), height=Inches(0.53))
-                    if slide.shapes.title:
-                        title_shape = slide.shapes.title
-                        title_shape.left = Inches(0.45)
-                        title_shape.top = Inches(0.45)
-                        title_shape.width = Inches(10.72)
-                        title_shape.height = Inches(0.64)
-                        text_frame = title_shape.text_frame
-                        text_frame.margin_top = 0
-                        text_frame.margin_bottom = 0
-                        for para in list(text_frame.paragraphs):
-                            text_frame._element.remove(para._element)
-                        p = text_frame.add_paragraph()
-                        p.text = sheet_name
-                        p.alignment = PP_ALIGN.LEFT
-                        p.space_before = Pt(0)
-                        p.space_after = Pt(0)
-                        run = p.runs[0] if p.runs else p.add_run()
-                        run.font.name = "Montserrat"
-                        run.font.size = Pt(32)
-                        run.font.bold = True
-                    else:
-                        print(f"Warning: No title placeholder found for sheet '{sheet_name}'.")
+                    
+                    title_shape = slide.shapes.add_textbox(Inches(0.45), Inches(-0.04), Inches(10.72), Inches(0.64)) # hard coded
+                    text_frame = title_shape.text_frame
+                    text_frame.clear()
+                    p = text_frame.add_paragraph()
+                    p.text = sheet_name
+                    p.alignment = PP_ALIGN.LEFT
+                    run = p.runs[0]
+                    run.font.name = "Montserrat"
+                    run.font.size = Pt(32)
+                    run.font.bold = True
+
                     is_plotting = sheet_name in plot_sheet_names
                     if not is_plotting:
                         if processed_data.empty:
@@ -415,10 +411,6 @@ class ReportGenerator:
                         spTree.remove(title_shape._element)
                         spTree.append(title_shape._element)
 
-                    # Add images from ImageLoader
-                    if sheet_name in self.gui.sheet_images:
-                        image_paths = self.gui.sheet_images[sheet_name]
-                        self.add_images_to_slide(slide, image_paths)
                     
                     processed_slides += 1
 
@@ -432,7 +424,7 @@ class ReportGenerator:
                     if sheet_name in self.gui.sheet_images and self.gui.sheet_images[sheet_name]:
                         print("Images Exist! Adding a slide...")
                         image_paths = self.gui.sheet_images[sheet_name]
-                        img_slide = prs.slides.add_slide(prs.slide_layouts[5])
+                        img_slide = prs.slides.add_slide(prs.slide_layouts[6])
                         self.setup_image_slide(prs, img_slide, sheet_name)
                         self.add_images_to_slide(img_slide, image_paths)
 
@@ -541,7 +533,7 @@ class ReportGenerator:
 
     def add_images_to_slide(self, slide, image_paths: list) -> None:
         """Adds images to the slide in a grid layout."""
-        start_left = Inches(0.15)
+        start_left = Inches(0.05)
         start_top = Inches(1.2)
         available_width = Inches(13.18)  # 13.33 - 0.15
         available_height = Inches(6.3)   # 7.5 - 1.2
@@ -611,7 +603,7 @@ class ReportGenerator:
                                  width=Inches(1.57), height=Inches(0.53))
     
         # Add title
-        title_shape = slide.shapes.add_textbox(Inches(0.45), Inches(0.45), Inches(10.72), Inches(0.64))
+        title_shape = slide.shapes.add_textbox(Inches(0.45), Inches(-0.04), Inches(10.72), Inches(0.64))
         text_frame = title_shape.text_frame
         text_frame.clear()
         p = text_frame.add_paragraph()
