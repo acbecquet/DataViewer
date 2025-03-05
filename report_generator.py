@@ -2,7 +2,9 @@
 import os
 import shutil
 import pandas as pd
+import math
 import matplotlib.pyplot as plt
+from PIL import Image
 from pptx import Presentation
 from pptx.enum.text import PP_ALIGN
 from pptx.util import Inches, Pt
@@ -207,71 +209,82 @@ class ReportGenerator:
         except Exception as e:
             print(f"Error writing Excel report for sheet '{sheet_name}': {e}")
 
-    def write_powerpoint_report_for_test(self, ppt_save_path: str, images_to_delete: list, sheet_name: str, processed_data, full_sample_data, plot_options: list) -> None:
+    def write_powerpoint_report_for_test(self, ppt_save_path: str, images_to_delete: list, sheet_name: str, 
+                                    processed_data, full_sample_data, plot_options: list) -> None:
         try:
             prs = Presentation()
             prs.slide_width = Inches(13.33)
             prs.slide_height = Inches(7.5)
-            try:
-                slide_layout = prs.slide_layouts[5]
-                slide = prs.slides.add_slide(slide_layout)
-            except IndexError:
-                raise ValueError("Slide layout 5 not found in the PowerPoint template.")
 
+           
+            image_paths = self.gui.sheet_images.get(sheet_name, [])
+
+            # Create main content slide
+            main_slide = prs.slides.add_slide(prs.slide_layouts[5])
+        
+            # Add background and logo
             background_path = get_resource_path("resources/ccell_background.png")
-            slide.shapes.add_picture(background_path, left=Inches(0), top=Inches(0),
-                                      width=prs.slide_width, height=prs.slide_height)
+            main_slide.shapes.add_picture(background_path, Inches(0), Inches(0),
+                                          width=prs.slide_width, height=prs.slide_height)
             logo_path = get_resource_path("resources/ccell_logo_full.png")
-            slide.shapes.add_picture(logo_path, left=Inches(11.21), top=Inches(0.43),
-                                      width=Inches(1.57), height=Inches(0.53))
-            if slide.shapes.title:
-                title_shape = slide.shapes.title
-            else:
-                title_shape = slide.shapes.add_textbox(Inches(0.45), Inches(0.45), Inches(10.72), Inches(0.64))
+            main_slide.shapes.add_picture(logo_path, Inches(11.21), Inches(0.43),
+                                          width=Inches(1.57), height=Inches(0.53))
+
+            # Add title
+            title_shape = main_slide.shapes.add_textbox(Inches(0.45), Inches(0.45), 
+                                                       Inches(10.72), Inches(0.64))
             text_frame = title_shape.text_frame
-            text_frame.margin_top = 0
-            text_frame.margin_bottom = 0
-            for para in list(text_frame.paragraphs):
-                text_frame._element.remove(para._element)
             p = text_frame.add_paragraph()
             p.text = sheet_name
-            p.alignment = PP_ALIGN.LEFT
-            p.space_before = Pt(0)
-            p.space_after = Pt(0)
-            text_frame.word_wrap = True
-            run = p.runs[0] if p.runs else p.add_run()
-            run.font.name = "Montserrat"
-            run.font.size = Pt(32)
-            run.font.bold = True
-            spTree = slide.shapes._spTree
-            spTree.remove(title_shape._element)
-            spTree.append(title_shape._element)
+            p.font.name = "Montserrat"
+            p.font.size = Pt(32)
+            p.font.bold = True
+
+            # Add table/plots
             plot_sheet_names = processing.get_plot_sheet_names()
             is_plotting = sheet_name in plot_sheet_names
+            table_width = Inches(8.07) if is_plotting else Inches(13.03)
+            self.add_table_to_slide(main_slide, 
+                                   processed_data if is_plotting else full_sample_data,
+                                   table_width, 
+                                   is_plotting)
+
             if is_plotting:
-                table_width = Inches(8.07)
-                self.add_table_to_slide(slide, processed_data, table_width, is_plotting)
                 valid_plot_options = processing.get_valid_plot_options(plot_options, full_sample_data)
                 if valid_plot_options:
-                    self.add_plots_to_slide(slide, sheet_name, full_sample_data, valid_plot_options, images_to_delete)
-                else:
-                    print(f"No valid plot options for sheet '{sheet_name}'. Skipping plots.")
-            else:
-                table_width = Inches(13.03)
-                self.add_table_to_slide(slide, full_sample_data, table_width, is_plotting)
+                    self.add_plots_to_slide(main_slide, sheet_name, full_sample_data,
+                                           valid_plot_options, images_to_delete)
+
+            # Create image slide if needed
+            if image_paths:
+                img_slide = prs.slides.add_slide(prs.slide_layouts[5])
+                self.setup_image_slide(prs, img_slide, sheet_name)
+                self.add_images_to_slide(img_slide, image_paths)
+
             processing.clean_presentation_tables(prs)
             prs.save(ppt_save_path)
-            print(f"PowerPoint test report saved successfully at {ppt_save_path}.")
+            print(f"PowerPoint test report saved to {ppt_save_path}")
+        
         except Exception as e:
-            print(f"Error writing PowerPoint test report: {e}")
+            print(f"Error generating test PowerPoint: {e}")
+            if os.path.exists(ppt_save_path):
+                os.remove(ppt_save_path)
+            raise
 
     def write_powerpoint_report(self, ppt_save_path: str, images_to_delete: list, plot_options: list, progress_callback = None) -> None:
         try:
+            processed_slides = 0
             prs = Presentation()
             prs.slide_width = Inches(13.33)
             prs.slide_height = Inches(7.5)
-            processed_slides = 0
-            total_slides = len(self.gui.filtered_sheets)
+
+            total_slides = 1  # Cover slide
+            for sheet_name in self.gui.filtered_sheets.keys():
+                total_slides += 1  # Main slide
+                if sheet_name in self.gui.sheet_images and self.gui.sheet_images[sheet_name]:
+                    total_slides += 1  # Image slide
+
+
             cover_slide = prs.slides.add_slide(prs.slide_layouts[6])
             bg_path = get_resource_path("resources/Cover_Page_Logo.jpg")
             cover_slide.shapes.add_picture(bg_path, left=Inches(0), top=Inches(0),
@@ -401,9 +414,33 @@ class ReportGenerator:
                         spTree = slide.shapes._spTree
                         spTree.remove(title_shape._element)
                         spTree.append(title_shape._element)
+
+                    # Add images from ImageLoader
+                    if sheet_name in self.gui.sheet_images:
+                        image_paths = self.gui.sheet_images[sheet_name]
+                        self.add_images_to_slide(slide, image_paths)
+                    
                     processed_slides += 1
+
+                    if progress_callback:
+                        progress_callback(processed_slides, total_slides)
                     
                     self._update_ppt_progress(processed_slides, total_slides)
+
+                    # Add image slide if images exist
+
+                    if sheet_name in self.gui.sheet_images and self.gui.sheet_images[sheet_name]:
+                        print("Images Exist! Adding a slide...")
+                        image_paths = self.gui.sheet_images[sheet_name]
+                        img_slide = prs.slides.add_slide(prs.slide_layouts[5])
+                        self.setup_image_slide(prs, img_slide, sheet_name)
+                        self.add_images_to_slide(img_slide, image_paths)
+
+                        # Update progress after image slide
+                        processed_slides += 1
+                        self._update_ppt_progress(processed_slides, total_slides)
+
+
                 except Exception as sheet_error:
                     print(f"Error processing sheet '{sheet_name}': {sheet_error}")
                     processed_slides += 1
@@ -502,3 +539,85 @@ class ReportGenerator:
                     paragraph.alignment = PP_ALIGN.CENTER
         return True
 
+    def add_images_to_slide(self, slide, image_paths: list) -> None:
+        """Adds images to the slide in a grid layout."""
+        start_left = Inches(0.15)
+        start_top = Inches(1.2)
+        available_width = Inches(13.18)  # 13.33 - 0.15
+        available_height = Inches(6.3)   # 7.5 - 1.2
+
+        num_images = len(image_paths)
+        if num_images == 0:
+            return
+
+        # Calculate grid dimensions to best fit available space
+        cols = math.ceil(math.sqrt(num_images * (available_width / available_height)))
+        rows = math.ceil(num_images / cols)
+
+        # Adjust to prevent excessive columns/rows
+        cols = min(cols, 4)  # Max 4 columns for better layout
+        rows = math.ceil(num_images / cols)
+
+        # Calculate cell dimensions with margins
+        horizontal_margin = Inches(0.2)
+        vertical_margin = Inches(0.2)
+    
+        cell_width = (available_width - (cols - 1) * horizontal_margin) / cols
+        cell_height = (available_height - (rows - 1) * vertical_margin) / rows
+
+        # Position each image in grid
+        for i, img_path in enumerate(image_paths):
+            # Get original image dimensions
+            with Image.open(img_path) as img:
+                img_width, img_height = img.size
+                aspect_ratio = img_width / img_height
+
+            # Calculate display dimensions
+            max_width = cell_width
+            max_height = cell_height
+        
+            # Determine which dimension to constrain
+            if (cell_width / cell_height) > aspect_ratio:
+                # Constrain by height
+                display_height = min(cell_height, max_height)
+                display_width = display_height * aspect_ratio
+            else:
+                # Constrain by width
+                display_width = min(cell_width, max_width)
+                display_height = display_width / aspect_ratio
+
+            # Center the image in the cell
+            row = i // cols
+            col = i % cols
+            x_offset = (cell_width - display_width) / 2
+            y_offset = (cell_height - display_height) / 2
+        
+            left = start_left + col * (cell_width + horizontal_margin) + x_offset
+            top = start_top + row * (cell_height + vertical_margin) + y_offset
+
+            slide.shapes.add_picture(img_path, left=left, top=top, width=display_width, height = display_height)
+
+
+    def setup_image_slide(self, prs, slide, sheet_name):
+        """Sets up the background, logo, and title for an image slide."""
+        # Add background
+        background_path = get_resource_path("resources/ccell_background.png")
+        slide.shapes.add_picture(background_path, Inches(0), Inches(0), 
+                                 width=prs.slide_width, height=prs.slide_height)
+    
+        # Add logo
+        logo_path = get_resource_path("resources/ccell_logo_full.png")
+        slide.shapes.add_picture(logo_path, Inches(11.21), Inches(0.43), 
+                                 width=Inches(1.57), height=Inches(0.53))
+    
+        # Add title
+        title_shape = slide.shapes.add_textbox(Inches(0.45), Inches(0.45), Inches(10.72), Inches(0.64))
+        text_frame = title_shape.text_frame
+        text_frame.clear()
+        p = text_frame.add_paragraph()
+        p.text = sheet_name
+        p.alignment = PP_ALIGN.LEFT
+        run = p.runs[0]
+        run.font.name = "Montserrat"
+        run.font.size = Pt(32)
+        run.font.bold = True

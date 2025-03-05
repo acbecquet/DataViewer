@@ -1508,8 +1508,8 @@ def extract_samples_from_old_file(file_path: str, sheet_name: Optional[str] = No
     # Regex patterns for metadata and data headers.
     metadata_patterns = {
         "sample_name": [
-            r"(cart(ridge)?\s*#|sample\s*(name|id))\s*:?\s*",  # e.g. "Cart #", "Sample ID:"
-            r"puffing\s*data\s*for\s*:?\s*"
+            r"(cart(ridge)?\s*#|sample\s*(name|id))",  # e.g. "Cart #", "Sample ID"
+            r"puffing\s*data\s*for\s*:?\s*" # e.g puffing data for:
         ],
         "resistance": [
             r"\bri\s*\(?\s*ohms?\s*\)?\s*:?\s*",  # e.g. "Ri (Ohms)"
