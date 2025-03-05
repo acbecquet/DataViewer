@@ -1,15 +1,43 @@
-# file_manager.py
+"""
+File Management Module for DataViewer Application
+
+This module handles all file-related operations including:
+- Loading Excel files (standard and legacy formats)
+- Saving and loading .vap3 files (custom format)
+- Opening Excel files for editing and monitoring changes
+- Managing file selections and UI updates related to files
+"""
+
+# Standard library imports
 import os
 import copy
 import shutil
-import pandas as pd
-import tkinter as tk
-from openpyxl import load_workbook
-from tkinter import filedialog, messagebox, Toplevel, Label, Button, ttk, Frame
-import processing
 import time
+import uuid
+import tempfile
+import threading
+import subprocess
+import traceback
+from typing import Optional
+
+# Third party imports
+import pandas as pd
 import psutil
-from utils import is_valid_excel_file, get_resource_path, load_excel_file, get_save_path, is_standard_file, FONT, APP_BACKGROUND_COLOR
+from openpyxl import Workbook, load_workbook
+import tkinter as tk
+from tkinter import filedialog, messagebox, Toplevel, Label, Button, ttk, Frame
+
+# Local imports
+import processing
+from utils import (
+    is_valid_excel_file,
+    get_resource_path,
+    load_excel_file,
+    get_save_path,
+    is_standard_file,
+    FONT,
+    APP_BACKGROUND_COLOR
+)
 
 class FileManager:
     """File Management Module for DataViewer.
@@ -20,9 +48,8 @@ class FileManager:
     def __init__(self, gui):
         self.gui = gui
         self.root = gui.root
-        # If you need your own lock, you can create one here:
         
-
+        
     def load_excel_file(self, file_path, legacy_mode: str = None) -> None:
         """
         Load the selected Excel file and process its sheets.
@@ -91,17 +118,10 @@ class FileManager:
                                 # Debugging: Print the first 20 rows and 15 columns for 'Intense Test' in legacy file
                     if "Intense Test" in self.gui.filtered_sheets:
                         intense_test_df = self.gui.filtered_sheets["Intense Test"]["data"]
-                        print("\n--- Legacy Standard File: 'Intense Test' ---")
-                        print(intense_test_df.iloc[:20, :15])
-
-
-
-                    
+                        #print("\n--- Legacy Standard File: 'Intense Test' ---")
+                        #print(intense_test_df.iloc[:20, :15])
                 else:
                     raise ValueError(f"Unknown legacy mode: {legacy_mode}")
-
-                
-
             else:
                 # Standard file processing.
                 print("Standard File. Processing")
@@ -118,8 +138,8 @@ class FileManager:
                             # Debugging: Print the first 20 rows and 15 columns for 'Intense Test' in normal file
                 if "Intense Test" in self.gui.filtered_sheets:
                     intense_test_df = self.gui.filtered_sheets["Intense Test"]["data"]
-                    print("\n--- Normal Standard File: 'Intense Test' ---")
-                    print(intense_test_df.iloc[:20, :15])
+                    #print("\n--- Normal Standard File: 'Intense Test' ---")
+                    #print(intense_test_df.iloc[:20, :15])
 
 
         except Exception as e:
@@ -169,7 +189,6 @@ class FileManager:
         finally:
             self.gui.progress_dialog.hide_progress_bar()
             self.root.update_idletasks()  # Ensure GUI refreshes
-
 
     def set_active_file(self, file_name: str) -> None:
         """Set the active file based on the given file name."""
@@ -235,151 +254,63 @@ class FileManager:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to reload the Excel file: {e}")
 
-    def open_raw_data_in_excel_old(self, sheet_name=None) -> None:
-        """Opens an Excel file using the default system application (Excel)."""
-        try:
-            file_path = self.gui.file_path
-            if not isinstance(file_path, str):
-                raise ValueError(f"Invalid file path. Expected string, got {type(file_path).__name__}")
-            if not os.path.exists(file_path):
-                raise FileNotFoundError(f"The file {file_path} does not exist.")
-            temp_file = None
-            if sheet_name:
-                try:
-                    # Create a temporary file with the specified sheet active
-                    import tempfile
-                    from openpyxl import load_workbook
-                
-                    # Create a temporary file
-                    fd, temp_path = tempfile.mkstemp(suffix='.xlsx')
-                    os.close(fd)
-                    temp_file = temp_path
-                
-                    # Make a copy of the original file
-                    import shutil
-                    shutil.copy2(file_path, temp_file)
-                
-                    # Modify the copy to set the active sheet
-                    wb = load_workbook(temp_file)
-                    if sheet_name in wb.sheetnames:
-                        wb.active = wb[sheet_name]
-                        wb.save(temp_file)
-                        # Open the modified temporary file
-                        os.startfile(temp_file)
-                    else:
-                        # If sheet doesn't exist, fall back to opening the original
-                        os.startfile(file_path)
-                except Exception as e:
-                    print(f"Error preparing sheet-specific Excel file: {e}")
-                    # Fall back to just opening the file
-                    os.startfile(file_path)
-            else:
-                # No sheet specified, just open the file
-                os.startfile(file_path)
-            #wait for excel to open
-            excel_opened = False
-            for _ in range(10):
-                if any(proc.name().lower() == "excel.exe" for proc in psutil.process_iter()):
-                    excel_opened = True
-                    break
-                time.sleep(0.5)
-            if not excel_opened:
-                raise TimeoutError("Excel did not open in the expected time.")
-
-            excel_processes = [proc for proc in psutil.process_iter() if proc.name().lower() == "excel.exe"]
-            
-            dialog = Toplevel(self.root)
-            dialog.title("Excel Opened")
-            dialog.geometry("300x150")
-            dialog.grab_set()
-
-            if sheet_name:
-                msg = f"Excel has opened with the '{sheet_name}' sheet active."
-            else:
-                msg = "Excel has opened the file."
-            msg += " This dialog will close automatically when Excel is closed."
-        
-            label = Label(dialog, text=msg, wraplength=280, justify="center")
-            label.pack(pady=20)
-
-            def close_excel_and_popup():
-                for proc in excel_processes:
-                    if proc.is_running():
-                        try:
-                            proc.terminate()
-                            proc.wait()
-                        except:
-                            pass
-                dialog.destroy()
-                # clean up temp file if it exists
-                if tep_file and os.path.exists(temp_file):
-                    try:
-                        os.remove(temp_file)
-                    except:
-                        pass
-
-            dialog.protocol("WM_DELETE_WINDOW", lambda: close_excel_and_popup()) 
-
-            def monitor_excel():
-                nonlocal excel_processes
-                excel_processes = [proc for proc in excel_processes if proc.is_running()]
-                if not any(proc.is_running() for proc in excel_processes):
-                    dialog.destroy()
-                    # Clean up the temporary file
-                    if temp_file and os.path.exists(temp_file):
-                        try:
-                            os.remove(temp_file)
-                        except:
-                            pass
-                else:
-                    dialog.after(100, monitor_excel)
-
-            dialog.after(100, monitor_excel)
-            close_button = Button(dialog, text="Close", command=close_excel_and_popup)
-            close_button.pack(pady=10)
-
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to open Excel: {e}")
-
     def open_raw_data_in_excel(self, sheet_name=None) -> None:
         """
         Opens an Excel file for a specific sheet, allowing edits, and then
-        updates the VAP3 file and GUI when Excel closes.
+        updates the application when Excel closes.
+    
+        This improved version forces Excel to open in a new instance and has robust
+        file tracking, preventing errors when other Excel files are already open.
+    
+        Args:
+            sheet_name (str, optional): Name of the sheet to open. If None,
+                                        uses the currently selected sheet.
         """
         try:
             # Validate the current state
             if not hasattr(self.gui, 'filtered_sheets') or not self.gui.filtered_sheets:
                 messagebox.showerror("Error", "No data is currently loaded.")
                 return
-            
+        
             # If no sheet specified, use the currently selected sheet
             if not sheet_name and hasattr(self.gui, 'selected_sheet'):
                 sheet_name = self.gui.selected_sheet.get()
-            
+        
             if not sheet_name or sheet_name not in self.gui.filtered_sheets:
                 messagebox.showerror("Error", "Please select a valid sheet first.")
                 return
-            
+        
             # Get the sheet data
             sheet_data = self.gui.filtered_sheets[sheet_name]['data']
         
-            # Create a temporary Excel file
+            # Create a temporary Excel file in a reliable location, with a simple filename
             import tempfile
+            import uuid
             from openpyxl import Workbook
         
-            # Use a consistent naming scheme so we can identify our temp files
-            temp_dir = tempfile.gettempdir()
-            temp_file = os.path.join(temp_dir, f"dataviewer_edit_{sheet_name}_{os.getpid()}.xlsx")
+            # Generate a unique identifier that's short but still unique
+            unique_id = str(uuid.uuid4()).split('-')[0]
+        
+            # Ensure the sheet name only contains valid characters
+            safe_sheet_name = "".join(c for c in sheet_name if c.isalnum() or c == ' ')
+            safe_sheet_name = safe_sheet_name.replace(' ', '_')[:15]  # Keep it reasonably short
+        
+            # Create a temporary file in the user's temp directory
+            temp_dir = os.path.abspath(tempfile.gettempdir())
+            temp_file = os.path.join(temp_dir, f"dataviewer_{safe_sheet_name}_{unique_id}.xlsx")
+        
+            #print(f"Creating temporary file at: {temp_file}")
         
             # Create a new workbook with just this sheet
             wb = Workbook()
             ws = wb.active
-            ws.title = sheet_name
+            # Ensure sheet name is valid for Excel (31 chars max, no special chars)
+            ws.title = safe_sheet_name[:31]
         
             # Write the headers
             for col_idx, column_name in enumerate(sheet_data.columns, 1):
                 ws.cell(row=1, column=col_idx, value=str(column_name))
-            
+        
             # Write the data
             for row_idx, row in enumerate(sheet_data.itertuples(index=False), 2):
                 for col_idx, value in enumerate(row, 1):
@@ -388,129 +319,232 @@ class FileManager:
             # Save the workbook
             wb.save(temp_file)
         
+            # Make sure the file exists before proceeding
+            if not os.path.exists(temp_file):
+                raise FileNotFoundError(f"Failed to create temporary file at {temp_file}")
+        
             # Record the file modification time before opening
             original_mod_time = os.path.getmtime(temp_file)
         
-            # Open the file in Excel
-            os.startfile(temp_file)
+            # Create a small status bar notification
+            status_text = f"Opening {sheet_name} in Excel. Changes will be imported when Excel closes."
+            status_label = ttk.Label(self.gui.root, text=status_text, relief="sunken", anchor="w")
+            status_label.pack(side="bottom", fill="x")
+            self.gui.root.update_idletasks()
         
-            # Wait for Excel to open
-            excel_opened = False
-            for _ in range(10):
-                if any(proc.name().lower() == "excel.exe" for proc in psutil.process_iter()):
-                    excel_opened = True
-                    break
-                time.sleep(0.5)
+            # Use a class to hold shared state that can be modified in the thread
+            class FileMonitorState:
+                def __init__(self, initial_mod_time):
+                    self.last_mod_time = initial_mod_time
+                    self.has_changed = False
+        
+            # Create a state object with the initial modification time
+            monitor_state = FileMonitorState(original_mod_time)
+        
+            # ----- THE KEY DIFFERENCE: FORCE A NEW EXCEL INSTANCE -----
+            # Windows Registry by default opens Excel files in the same instance
+            # We need to bypass this by using the /x switch to start a new instance
+            import subprocess
+        
+            # The command to force a new Excel instance 
+            cmd = f'start /wait "" "excel.exe" /x "{os.path.abspath(temp_file)}"'
+        
+            # Execute the command which opens Excel in a new instance
+            # Note: we use subprocess.call with shell=True to properly handle the start command
+            try:
+                subprocess.Popen(cmd, shell=True)
+                #print(f"Launched Excel with command: {cmd}")
+            except Exception as e:
+                print(f"Error launching Excel with command: {e}")
+                # Fall back to the standard method as a last resort
+                os.startfile(os.path.abspath(temp_file))
+                #print("Fell back to os.startfile method")
             
-            if not excel_opened:
-                raise TimeoutError("Excel did not open in the expected time.")
+            # Wait a moment for Excel to start up
+            time.sleep(2.0)
+        
+            # Start a background thread to monitor the file
+            import threading
+        
+            def monitor_file_lock():
+                """Monitor the Excel file until it's no longer locked, then process any changes."""
+                file_open = True
             
-            # Get Excel processes for monitoring
-            excel_processes = [proc for proc in psutil.process_iter() if proc.name().lower() == "excel.exe"]
-        
-            # Create dialog
-            from tkinter import Toplevel, Label, Button, Frame
-            dialog = Toplevel(self.root)
-            dialog.title("Excel Edit Mode")
-            dialog.geometry("400x200")
-            dialog.grab_set()
-        
-            main_frame = Frame(dialog)
-            main_frame.pack(pady=10, padx=15, fill="both", expand=True)
-        
-            # Information label
-            Label(main_frame, text=f"Excel has opened with the '{sheet_name}' sheet.", 
-                  font=("Arial", 10, "bold")).pack(pady=(0,5))
-        
-            # Instructions
-            instruction_text = (
-                "Make your changes in Excel and save the file.\n"
-                "When you close Excel, your changes will be automatically imported."
-            )
-            Label(main_frame, text=instruction_text, justify="center", wraplength=360).pack(pady=5)
-        
-            # Warning/note
-            note_text = (
-                "Note: Only changes to data values will be preserved. "
-                "Formatting, formulas, and structural changes may be lost."
-            )
-            Label(main_frame, text=note_text, font=("Arial", 8), fg="gray", 
-                  wraplength=360, justify="center").pack(pady=5)
-        
-            def process_excel_changes():
-                """Process changes made in Excel after it closes"""
-                try:
-                    # Check if the file was modified
-                    if os.path.exists(temp_file):
-                        new_mod_time = os.path.getmtime(temp_file)
-                    
-                        if new_mod_time > original_mod_time:
-                            # File was modified, read it back
-                            
-                        
-                            modified_data = pd.read_excel(temp_file)
-                        
-                            # Update the filtered sheets with new data
-                            self.gui.filtered_sheets[sheet_name]['data'] = modified_data
-                        
-                            # If we're using a VAP3 file, update it
-                            if hasattr(self.gui, 'file_path') and self.gui.file_path.endswith('.vap3'):
-                                from vap_file_manager import VapFileManager
-                            
-                                vap_manager = VapFileManager()
-                                # Save to the same VAP3 file
-                                vap_manager.save_to_vap3(
-                                    self.gui.file_path,
-                                    self.gui.filtered_sheets,
-                                    self.gui.sheet_images,
-                                    self.gui.plot_options,
-                                    getattr(self.gui, 'image_crop_states', {})
-                                )
-                        
-                            # Refresh the GUI display
-                            self.gui.update_displayed_sheet(sheet_name)
-                            messagebox.showinfo("Success", "Changes from Excel have been imported successfully.")
-                except Exception as e:
-                    messagebox.showerror("Error", f"Failed to process Excel changes: {e}")
-                finally:
-                    # Always try to clean up the temp file
+                #print(f"Starting file lock monitoring for {temp_file}")
+            
+                while file_open:
+                    # Check if the file is still locked by Excel
+                    file_locked = False
+                    try:
+                        # Try to open the file for exclusive access - if it fails, Excel still has it open
+                        with open(temp_file, 'r+b') as test_lock:
+                            # Successfully opened file - not locked
+                            pass
+                    except PermissionError:
+                        # File is still locked (open in Excel)
+                        file_locked = True
+                        #print("File is locked - Excel is still using it")
+                    except FileNotFoundError:
+                        # File was deleted or moved
+                        #print(f"File not found during monitoring: {temp_file}")
+                        file_locked = False
+                        file_open = False
+                    except Exception as e:
+                        # Some other error - assume file is not locked
+                        #print(f"Error checking file lock: {e}")
+                        file_locked = False
+                
+                    # Update file_open status based on lock check
+                    file_open = file_locked
+                
+                    # If file exists, check if it has been modified 
                     if os.path.exists(temp_file):
                         try:
-                            os.remove(temp_file)
-                        except:
+                            current_mod_time = os.path.getmtime(temp_file)
+                            if current_mod_time > monitor_state.last_mod_time:
+                                #print(f"File modification detected. Old time: {monitor_state.last_mod_time}, New time: {current_mod_time}")
+                                monitor_state.has_changed = True
+                                monitor_state.last_mod_time = current_mod_time
+                        except Exception as e:
+                            #print(f"Error checking file modification time: {e}")
                             pass
+                    else:
+                        #print(f"Warning: File no longer exists at {temp_file}")
+                        pass
+                    # If the file is no longer open, process any changes
+                    if not file_open:
+                        #print("File is no longer locked - processing changes")
+                        # Use a delay before processing to make sure Excel fully releases the file
+                        self.gui.root.after(500, lambda: self._process_excel_changes(temp_file, sheet_name, monitor_state.has_changed, status_label))
+                        break
+                
+                    # Sleep briefly to reduce CPU usage
+                    time.sleep(1.0)
         
-            def close_excel_and_process():
-                """Close Excel and process any changes"""
-                for proc in excel_processes:
-                    if proc.is_running():
-                        try:
-                            proc.terminate()
-                            proc.wait()
-                        except:
-                            pass
-                process_excel_changes()
-                dialog.destroy()
-        
-            def monitor_excel():
-                """Monitor Excel and process changes when it closes"""
-                nonlocal excel_processes
-                excel_processes = [proc for proc in excel_processes if proc.is_running()]
-                if not any(proc.is_running() for proc in excel_processes):
-                    process_excel_changes()
-                    dialog.destroy()
-                else:
-                    dialog.after(100, monitor_excel)
-        
-            dialog.protocol("WM_DELETE_WINDOW", close_excel_and_process)
-            dialog.after(100, monitor_excel)
-        
-            # Close button
-            Button(dialog, text="Close Excel & Import Changes", 
-                   command=close_excel_and_process).pack(pady=10)
+            # Start the monitoring thread
+            monitor_thread = threading.Thread(target=monitor_file_lock, daemon=True)
+            self.gui.threads.append(monitor_thread)
+            monitor_thread.start()
         
         except Exception as e:
             messagebox.showerror("Error", f"Failed to open Excel: {e}")
+            import traceback
+            traceback.print_exc()
+            # Clean up any UI changes if there was an error
+            for widget in self.gui.root.winfo_children():
+                if isinstance(widget, ttk.Label) and "Opening" in widget.cget("text"):
+                    widget.destroy()
+
+    def _process_excel_changes(self, temp_file, sheet_name, file_changed, status_label=None):
+        """
+        Process changes made in Excel after it closes.
+    
+        Args:
+            temp_file (str): Path to the temporary Excel file
+            sheet_name (str): The sheet name that was edited
+            file_changed (bool): Whether the file was modified
+            status_label (ttk.Label, optional): Status label to update and remove
+        """
+        try:
+            # Remove the status label if it exists
+            if status_label and status_label.winfo_exists():
+                status_label.destroy()
+        
+            #print(f"Processing Excel changes for {sheet_name}. File changed: {file_changed}")
+            #print(f"File path: {temp_file}")
+            #print(f"File exists: {os.path.exists(temp_file)}")
+        
+            if file_changed and os.path.exists(temp_file):
+                try:
+                    # Read the modified data with a retry mechanism
+                    max_retries = 3
+                    retry_count = 0
+                    read_success = False
+                    modified_data = None
+                
+                    while not read_success and retry_count < max_retries:
+                        try:
+                            #print(f"Attempting to read Excel file, attempt {retry_count + 1}")
+                            modified_data = pd.read_excel(temp_file)
+                            read_success = True
+                            #print("Successfully read modified Excel data")
+                        except Exception as read_error:
+                            retry_count += 1
+                            #print(f"Error reading Excel file (attempt {retry_count}): {read_error}")
+                            time.sleep(1.0)  # Wait before retrying
+                
+                    if not read_success:
+                        raise Exception(f"Failed to read Excel file after {max_retries} attempts")
+                
+                    # Update the filtered sheets with new data
+                    self.gui.filtered_sheets[sheet_name]['data'] = modified_data
+                
+                    # If we're using a VAP3 file, update it
+                    if hasattr(self.gui, 'file_path') and self.gui.file_path.endswith('.vap3'):
+                        from vap_file_manager import VapFileManager
+                    
+                        vap_manager = VapFileManager()
+                        #print("Updating VAP3 file with modified data")
+                        # Save to the same VAP3 file
+                        vap_manager.save_to_vap3(
+                            self.gui.file_path,
+                            self.gui.filtered_sheets,
+                            self.gui.sheet_images,
+                            self.gui.plot_options,
+                            getattr(self.gui, 'image_crop_states', {})
+                        )
+                
+                    # Refresh the GUI display
+                    self.gui.update_displayed_sheet(sheet_name)
+                
+                    # Show a temporary success message in the status bar
+                    success_label = ttk.Label(
+                        self.gui.root, 
+                        text="Changes from Excel have been imported successfully.",
+                        relief="sunken", 
+                        anchor="w"
+                    )
+                    success_label.pack(side="bottom", fill="x")
+                
+                    # Auto-remove the success message after 3 seconds
+                    self.gui.root.after(3000, lambda: success_label.destroy() if success_label.winfo_exists() else None)
+                    #print("Excel changes successfully processed and imported")
+                
+                except Exception as e:
+                    #print(f"Error processing Excel changes: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    messagebox.showerror("Error", f"Failed to read modified Excel file: {e}")
+            elif file_changed and not os.path.exists(temp_file):
+                #print("File was modified but no longer exists")
+                messagebox.showinfo("Information", "Excel file was modified but appears to have been moved or renamed. Changes could not be imported.")
+            else:
+                # File was closed without changes
+                #print("Excel file was closed without changes")
+                info_label = ttk.Label(
+                    self.gui.root, 
+                    text="Excel file was closed without changes.",
+                    relief="sunken", 
+                    anchor="w"
+                )
+                info_label.pack(side="bottom", fill="x")
+                self.gui.root.after(3000, lambda: info_label.destroy() if info_label.winfo_exists() else None)
+            
+        except Exception as e:
+            #print(f"Exception in _process_excel_changes: {e}")
+            import traceback
+            traceback.print_exc()
+            messagebox.showerror("Error", f"Failed to process Excel changes: {e}")
+        finally:
+            # Always try to clean up the temp file
+            if os.path.exists(temp_file):
+                try:
+                    os.remove(temp_file)
+                    #print(f"Temporary file removed: {temp_file}")
+                except Exception as cleanup_error:
+                    #print(f"Warning: Failed to remove temporary file: {cleanup_error}")
+                    pass
+                    # Don't disrupt the user's workflow with an error message for cleanup issues
 
     def create_new_template(self, startup_menu: tk.Toplevel) -> None:
         """
@@ -560,7 +594,7 @@ class FileManager:
     def update_file_dropdown(self) -> None:
         """Update the file dropdown with loaded file names."""
         file_names = [file_data["file_name"] for file_data in self.gui.all_filtered_sheets]
-        print("DEBUG: file_names = ", file_names)
+        #print("DEBUG: file_names = ", file_names)
         self.gui.file_dropdown["values"] = file_names
         if file_names:
             self.gui.file_dropdown_var.set(file_names[-1])
