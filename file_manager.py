@@ -301,7 +301,7 @@ class FileManager:
             shutil.copy(template_path, new_file_path)
             self.gui.file_path = new_file_path
             self.load_excel_file(new_file_path)
-            self.gui.clear_display_frame(is_plotting_sheet=False, is_empty_sheet=False)
+            self.gui.clear_dynamic_frame()
             self.gui.all_filtered_sheets.append({
                 "file_name": os.path.basename(new_file_path),
                 "file_path": new_file_path,

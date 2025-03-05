@@ -112,8 +112,8 @@ def plot_all_samples(full_sample_data: pd.DataFrame, num_columns_per_sample: int
                 ax.plot(x_data, y_data, marker='o', label=sample_name)
                 sample_names.append(sample_name)
                 y_max = max(y_max, y_data.max())
-            else:
-                print(f"Sample {i+1} - Missing Data for Plot")
+            #else:
+                #print(f"Sample {i+1} - Missing Data for Plot")
 
         ax.set_xlabel('Puffs')
         ax.set_ylabel(get_y_label_for_plot_type(plot_type))
@@ -284,7 +284,7 @@ def process_plot_sheet(data, headers_row=3, data_start_row=4, num_columns_per_sa
             sample_data = data.iloc[:, start_col:end_col]
 
             if sample_data.empty:
-                print(f"Sample {i+1} is empty. Skipping.")
+                #print(f"Sample {i+1} is empty. Skipping.")
                 continue
 
             # Extract plotting data
@@ -314,11 +314,11 @@ def process_plot_sheet(data, headers_row=3, data_start_row=4, num_columns_per_sa
                 samples.append(extracted_data)
                 full_sample_data.append(sample_data)
             except IndexError as e:
-                print(f"Index error for sample {i+1}: {e}. Skipping.")
+                #print(f"Index error for sample {i+1}: {e}. Skipping.")
                 continue
 
         if not samples:
-            print("No valid samples found.")
+            #print("No valid samples found.")
             return pd.DataFrame(), {}, pd.DataFrame()
 
         # Concatenate all sample data
@@ -329,7 +329,7 @@ def process_plot_sheet(data, headers_row=3, data_start_row=4, num_columns_per_sa
 
         return processed_data, sample_arrays, full_sample_data_df
     except Exception as e:
-        print(f"Error processing plot sheet: {e}")
+        #print(f"Error processing plot sheet: {e}")
         return pd.DataFrame(), {}, pd.DataFrame()
 
 def no_efficiency_extracted_data(sample_data):
@@ -376,7 +376,7 @@ def process_generic_sheet(data, headers_row=3, data_start_row=4):
     try:
         # Check for sufficient rows
         if data.shape[0] <= headers_row or data.shape[0] <= data_start_row:
-            print(f"Insufficient rows for processing (headers_row={headers_row}, data_start_row={data_start_row})")
+            #print(f"Insufficient rows for processing (headers_row={headers_row}, data_start_row={data_start_row})")
             return pd.DataFrame(), {}, pd.DataFrame()
 
         # Extract headers and validate them
@@ -395,7 +395,7 @@ def process_generic_sheet(data, headers_row=3, data_start_row=4):
         
         return display_df, {}, full_sample_data_df
     except Exception as e:
-        print(f"Error processing generic sheet: {e}")
+        #print(f"Error processing generic sheet: {e}")
         return pd.DataFrame(), {}, pd.DataFrame()
 
 # ==================== SHEET PROCESSING DISPATCHER ====================
@@ -569,9 +569,9 @@ def process_legacy_test(data, headers_row=3, data_start_row=4, num_columns_per_s
             full_sample_data (pd.DataFrame): Concatenated data for all samples.
     """
     processed_data, sample_arrays, full_sample_data = process_plot_sheet(data, headers_row, data_start_row, num_columns_per_sample)
-    print("Legacy data debug:")
-    print("Puffs array:", sample_arrays.get("Sample_1_Puffs"))
-    print("TPM array:", sample_arrays.get("Sample_1_TPM"))
+    #print("Legacy data debug:")
+    #print("Puffs array:", sample_arrays.get("Sample_1_Puffs"))
+    #print("TPM array:", sample_arrays.get("Sample_1_TPM"))
     return processed_data, sample_arrays, full_sample_data
 
 def process_big_head_low_t_test(data):
@@ -1010,7 +1010,7 @@ def convert_legacy_file_using_template(legacy_file_path: str, template_path: str
     # Process each legacy sample.
     for sample_idx, sample in enumerate(legacy_samples):
         col_offset = 1 + (sample_idx * 12)
-        print(f"\nProcessing sample {sample_idx + 1} at columns {col_offset} to {col_offset + 11}")
+        #print(f"\nProcessing sample {sample_idx + 1} at columns {col_offset} to {col_offset + 11}")
 
         # --- 1. Metadata Handling ---
         sample_name = sample.get("sample_name", f"Sample {sample_idx + 1}")
@@ -1040,7 +1040,7 @@ def convert_legacy_file_using_template(legacy_file_path: str, template_path: str
             if pd.isna(val) or str(val).strip() == "":
                 cutoff = i
                 break
-        print(f"Sample {sample_idx + 1}: Writing {cutoff} data rows based on 'After weight/g' column.")
+        #print(f"Sample {sample_idx + 1}: Writing {cutoff} data rows based on 'After weight/g' column.")
 
         # Now loop over each key in DATA_COL_MAPPING and write only rows up to the cutoff.
         for key, (rel_col, is_numeric) in DATA_COL_MAPPING.items():
@@ -1058,7 +1058,7 @@ def convert_legacy_file_using_template(legacy_file_path: str, template_path: str
                     ws.cell(row=target_row, column=target_col, 
                             value=float(value) if is_numeric else str(value))
                 except Exception as e:
-                    print(f"Error writing {key} at ({target_row},{target_col}): {e}")
+                    #print(f"Error writing {key} at ({target_row},{target_col}): {e}")
                     ws.cell(row=target_row, column=target_col, value="ERROR")
 
         # --- 3. Clearing Extra Rows in the Block ---
@@ -1091,7 +1091,7 @@ def convert_legacy_file_using_template(legacy_file_path: str, template_path: str
     new_file_name = f"{base_name} Legacy.xlsx"
     new_file_path = os.path.join(folder_path, new_file_name)
     wb.save(new_file_path)
-    print(f"\nSaved processed file to: {new_file_path}")
+    #print(f"\nSaved processed file to: {new_file_path}")
     return load_excel_file(new_file_path)[new_sheet_name]
 
 def convert_legacy_standards_using_template(legacy_file_path: str, template_path: str = None) -> dict:
@@ -1176,5 +1176,5 @@ def convert_legacy_standards_using_template(legacy_file_path: str, template_path
             pass
 
     wb_template.save(new_file_path)
-    print(f"Saved legacy standards file to: {new_file_path}")
+    #print(f"Saved legacy standards file to: {new_file_path}")
     return load_excel_file(new_file_path)
