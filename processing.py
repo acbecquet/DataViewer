@@ -31,7 +31,7 @@ from utils import (
     get_resource_path
 )
 
-pd.set_option('future.no_silent_downcasting', True)
+#pd.set_option('future.no_silent_downcasting', True)
 
 def get_valid_plot_options(plot_options,full_sample_data):
     """

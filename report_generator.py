@@ -216,8 +216,8 @@ class ReportGenerator:
             prs.slide_width = Inches(13.33)
             prs.slide_height = Inches(7.5)
 
-           
-            image_paths = self.gui.sheet_images.get(sheet_name, [])
+            current_file = self.gui.current_file
+            image_paths = self.gui.sheet_images.get(current_file, {}).get(sheet_name, [])
 
             # Create main content slide
             main_slide = prs.slides.add_slide(prs.slide_layouts[6])
@@ -231,7 +231,7 @@ class ReportGenerator:
                                           width=Inches(1.57), height=Inches(0.53))
 
             # Add title
-            title_shape = main_slide.shapes.add_textbox(Inches(0.45), Inches(0.45), 
+            title_shape = main_slide.shapes.add_textbox(Inches(0.45), Inches(-0.04), 
                                                        Inches(10.72), Inches(0.64))
             text_frame = title_shape.text_frame
 
@@ -284,7 +284,7 @@ class ReportGenerator:
             total_slides = 1  # Cover slide
             for sheet_name in self.gui.filtered_sheets.keys():
                 total_slides += 1  # Main slide
-                if sheet_name in self.gui.sheet_images and self.gui.sheet_images[sheet_name]:
+                if sheet_name in self.gui.sheet_images and self.gui.sheet_images[self.gui.current_file][sheet_name]:
                     total_slides += 1  # Image slide
 
 
@@ -421,9 +421,10 @@ class ReportGenerator:
 
                     # Add image slide if images exist
 
-                    if sheet_name in self.gui.sheet_images and self.gui.sheet_images[sheet_name]:
+                    if sheet_name in self.gui.sheet_images[self.gui.current_file]:
                         print("Images Exist! Adding a slide...")
-                        image_paths = self.gui.sheet_images[sheet_name]
+                        current_file = self.gui.current_file
+                        image_paths = self.gui.sheet_images.get(current_file, {}).get(sheet_name, [])
                         img_slide = prs.slides.add_slide(prs.slide_layouts[6])
                         self.setup_image_slide(prs, img_slide, sheet_name)
                         self.add_images_to_slide(img_slide, image_paths)

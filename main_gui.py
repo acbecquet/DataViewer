@@ -524,9 +524,10 @@ class TestingGUI:
 
         self.image_loader.frame.config(height=150)
 
-        if sheet_name in self.sheet_images:
-            self.image_loader.load_images_from_list(self.sheet_images[sheet_name])
-            for img_path in self.sheet_images[sheet_name]:
+        current_file = self.current_file
+        if current_file in self.sheet_images and sheet_name in self.sheet_images[current_file]:
+            self.image_loader.load_images_from_list(self.sheet_images[current_file][sheet_name])
+            for img_path in self.sheet_images[current_file][sheet_name]:
                 if img_path in self.image_crop_states:
                     self.image_loader.image_crop_states[img_path] = self.image_crop_states[img_path]
 
@@ -591,9 +592,12 @@ class TestingGUI:
             return
 
         print(f"DEBUG: Storing images for sheet: {sheet_name}")
-    
-        # Store image paths
-        self.sheet_images[sheet_name] = paths
+        
+        # Ensure the file key exists in the sheet_images dictionary
+        if self.current_file not in self.sheet_images:
+            self.sheet_images[self.current_file] = {}
+        # Store images under both the file and sheet name
+        self.sheet_images[self.current_file][sheet_name] = paths
 
         # Store crop states for each image
         if not hasattr(self, 'image_crop_states'):
@@ -604,7 +608,7 @@ class TestingGUI:
             if img_path not in self.image_crop_states:
                 self.image_crop_states[img_path] = self.crop_enabled.get()
 
-        print(f"DEBUG: Stored image paths: {self.sheet_images[sheet_name]}")
+        print(f"DEBUG: Stored image paths: {self.sheet_images[self.current_file][sheet_name]}")
         print(f"DEBUG: Stored crop states: {self.image_crop_states}")
 
 

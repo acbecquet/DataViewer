@@ -161,6 +161,7 @@ class FileManager:
             if self.gui.all_filtered_sheets:
                 last_file = self.gui.all_filtered_sheets[-1]
                 self.set_active_file(last_file["file_name"])
+                self.update_file_dropdown()
                 self.update_ui_for_current_file()
 
         except Exception as e:
@@ -328,6 +329,7 @@ class FileManager:
     def update_file_dropdown(self) -> None:
         """Update the file dropdown with loaded file names."""
         file_names = [file_data["file_name"] for file_data in self.gui.all_filtered_sheets]
+        print("DEBUG: file_names = ", file_names)
         self.gui.file_dropdown["values"] = file_names
         if file_names:
             self.gui.file_dropdown_var.set(file_names[-1])
