@@ -28,6 +28,7 @@ from report_generator import ReportGenerator
 from trend_analysis_gui import TrendAnalysisGUI
 from progress_dialog import ProgressDialog
 from image_loader import ImageLoader
+from viscosity_calculator import ViscosityCalculator
 from utils import FONT, get_resource_path, clean_columns, get_save_path, is_standard_file, plotting_sheet_test, APP_BACKGROUND_COLOR,BUTTON_COLOR, PLOT_CHECKBOX_TITLE
 
 class TestingGUI:
@@ -76,6 +77,7 @@ class TestingGUI:
         self.plot_manager = PlotManager(self)
         self.report_generator = ReportGenerator(self)
         self.progress_dialog = ProgressDialog(self.root)
+        self.viscosity_calculator = ViscosityCalculator(self)
         # (TrendAnalysisGUI will be created when needed)
 
     def configure_ui(self) -> None:
@@ -365,6 +367,11 @@ class TestingGUI:
         dbmenu.add_command(label="Browse Database", command=self.file_manager.show_database_browser)
         dbmenu.add_command(label="Load from Database", command=self.file_manager.load_from_database)
         menubar.add_cascade(label="Database", menu=dbmenu)
+
+        # Calculate menu (new)
+        calculatemenu = tk.Menu(menubar, tearoff=0)
+        calculatemenu.add_command(label="Viscosity", command=self.open_viscosity_calculator)
+        menubar.add_cascade(label="Calculate", menu=calculatemenu)
 
         # Compare menu (empty for now)
         comparemenu = tk.Menu(menubar, tearoff=0)
@@ -890,3 +897,7 @@ class TestingGUI:
         finally:
             self.progress_dialog.hide_progress_bar()
 
+    def open_viscosity_calculator(self):
+        """Open the viscosity calculator window."""
+        calculator = ViscosityCalculator(self)
+        calculator.show_calculator()
