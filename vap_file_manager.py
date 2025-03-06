@@ -5,7 +5,7 @@ Manages the .vap3 file format for the DataViewer Application.
 
 This module implements a custom file format (.vap3) that stores:
 - Sheet data as CSVs
-- Sheet metadata (is_plotting, is_empty)
+- Sheet meta_data (is_plotting, is_empty)
 - Associated images for each sheet
 - Image crop states
 - Plot data and settings
@@ -65,11 +65,11 @@ class VapFileManager:
             
         try:
             with zipfile.ZipFile(filepath, 'w', zipfile.ZIP_DEFLATED) as archive:
-                # Create a metadata file
+                # Create a meta_data file
                 file_id = str(uuid.uuid4())
                 timestamp = datetime.datetime.now().isoformat()
                 
-                metadata = {
+                meta_data = {
                     'version': self.version,
                     'file_id': file_id,
                     'timestamp': timestamp,
@@ -77,8 +77,8 @@ class VapFileManager:
                     'has_images': bool(sheet_images)
                 }
                 
-                # Write metadata to the archive
-                archive.writestr('metadata.json', json.dumps(metadata))
+                # Write meta_data to the archive
+                archive.writestr('meta_data.json', json.dumps(meta_data))
                 
                 # Store plot options
                 archive.writestr('plot_options.json', json.dumps(plot_options))
@@ -101,13 +101,13 @@ class VapFileManager:
                     sheet_info['data'].to_csv(buffer, index=False)
                     archive.writestr(f'{sheet_dir}/data.csv', buffer.getvalue())
                     
-                    # Store sheet metadata
-                    sheet_metadata = {
+                    # Store sheet meta_data
+                    sheet_meta_data = {
                         'is_plotting': is_plotting,
                         'is_empty': is_empty
                     }
-                    archive.writestr(f'{sheet_dir}/metadata.json', 
-                                    json.dumps(sheet_metadata))
+                    archive.writestr(f'{sheet_dir}/meta_data.json', 
+                                    json.dumps(sheet_meta_data))
                 
                 # Store images
                 for file_name, file_sheets in sheet_images.items():
@@ -152,7 +152,7 @@ class VapFileManager:
             - image_crop_states: Dictionary of crop states for images
             - plot_options: List of available plot types
             - plot_settings: Dictionary of plot settings
-            - metadata: File metadata
+            - meta_data: File meta_data
         """
         # Initialize the result dictionary
         result = {
@@ -161,7 +161,7 @@ class VapFileManager:
             'image_crop_states': {},
             'plot_options': [],
             'plot_settings': {},
-            'metadata': {}
+            'meta_data': {}
         }
         
         try:
@@ -169,10 +169,10 @@ class VapFileManager:
                 # Get the list of all files in the archive
                 all_files = archive.namelist()
                 
-                # Extract metadata
-                if 'metadata.json' in all_files:
-                    metadata = json.loads(archive.read('metadata.json').decode('utf-8'))
-                    result['metadata'] = metadata
+                # Extract meta_data
+                if 'meta_data.json' in all_files:
+                    meta_data = json.loads(archive.read('meta_data.json').decode('utf-8'))
+                    result['meta_data'] = meta_data
                 
                 # Extract plot options
                 if 'plot_options.json' in all_files:
@@ -185,10 +185,10 @@ class VapFileManager:
                     result['plot_settings'] = plot_settings
                 
                 # Extract sheet data
-                sheet_names = metadata.get('sheet_names', [])
+                sheet_names = meta_data.get('sheet_names', [])
                 for sheet_name in sheet_names:
-                    # Load sheet metadata
-                    sheet_meta_path = f'sheets/{sheet_name}/metadata.json'
+                    # Load sheet meta_data
+                    sheet_meta_path = f'sheets/{sheet_name}/meta_data.json'
                     if sheet_meta_path in all_files:
                         sheet_meta = json.loads(archive.read(sheet_meta_path).decode('utf-8'))
                         

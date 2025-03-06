@@ -14,8 +14,8 @@ from utils import (
     remove_empty_columns,
     wrap_text,
     plotting_sheet_test,
-    extract_metadata,
-    map_metadata_to_template,
+    extract_meta_data,
+    map_meta_data_to_template,
     read_sheet_with_values,
     unmerge_all_cells,
     validate_sheet_data,
@@ -553,7 +553,7 @@ def process_legacy_test(data, headers_row=3, data_start_row=4, num_columns_per_s
     """
     Process legacy test data (already converted to standard format) similarly to other plotting sheets.
     Legacy files (after conversion) contain only the key columns (e.g. puffs and TPM (mg/puff))
-    and minimal metadata. This function uses the same logic as process_plot_sheet to generate the
+    and minimal meta_data. This function uses the same logic as process_plot_sheet to generate the
     processed data, sample arrays, and concatenated full_sample_data.
     
     Args:
@@ -695,12 +695,12 @@ def aggregate_sheet_metrics(full_sample_data: pd.DataFrame, num_columns_per_samp
         the value from the puffs column (index 0) at that row.
       - Draw Pressure: from the same last valid row in column index 3.
       - Smell: from the same last valid row in column index 5.
-      - Date: from metadata at row index 0, column index 3.
-      - Puff Regime: from metadata at row index 1, column index 7.
-      - Initial Oil Mass: from metadata at row index 2, column index 7.
-      - Burn: from metadata at row index 0, column index 9.
-      - Clog: from metadata at row index 1, column index 9.
-      - Leak: from metadata at row index 2, column index 9.
+      - Date: from meta_data at row index 0, column index 3.
+      - Puff Regime: from meta_data at row index 1, column index 7.
+      - Initial Oil Mass: from meta_data at row index 2, column index 7.
+      - Burn: from meta_data at row index 0, column index 9.
+      - Clog: from meta_data at row index 1, column index 9.
+      - Leak: from meta_data at row index 2, column index 9.
       - Sample Name: from column index 5 (assumed to contain the sample name).
     
     Returns a DataFrame with one row per sample.
@@ -754,7 +754,7 @@ def aggregate_sheet_metrics(full_sample_data: pd.DataFrame, num_columns_per_samp
             draw_pressure = None
             smell = None
 
-        # Extract metadata from the first three rows (indices 0, 1, and 2)
+        # Extract meta_data from the first three rows (indices 0, 1, and 2)
         try:
             date_val = sample_data.iloc[0, 3]  # Date from column 4 (index 3) at row 1 (index 0)
         except Exception:
@@ -843,22 +843,22 @@ def plot_aggregate_trends(aggregate_df: pd.DataFrame) -> plt.Figure:
 def extract_samples_from_old_file(file_path: str, sheet_name: Optional[str] = None) -> list:
     """
     Extract samples from an old Excel file by robustly locating the headers "puffs" and "TPM (mg/puff)" anywhere in the sheet.
-    For each sample header found, a new set of metadata (from up to 3 rows above) and column data is extracted.
+    For each sample header found, a new set of meta_data (from up to 3 rows above) and column data is extracted.
     
     Returns a list of dictionaries, one per sample, each containing:
         - 'sample_name': The value found near the puffs header.
         - 'puffs': A pandas Series of the puffs column.
         - 'tpm': A pandas Series of the TPM column.
         - 'header_row': The index of the header row.
-        - Additional metadata if detected.
+        - Additional meta_data if detected.
     """
     # Read the sheet without assuming a header row.
     df = read_sheet_with_values(file_path, sheet_name)
     samples = []
     nrows, ncols = df.shape
 
-    # Regex patterns for metadata and data headers.
-    metadata_patterns = {
+    # Regex patterns for meta_data and data headers.
+    meta_data_patterns = {
         "sample_name": [
             r"(cart(ridge)?\s*#|sample\s*(name|id))",  # e.g. "Cart #", "Sample ID"
             r"puffing\s*data\s*for\s*:?\s*" # e.g puffing data for:
@@ -887,9 +887,9 @@ def extract_samples_from_old_file(file_path: str, sheet_name: Optional[str] = No
 
     numeric_columns = {"puffs", "tpm", "before_weight", "after_weight", "draw_pressure"}
 
-    # Track processed columns for sample data and metadata separately.
+    # Track processed columns for sample data and meta_data separately.
     processed_cols = {row: [] for row in range(nrows)}
-    processed_metadata = {row: [] for row in range(nrows)}
+    processed_meta_data = {row: [] for row in range(nrows)}
     # Set a threshold: cells within this number of columns are considered too close.
     proximity_threshold = 1
 
@@ -909,29 +909,29 @@ def extract_samples_from_old_file(file_path: str, sheet_name: Optional[str] = No
                 processed_cols[row].append(col)
 
                 # -----------------------------
-                # Extract metadata (up to 3 rows above)
+                # Extract meta_data (up to 3 rows above)
                 # -----------------------------
                 start_search_row = max(0, row - 3)
-                metadata_found = {}
+                meta_data_found = {}
                 for r in range(row - 1, start_search_row - 1, -1):
                     for c in range(ncols):
-                        # Skip if this cell in metadata row was already used.
-                        if any(abs(c - pm) < proximity_threshold for pm in processed_metadata[r]):
+                        # Skip if this cell in meta_data row was already used.
+                        if any(abs(c - pm) < proximity_threshold for pm in processed_meta_data[r]):
                             continue
                         cell_val_above = df.iat[r, c]
-                        for key, patterns in metadata_patterns.items():
-                            if key in metadata_found:
+                        for key, patterns in meta_data_patterns.items():
+                            if key in meta_data_found:
                                 continue  # Already found this key for the current sample.
                             for pattern in patterns:
                                 if header_matches(cell_val_above, pattern):
                                     value = df.iat[r, c + 1] if (c + 1 < ncols) else None
-                                    metadata_found[key] = value
-                                    # Mark this column as used for metadata in row r.
-                                    processed_metadata[r].append(c)
+                                    meta_data_found[key] = value
+                                    # Mark this column as used for meta_data in row r.
+                                    processed_meta_data[r].append(c)
                                     break
-                            if key in metadata_found:
+                            if key in meta_data_found:
                                 break
-                sample.update(metadata_found)
+                sample.update(meta_data_found)
 
                 # -----------------------------
                 # Extract column data for this sample.
@@ -957,7 +957,7 @@ def convert_legacy_file_using_template(legacy_file_path: str, template_path: str
     """
     Converts a legacy Excel file to the standardized template format.
     - Uses 12-column blocks per sample.
-    - Maps metadata into exact template positions.
+    - Maps meta_data into exact template positions.
     - For each sample block, only rows up to the first empty 'After weight/g'
       are written and all cells below that row (within that block) are cleared.
     """
@@ -977,8 +977,8 @@ def convert_legacy_file_using_template(legacy_file_path: str, template_path: str
     if not legacy_samples:
         raise ValueError("No valid legacy sample data found.")
 
-    # Metadata mapping: each key maps to a list of regex patterns and the target (row, col offset).
-    METADATA_MAPPING = {
+    # meta_data mapping: each key maps to a list of regex patterns and the target (row, col offset).
+    meta_data_MAPPING = {
         "Sample ID:": (
             [r"cart\s*#:?", r"sample\s*(name|id):?"], 
             (1, 5)
@@ -1012,11 +1012,11 @@ def convert_legacy_file_using_template(legacy_file_path: str, template_path: str
         col_offset = 1 + (sample_idx * 12)
         #print(f"\nProcessing sample {sample_idx + 1} at columns {col_offset} to {col_offset + 11}")
 
-        # --- 1. Metadata Handling ---
+        # --- 1. meta_data Handling ---
         sample_name = sample.get("sample_name", f"Sample {sample_idx + 1}")
         ws.cell(row=1, column=col_offset, value=os.path.splitext(os.path.basename(legacy_file_path))[0])
 
-        metadata_values = {
+        meta_data_values = {
             "Sample ID:": sample.get("sample_name", ""),
             "Voltage:": sample.get("voltage", ""),
             "Viscosity:": sample.get("viscosity", ""),
@@ -1027,8 +1027,8 @@ def convert_legacy_file_using_template(legacy_file_path: str, template_path: str
             "Media:": sample.get("media", "")
         }
 
-        for template_key, (patterns, (tpl_row, tpl_col_offset)) in METADATA_MAPPING.items():
-            value = metadata_values.get(template_key, "")
+        for template_key, (patterns, (tpl_row, tpl_col_offset)) in meta_data_MAPPING.items():
+            value = meta_data_values.get(template_key, "")
             ws.cell(row=tpl_row, column=col_offset + tpl_col_offset, value=value)
 
         # --- 2. Data Column Handling with Row Slicing ---
@@ -1103,8 +1103,8 @@ def convert_legacy_standards_using_template(legacy_file_path: str, template_path
            • If the sheet is a plotting sheet:
                  - Unmerge merged cells on the legacy sheet,
                  - Copy the entire legacy sheet (preserving header rows),
-                 - Extract metadata using a simplified mapping,
-                 - Update the template sheet with that metadata, then write the data.
+                 - Extract meta_data using a simplified mapping,
+                 - Update the template sheet with that meta_data, then write the data.
            • Otherwise (non-plotting):
                  - Unmerge merged cells on the legacy sheet and the template sheet,
                  - Clear the template sheet,
@@ -1130,7 +1130,7 @@ def convert_legacy_standards_using_template(legacy_file_path: str, template_path
     new_file_name = f"{base_name} Legacy Standards.xlsx"
     new_file_path = os.path.join(folder_path, new_file_name)
     
-    SIMPLE_METADATA_MAPPING = {
+    SIMPLE_meta_data_MAPPING = {
         "sample_name": r"(cart(ridge)?\s*#|sample\s*(name|id))",
         "voltage": r"voltage",
         "viscosity": r"viscosity",
@@ -1150,8 +1150,8 @@ def convert_legacy_standards_using_template(legacy_file_path: str, template_path
             if plotting_sheet_test(sheet_name, legacy_df):
                 # For plotting sheets: copy the entire legacy sheet so headers are preserved.
                 processed_df = legacy_df.copy()
-                metadata = extract_metadata(legacy_ws, SIMPLE_METADATA_MAPPING)
-                map_metadata_to_template(ws, metadata)
+                meta_data = extract_meta_data(legacy_ws, SIMPLE_meta_data_MAPPING)
+                map_meta_data_to_template(ws, meta_data)
                 # Clear the entire template sheet.
                 for row in ws.iter_rows():
                     for cell in row:

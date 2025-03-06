@@ -38,6 +38,7 @@ from utils import (
     FONT,
     APP_BACKGROUND_COLOR
 )
+from database_manager import DatabaseManager
 
 class FileManager:
     """File Management Module for DataViewer.
@@ -49,6 +50,8 @@ class FileManager:
         self.gui = gui
         self.root = gui.root
         
+
+        self.db_manager = DatabaseManager()
         
     def load_excel_file(self, file_path, legacy_mode: str = None) -> None:
         """
@@ -122,6 +125,8 @@ class FileManager:
                         #print(intense_test_df.iloc[:20, :15])
                 else:
                     raise ValueError(f"Unknown legacy mode: {legacy_mode}")
+
+                self._store_file_in_database(file_path)
             else:
                 # Standard file processing.
                 print("Standard File. Processing")
@@ -140,7 +145,7 @@ class FileManager:
                     intense_test_df = self.gui.filtered_sheets["Intense Test"]["data"]
                     #print("\n--- Normal Standard File: 'Intense Test' ---")
                     #print(intense_test_df.iloc[:20, :15])
-
+                self._store_file_in_database(file_path)
 
         except Exception as e:
             messagebox.showerror("Error", f"Error occurred while loading file: {e}")
@@ -189,6 +194,343 @@ class FileManager:
         finally:
             self.gui.progress_dialog.hide_progress_bar()
             self.root.update_idletasks()  # Ensure GUI refreshes
+
+    def _store_file_in_database(self, original_file_path):
+        """
+        Store the loaded file in the database.
+
+        Steps:
+        1. Create a temporary VAP3 file
+        2. Store the VAP3 file in the database with proper filename
+        3. Store sheet metadata
+        4. Store associated images
+        """
+        try:
+            # Show progress dialog
+            self.gui.progress_dialog.show_progress_bar("Storing file in database...")
+            self.gui.root.update_idletasks()
+    
+            # Create a temporary VAP3 file
+            with tempfile.NamedTemporaryFile(suffix='.vap3', delete=False) as temp_file:
+                temp_vap3_path = temp_file.name
+    
+            # Save current state as VAP3
+            from vap_file_manager import VapFileManager
+            vap_manager = VapFileManager()
+    
+            # Collect plot settings
+            plot_settings = {
+                'selected_plot_type': self.gui.selected_plot_type.get() if hasattr(self.gui, 'selected_plot_type') else None
+            }
+    
+            # Get image crop states
+            image_crop_states = getattr(self.gui, 'image_crop_states', {})
+            if hasattr(self.gui, 'image_loader') and self.gui.image_loader:
+                image_crop_states.update(self.gui.image_loader.image_crop_states)
+    
+            # Extract just the filename (without path or extension) from the original file
+            original_filename_base = os.path.splitext(os.path.basename(original_file_path))[0]
+            display_filename = original_filename_base + '.vap3'
+    
+            # Save to temporary VAP3 file
+            success = vap_manager.save_to_vap3(
+                temp_vap3_path,
+                self.gui.filtered_sheets,
+                self.gui.sheet_images,
+                self.gui.plot_options,
+                image_crop_states,
+                plot_settings
+            )
+    
+            if not success:
+                raise Exception("Failed to create temporary VAP3 file")
+    
+            # Print debug information
+            print(f"Original path: {original_file_path}")
+            print(f"Extracted display filename: {display_filename}")
+    
+            # Store metadata about the original file
+            metadata = {
+                'display_filename': display_filename,  # Include the display filename
+                'original_filename': os.path.basename(original_file_path),
+                'original_path': original_file_path,
+                'creation_date': time.strftime('%Y-%m-%d %H:%M:%S'),
+                'sheet_count': len(self.gui.filtered_sheets),
+                'plot_options': self.gui.plot_options,
+                'plot_settings': plot_settings
+            }
+    
+            # Store the VAP3 file in the database with the proper display filename
+            file_id = self.db_manager.store_vap3_file(temp_vap3_path, metadata)
+    
+            # Store sheet metadata
+            for sheet_name, sheet_info in self.gui.filtered_sheets.items():
+                is_plotting = processing.plotting_sheet_test(sheet_name, sheet_info["data"])
+                is_empty = sheet_info.get("is_empty", False)
+        
+                self.db_manager.store_sheet_info(
+                    file_id, 
+                    sheet_name, 
+                    is_plotting, 
+                    is_empty
+                )
+    
+            # Store associated images
+            if hasattr(self.gui, 'sheet_images') and self.gui.current_file in self.gui.sheet_images:
+                for sheet_name, images in self.gui.sheet_images[self.gui.current_file].items():
+                    for img_path in images:
+                        if os.path.exists(img_path):
+                            crop_enabled = image_crop_states.get(img_path, False)
+                            self.db_manager.store_image(file_id, img_path, sheet_name, crop_enabled)
+    
+            # Clean up the temporary file
+            try:
+                os.unlink(temp_vap3_path)
+            except:
+                pass
+    
+            # Update progress
+            self.gui.progress_dialog.update_progress_bar(100)
+            self.gui.root.update_idletasks()
+    
+            print(f"File successfully stored in database with ID: {file_id} and name: {display_filename}")
+    
+        except Exception as e:
+            print(f"Error storing file in database: {e}")
+            traceback.print_exc()
+        finally:
+            # Hide progress dialog
+            self.gui.progress_dialog.hide_progress_bar()
+    
+    def load_from_database(self, file_id=None):
+        """
+        Load a file from the database.
+        
+        Args:
+            file_id: The ID of the file to load. If None, shows a dialog to select from available files.
+        """
+        try:
+            # Show progress dialog
+            self.gui.progress_dialog.show_progress_bar("Loading from database...")
+            self.gui.root.update_idletasks()
+            
+            if file_id is None:
+                # Show a dialog to select from available files
+                file_list = self.db_manager.list_files()
+                if not file_list:
+                    messagebox.showinfo("Info", "No files found in the database.")
+                    return
+                
+                # Create a simple dialog to choose a file
+                dialog = Toplevel(self.gui.root)
+                dialog.title("Select File from Database")
+                dialog.geometry("600x400")
+                dialog.transient(self.gui.root)
+                dialog.grab_set()
+                
+                # Create a frame for the listbox and scrollbar
+                frame = Frame(dialog)
+                frame.pack(fill="both", expand=True, padx=10, pady=10)
+                
+                # Create a Listbox to display the files
+                listbox = tk.Listbox(frame, font=FONT)
+                listbox.pack(side="left", fill="both", expand=True)
+                
+                # Add a scrollbar
+                scrollbar = tk.Scrollbar(frame, orient="vertical", command=listbox.yview)
+                scrollbar.pack(side="right", fill="y")
+                listbox.config(yscrollcommand=scrollbar.set)
+                
+                # Populate the listbox
+                for file in file_list:
+                    created_at = file["created_at"].strftime("%Y-%m-%d %H:%M:%S")
+                    listbox.insert(tk.END, f"{file['id']}: {file['filename']} - {created_at}")
+                
+                # Add buttons
+                button_frame = Frame(dialog)
+                button_frame.pack(fill="x", padx=10, pady=10)
+                
+                selected_file_id = [None]  # Use a list to store the selected file ID
+                
+                def on_select():
+                    selection = listbox.curselection()
+                    if selection:
+                        index = selection[0]
+                        file_id = file_list[index]["id"]
+                        selected_file_id[0] = file_id
+                        dialog.destroy()
+                
+                def on_cancel():
+                    dialog.destroy()
+                
+                select_button = Button(button_frame, text="Select", command=on_select)
+                select_button.pack(side="right", padx=5)
+                
+                cancel_button = Button(button_frame, text="Cancel", command=on_cancel)
+                cancel_button.pack(side="right", padx=5)
+                
+                # Wait for the dialog to close
+                self.gui.root.wait_window(dialog)
+                
+                # Check if a file was selected
+                file_id = selected_file_id[0]
+                if file_id is None:
+                    return
+            
+            # Load the file from the database
+            file_data = self.db_manager.get_file_by_id(file_id)
+            if not file_data:
+                messagebox.showerror("Error", f"File with ID {file_id} not found in the database.")
+                return
+            
+            # Save the VAP3 file to a temporary location
+            with tempfile.NamedTemporaryFile(suffix='.vap3', delete=False) as temp_file:
+                temp_vap3_path = temp_file.name
+                temp_file.write(file_data['file_content'])
+            
+            # Load the VAP3 file using the existing method
+            from vap_file_manager import VapFileManager
+            vap_manager = VapFileManager()
+            
+            # Load the VAP3 file
+            self.load_vap3_file(temp_vap3_path)
+            
+            # Clean up the temporary file
+            try:
+                os.unlink(temp_vap3_path)
+            except:
+                pass
+            
+            # Update the UI to indicate the file was loaded from the database
+            file_name = file_data['filename']
+            self.gui.root.title(f"DataViewer - {file_name} (from Database)")
+            
+            # Update progress
+            self.gui.progress_dialog.update_progress_bar(100)
+            self.gui.root.update_idletasks()
+            
+            messagebox.showinfo("Success", f"File '{file_name}' loaded from database.")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Error loading file from database: {e}")
+            traceback.print_exc()
+        finally:
+            # Hide progress dialog
+            self.gui.progress_dialog.hide_progress_bar()
+
+    def show_database_browser(self):
+        """
+        Show a dialog to browse files stored in the database.
+        """
+        # Create a dialog to browse the database
+        dialog = Toplevel(self.gui.root)
+        dialog.title("Database Browser")
+        dialog.geometry("800x600")
+        dialog.transient(self.gui.root)
+    
+        # Create frames for UI elements
+        top_frame = Frame(dialog)
+        top_frame.pack(fill="x", padx=10, pady=10)
+    
+        list_frame = Frame(dialog)
+        list_frame.pack(fill="both", expand=True, padx=10, pady=10)
+    
+        bottom_frame = Frame(dialog)
+        bottom_frame.pack(fill="x", padx=10, pady=10)
+    
+        # Add a refresh button
+        def refresh_list():
+            # Clear the current list
+            file_listbox.delete(0, tk.END)
+        
+            # Get the latest file list
+            file_list = self.db_manager.list_files()
+        
+            # Populate the listbox
+            for file in file_list:
+                created_at = file["created_at"].strftime("%Y-%m-%d %H:%M:%S")
+                file_listbox.insert(tk.END, f"{file['id']}: {file['filename']} - {created_at}")
+        
+            # Update the status label
+            status_label.config(text=f"Total files: {len(file_list)}")
+    
+        refresh_button = Button(top_frame, text="Refresh", command=refresh_list)
+        refresh_button.pack(side="left", padx=5)
+    
+        # Add a status label
+        status_label = Label(top_frame, text="Total files: 0")
+        status_label.pack(side="right", padx=5)
+    
+        # Create a listbox with scrollbar for files
+        file_listbox = tk.Listbox(list_frame, font=FONT)
+        file_listbox.pack(side="left", fill="both", expand=True)
+    
+        file_scrollbar = tk.Scrollbar(list_frame, orient="vertical", command=file_listbox.yview)
+        file_scrollbar.pack(side="right", fill="y")
+        file_listbox.config(yscrollcommand=file_scrollbar.set)
+    
+        # Add buttons for actions
+        def load_selected():
+            selection = file_listbox.curselection()
+            if not selection:
+                messagebox.showinfo("Info", "Please select a file to load.")
+                return
+        
+            index = selection[0]
+            selected_text = file_listbox.get(index)
+            file_id = int(selected_text.split(":")[0])
+        
+            # Close the dialog
+            dialog.destroy()
+        
+            # Load the file from the database
+            self.load_from_database(file_id)
+    
+        def delete_selected():
+            selection = file_listbox.curselection()
+            if not selection:
+                messagebox.showinfo("Info", "Please select a file to delete.")
+                return
+        
+            index = selection[0]
+            selected_text = file_listbox.get(index)
+            file_id = int(selected_text.split(":")[0])
+            filename = selected_text.split(":")[1].split("-")[0].strip()
+        
+            # Confirm deletion
+            if messagebox.askyesno("Confirm Delete", f"Are you sure you want to delete {filename}?"):
+                # Delete the file
+                success = self.db_manager.delete_file(file_id)
+                if success:
+                    messagebox.showinfo("Success", f"File {filename} deleted successfully.")
+                    # Refresh the list
+                    refresh_list()
+                else:
+                    messagebox.showerror("Error", f"Failed to delete file {filename}.")
+    
+        load_button = Button(bottom_frame, text="Load Selected", command=load_selected)
+        load_button.pack(side="left", padx=5)
+    
+        delete_button = Button(bottom_frame, text="Delete Selected", command=delete_selected)
+        delete_button.pack(side="left", padx=5)
+    
+        close_button = Button(bottom_frame, text="Close", command=dialog.destroy)
+        close_button.pack(side="right", padx=5)
+    
+        # Initial population of the list
+        refresh_list()
+    
+        # Center the dialog
+        dialog.update_idletasks()
+        width = dialog.winfo_width()
+        height = dialog.winfo_height()
+        x = (dialog.winfo_screenwidth() - width) // 2
+        y = (dialog.winfo_screenheight() - height) // 2
+        dialog.geometry(f"{width}x{height}+{x}+{y}")
+    
+        # Make the dialog modal
+        dialog.grab_set()
+        self.gui.root.wait_window(dialog)
 
     def set_active_file(self, file_name: str) -> None:
         """Set the active file based on the given file name."""

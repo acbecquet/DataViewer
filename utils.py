@@ -241,23 +241,23 @@ def plotting_sheet_test(sheet_name, data):
         return False
 
 # Helper functions
-def extract_metadata(worksheet, patterns):
-    """Extract metadata from first 3 rows using regex patterns."""
-    metadata = {}
+def extract_meta_data(worksheet, patterns):
+    """Extract meta_data from first 3 rows using regex patterns."""
+    meta_data = {}
     for row in range(1, 3):  # Rows 1-3 (1-indexed)
         for col in range(1, worksheet.max_column + 1):
             cell_value = str(worksheet.cell(row=row, column=col).value).lower()
             for key, pattern in patterns.items():
                 if re.search(pattern, cell_value, re.IGNORECASE):
-                    metadata[key] = worksheet.cell(
+                    meta_data[key] = worksheet.cell(
                         row=row, 
                         column=col+1
                     ).value  # Get value from next cell
                     break
-    return metadata
+    return meta_data
 
-def map_metadata_to_template(template_ws, metadata):
-    """Map extracted metadata to template positions."""
+def map_meta_data_to_template(template_ws, meta_data):
+    """Map extracted meta_data to template positions."""
     mapping = {
         "sample_name": (1, 6),   # Row 1, Column F
         "voltage": (4, 6),       # Row 4, Column F
@@ -269,8 +269,8 @@ def map_metadata_to_template(template_ws, metadata):
         "media": (2, 2)         # Row 2, Column B
     }
     for key, (row, col) in mapping.items():
-        if key in metadata:
-            template_ws.cell(row=row, column=col, value=metadata[key])
+        if key in meta_data:
+            template_ws.cell(row=row, column=col, value=meta_data[key])
 
 def copy_data_rows(src_ws, dest_ws):
     """Copy data rows (4+) exactly, maintaining structure."""

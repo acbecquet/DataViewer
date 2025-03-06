@@ -360,12 +360,16 @@ class TestingGUI:
         viewmenu.add_command(label="Trend Analysis", command=self.open_trend_analysis_window)
         menubar.add_cascade(label="View", menu=viewmenu)
 
+        # Database menu
+        dbmenu = tk.Menu(menubar, tearoff=0)
+        dbmenu.add_command(label="Browse Database", command=self.file_manager.show_database_browser)
+        dbmenu.add_command(label="Load from Database", command=self.file_manager.load_from_database)
+        menubar.add_cascade(label="Database", menu=dbmenu)
+
         # Compare menu (empty for now)
         comparemenu = tk.Menu(menubar, tearoff=0)
         # Future comparison functionality will go here
         menubar.add_cascade(label="Compare", menu=comparemenu)
-
-
 
         # Reports menu
         reportmenu = tk.Menu(menubar, tearoff=0)

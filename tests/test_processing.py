@@ -178,7 +178,7 @@ def test_legacy_conversion(mock_extract, mock_wb):
     
     result = convert_legacy_file_using_template("dummy.xlsx")
     assert not result.empty
-    mock_ws.cell.assert_called()  # Verify metadata writing
+    mock_ws.cell.assert_called()  # Verify meta_data writing
 
 def test_is_sheet_empty():
     empty_data = pd.DataFrame(np.zeros((16, 6)))  # 16 rows of zeros
