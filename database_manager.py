@@ -1,473 +1,317 @@
-"""
-database_manager.py
-Developed By Charlie Becquet.
-Manages the SQL database for the DataViewer Application.
-
-This module provides functions to store and retrieve .vap3 files and their meta_data
-in an SQL database, enabling persistent storage and sharing of test data.
-"""
-
 import os
-import datetime
+import sqlite3
 import json
-import base64
-import io
-import logging
-from typing import Dict, List, Any, Optional, Tuple
-
-import sqlalchemy
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, LargeBinary, Text, ForeignKey, Boolean, Table
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship, Session
-
-# Set up logging
-logging.basicConfig(level=logging.INFO, 
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
-
-# Create a base class for declarative class definitions
-Base = declarative_base()
-
-# Define the association table for the many-to-many relationship between Files and Images
-file_image_association = Table(
-    'file_image_association', 
-    Base.metadata,
-    Column('file_id', Integer, ForeignKey('files.id')),
-    Column('image_id', Integer, ForeignKey('images.id'))
-)
-
-class File(Base):
-    """Represents a .vap3 file in the database."""
-    __tablename__ = 'files'
-    
-    id = Column(Integer, primary_key=True)
-    filename = Column(String(255), nullable=False)
-    original_path = Column(String(512))
-    created_at = Column(DateTime, default=datetime.datetime.now)
-    updated_at = Column(DateTime, default=datetime.datetime.now, onupdate=datetime.datetime.now)
-    file_content = Column(LargeBinary, nullable=False)  # The actual .vap3 file content
-    meta_data = Column(Text)  # JSON string containing meta_data
-    
-    # Relationships
-    sheets = relationship("Sheet", back_populates="file", cascade="all, delete-orphan")
-    images = relationship("Image", secondary=file_image_association, back_populates="files")
-    
-    def __repr__(self):
-        return f"<File(id={self.id}, filename='{self.filename}', created_at='{self.created_at}')>"
-
-class Sheet(Base):
-    """Represents a sheet within a .vap3 file."""
-    __tablename__ = 'sheets'
-    
-    id = Column(Integer, primary_key=True)
-    file_id = Column(Integer, ForeignKey('files.id'))
-    name = Column(String(255), nullable=False)
-    is_plotting = Column(Boolean, default=False)
-    is_empty = Column(Boolean, default=False)
-    
-    # Relationships
-    file = relationship("File", back_populates="sheets")
-    
-    def __repr__(self):
-        return f"<Sheet(id={self.id}, name='{self.name}', is_plotting={self.is_plotting})>"
-
-class Image(Base):
-    """Represents an image stored in the database."""
-    __tablename__ = 'images'
-    
-    id = Column(Integer, primary_key=True)
-    filename = Column(String(255), nullable=False)
-    content = Column(LargeBinary, nullable=False)
-    mime_type = Column(String(100), default="image/jpeg")
-    sheet_name = Column(String(255))  # The sheet this image is associated with
-    crop_enabled = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.datetime.now)
-    
-    # Relationships
-    files = relationship("File", secondary=file_image_association, back_populates="images")
-    
-    def __repr__(self):
-        return f"<Image(id={self.id}, filename='{self.filename}', sheet_name='{self.sheet_name}')>"
+import datetime
+from typing import Dict, List, Any, Optional
 
 class DatabaseManager:
-    """Manages database connections and operations for DataViewer."""
+    """Manages interactions with the SQLite database for storing VAP3 files and metadata."""
     
-    def __init__(self, db_path: str = None):
+    def __init__(self, db_path=None):
         """
-        Initialize the DatabaseManager.
+        Initialize the DatabaseManager with a connection to the SQLite database.
         
         Args:
-            db_path: Path to the database file. If None, uses a default path.
+            db_path (str, optional): Path to the SQLite database file. 
+                                    If None, creates a 'dataviewer.db' in the current directory.
         """
-        if db_path is None:
-            # Create database in user's home directory
-            home_dir = os.path.expanduser("~")
-            app_dir = os.path.join(home_dir, ".dataviewer")
-            os.makedirs(app_dir, exist_ok=True)
-            db_path = os.path.join(app_dir, "dataviewer.db")
-        
-        self.db_path = db_path
-        self.engine = create_engine(f'sqlite:///{db_path}')
-        self.Session = sessionmaker(bind=self.engine)
-        
-        # Create tables if they don't exist
-        Base.metadata.create_all(self.engine)
-        logger.info(f"Database initialized at {db_path}")
-    
-    def store_vap3_file(self, filepath: str, meta_data: Dict = None) -> int:
-        """
-        Store a .vap3 file in the database.
-        
-        Args:
-            filepath: Path to the .vap3 file
-            meta_data: Dictionary of meta_data about the file
-            
-        Returns:
-            int: ID of the created file record
-        """
-        if not os.path.exists(filepath):
-            raise FileNotFoundError(f"File not found: {filepath}")
-        
-        filename = os.path.basename(filepath)
-        
-        # Read the file content
-        with open(filepath, 'rb') as f:
-            file_content = f.read()
-        
-        # Serialize meta_data to JSON
-        if meta_data:
-            meta_data_json = json.dumps(meta_data)
-        else:
-            meta_data_json = None
-        
-        with self.Session() as session:
-            # Check if file already exists
-            existing_file = session.query(File).filter_by(filename=filename).first()
-            
-            if existing_file:
-                # Update existing file
-                existing_file.file_content = file_content
-                existing_file.meta_data = meta_data_json
-                existing_file.updated_at = datetime.datetime.now()
-                file_id = existing_file.id
-                logger.info(f"Updated existing file: {filename} (ID: {file_id})")
-            else:
-                # Create new file record
-                new_file = File(
-                    filename=filename,
-                    original_path=filepath,
-                    file_content=file_content,
-                    meta_data=meta_data_json
-                )
-                session.add(new_file)
-                session.flush()  # Flush to get the ID
-                file_id = new_file.id
-                logger.info(f"Stored new file: {filename} (ID: {file_id})")
-            
-            session.commit()
-            return file_id
-    
-    def store_sheet_info(self, file_id: int, sheet_name: str, is_plotting: bool, is_empty: bool) -> int:
-        """
-        Store information about a sheet associated with a file.
-        
-        Args:
-            file_id: The ID of the parent file
-            sheet_name: Name of the sheet
-            is_plotting: Whether this sheet is a plotting sheet
-            is_empty: Whether this sheet is empty
-            
-        Returns:
-            int: ID of the created sheet record
-        """
-        with self.Session() as session:
-            # Check if sheet already exists for this file
-            existing_sheet = session.query(Sheet).filter_by(
-                file_id=file_id, name=sheet_name).first()
-            
-            if existing_sheet:
-                # Update existing sheet
-                existing_sheet.is_plotting = is_plotting
-                existing_sheet.is_empty = is_empty
-                sheet_id = existing_sheet.id
-                logger.info(f"Updated sheet: {sheet_name} for file ID {file_id}")
-            else:
-                # Create new sheet record
-                new_sheet = Sheet(
-                    file_id=file_id,
-                    name=sheet_name,
-                    is_plotting=is_plotting,
-                    is_empty=is_empty
-                )
-                session.add(new_sheet)
-                session.flush()  # Flush to get the ID
-                sheet_id = new_sheet.id
-                logger.info(f"Stored new sheet: {sheet_name} for file ID {file_id}")
-            
-            session.commit()
-            return sheet_id
-    
-    def store_image(self, file_id: int, image_path: str, sheet_name: str, crop_enabled: bool) -> int:
-        """
-        Store an image associated with a file.
-        
-        Args:
-            file_id: The ID of the parent file
-            image_path: Path to the image file
-            sheet_name: Name of the sheet this image is associated with
-            crop_enabled: Whether auto-crop is enabled for this image
-            
-        Returns:
-            int: ID of the created image record
-        """
-        if not os.path.exists(image_path):
-            raise FileNotFoundError(f"Image not found: {image_path}")
-        
-        filename = os.path.basename(image_path)
-        
-        # Read the image content
-        with open(image_path, 'rb') as f:
-            image_content = f.read()
-        
-        # Determine MIME type based on file extension
-        _, ext = os.path.splitext(filename)
-        mime_type = {
-            '.jpg': 'image/jpeg',
-            '.jpeg': 'image/jpeg',
-            '.png': 'image/png',
-            '.gif': 'image/gif',
-            '.bmp': 'image/bmp',
-            '.pdf': 'application/pdf'
-        }.get(ext.lower(), 'application/octet-stream')
-        
-        with self.Session() as session:
-            # Check if file exists
-            file = session.query(File).filter_by(id=file_id).first()
-            if not file:
-                raise ValueError(f"File with ID {file_id} not found")
-            
-            # Check if this image already exists for this file and sheet
-            existing_image = None
-            for img in file.images:
-                if img.filename == filename and img.sheet_name == sheet_name:
-                    existing_image = img
-                    break
-            
-            if existing_image:
-                # Update existing image
-                existing_image.content = image_content
-                existing_image.crop_enabled = crop_enabled
-                existing_image.mime_type = mime_type
-                image_id = existing_image.id
-                logger.info(f"Updated image: {filename} for sheet {sheet_name}")
-            else:
-                # Create new image record
-                new_image = Image(
-                    filename=filename,
-                    content=image_content,
-                    mime_type=mime_type,
-                    sheet_name=sheet_name,
-                    crop_enabled=crop_enabled
-                )
-                session.add(new_image)
-                session.flush()  # Flush to get the ID
-                
-                # Associate image with file
-                file.images.append(new_image)
-                
-                image_id = new_image.id
-                logger.info(f"Stored new image: {filename} for sheet {sheet_name}")
-            
-            session.commit()
-            return image_id
-    
-    def get_file_by_id(self, file_id: int) -> Optional[Dict]:
-        """
-        Retrieve a file from the database by ID.
-        
-        Args:
-            file_id: The ID of the file to retrieve
-            
-        Returns:
-            dict: Dictionary containing file data, or None if not found
-        """
-        with self.Session() as session:
-            file = session.query(File).filter_by(id=file_id).first()
-            if not file:
-                return None
-            
-            # Build result dictionary
-            result = {
-                'id': file.id,
-                'filename': file.filename,
-                'original_path': file.original_path,
-                'created_at': file.created_at,
-                'updated_at': file.updated_at,
-                'file_content': file.file_content,
-                'meta_data': json.loads(file.meta_data) if file.meta_data else {},
-                'sheets': []
-            }
-            
-            # Add sheets
-            for sheet in file.sheets:
-                result['sheets'].append({
-                    'id': sheet.id,
-                    'name': sheet.name,
-                    'is_plotting': sheet.is_plotting,
-                    'is_empty': sheet.is_empty
-                })
-            
-            return result
-    
-    def get_file_by_name(self, filename: str) -> Optional[Dict]:
-        """
-        Retrieve a file from the database by filename.
-        
-        Args:
-            filename: The name of the file to retrieve
-            
-        Returns:
-            dict: Dictionary containing file data, or None if not found
-        """
-        with self.Session() as session:
-            file = session.query(File).filter_by(filename=filename).first()
-            if not file:
-                return None
-            
-            return self.get_file_by_id(file.id)
-    
-    def save_vap3_to_disk(self, file_id: int, output_path: str) -> bool:
-        """
-        Save a .vap3 file from the database to disk.
-        
-        Args:
-            file_id: The ID of the file to save
-            output_path: Path where the file should be saved
-            
-        Returns:
-            bool: True if successful, False otherwise
-        """
-        file_data = self.get_file_by_id(file_id)
-        if not file_data:
-            logger.error(f"File with ID {file_id} not found")
-            return False
-        
         try:
-            with open(output_path, 'wb') as f:
-                f.write(file_data['file_content'])
-            logger.info(f"File saved to {output_path}")
-            return True
+            if db_path is None:
+                # Use a default path in the application directory
+                db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dataviewer.db')
+            
+            # Create directory if it doesn't exist
+            os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
+            
+            # Initialize database connection with extended error codes to help with debugging
+            self.conn = sqlite3.connect(db_path, detect_types=sqlite3.PARSE_DECLTYPES)
+            self.conn.execute("PRAGMA foreign_keys = ON")
+            
+            # Create tables if they don't exist
+            self._create_tables()
+            
+            print(f"Database initialized at: {db_path}")
         except Exception as e:
-            logger.error(f"Error saving file to disk: {e}")
-            return False
+            print(f"Error initializing database: {e}")
+            # Make sure conn exists even if initialization fails
+            if not hasattr(self, 'conn'):
+                self.conn = None
+            raise
     
-    def list_files(self, limit: int = 100) -> List[Dict]:
+    def _create_tables(self):
+        """Create necessary database tables if they don't exist."""
+        cursor = self.conn.cursor()
+        
+        # Files table
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS files (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            filename TEXT NOT NULL,
+            file_content BLOB NOT NULL,
+            meta_data TEXT,
+            created_at TIMESTAMP NOT NULL
+        )
+        ''')
+        
+        # Sheets table
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS sheets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            file_id INTEGER NOT NULL,
+            sheet_name TEXT NOT NULL,
+            is_plotting BOOLEAN NOT NULL,
+            is_empty BOOLEAN NOT NULL,
+            FOREIGN KEY (file_id) REFERENCES files (id) ON DELETE CASCADE
+        )
+        ''')
+        
+        # Images table
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS images (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            file_id INTEGER NOT NULL,
+            sheet_name TEXT NOT NULL,
+            image_path TEXT NOT NULL,
+            image_data BLOB NOT NULL,
+            crop_enabled BOOLEAN NOT NULL,
+            FOREIGN KEY (file_id) REFERENCES files (id) ON DELETE CASCADE
+        )
+        ''')
+        
+        self.conn.commit()
+    
+    def _check_connection(self):
+        """Ensure the database connection is open."""
+        if self.conn is None:
+            raise ConnectionError("Database connection is not initialized")
+    
+    def store_vap3_file(self, file_path, meta_data):
         """
-        List files in the database.
+        Store a VAP3 file in the database.
         
         Args:
-            limit: Maximum number of files to return
+            file_path (str): Path to the temporary VAP3 file
+            meta_data (dict): Dictionary containing file metadata, including display_filename
             
         Returns:
-            list: List of dictionaries containing file information
+            int: ID of the newly inserted file record
         """
-        with self.Session() as session:
-            files = session.query(File).order_by(File.updated_at.desc()).limit(limit).all()
+        try:
+            self._check_connection()
+            
+            # Verify file exists
+            if not os.path.exists(file_path):
+                raise FileNotFoundError(f"File not found: {file_path}")
+            
+            # Read the file content
+            with open(file_path, 'rb') as f:
+                file_content = f.read()
+            
+            # Use the display filename from meta_data instead of the temp filename
+            filename = meta_data.get('display_filename')
+            if not filename:
+                # Fallback only if display_filename isn't provided
+                filename = os.path.basename(file_path)
+            
+            # Print debug info before database operation
+            print(f"Storing file: {filename} (from {file_path})")
+            print(f"Meta data keys: {list(meta_data.keys())}")
+            
+            # Convert meta_data to JSON for storage
+            meta_data_json = json.dumps(meta_data)
+            
+            cursor = self.conn.cursor()
+            cursor.execute(
+                "INSERT INTO files (filename, file_content, meta_data, created_at) VALUES (?, ?, ?, ?)",
+                (filename, file_content, meta_data_json, datetime.datetime.now())
+            )
+            self.conn.commit()
+            
+            # Get the ID of the newly inserted record
+            file_id = cursor.lastrowid
+            
+            print(f"File stored in database with ID {file_id} and filename '{filename}'")
+            return file_id
+            
+        except Exception as e:
+            if hasattr(self, 'conn') and self.conn is not None:
+                try:
+                    self.conn.rollback()
+                except sqlite3.Error:
+                    pass  # Ignore rollback errors
+            print(f"Error storing file in database: {e}")
+            raise
+    
+    def store_sheet_info(self, file_id, sheet_name, is_plotting, is_empty):
+        """
+        Store sheet information in the database.
+        
+        Args:
+            file_id (int): ID of the file this sheet belongs to
+            sheet_name (str): Name of the sheet
+            is_plotting (bool): Whether this is a plotting sheet
+            is_empty (bool): Whether this sheet is empty
+        """
+        try:
+            self._check_connection()
+            
+            cursor = self.conn.cursor()
+            cursor.execute(
+                "INSERT INTO sheets (file_id, sheet_name, is_plotting, is_empty) VALUES (?, ?, ?, ?)",
+                (file_id, sheet_name, 1 if is_plotting else 0, 1 if is_empty else 0)
+            )
+            self.conn.commit()
+            return cursor.lastrowid
+        except Exception as e:
+            if self.conn is not None:
+                self.conn.rollback()
+            print(f"Error storing sheet info: {e}")
+            raise
+    
+    def store_image(self, file_id, image_path, sheet_name, crop_enabled):
+        """
+        Store an image in the database.
+        
+        Args:
+            file_id (int): ID of the file this image belongs to
+            image_path (str): Path to the image file
+            sheet_name (str): Name of the sheet this image belongs to
+            crop_enabled (bool): Whether auto-crop is enabled for this image
+        """
+        try:
+            self._check_connection()
+            
+            # Verify file exists
+            if not os.path.exists(image_path):
+                raise FileNotFoundError(f"Image not found: {image_path}")
+            
+            # Read the image data
+            with open(image_path, 'rb') as f:
+                image_data = f.read()
+            
+            cursor = self.conn.cursor()
+            cursor.execute(
+                "INSERT INTO images (file_id, sheet_name, image_path, image_data, crop_enabled) VALUES (?, ?, ?, ?, ?)",
+                (file_id, sheet_name, os.path.basename(image_path), image_data, 1 if crop_enabled else 0)
+            )
+            self.conn.commit()
+            return cursor.lastrowid
+        except Exception as e:
+            if self.conn is not None:
+                self.conn.rollback()
+            print(f"Error storing image: {e}")
+            raise
+    
+    def list_files(self):
+        """
+        List all files stored in the database.
+        
+        Returns:
+            list: List of file records with id, filename, and created_at
+        """
+        try:
+            self._check_connection()
+            
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT id, filename, created_at FROM files ORDER BY created_at DESC")
+            rows = cursor.fetchall()
             
             result = []
-            for file in files:
-                sheet_count = len(file.sheets)
-                image_count = len(file.images)
+            for row in rows:
+                try:
+                    # Handle different date formats safely
+                    if isinstance(row[2], datetime.datetime):
+                        created_at = row[2]
+                    else:
+                        created_at = datetime.datetime.fromisoformat(row[2])
+                except (ValueError, TypeError):
+                    # If date parsing fails, use current time
+                    created_at = datetime.datetime.now()
                 
                 result.append({
-                    'id': file.id,
-                    'filename': file.filename,
-                    'created_at': file.created_at,
-                    'updated_at': file.updated_at,
-                    'sheet_count': sheet_count,
-                    'image_count': image_count
+                    "id": row[0],
+                    "filename": row[1],
+                    "created_at": created_at
                 })
             
             return result
+        except Exception as e:
+            print(f"Error listing files: {e}")
+            return []
     
-    def get_images_for_sheet(self, file_id: int, sheet_name: str) -> List[Dict]:
+    def get_file_by_id(self, file_id):
         """
-        Get all images associated with a specific sheet in a file.
+        Get a file by its ID.
         
         Args:
-            file_id: The ID of the file
-            sheet_name: The name of the sheet
+            file_id (int): ID of the file to retrieve
             
         Returns:
-            list: List of dictionaries containing image information
+            dict: File record with id, filename, file_content, meta_data, and created_at
         """
-        with self.Session() as session:
-            file = session.query(File).filter_by(id=file_id).first()
-            if not file:
-                return []
+        try:
+            self._check_connection()
             
-            result = []
-            for image in file.images:
-                if image.sheet_name == sheet_name:
-                    result.append({
-                        'id': image.id,
-                        'filename': image.filename,
-                        'mime_type': image.mime_type,
-                        'crop_enabled': image.crop_enabled,
-                        'created_at': image.created_at,
-                        'content': image.content  # Binary content
-                    })
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT id, filename, file_content, meta_data, created_at FROM files WHERE id = ?", (file_id,))
+            row = cursor.fetchone()
             
-            return result
+            if row:
+                try:
+                    meta_data = json.loads(row[3]) if row[3] else {}
+                except json.JSONDecodeError:
+                    meta_data = {}
+                
+                try:
+                    if isinstance(row[4], datetime.datetime):
+                        created_at = row[4]
+                    else:
+                        created_at = datetime.datetime.fromisoformat(row[4])
+                except (ValueError, TypeError):
+                    created_at = datetime.datetime.now()
+                
+                return {
+                    "id": row[0],
+                    "filename": row[1],
+                    "file_content": row[2],
+                    "meta_data": meta_data,
+                    "created_at": created_at
+                }
+            else:
+                return None
+        except Exception as e:
+            print(f"Error getting file: {e}")
+            return None
     
-    def save_image_to_disk(self, image_id: int, output_path: str) -> bool:
-        """
-        Save an image from the database to disk.
-        
-        Args:
-            image_id: The ID of the image to save
-            output_path: Path where the image should be saved
-            
-        Returns:
-            bool: True if successful, False otherwise
-        """
-        with self.Session() as session:
-            image = session.query(Image).filter_by(id=image_id).first()
-            if not image:
-                logger.error(f"Image with ID {image_id} not found")
-                return False
-            
-            try:
-                with open(output_path, 'wb') as f:
-                    f.write(image.content)
-                logger.info(f"Image saved to {output_path}")
-                return True
-            except Exception as e:
-                logger.error(f"Error saving image to disk: {e}")
-                return False
-    
-    def delete_file(self, file_id: int) -> bool:
+    def delete_file(self, file_id):
         """
         Delete a file from the database.
         
         Args:
-            file_id: The ID of the file to delete
+            file_id (int): ID of the file to delete
             
         Returns:
             bool: True if successful, False otherwise
         """
-        with self.Session() as session:
-            file = session.query(File).filter_by(id=file_id).first()
-            if not file:
-                logger.error(f"File with ID {file_id} not found")
-                return False
+        try:
+            self._check_connection()
             
+            cursor = self.conn.cursor()
+            cursor.execute("DELETE FROM files WHERE id = ?", (file_id,))
+            self.conn.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            if self.conn is not None:
+                self.conn.rollback()
+            print(f"Error deleting file: {e}")
+            return False
+    
+    def close(self):
+        """Close the database connection."""
+        if hasattr(self, 'conn') and self.conn is not None:
             try:
-                session.delete(file)
-                session.commit()
-                logger.info(f"Deleted file with ID {file_id}")
-                return True
-            except Exception as e:
-                session.rollback()
-                logger.error(f"Error deleting file: {e}")
-                return False
+                self.conn.close()
+                self.conn = None
+                print("Database connection closed")
+            except sqlite3.Error as e:
+                print(f"Error closing database connection: {e}")

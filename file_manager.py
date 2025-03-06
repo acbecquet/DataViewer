@@ -249,8 +249,8 @@ class FileManager:
             print(f"Original path: {original_file_path}")
             print(f"Extracted display filename: {display_filename}")
     
-            # Store metadata about the original file
-            metadata = {
+            # Store meta_data about the original file
+            meta_data = {
                 'display_filename': display_filename,  # Include the display filename
                 'original_filename': os.path.basename(original_file_path),
                 'original_path': original_file_path,
@@ -261,9 +261,9 @@ class FileManager:
             }
     
             # Store the VAP3 file in the database with the proper display filename
-            file_id = self.db_manager.store_vap3_file(temp_vap3_path, metadata)
+            file_id = self.db_manager.store_vap3_file(temp_vap3_path, meta_data)
     
-            # Store sheet metadata
+            # Store sheet meta_data
             for sheet_name, sheet_info in self.gui.filtered_sheets.items():
                 is_plotting = processing.plotting_sheet_test(sheet_name, sheet_info["data"])
                 is_empty = sheet_info.get("is_empty", False)
