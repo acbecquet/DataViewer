@@ -429,7 +429,7 @@ class ReportGenerator:
 
                     # Add image slide if images exist
 
-                    if sheet_name in self.gui.sheet_images[self.gui.current_file]:
+                    if self.gui.current_file in self.gui.sheet_images and sheet_name in self.gui.sheet_images.get(self.gui.current_file, {}):
                         print("Images Exist! Adding a slide...")
                         current_file = self.gui.current_file
                         image_paths = self.gui.sheet_images.get(current_file, {}).get(sheet_name, [])
