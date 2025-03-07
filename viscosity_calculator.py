@@ -3,7 +3,9 @@ viscosity_calculator.py
 Module for calculating terpene percentages based on viscosity.
 """
 import tkinter as tk
-from tkinter import ttk, Toplevel
+from tkinter import ttk, Toplevel, StringVar, DoubleVar, Frame, Label, Entry, Button, messagebox
+import json
+import os
 from utils import FONT, APP_BACKGROUND_COLOR, BUTTON_COLOR
 
 class ViscosityCalculator:
@@ -17,9 +19,40 @@ class ViscosityCalculator:
         self.gui = gui
         self.root = gui.root
         
+        # Initialize variables for input fields
+        self.media_var = StringVar()
+        self.media_brand_var = StringVar()
+        self.terpene_var = StringVar()
+        self.terpene_brand_var = StringVar()
+        self.mass_of_oil_var = DoubleVar(value=0.0)
+        self.target_viscosity_var = DoubleVar(value=0.0)
+        
+        # Initialize variables for result fields
+        self.exact_percent_var = StringVar(value="0.0%")
+        self.exact_mass_var = StringVar(value="0.0g")
+        self.start_percent_var = StringVar(value="0.0%")
+        self.start_mass_var = StringVar(value="0.0g")
+        
+        # Initialize variables for advanced tab
+        self.step1_amount_var = StringVar(value="0.0g")
+        self.step1_viscosity_var = StringVar(value="")
+        self.step2_amount_var = StringVar(value="0.0g")
+        self.step2_viscosity_var = StringVar(value="")
+        self.expected_viscosity_var = StringVar(value="0.0")
+        
+        # Define media options
+        self.media_options = ["D8", "D9", "Resin", "Rosin", "Liquid Diamonds", "Other"]
+        
+        # Load or initialize formulation database
+        self.formulation_db_path = "terpene_formulations.json"
+        self.formulation_db = self.load_formulation_database()
+        
+        # Store notebook reference
+        self.notebook = None
+        
     def show_calculator(self):
         """
-        Show the viscosity calculator window.
+        Show the viscosity calculator window with tabbed interface.
         
         Returns:
             tk.Toplevel: The calculator window
@@ -27,7 +60,7 @@ class ViscosityCalculator:
         # Create a new top-level window
         calculator_window = Toplevel(self.root)
         calculator_window.title("Calculate Terpene % for Viscosity")
-        calculator_window.geometry("400x400")
+        calculator_window.geometry("550x420")
         calculator_window.resizable(False, False)
         calculator_window.configure(bg=APP_BACKGROUND_COLOR)
         
@@ -36,9 +69,563 @@ class ViscosityCalculator:
         calculator_window.grab_set()
         
         # Center the window on the screen
-        self.gui.center_window(calculator_window, 400, 400)
+        self.gui.center_window(calculator_window, 550, 420)
         
-        # For now, just create an empty window
-        # Content will be added in future implementations
+        # Create notebook (tabbed interface)
+        self.notebook = ttk.Notebook(calculator_window)
+        self.notebook.pack(fill='both', expand=True, padx=10, pady=10)
+        
+        # Create Tab 1: Calculator
+        self.create_calculator_tab(self.notebook)
+        
+        # Create Tab 2: Iterative Method
+        self.create_advanced_tab(self.notebook)
+        
+        # Bind tab change event to update advanced tab
+        self.notebook.bind("<<NotebookTabChanged>>", lambda e: self.update_advanced_tab_fields())
         
         return calculator_window
+    
+    def create_calculator_tab(self, notebook):
+        """
+        Create the main calculator tab.
+        
+        Args:
+            notebook (ttk.Notebook): The notebook widget to add the tab to
+        """
+        tab1 = Frame(notebook, bg=APP_BACKGROUND_COLOR)
+        notebook.add(tab1, text="Calculator")
+        
+        # Create a frame for the form with some padding
+        form_frame = Frame(tab1, bg=APP_BACKGROUND_COLOR, padx=20, pady=15)
+        form_frame.pack(fill='both', expand=True)
+        
+        # Row 0: Title and explanation
+        explanation = Label(form_frame, 
+                            text="Calculate terpene % based on viscosity formula.\nIf no formula is known, use the 'Iterative Method' tab.",
+                            bg=APP_BACKGROUND_COLOR, fg="white", 
+                            font=FONT, justify="center")
+        explanation.grid(row=0, column=0, columnspan=4, pady=5)
+        
+        # Row 1: Media and Terpene
+        Label(form_frame, text="Media:", bg=APP_BACKGROUND_COLOR, fg="white", 
+              font=FONT, anchor="w").grid(row=1, column=0, sticky="w", pady=5)
+        
+        media_dropdown = ttk.Combobox(
+            form_frame, 
+            textvariable=self.media_var,
+            values=self.media_options,
+            state="readonly",
+            width=15
+        )
+        media_dropdown.grid(row=1, column=1, sticky="w", padx=5, pady=5)
+        media_dropdown.current(0)  # Set default value
+        
+        Label(form_frame, text="Terpene:", bg=APP_BACKGROUND_COLOR, fg="white", 
+              font=FONT, anchor="w").grid(row=1, column=2, sticky="w", pady=5)
+        
+        terpene_entry = Entry(form_frame, textvariable=self.terpene_var, width=15)
+        terpene_entry.grid(row=1, column=3, sticky="w", padx=5, pady=5)
+        
+        # Row 2: Media Brand and Terpene Brand
+        Label(form_frame, text="Media Brand:", bg=APP_BACKGROUND_COLOR, fg="white", 
+              font=FONT, anchor="w").grid(row=2, column=0, sticky="w", pady=5)
+        
+        media_brand_entry = Entry(form_frame, textvariable=self.media_brand_var, width=15)
+        media_brand_entry.grid(row=2, column=1, sticky="w", padx=5, pady=5)
+        
+        Label(form_frame, text="Terpene Brand:", bg=APP_BACKGROUND_COLOR, fg="white", 
+              font=FONT, anchor="w").grid(row=2, column=2, sticky="w", pady=5)
+        
+        terpene_brand_entry = Entry(form_frame, textvariable=self.terpene_brand_var, width=15)
+        terpene_brand_entry.grid(row=2, column=3, sticky="w", padx=5, pady=5)
+        
+        # Row 3: Mass of Oil
+        Label(form_frame, text="Mass of Oil (g):", bg=APP_BACKGROUND_COLOR, fg="white", 
+              font=FONT, anchor="w").grid(row=3, column=0, sticky="w", pady=5)
+        
+        mass_entry = Entry(form_frame, textvariable=self.mass_of_oil_var, width=15)
+        mass_entry.grid(row=3, column=1, sticky="w", padx=5, pady=5)
+        
+        # Row 4: Target Viscosity
+        Label(form_frame, text="Target Viscosity:", bg=APP_BACKGROUND_COLOR, fg="white", 
+              font=FONT, anchor="w").grid(row=4, column=0, sticky="w", pady=5)
+        
+        viscosity_entry = Entry(form_frame, textvariable=self.target_viscosity_var, width=15)
+        viscosity_entry.grid(row=4, column=1, sticky="w", padx=5, pady=5)
+        
+        # Separator for results
+        ttk.Separator(form_frame, orient='horizontal').grid(row=5, column=0, columnspan=4, sticky="ew", pady=15)
+        
+        # Results section - Row 6: Results header
+        Label(form_frame, text="Results:", bg=APP_BACKGROUND_COLOR, fg="white", 
+              font=(FONT[0], FONT[1], "bold"), anchor="w").grid(row=6, column=0, sticky="w", pady=5)
+        
+        # Row 7: Exact % and Exact Mass
+        Label(form_frame, text="Exact %:", bg=APP_BACKGROUND_COLOR, fg="white", 
+              font=FONT, anchor="w").grid(row=7, column=0, sticky="w", pady=5)
+        
+        exact_percent_label = Label(form_frame, textvariable=self.exact_percent_var, 
+                              bg=APP_BACKGROUND_COLOR, fg="#90EE90", font=FONT)
+        exact_percent_label.grid(row=7, column=1, sticky="w", pady=5)
+        
+        Label(form_frame, text="Exact Mass:", bg=APP_BACKGROUND_COLOR, fg="white", 
+              font=FONT, anchor="w").grid(row=7, column=2, sticky="w", pady=5)
+        
+        exact_mass_label = Label(form_frame, textvariable=self.exact_mass_var, 
+                           bg=APP_BACKGROUND_COLOR, fg="#90EE90", font=FONT)
+        exact_mass_label.grid(row=7, column=3, sticky="w", pady=5)
+        
+        # Row 8: Start % and Start Mass
+        Label(form_frame, text="Start %:", bg=APP_BACKGROUND_COLOR, fg="white", 
+              font=FONT, anchor="w").grid(row=8, column=0, sticky="w", pady=5)
+        
+        start_percent_label = Label(form_frame, textvariable=self.start_percent_var, 
+                              bg=APP_BACKGROUND_COLOR, fg="#90EE90", font=FONT)
+        start_percent_label.grid(row=8, column=1, sticky="w", pady=5)
+        
+        Label(form_frame, text="Start Mass:", bg=APP_BACKGROUND_COLOR, fg="white", 
+              font=FONT, anchor="w").grid(row=8, column=2, sticky="w", pady=5)
+        
+        start_mass_label = Label(form_frame, textvariable=self.start_mass_var, 
+                           bg=APP_BACKGROUND_COLOR, fg="#90EE90", font=FONT)
+        start_mass_label.grid(row=8, column=3, sticky="w", pady=5)
+        
+        # Calculate button
+        calculate_btn = ttk.Button(
+            form_frame,
+            text="Calculate",
+            command=self.calculate_viscosity
+        )
+        calculate_btn.grid(row=9, column=1, columnspan=2, pady=10)
+    
+    def create_advanced_tab(self, notebook):
+        """
+        Create the advanced tab for iterative viscosity calculation.
+        
+        Args:
+            notebook (ttk.Notebook): The notebook widget to add the tab to
+        """
+        tab2 = Frame(notebook, bg=APP_BACKGROUND_COLOR)
+        notebook.add(tab2, text="Iterative Method")
+        
+        # Create a frame for the form with some padding
+        form_frame = Frame(tab2, bg=APP_BACKGROUND_COLOR, padx=20, pady=15)
+        form_frame.pack(fill='both', expand=True)
+        
+        # Row 0: Title and Explanation
+        explanation = Label(form_frame, 
+                           text="Use this method when no formula is available.\nFollow the steps and measure viscosity at each stage.",
+                           bg=APP_BACKGROUND_COLOR, fg="white", 
+                           font=FONT, justify="center")
+        explanation.grid(row=0, column=0, columnspan=6, pady=5)
+        
+        # Row 1: Media and Media Brand, Target Viscosity
+        Label(form_frame, text="Media:", bg=APP_BACKGROUND_COLOR, fg="white", 
+              font=FONT, anchor="w").grid(row=1, column=0, sticky="w", pady=5)
+        
+        Label(form_frame, textvariable=self.media_var, 
+              bg=APP_BACKGROUND_COLOR, fg="white", font=FONT).grid(row=1, column=1, sticky="w", pady=5)
+        
+        Label(form_frame, text="Media Brand:", bg=APP_BACKGROUND_COLOR, fg="white", 
+              font=FONT, anchor="w").grid(row=1, column=2, sticky="w", pady=5)
+        
+        Label(form_frame, textvariable=self.media_brand_var, 
+              bg=APP_BACKGROUND_COLOR, fg="white", font=FONT).grid(row=1, column=3, sticky="w", pady=5)
+        
+        Label(form_frame, text="Target Viscosity:", bg=APP_BACKGROUND_COLOR, fg="white", 
+              font=FONT, anchor="w").grid(row=1, column=4, sticky="w", pady=5)
+        
+        Label(form_frame, textvariable=self.target_viscosity_var, 
+              bg=APP_BACKGROUND_COLOR, fg="white", font=FONT).grid(row=1, column=5, sticky="w", pady=5)
+        
+        # Row 2: Terpene and Terpene Brand, Oil Mass
+        Label(form_frame, text="Terpene:", bg=APP_BACKGROUND_COLOR, fg="white", 
+              font=FONT, anchor="w").grid(row=2, column=0, sticky="w", pady=5)
+        
+        Label(form_frame, textvariable=self.terpene_var, 
+              bg=APP_BACKGROUND_COLOR, fg="white", font=FONT).grid(row=2, column=1, sticky="w", pady=5)
+        
+        Label(form_frame, text="Terpene Brand:", bg=APP_BACKGROUND_COLOR, fg="white", 
+              font=FONT, anchor="w").grid(row=2, column=2, sticky="w", pady=5)
+        
+        Label(form_frame, textvariable=self.terpene_brand_var, 
+              bg=APP_BACKGROUND_COLOR, fg="white", font=FONT).grid(row=2, column=3, sticky="w", pady=5)
+        
+        Label(form_frame, text="Oil Mass (g):", bg=APP_BACKGROUND_COLOR, fg="white", 
+              font=FONT, anchor="w").grid(row=2, column=4, sticky="w", pady=5)
+        
+        Label(form_frame, textvariable=self.mass_of_oil_var, 
+              bg=APP_BACKGROUND_COLOR, fg="white", font=FONT).grid(row=2, column=5, sticky="w", pady=5)
+        
+        # Separator
+        ttk.Separator(form_frame, orient='horizontal').grid(row=3, column=0, columnspan=6, sticky="ew", pady=10)
+        
+        # Step 1 - Row 4
+        Label(form_frame, text="Step 1: Add", bg=APP_BACKGROUND_COLOR, fg="white", 
+              font=FONT, anchor="w").grid(row=4, column=0, sticky="w", pady=10)
+        
+        Label(form_frame, textvariable=self.step1_amount_var, 
+              bg=APP_BACKGROUND_COLOR, fg="#90EE90", font=FONT).grid(row=4, column=1, sticky="w", pady=10)
+        
+        Label(form_frame, text="terpenes", bg=APP_BACKGROUND_COLOR, fg="white", 
+              font=FONT, anchor="w").grid(row=4, column=2, sticky="w", pady=10)
+        
+        Label(form_frame, text="Viscosity @ 25C:", bg=APP_BACKGROUND_COLOR, fg="white", 
+              font=FONT, anchor="w").grid(row=4, column=3, sticky="w", pady=10)
+        
+        viscosity1_entry = Entry(form_frame, textvariable=self.step1_viscosity_var, width=10)
+        viscosity1_entry.grid(row=4, column=4, sticky="w", padx=5, pady=10)
+        
+        # Step 2 - Row 5
+        Label(form_frame, text="Step 2: Add", bg=APP_BACKGROUND_COLOR, fg="white", 
+              font=FONT, anchor="w").grid(row=5, column=0, sticky="w", pady=10)
+        
+        Label(form_frame, textvariable=self.step2_amount_var, 
+              bg=APP_BACKGROUND_COLOR, fg="#90EE90", font=FONT).grid(row=5, column=1, sticky="w", pady=10)
+        
+        Label(form_frame, text="terpenes", bg=APP_BACKGROUND_COLOR, fg="white", 
+              font=FONT, anchor="w").grid(row=5, column=2, sticky="w", pady=10)
+        
+        Label(form_frame, text="Viscosity @ 25C:", bg=APP_BACKGROUND_COLOR, fg="white", 
+              font=FONT, anchor="w").grid(row=5, column=3, sticky="w", pady=10)
+        
+        viscosity2_entry = Entry(form_frame, textvariable=self.step2_viscosity_var, width=10)
+        viscosity2_entry.grid(row=5, column=4, sticky="w", padx=5, pady=10)
+        
+        # Expected Viscosity - Row 6
+        Label(form_frame, text="Expected Viscosity:", bg=APP_BACKGROUND_COLOR, fg="white", 
+              font=(FONT[0], FONT[1], "bold"), anchor="w").grid(row=6, column=0, columnspan=2, sticky="w", pady=10)
+        
+        Label(form_frame, textvariable=self.expected_viscosity_var, 
+              bg=APP_BACKGROUND_COLOR, fg="#90EE90", font=(FONT[0], FONT[1], "bold")).grid(row=6, column=2, sticky="w", pady=10)
+        
+        # Buttons - Row 7
+        calculate_btn = ttk.Button(
+            form_frame,
+            text="Calculate Step 1",
+            command=self.calculate_step1
+        )
+        calculate_btn.grid(row=7, column=0, columnspan=2, pady=5)
+        
+        calculate_btn2 = ttk.Button(
+            form_frame,
+            text="Calculate Step 2",
+            command=self.calculate_step2
+        )
+        calculate_btn2.grid(row=7, column=2, columnspan=2, pady=5)
+        
+        # Save Formulation Button - Row 8
+        save_btn = ttk.Button(
+            form_frame,
+            text="Save Terpene Formulation",
+            command=self.save_formulation
+        )
+        save_btn.grid(row=8, column=1, columnspan=3, pady=10)
+    
+    def update_advanced_tab_fields(self):
+        """Update the fields in the advanced tab based on the calculator tab inputs."""
+        try:
+            # Calculate initial terpene amount for step 1
+            try:
+                mass_of_oil = float(self.mass_of_oil_var.get())
+                target_viscosity = float(self.target_viscosity_var.get())
+                
+                # For step 1, determine amount to add based on guesstimates
+                # The calculation described: if 2x < y0, add 1% terpene else 0.1%
+                # We're using target_viscosity as x, and assuming y0 (raw oil viscosity)
+                
+                # Assume raw oil viscosity based on media type - these are placeholders
+                raw_oil_viscosity = self.get_raw_oil_viscosity(self.media_var.get())
+                
+                if 2 * target_viscosity < raw_oil_viscosity:
+                    # Add 1% terpene
+                    percent_to_add = 1.0
+                else:
+                    # Add 0.1% terpene
+                    percent_to_add = 0.1
+                
+                step1_amount = (percent_to_add / 100) * mass_of_oil
+                self.step1_amount_var.set(f"{step1_amount:.2f}g")
+                
+            except (ValueError, tk.TclError):
+                # If inputs can't be converted to numbers, don't update
+                pass
+                
+        except Exception as e:
+            print(f"Error updating advanced tab fields: {e}")
+    
+    def calculate_step1(self):
+        """Calculate the first step amount of terpenes to add."""
+        try:
+            mass_of_oil = float(self.mass_of_oil_var.get())
+            target_viscosity = float(self.target_viscosity_var.get())
+            
+            # Get estimated raw oil viscosity based on media type
+            raw_oil_viscosity = self.get_raw_oil_viscosity(self.media_var.get())
+            
+            # Calculate amount to add for step 1
+            if 2 * target_viscosity < raw_oil_viscosity:
+                # Add 1% terpene if target is much lower than raw oil
+                percent_to_add = 1.0
+            else:
+                # Add 0.1% terpene if target is closer to raw oil
+                percent_to_add = 0.1
+            
+            step1_amount = (percent_to_add / 100) * mass_of_oil
+            self.step1_amount_var.set(f"{step1_amount:.2f}g")
+            
+            messagebox.showinfo("Step 1", 
+                               f"Add {step1_amount:.2f}g of {self.terpene_var.get()} terpenes.\n"
+                               f"Mix thoroughly and then measure the viscosity at 25C.\n"
+                               f"Enter the measured viscosity in the field.")
+            
+        except (ValueError, tk.TclError) as e:
+            messagebox.showerror("Input Error", 
+                                f"Please ensure all numeric fields contain valid numbers: {str(e)}")
+        except Exception as e:
+            messagebox.showerror("Calculation Error", f"An error occurred: {str(e)}")
+    
+    def calculate_step2(self):
+        """
+        Calculate the second step amount of terpenes to add and
+        predict the final viscosity.
+        """
+        try:
+            # Get the inputs
+            mass_of_oil = float(self.mass_of_oil_var.get())
+            target_viscosity = float(self.target_viscosity_var.get())
+            step1_viscosity_text = self.step1_viscosity_var.get()
+            
+            if not step1_viscosity_text:
+                messagebox.showerror("Input Error", 
+                                    "Please enter the measured viscosity from Step 1.")
+                return
+            
+            step1_viscosity = float(step1_viscosity_text)
+            step1_amount = float(self.step1_amount_var.get().replace('g', ''))
+            
+            # Get raw oil viscosity based on media type
+            raw_oil_viscosity = self.get_raw_oil_viscosity(self.media_var.get())
+            
+            # Calculate how much the viscosity dropped per percent of terpenes
+            step1_percent = (step1_amount / mass_of_oil) * 100
+            viscosity_drop_per_percent = (raw_oil_viscosity - step1_viscosity) / step1_percent
+            
+            # Calculate how much more percentage we need
+            percent_needed = (raw_oil_viscosity - target_viscosity) / viscosity_drop_per_percent
+            percent_needed -= step1_percent  # Subtract what we've already added
+            
+            # Ensure we don't get negative percentages
+            percent_needed = max(0, percent_needed)
+            
+            # Calculate amount for step 2
+            step2_amount = (percent_needed / 100) * mass_of_oil
+            
+            # Update the UI
+            self.step2_amount_var.set(f"{step2_amount:.2f}g")
+            
+            # Calculate expected final viscosity
+            expected_viscosity = raw_oil_viscosity - (viscosity_drop_per_percent * (step1_percent + percent_needed))
+            self.expected_viscosity_var.set(f"{expected_viscosity:.2f}")
+            
+            messagebox.showinfo("Step 2", 
+                               f"Add an additional {step2_amount:.2f}g of {self.terpene_var.get()} terpenes.\n"
+                               f"Mix thoroughly and then measure the final viscosity at 25C.\n"
+                               f"The expected final viscosity is {expected_viscosity:.2f}.")
+            
+        except (ValueError, tk.TclError) as e:
+            messagebox.showerror("Input Error", 
+                                f"Please ensure all numeric fields contain valid numbers: {str(e)}")
+        except Exception as e:
+            messagebox.showerror("Calculation Error", f"An error occurred: {str(e)}")
+    
+    def get_raw_oil_viscosity(self, media_type):
+        """
+        Get the estimated raw oil viscosity based on media type.
+        These are placeholder values - replace with your actual data.
+        """
+        # These are just example values - replace with actual values based on your data
+        viscosity_map = {
+            "D8": 500000,
+            "D9": 400000,
+            "Resin": 1000000,
+            "Rosin": 1500000,
+            "Liquid Diamonds": 300000,
+            "Other": 500000
+        }
+        
+        return viscosity_map.get(media_type, 500000)
+    
+    def save_formulation(self):
+        """
+        Save the terpene formulation to a database file.
+        """
+        try:
+            # Verify we have all required data
+            step2_viscosity_text = self.step2_viscosity_var.get()
+            
+            if not step2_viscosity_text:
+                messagebox.showinfo("Input Needed", 
+                                   "Please enter the final measured viscosity from Step 2 before saving.")
+                return
+            
+            # Get all formulation data
+            formulation = {
+                "media": self.media_var.get(),
+                "media_brand": self.media_brand_var.get(),
+                "terpene": self.terpene_var.get(),
+                "terpene_brand": self.terpene_brand_var.get(),
+                "target_viscosity": float(self.target_viscosity_var.get()),
+                "step1_amount": float(self.step1_amount_var.get().replace('g', '')),
+                "step1_viscosity": float(self.step1_viscosity_var.get()),
+                "step2_amount": float(self.step2_amount_var.get().replace('g', '')),
+                "step2_viscosity": float(step2_viscosity_text),
+                "expected_viscosity": float(self.expected_viscosity_var.get()),
+                "total_oil_mass": float(self.mass_of_oil_var.get()),
+                "total_terpene_mass": float(self.step1_amount_var.get().replace('g', '')) + 
+                                     float(self.step2_amount_var.get().replace('g', '')),
+                "total_terpene_percent": ((float(self.step1_amount_var.get().replace('g', '')) + 
+                                         float(self.step2_amount_var.get().replace('g', ''))) / 
+                                         float(self.mass_of_oil_var.get())) * 100
+            }
+            
+            # Add to database
+            key = f"{formulation['media']}_{formulation['media_brand']}_{formulation['terpene']}_{formulation['terpene_brand']}"
+            
+            if key not in self.formulation_db:
+                self.formulation_db[key] = []
+            
+            self.formulation_db[key].append(formulation)
+            
+            # Save database to file
+            self.save_formulation_database()
+            
+            messagebox.showinfo("Success", 
+                               f"Formulation saved successfully!\n\n"
+                               f"Total terpene percentage: {formulation['total_terpene_percent']:.2f}%\n"
+                               f"Total terpene mass: {formulation['total_terpene_mass']:.2f}g")
+            
+        except (ValueError, tk.TclError) as e:
+            messagebox.showerror("Input Error", 
+                                f"Please ensure all numeric fields contain valid numbers: {str(e)}")
+        except Exception as e:
+            messagebox.showerror("Save Error", f"An error occurred: {str(e)}")
+    
+    def load_formulation_database(self):
+        """
+        Load the terpene formulation database from a JSON file.
+        If the file doesn't exist, return an empty database.
+        """
+        if os.path.exists(self.formulation_db_path):
+            try:
+                with open(self.formulation_db_path, 'r') as f:
+                    return json.load(f)
+            except Exception as e:
+                print(f"Error loading formulation database: {e}")
+                return {}
+        else:
+            return {}
+    
+    def save_formulation_database(self):
+        """
+        Save the terpene formulation database to a JSON file.
+        """
+        try:
+            with open(self.formulation_db_path, 'w') as f:
+                json.dump(self.formulation_db, f, indent=4)
+        except Exception as e:
+            print(f"Error saving formulation database: {e}")
+    
+    def calculate_viscosity(self):
+        """
+        Calculate terpene percentage based on input parameters.
+        This is a placeholder function that will be implemented in the future.
+        """
+        try:
+            # Extract input values
+            media = self.media_var.get()
+            media_brand = self.media_brand_var.get()
+            terpene = self.terpene_var.get()
+            terpene_brand = self.terpene_brand_var.get()
+            
+            # Validate numeric inputs
+            try:
+                mass_of_oil = float(self.mass_of_oil_var.get())
+                target_viscosity = float(self.target_viscosity_var.get())
+            except (ValueError, tk.TclError):
+                messagebox.showerror("Input Error", "Mass of oil and target viscosity must be numeric values.")
+                return
+            
+            # Try to find the formulation in the database
+            key = f"{media}_{media_brand}_{terpene}_{terpene_brand}"
+            
+            if key in self.formulation_db and self.formulation_db[key]:
+                # Use the most recent formulation as a reference
+                formulation = self.formulation_db[key][-1]
+                
+                # Calculate based on previous data
+                # This is a simplified calculation - replace with your actual formula
+                reference_percent = formulation['total_terpene_percent']
+                reference_viscosity = formulation['step2_viscosity']
+                
+                # Adjust for different target viscosity
+                # This is just a placeholder calculation
+                raw_oil_viscosity = self.get_raw_oil_viscosity(media)
+                viscosity_drop_factor = (raw_oil_viscosity - reference_viscosity) / reference_percent
+                
+                percent_needed = (raw_oil_viscosity - target_viscosity) / viscosity_drop_factor
+                
+                # Ensure the percentage is reasonable
+                percent_needed = max(0.1, min(15.0, percent_needed))
+                
+                exact_percent = percent_needed
+                exact_mass = mass_of_oil * (exact_percent / 100)
+                
+                # Suggested starting point (slightly higher)
+                start_percent = exact_percent * 1.1
+                start_mass = mass_of_oil * (start_percent / 100)
+                
+                # Update result variables
+                self.exact_percent_var.set(f"{exact_percent:.1f}%")
+                self.exact_mass_var.set(f"{exact_mass:.2f}g")
+                self.start_percent_var.set(f"{start_percent:.1f}%")
+                self.start_mass_var.set(f"{start_mass:.2f}g")
+                
+                messagebox.showinfo("Calculation Result", 
+                                   f"Calculation based on previous formulation data:\n\n"
+                                   f"Exact percentage: {exact_percent:.1f}%\n"
+                                   f"Exact mass: {exact_mass:.2f}g\n"
+                                   f"Suggested starting amount: {start_mass:.2f}g ({start_percent:.1f}%)")
+            else:
+                # No previous data
+                result = messagebox.askyesno("No Previous Data", 
+                                           f"No previous formulation data found for this combination.\n\n"
+                                           f"Would you like to use the Iterative Method instead?")
+                
+                if result and self.notebook:
+                    # Switch to the Iterative Method tab
+                    self.notebook.select(1)
+                else:
+                    # Use placeholder values if user chose not to switch tabs
+                    exact_percent = 5.0  # Placeholder
+                    exact_mass = mass_of_oil * (exact_percent / 100)
+                    
+                    # Suggested starting point (slightly higher)
+                    start_percent = exact_percent * 1.1
+                    start_mass = mass_of_oil * (start_percent / 100)
+                    
+                    # Update result variables
+                    self.exact_percent_var.set(f"{exact_percent:.1f}%")
+                    self.exact_mass_var.set(f"{exact_mass:.2f}g")
+                    self.start_percent_var.set(f"{start_percent:.1f}%")
+                    self.start_mass_var.set(f"{start_mass:.2f}g")
+                    
+                    messagebox.showinfo("Default Estimate", 
+                                       f"Using default estimates (not based on actual data):\n\n"
+                                       f"Exact percentage: {exact_percent:.1f}%\n"
+                                       f"Exact mass: {exact_mass:.2f}g\n\n"
+                                       f"Note: For better accuracy, consider using the Iterative Method.")
+        
+        except Exception as e:
+            messagebox.showerror("Calculation Error", f"An error occurred: {str(e)}")
