@@ -365,8 +365,6 @@ class ViscosityCalculator:
     
         Label(title_frame, text="Raw Viscosity Measurement", 
               bg=APP_BACKGROUND_COLOR, fg="white", font=(FONT[0], FONT[1]+2, "bold")).pack(pady=(0, 2))
-        Label(title_frame, text="Record viscosity measurements at different temperatures.",
-              bg=APP_BACKGROUND_COLOR, fg="white", font=FONT).pack(pady=(0, 5))
     
         # Media selection frame
         media_frame = Frame(main_frame, bg=APP_BACKGROUND_COLOR)
