@@ -1,4 +1,4 @@
-"""
+﻿"""
 viscosity_calculator.py
 Module for calculating terpene percentages based on viscosity.
 """
@@ -920,8 +920,7 @@ class ViscosityCalculator:
     
     def calculate_viscosity(self):
         """
-        Calculate terpene percentage based on input parameters.
-        This is a placeholder function that will be implemented in the future.
+        Calculate terpene percentage based on target viscosity using trained models.
         """
         try:
             # Extract input values
@@ -929,88 +928,50 @@ class ViscosityCalculator:
             media_brand = self.media_brand_var.get()
             terpene = self.terpene_var.get()
             terpene_brand = self.terpene_brand_var.get()
+            mass_of_oil = float(self.mass_of_oil_var.get())
+            target_viscosity = float(self.target_viscosity_var.get())
+        
+            # Load the appropriate model for this media/terpene combination
+            model_key = f"{media}_{terpene}"
+        
+            if model_key in self.viscosity_models:
+                model = self.viscosity_models[model_key]
             
-            # Validate numeric inputs
-            try:
-                mass_of_oil = float(self.mass_of_oil_var.get())
-                target_viscosity = float(self.target_viscosity_var.get())
-            except (ValueError, tk.TclError):
-                messagebox.showerror("Input Error", "Mass of oil and target viscosity must be numeric values.")
-                return
+                # For numerical solution, find terpene percentage that gives target viscosity
+                from scipy.optimize import fsolve
             
-            # Try to find the formulation in the database
-            key = f"{media}_{media_brand}_{terpene}_{terpene_brand}"
+                def objective(terpene_pct):
+                    # Predict viscosity at 25°C with given terpene percentage
+                    predicted_viscosity = model.predict([[terpene_pct, 25.0]])[0]
+                    return predicted_viscosity - target_viscosity
             
-            if key in self.formulation_db and self.formulation_db[key]:
-                # Use the most recent formulation as a reference
-                formulation = self.formulation_db[key][-1]
-                
-                # Calculate based on previous data
-                # This is a simplified calculation - replace with your actual formula
-                reference_percent = formulation['total_terpene_percent']
-                reference_viscosity = formulation['step2_viscosity']
-                
-                # Adjust for different target viscosity
-                # This is just a placeholder calculation
-                raw_oil_viscosity = self.get_raw_oil_viscosity(media)
-                viscosity_drop_factor = (raw_oil_viscosity - reference_viscosity) / reference_percent
-                
-                percent_needed = (raw_oil_viscosity - target_viscosity) / viscosity_drop_factor
-                
+                # Solve for terpene percentage (start with a guess of 5%)
+                exact_percent = fsolve(objective, 5.0)[0]
+            
                 # Ensure the percentage is reasonable
-                percent_needed = max(0.1, min(15.0, percent_needed))
-                
-                exact_percent = percent_needed
+                exact_percent = max(0.1, min(15.0, exact_percent))
                 exact_mass = mass_of_oil * (exact_percent / 100)
-                
+            
                 # Suggested starting point (slightly higher)
                 start_percent = exact_percent * 1.1
                 start_mass = mass_of_oil * (start_percent / 100)
-                
+            
                 # Update result variables
                 self.exact_percent_var.set(f"{exact_percent:.1f}%")
                 self.exact_mass_var.set(f"{exact_mass:.2f}g")
                 self.start_percent_var.set(f"{start_percent:.1f}%")
                 self.start_mass_var.set(f"{start_mass:.2f}g")
-                
-                messagebox.showinfo("Calculation Result", 
-                                   f"Calculation based on previous formulation data:\n\n"
-                                   f"Exact percentage: {exact_percent:.1f}%\n"
-                                   f"Exact mass: {exact_mass:.2f}g\n"
-                                   f"Suggested starting amount: {start_mass:.2f}g ({start_percent:.1f}%)")
+            
             else:
-                # No previous data
-                result = messagebox.askyesno("No Previous Data", 
-                                           f"No previous formulation data found for this combination.\n\n"
-                                           f"Would you like to use the Iterative Method instead?")
-                
-                if result and self.notebook:
-                    # Switch to the Iterative Method tab
-                    self.notebook.select(1)
-                else:
-                    # Use placeholder values if user chose not to switch tabs
-                    exact_percent = 5.0  # Placeholder
-                    exact_mass = mass_of_oil * (exact_percent / 100)
-                    
-                    # Suggested starting point (slightly higher)
-                    start_percent = exact_percent * 1.1
-                    start_mass = mass_of_oil * (start_percent / 100)
-                    
-                    # Update result variables
-                    self.exact_percent_var.set(f"{exact_percent:.1f}%")
-                    self.exact_mass_var.set(f"{exact_mass:.2f}g")
-                    self.start_percent_var.set(f"{start_percent:.1f}%")
-                    self.start_mass_var.set(f"{start_mass:.2f}g")
-                    
-                    messagebox.showinfo("Default Estimate", 
-                                       f"Using default estimates (not based on actual data):\n\n"
-                                       f"Exact percentage: {exact_percent:.1f}%\n"
-                                       f"Exact mass: {exact_mass:.2f}g\n\n"
-                                       f"Note: For better accuracy, consider using the Iterative Method.")
-        
+                # No model available, use iterative method
+                messagebox.askyesno("No Model Available", 
+                                  "No prediction model found for this combination.\n\n"
+                                  "Would you like to use the Iterative Method instead?")
+            
+                # ... rest of your code for the iterative method
+    
         except Exception as e:
             messagebox.showerror("Calculation Error", f"An error occurred: {str(e)}")
-
 
     def update_advanced_tab_fields(self):
         """Update the fields in the advanced tab based on the calculator tab inputs."""
@@ -1043,3 +1004,132 @@ class ViscosityCalculator:
             
         except Exception as e:
             print(f"Error updating advanced tab fields: {e}")
+
+
+# ------------ Regression Model -------------
+
+    def collect_structured_data(self):
+        """
+        Collect viscosity data in a structured manner following Design of Experiments
+        principles to minimize experiments while maximizing information gain.
+        """
+        # Define a grid of test points 
+        test_points = []
+    
+        # For each media type
+        for media in self.media_options:
+            # Test at several terpene percentages
+            for terpene_pct in [0.0, 0.5, 1.0, 2.0, 3.0, 5.0, 7.0, 10.0]:
+                # Test at different temperatures
+                for temp in [25, 30, 40, 50]:
+                    test_points.append({
+                        'media': media,
+                        'terpene_pct': terpene_pct,
+                        'temperature': temp
+                    })
+    
+        return test_points
+
+
+    def build_viscosity_models(self, data):
+        """
+        Build multiple regression models for viscosity prediction and 
+        select the best one based on cross-validation.
+        """
+        import numpy as np
+        from sklearn.model_selection import train_test_split, cross_val_score
+        from sklearn.linear_model import LinearRegression
+        from sklearn.preprocessing import PolynomialFeatures
+        from sklearn.ensemble import RandomForestRegressor
+        from sklearn.pipeline import make_pipeline
+    
+        # Extract features and target
+        X = data[['terpene_pct', 'temperature']]
+        y = data['viscosity']
+    
+        # Split data
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+    
+        # Create models
+        models = {
+            'linear': LinearRegression(),
+            'polynomial': make_pipeline(PolynomialFeatures(2), LinearRegression()),
+            'random_forest': RandomForestRegressor(n_estimators=100)
+        }
+    
+        # Evaluate models
+        results = {}
+        for name, model in models.items():
+            # Use cross-validation
+            scores = cross_val_score(model, X_train, y_train, cv=5)
+            results[name] = {
+                'mean_score': np.mean(scores),
+                'std_score': np.std(scores)
+            }
+            # Fit on all training data
+            model.fit(X_train, y_train)
+            # Test performance
+            test_score = model.score(X_test, y_test)
+            results[name]['test_score'] = test_score
+    
+        # Find best model
+        best_model_name = max(results, key=lambda k: results[k]['test_score'])
+        best_model = models[best_model_name]
+    
+        return best_model, results
+
+
+    def arrhenius_model(self, data):
+        """
+        Build a physics-based model using the Arrhenius equation for viscosity's
+        temperature dependence, and a polynomial relationship with terpene percentage.
+        """
+        import numpy as np
+        from scipy.optimize import curve_fit
+
+        # Define Arrhenius-based model function
+        def viscosity_model(X, A, B, C, D, E):
+            """
+            X[:, 0] = terpene_pct
+            X[:, 1] = temperature in Kelvin
+        
+            Model: μ = (A + B*T + C*T²) * exp(D/T) * (1 - E*terpene_pct)
+            """
+            terpene_pct = X[:, 0]
+            T = X[:, 1] + 273.15  # Convert to Kelvin
+        
+            return (A + B*T + C*T**2) * np.exp(D/T) * (1 - E*terpene_pct)
+    
+        # Prepare data
+        X = np.column_stack([data['terpene_pct'], data['temperature']])
+        y = data['viscosity']
+    
+        # Initial parameter guess
+        initial_params = [1.0, 0.0, 0.0, 1000.0, 0.1]
+    
+        # Fit the model
+        params, covariance = curve_fit(viscosity_model, X, y, p0=initial_params)
+    
+        # Create a prediction function
+        def predict_viscosity(terpene_pct, temperature):
+            X_pred = np.array([[terpene_pct, temperature]])
+            return viscosity_model(X_pred, *params)[0]
+    
+        return predict_viscosity, params
+
+        def save_models(self, models_dict):
+            """Save trained models to disk"""
+            import pickle
+    
+            with open('viscosity_models.pkl', 'wb') as f:
+                pickle.dump(models_dict, f)
+    
+        def load_models(self):
+            """Load trained models from disk"""
+            import pickle
+            import os
+    
+            if os.path.exists('viscosity_models.pkl'):
+                with open('viscosity_models.pkl', 'rb') as f:
+                    return pickle.load(f)
+            return {}
