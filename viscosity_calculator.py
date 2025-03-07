@@ -49,6 +49,8 @@ class ViscosityCalculator:
         
         # Store notebook reference
         self.notebook = None
+
+        self.viscosity_models = self.load_models()
         
     def show_calculator(self):
         """
@@ -194,13 +196,34 @@ class ViscosityCalculator:
                            bg=APP_BACKGROUND_COLOR, fg="#90EE90", font=FONT)
         start_mass_label.grid(row=8, column=3, sticky="w", pady=3)
         
+        # Create button frame for a single row of buttons
+        button_frame = Frame(form_frame, bg=APP_BACKGROUND_COLOR)
+        button_frame.grid(row=9, column=0, columnspan=4, pady=10)
+
         # Calculate button
         calculate_btn = ttk.Button(
-            form_frame,
+            button_frame,
             text="Calculate",
             command=self.calculate_viscosity
         )
-        calculate_btn.grid(row=9, column=1, columnspan=2, pady=10)
+        calculate_btn.pack(side="left", padx=(0, 5))
+
+        # Upload Data button
+        upload_btn = ttk.Button(
+            button_frame,
+            text="Upload Data",
+            command=self.upload_training_data
+        )
+        upload_btn.pack(side="left", padx=5)
+
+        # Train Models button
+        train_btn = ttk.Button(
+            button_frame,
+            text="Train Models",
+            command=self.train_models_from_data
+        )
+        train_btn.pack(side="left", padx=5)
+
     
     def create_advanced_tab(self, notebook):
         """
@@ -738,6 +761,7 @@ class ViscosityCalculator:
         self.save_formulation_database()
     
         messagebox.showinfo("Success", "Viscosity measurements saved successfully!")
+
     def calculate_step1(self):
         """Calculate the first step amount of terpenes to add."""
         try:
@@ -1030,7 +1054,6 @@ class ViscosityCalculator:
     
         return test_points
 
-
     def build_viscosity_models(self, data):
         """
         Build multiple regression models for viscosity prediction and 
@@ -1078,7 +1101,6 @@ class ViscosityCalculator:
     
         return best_model, results
 
-
     def arrhenius_model(self, data):
         """
         Build a physics-based model using the Arrhenius equation for viscosity's
@@ -1117,19 +1139,185 @@ class ViscosityCalculator:
     
         return predict_viscosity, params
 
-        def save_models(self, models_dict):
-            """Save trained models to disk"""
-            import pickle
+    def save_models(self, models_dict):
+        """
+        Save trained viscosity prediction models to disk.
     
-            with open('viscosity_models.pkl', 'wb') as f:
-                pickle.dump(models_dict, f)
+        Args:
+            models_dict (dict): Dictionary of trained models for different 
+                               media/terpene combinations
+        """
+        import pickle
+        import os
     
-        def load_models(self):
-            """Load trained models from disk"""
-            import pickle
-            import os
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(os.path.abspath("models/")), exist_ok=True)
     
-            if os.path.exists('viscosity_models.pkl'):
-                with open('viscosity_models.pkl', 'rb') as f:
+        with open('models/viscosity_models.pkl', 'wb') as f:
+            pickle.dump(models_dict, f)
+    
+        print(f"Saved {len(models_dict)} models to models/viscosity_models.pkl")
+
+    def load_models(self):
+        """
+        Load trained viscosity prediction models from disk.
+    
+        Returns:
+            dict: Dictionary of trained models for different media/terpene combinations
+        """
+        import pickle
+        import os
+    
+        model_path = 'models/viscosity_models.pkl'
+        if os.path.exists(model_path):
+            try:
+                with open(model_path, 'rb') as f:
                     return pickle.load(f)
-            return {}
+            except Exception as e:
+                print(f"Error loading models: {e}")
+        return {}
+
+
+    def upload_training_data(self):
+        """
+        Allow the user to upload CSV data for training viscosity models.
+    
+        The CSV should have columns: media, terpene, terpene_pct, temperature, viscosity
+        """
+        from tkinter import filedialog
+        import pandas as pd
+        import os
+    
+        # Prompt user to select a CSV file
+        file_path = filedialog.askopenfilename(
+            title="Select CSV with Viscosity Training Data",
+            filetypes=[("CSV files", "*.csv")]
+        )
+    
+        if not file_path:
+            return None  # User canceled
+    
+        try:
+            # Load the data
+            data = pd.read_csv(file_path)
+        
+            # Validate the data has the required columns
+            required_cols = ['media', 'terpene', 'terpene_pct', 'temperature', 'viscosity']
+            missing_cols = [col for col in required_cols if col not in data.columns]
+        
+            if missing_cols:
+                messagebox.showerror("Error", 
+                                   f"CSV missing required columns: {', '.join(missing_cols)}")
+                return None
+        
+            # Save a copy of the data in our data directory
+            os.makedirs('data', exist_ok=True)
+            backup_path = f"data/viscosity_data_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            data.to_csv(backup_path, index=False)
+        
+            messagebox.showinfo("Success", 
+                              f"Loaded {len(data)} data points from {os.path.basename(file_path)}.\n"
+                              f"A copy has been saved to {backup_path}")
+        
+            return data
+        
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load data: {str(e)}")
+            return None
+
+    def train_models_from_data(self, data=None):
+        """
+        Train viscosity prediction models using uploaded data or existing data.
+    
+        Args:
+            data (pd.DataFrame, optional): DataFrame with training data. If None,
+                                          attempts to use data from saved CSV files.
+        """
+        import pandas as pd
+        import os
+        import glob
+    
+        # If no data provided, try to load from saved files
+        if data is None:
+            data_files = glob.glob('data/viscosity_data_*.csv')
+            if not data_files:
+                messagebox.showerror("Error", "No training data available. Please upload data first.")
+                return
+        
+            # Load and combine all data files
+            data_frames = []
+            for file in data_files:
+                try:
+                    df = pd.read_csv(file)
+                    data_frames.append(df)
+                except:
+                    print(f"Error loading {file}, skipping")
+        
+            if not data_frames:
+                messagebox.showerror("Error", "Failed to load any training data.")
+                return
+            
+            data = pd.concat(data_frames, ignore_index=True)
+    
+        # Show a progress dialog
+        progress_window = Toplevel(self.root)
+        progress_window.title("Training Models")
+        progress_window.geometry("300x150")
+        progress_window.transient(self.root)
+        progress_window.grab_set()
+    
+        progress_label = Label(progress_window, text="Training models...", font=FONT)
+        progress_label.pack(pady=20)
+    
+        progress_bar = ttk.Progressbar(progress_window, mode='indeterminate')
+        progress_bar.pack(fill='x', padx=20)
+        progress_bar.start()
+    
+        # Create a new thread for training to avoid freezing the UI
+        def train_thread():
+            try:
+                # Train a model for each unique media-terpene combination
+                media_terpene_combos = data[['media', 'terpene']].drop_duplicates()
+                models_dict = {}
+            
+                for _, row in media_terpene_combos.iterrows():
+                    media = row['media']
+                    terpene = row['terpene']
+                
+                    # Filter data for this combination
+                    combo_data = data[(data['media'] == media) & (data['terpene'] == terpene)]
+                
+                    if len(combo_data) < 10:  # Need enough data points
+                        continue
+                
+                    # Train the model using data
+                    model, _ = self.build_viscosity_models(combo_data)
+                
+                    # Store the model
+                    model_key = f"{media}_{terpene}"
+                    models_dict[model_key] = model
+            
+                # Save the trained models
+                if models_dict:
+                    self.save_models(models_dict)
+                    self.viscosity_models = models_dict  # Update current models
+                
+                    # Update UI in the main thread
+                    self.root.after(0, lambda: messagebox.showinfo("Success", 
+                                                              f"Successfully trained {len(models_dict)} models."))
+                else:
+                    self.root.after(0, lambda: messagebox.showwarning("Warning", 
+                                                                "Not enough data to train any models."))
+                
+            except Exception as e:
+                self.root.after(0, lambda: messagebox.showerror("Error", 
+                                                          f"Error training models: {str(e)}"))
+            finally:
+                # Close the progress window
+                self.root.after(0, progress_window.destroy)
+    
+        # Start the training thread
+        import threading
+        training_thread = threading.Thread(target=train_thread)
+        training_thread.daemon = True
+        training_thread.start()
