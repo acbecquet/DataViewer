@@ -224,6 +224,13 @@ class ViscosityCalculator:
         )
         train_btn.pack(side="left", padx=5)
 
+        analyze_btn = ttk.Button(
+            button_frame,
+            text="Analyze Data",
+            command=self.analyze_training_data
+        )
+        analyze_btn.pack(side="left", padx=5)
+
     
     def create_advanced_tab(self, notebook):
         """
@@ -1060,47 +1067,97 @@ class ViscosityCalculator:
         select the best one based on cross-validation.
         """
         import numpy as np
+        import pandas as pd
         from sklearn.model_selection import train_test_split, cross_val_score
         from sklearn.linear_model import LinearRegression
         from sklearn.preprocessing import PolynomialFeatures
         from sklearn.ensemble import RandomForestRegressor
         from sklearn.pipeline import make_pipeline
-    
-        # Extract features and target
+
+        # Print initial data shape for debugging
+        print(f"Initial data shape in build_viscosity_models: {data.shape}")
+        
+        # Extract features and target - data should already be cleaned
         X = data[['terpene_pct', 'temperature']]
         y = data['viscosity']
-    
-        # Split data
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
-    
+        
+        # Double-check that we don't have any NaN values
+        if X.isna().any().any() or y.isna().any():
+            print("Warning: NaN values found in features or target. Cleaning data...")
+            # Get indices of rows with NaN values
+            rows_with_nan = X.index[X.isna().any(axis=1)].union(y.index[y.isna()])
+            print(f"Dropping {len(rows_with_nan)} rows with NaN values")
+            # Drop these rows
+            X = X.drop(rows_with_nan)
+            y = y.drop(rows_with_nan)
+        
+        # Check that we have enough data for splitting
+        if len(X) < 5:  # Need at least a few samples for meaningful train/test split
+            print(f"WARNING: Only {len(X)} samples after cleaning. Using all data for training.")
+            # Create a simple model using all data
+            model = LinearRegression()
+            model.fit(X, y)
+            return model, {"small_data": True}
+
+        # Split data - using a smaller test size if we have limited data
+        test_size = min(0.2, 1/len(X))  # Ensure at least 1 test sample, but no more than 20%
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
+        
+        print(f"Training set size: {len(X_train)}, Test set size: {len(X_test)}")
+
         # Create models
         models = {
             'linear': LinearRegression(),
             'polynomial': make_pipeline(PolynomialFeatures(2), LinearRegression()),
-            'random_forest': RandomForestRegressor(n_estimators=100)
+            'random_forest': RandomForestRegressor(n_estimators=100, random_state=42)
         }
-    
+
         # Evaluate models
         results = {}
-        for name, model in models.items():
-            # Use cross-validation
-            scores = cross_val_score(model, X_train, y_train, cv=5)
-            results[name] = {
-                'mean_score': np.mean(scores),
-                'std_score': np.std(scores)
-            }
-            # Fit on all training data
-            model.fit(X_train, y_train)
-            # Test performance
-            test_score = model.score(X_test, y_test)
-            results[name]['test_score'] = test_score
-    
-        # Find best model
-        best_model_name = max(results, key=lambda k: results[k]['test_score'])
-        best_model = models[best_model_name]
-    
-        return best_model, results
+        best_score = -float('inf')
+        best_model_name = None
+        best_model = None
 
+        for name, model in models.items():
+            try:
+                print(f"Training {name} model...")
+                # Try to fit the model
+                model.fit(X_train, y_train)
+                
+                # Test performance - this is more reliable with small datasets
+                test_score = model.score(X_test, y_test)
+                results[name] = {'test_score': test_score}
+                print(f"{name} model test R² score: {test_score:.4f}")
+                
+                # Track the best model
+                if test_score > best_score:
+                    best_score = test_score
+                    best_model_name = name
+                    best_model = model
+                    
+                # Only try cross-validation if we have enough data
+                if len(X_train) >= 10:
+                    cv = min(5, len(X_train))  # Don't use more folds than we have samples
+                    scores = cross_val_score(model, X_train, y_train, cv=cv)
+                    results[name]['mean_cv_score'] = np.mean(scores)
+                    results[name]['std_cv_score'] = np.std(scores)
+                    print(f"{name} model CV score: {np.mean(scores):.4f} ± {np.std(scores):.4f}")
+                
+            except Exception as e:
+                print(f"Error training {name} model: {str(e)}")
+                results[name] = {'error': str(e)}
+
+        # Use the best model if we found one
+        if best_model is not None:
+            print(f"Best model: {best_model_name} with test score {best_score:.4f}")
+            return best_model, results
+        else:
+            # Fallback to a simple model
+            print("WARNING: No models were successfully trained. Using fallback model.")
+            fallback = LinearRegression()
+            fallback.fit(X, y)  # Use all data
+            return fallback, {"fallback": True}
+        
     def arrhenius_model(self, data):
         """
         Build a physics-based model using the Arrhenius equation for viscosity's
@@ -1142,22 +1199,21 @@ class ViscosityCalculator:
     def save_models(self, models_dict):
         """
         Save trained viscosity prediction models to disk.
-    
+        
         Args:
             models_dict (dict): Dictionary of trained models for different 
-                               media/terpene combinations
+                            media/terpene combinations
         """
         import pickle
         import os
-    
-        # Create directory if it doesn't exist
-        os.makedirs(os.path.dirname(os.path.abspath("models/")), exist_ok=True)
-    
+        
+        # Create the models directory if it doesn't exist
+        os.makedirs("models", exist_ok=True)
+        
         with open('models/viscosity_models.pkl', 'wb') as f:
             pickle.dump(models_dict, f)
-    
+        
         print(f"Saved {len(models_dict)} models to models/viscosity_models.pkl")
-
     def load_models(self):
         """
         Load trained viscosity prediction models from disk.
@@ -1224,19 +1280,20 @@ class ViscosityCalculator:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load data: {str(e)}")
             return None
-
+        
     def train_models_from_data(self, data=None):
         """
         Train viscosity prediction models using uploaded data or existing data.
-    
+        
         Args:
             data (pd.DataFrame, optional): DataFrame with training data. If None,
-                                          attempts to use data from saved CSV files.
+                                        attempts to use data from saved CSV files.
         """
         import pandas as pd
         import os
         import glob
-    
+        import traceback
+        
         # If no data provided, try to load from saved files
         if data is None:
             data_files = glob.glob('data/viscosity_data_*.csv')
@@ -1250,52 +1307,116 @@ class ViscosityCalculator:
                 try:
                     df = pd.read_csv(file)
                     data_frames.append(df)
-                except:
-                    print(f"Error loading {file}, skipping")
+                except Exception as e:
+                    print(f"Error loading {file}: {str(e)}")
+                    continue
         
             if not data_frames:
                 messagebox.showerror("Error", "Failed to load any training data.")
                 return
             
             data = pd.concat(data_frames, ignore_index=True)
-    
+
         # Show a progress dialog
         progress_window = Toplevel(self.root)
         progress_window.title("Training Models")
         progress_window.geometry("300x150")
         progress_window.transient(self.root)
         progress_window.grab_set()
-    
+
         progress_label = Label(progress_window, text="Training models...", font=FONT)
         progress_label.pack(pady=20)
-    
+
         progress_bar = ttk.Progressbar(progress_window, mode='indeterminate')
         progress_bar.pack(fill='x', padx=20)
         progress_bar.start()
-    
+
         # Create a new thread for training to avoid freezing the UI
         def train_thread():
             try:
+                print("Starting model training...")
+        
+                # Try to import required libraries
+                try:
+                    import numpy as np
+                    from sklearn.model_selection import train_test_split
+                    from sklearn.linear_model import LinearRegression
+                    from sklearn.preprocessing import PolynomialFeatures
+                    from sklearn.ensemble import RandomForestRegressor
+                    from sklearn.pipeline import make_pipeline
+                    print("Successfully imported required ML libraries")
+                except ImportError as e:
+                    error_msg = str(e)
+                    print(f"Error importing required libraries: {error_msg}")
+                    self.root.after(0, lambda msg=error_msg: messagebox.showerror("Library Error", 
+                                                        f"Required library not found: {msg}\n"
+                                                        f"Make sure scikit-learn is installed."))
+                    return
+                    
+                # Step 1: Clean up the data - drop any unnamed or empty columns
+                print(f"Original data columns: {data.columns.tolist()}")
+                data_cleaned = data.drop(columns=[col for col in data.columns if 'Unnamed:' in col], errors='ignore')
+                print(f"Columns after dropping unnamed: {data_cleaned.columns.tolist()}")
+                
+                # Step 2: Ensure correct data types for numeric columns
+                print("Converting columns to numeric types...")
+                for col in ['terpene_pct', 'temperature', 'viscosity']:
+                    # Print original data type and some sample values
+                    print(f"Column {col} before conversion - dtype: {data_cleaned[col].dtype}")
+                    print(f"Sample values before conversion: {data_cleaned[col].head().tolist()}")
+                    
+                    # Convert to numeric, using coerce to handle non-numeric values
+                    data_cleaned[col] = pd.to_numeric(data_cleaned[col], errors='coerce')
+                    
+                    # Print new data type and NaN counts
+                    print(f"Column {col} after conversion - dtype: {data_cleaned[col].dtype}")
+                    print(f"NaN values after conversion: {data_cleaned[col].isna().sum()} ({data_cleaned[col].isna().mean()*100:.1f}%)")
+                
                 # Train a model for each unique media-terpene combination
-                media_terpene_combos = data[['media', 'terpene']].drop_duplicates()
+                media_terpene_combos = data_cleaned[['media', 'terpene']].drop_duplicates()
                 models_dict = {}
+                
+                print(f"Found {len(media_terpene_combos)} unique media/terpene combinations to process")
             
-                for _, row in media_terpene_combos.iterrows():
+                for idx, row in media_terpene_combos.iterrows():
                     media = row['media']
                     terpene = row['terpene']
-                
+                    
                     # Filter data for this combination
-                    combo_data = data[(data['media'] == media) & (data['terpene'] == terpene)]
-                
-                    if len(combo_data) < 10:  # Need enough data points
+                    combo_data = data_cleaned[(data_cleaned['media'] == media) & (data_cleaned['terpene'] == terpene)]
+                    print(f"\nProcessing {media}/{terpene} combination: {len(combo_data)} samples")
+                    
+                    # Skip if we don't have enough data to start with
+                    if len(combo_data) < 5:  # Need at least 5 samples for minimal training
+                        print(f"Skipping {media}/{terpene}: Not enough initial samples ({len(combo_data)})")
                         continue
-                
-                    # Train the model using data
-                    model, _ = self.build_viscosity_models(combo_data)
-                
-                    # Store the model
-                    model_key = f"{media}_{terpene}"
-                    models_dict[model_key] = model
+                    
+                    # Clean data - handle missing values, but check if we have any data left
+                    combo_data_clean = combo_data.dropna(subset=['terpene_pct', 'temperature', 'viscosity'])
+                    
+                    if len(combo_data_clean) < 3:  # Too few samples after cleaning
+                        print(f"Skipping {media}/{terpene}: Not enough clean samples ({len(combo_data_clean)})")
+                        continue
+                    
+                    # Print a summary of the data
+                    print(f"  Clean data shape: {combo_data_clean.shape}")
+                    print(f"  Terpene % range: {combo_data_clean['terpene_pct'].min()}-{combo_data_clean['terpene_pct'].max()}")
+                    print(f"  Temperature range: {combo_data_clean['temperature'].min()}-{combo_data_clean['temperature'].max()}")
+                    print(f"  Viscosity range: {combo_data_clean['viscosity'].min()}-{combo_data_clean['viscosity'].max()}")
+                    
+                    # Train the model using clean data
+                    try:
+                        model, results = self.build_viscosity_models(combo_data_clean)
+                        
+                        # If we got a valid model
+                        if model is not None:
+                            # Store the model
+                            model_key = f"{media}_{terpene}"
+                            models_dict[model_key] = model
+                            print(f"Successfully trained model for {media}/{terpene}")
+                    except Exception as e:
+                        print(f"Error training model for {media}/{terpene}: {str(e)}")
+                        traceback.print_exc()
             
                 # Save the trained models
                 if models_dict:
@@ -1304,20 +1425,113 @@ class ViscosityCalculator:
                 
                     # Update UI in the main thread
                     self.root.after(0, lambda: messagebox.showinfo("Success", 
-                                                              f"Successfully trained {len(models_dict)} models."))
+                                                            f"Successfully trained {len(models_dict)} models."))
                 else:
                     self.root.after(0, lambda: messagebox.showwarning("Warning", 
-                                                                "Not enough data to train any models."))
+                                                                "No models could be trained. Check data quality."))
                 
             except Exception as e:
-                self.root.after(0, lambda: messagebox.showerror("Error", 
-                                                          f"Error training models: {str(e)}"))
+                error_message = str(e)
+                print(f"Error in training thread: {error_message}")
+                traceback.print_exc()
+                self.root.after(0, lambda msg=error_message: messagebox.showerror("Error", 
+                                                            f"Error training models: {msg}"))
             finally:
                 # Close the progress window
+                print("Training thread completed")
                 self.root.after(0, progress_window.destroy)
-    
+
         # Start the training thread
         import threading
         training_thread = threading.Thread(target=train_thread)
         training_thread.daemon = True
         training_thread.start()
+    def analyze_training_data(self, data=None, show_dialog=True):
+        """Analyze the training data CSV to identify issues."""
+        import pandas as pd
+        import matplotlib.pyplot as plt
+        from tkinter import Toplevel, Text, Scrollbar, Label
+        
+        if data is None:
+            data = self.upload_training_data()
+            if data is None:
+                return
+        
+        # Create a detailed analysis report
+        report = []
+        report.append(f"CSV Analysis Report")
+        report.append(f"==================")
+        report.append(f"Total rows: {len(data)}")
+        report.append(f"Columns: {', '.join(data.columns)}")
+        report.append(f"")
+        
+        # Check for NaN values
+        for col in data.columns:
+            nan_count = data[col].isna().sum()
+            nan_percent = (nan_count / len(data)) * 100
+            report.append(f"{col}: {nan_count} NaN values ({nan_percent:.2f}%)")
+        
+        report.append(f"")
+        
+        # Check unique values for categorical columns
+        for col in ['media', 'terpene', 'spindle', 'speed']:
+            if col in data.columns:
+                unique_vals = data[col].dropna().unique()
+                report.append(f"{col} unique values: {', '.join(str(x) for x in unique_vals)}")
+        
+        report.append(f"")
+        
+        # Check numeric ranges
+        for col in ['terpene_pct', 'temperature', 'viscosity']:
+            if col in data.columns:
+                non_nan_data = data[col].dropna()
+                report.append(f"{col} range: {non_nan_data.min()} to {non_nan_data.max()}")
+        
+        report.append(f"")
+        
+        # Check for usable combinations
+        media_terpene_combos = data[['media', 'terpene']].drop_duplicates()
+        report.append(f"Found {len(media_terpene_combos)} unique media/terpene combinations:")
+        
+        usable_combos = 0
+        for _, row in media_terpene_combos.iterrows():
+            media = row['media']
+            terpene = row['terpene']
+            combo_data = data[(data['media'] == media) & (data['terpene'] == terpene)]
+            clean_combo = combo_data.dropna(subset=['terpene_pct', 'temperature', 'viscosity'])
+            status = "USABLE" if len(clean_combo) >= 5 else "NOT ENOUGH DATA"
+            if status == "USABLE":
+                usable_combos += 1
+            report.append(f"  {media}/{terpene}: {len(combo_data)} samples, {len(clean_combo)} clean samples - {status}")
+        
+        report.append(f"")
+        report.append(f"Summary: {usable_combos} usable combinations out of {len(media_terpene_combos)}")
+        
+        # Print to console
+        print("\n".join(report))
+        
+        # Show in dialog if requested
+        if show_dialog:
+            report_window = Toplevel(self.root)
+            report_window.title("CSV Analysis Report")
+            report_window.geometry("600x400")
+            
+            Label(report_window, text="CSV Analysis Report", font=("Arial", 14, "bold")).pack(pady=10)
+            
+            text_frame = Frame(report_window)
+            text_frame.pack(fill="both", expand=True, padx=10, pady=10)
+            
+            scrollbar = Scrollbar(text_frame)
+            scrollbar.pack(side="right", fill="y")
+            
+            text_widget = Text(text_frame, wrap="word", yscrollcommand=scrollbar.set)
+            text_widget.pack(side="left", fill="both", expand=True)
+            
+            scrollbar.config(command=text_widget.yview)
+            
+            text_widget.insert("1.0", "\n".join(report))
+            text_widget.config(state="disabled")
+            
+            Button(report_window, text="Close", command=report_window.destroy).pack(pady=10)
+        
+        return report
