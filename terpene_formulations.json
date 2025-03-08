@@ -1,0 +1,25 @@
+{
+    "D8_Guava_2.5": [
+        {
+            "media": "D8",
+            "terpene": "Guava",
+            "terpene_pct": 2.5,
+            "timestamp": "2025-03-07T23:40:21.092691",
+            "temperature_data": []
+        },
+        {
+            "media": "D8",
+            "terpene": "Guava",
+            "terpene_pct": 2.5,
+            "timestamp": "2025-03-07T23:42:06.451414",
+            "temperature_data": []
+        },
+        {
+            "media": "D8",
+            "terpene": "Guava",
+            "terpene_pct": 2.5,
+            "timestamp": "2025-03-07T23:48:41.302547",
+            "temperature_data": []
+        }
+    ]
+}

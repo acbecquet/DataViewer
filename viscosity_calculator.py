@@ -62,7 +62,7 @@ class ViscosityCalculator:
         # Create a new top-level window
         calculator_window = Toplevel(self.root)
         calculator_window.title("Calculate Terpene % for Viscosity")
-        calculator_window.geometry("550x420")
+        calculator_window.geometry("550x500")
         calculator_window.resizable(False, False)
         calculator_window.configure(bg=APP_BACKGROUND_COLOR)
         
@@ -71,7 +71,7 @@ class ViscosityCalculator:
         calculator_window.grab_set()
         
         # Center the window on the screen
-        self.gui.center_window(calculator_window, 550, 420)
+        self.gui.center_window(calculator_window, 550, 500)
         
         # Create notebook (tabbed interface)
         self.notebook = ttk.Notebook(calculator_window)
@@ -197,12 +197,17 @@ class ViscosityCalculator:
         start_mass_label.grid(row=8, column=3, sticky="w", pady=3)
         
         # Create button frame for a single row of buttons
+        # Create button frame for organized rows of buttons
         button_frame = Frame(form_frame, bg=APP_BACKGROUND_COLOR)
         button_frame.grid(row=9, column=0, columnspan=4, pady=10)
 
+        # Create first row of buttons
+        button_row1 = Frame(button_frame, bg=APP_BACKGROUND_COLOR)
+        button_row1.pack(fill="x", pady=(0, 5))  # Add some space between rows
+
         # Calculate button
         calculate_btn = ttk.Button(
-            button_frame,
+            button_row1,
             text="Calculate",
             command=self.calculate_viscosity
         )
@@ -210,26 +215,39 @@ class ViscosityCalculator:
 
         # Upload Data button
         upload_btn = ttk.Button(
-            button_frame,
+            button_row1,
             text="Upload Data",
             command=self.upload_training_data
         )
         upload_btn.pack(side="left", padx=5)
 
+        # Create second row of buttons
+        button_row2 = Frame(button_frame, bg=APP_BACKGROUND_COLOR)
+        button_row2.pack(fill="x")
+
         # Train Models button
         train_btn = ttk.Button(
-            button_frame,
+            button_row2,
             text="Train Models",
             command=self.train_models_from_data
         )
-        train_btn.pack(side="left", padx=5)
+        train_btn.pack(side="left", padx=(0, 5))
 
-        analyze_btn = ttk.Button(
-            button_frame,
-            text="Analyze Data",
+        # Analyze Models button
+        analyze_models_btn = ttk.Button(
+            button_row2,
+            text="Analyze Models",
             command=self.analyze_models
         )
-        analyze_btn.pack(side="left", padx=5)
+        analyze_models_btn.pack(side="left", padx=5)
+
+        # Arrhenius Analysis button
+        arrhenius_btn = ttk.Button(
+            button_row2,
+            text="Arrhenius Analysis",
+            command=self.filter_and_analyze_specific_combinations
+        )
+        arrhenius_btn.pack(side="left", padx=5)
 
     
     def create_advanced_tab(self, notebook):
@@ -384,40 +402,61 @@ class ViscosityCalculator:
         """
         tab3 = Frame(notebook, bg=APP_BACKGROUND_COLOR)
         notebook.add(tab3, text="Measure")
-    
+        
         # Main container with padding
         main_frame = Frame(tab3, bg=APP_BACKGROUND_COLOR)
         main_frame.pack(fill='both', expand=True, padx=10, pady=10)
-    
+        
         # Title section
         title_frame = Frame(main_frame, bg=APP_BACKGROUND_COLOR)
         title_frame.pack(fill='x', pady=(0, 10))
-    
+        
         Label(title_frame, text="Raw Viscosity Measurement", 
-              bg=APP_BACKGROUND_COLOR, fg="white", font=(FONT[0], FONT[1]+2, "bold")).pack(pady=(0, 2))
-    
-        # Media selection frame
-        media_frame = Frame(main_frame, bg=APP_BACKGROUND_COLOR)
-        media_frame.pack(fill='x', pady=5)
-    
-        Label(media_frame, text="Media:", bg=APP_BACKGROUND_COLOR, fg="white", 
-              font=FONT).pack(side="left", padx=(5, 5))
-    
+            bg=APP_BACKGROUND_COLOR, fg="white", font=(FONT[0], FONT[1]+2, "bold")).pack(pady=(0, 2))
+        
+        # Create a frame for input fields using grid layout
+        input_frame = Frame(main_frame, bg=APP_BACKGROUND_COLOR)
+        input_frame.pack(fill='x', pady=5)
+        
+        # Configure grid columns to have appropriate weights
+        for i in range(6):
+            input_frame.columnconfigure(i, weight=1)
+        
+        # Media section - now using grid consistently
+        Label(input_frame, text="Media:", bg=APP_BACKGROUND_COLOR, fg="white", 
+            font=FONT).grid(row=0, column=0, sticky="w", padx=5, pady=2)
+        
         media_dropdown = ttk.Combobox(
-            media_frame, 
+            input_frame, 
             textvariable=self.media_var,
             values=self.media_options,
             state="readonly",
-            width=15
+            width=10
         )
-        media_dropdown.pack(side="left", padx=(0, 10))
-    
-        Label(media_frame, text="Media Brand:", bg=APP_BACKGROUND_COLOR, fg="white", 
-              font=FONT).pack(side="left", padx=(5, 5))
-    
-        media_brand_entry = Entry(media_frame, textvariable=self.media_brand_var, width=15)
-        media_brand_entry.pack(side="left")
-    
+        media_dropdown.grid(row=0, column=1, sticky="w", padx=5, pady=2)
+        
+        # Terpene section
+        Label(input_frame, text="Terpene:", bg=APP_BACKGROUND_COLOR, fg="white", 
+            font=FONT).grid(row=0, column=2, sticky="w", padx=5, pady=2)
+        
+        # Initialize terpene variable if not already done
+        if not hasattr(self, 'measure_terpene_var'):
+            self.measure_terpene_var = StringVar(value="Raw")  # Default to "Raw"
+        
+        terpene_entry = Entry(input_frame, textvariable=self.measure_terpene_var, width=12)
+        terpene_entry.grid(row=0, column=3, sticky="w", padx=5, pady=2)
+        
+        # Terpene percentage
+        Label(input_frame, text="Terpene %:", bg=APP_BACKGROUND_COLOR, fg="white", 
+            font=FONT).grid(row=0, column=4, sticky="w", padx=5, pady=2)
+        
+        # Initialize terpene percentage variable if not already done
+        if not hasattr(self, 'measure_terpene_pct_var'):
+            self.measure_terpene_pct_var = DoubleVar(value=0.0)  # Default to 0%
+        
+        pct_entry = Entry(input_frame, textvariable=self.measure_terpene_pct_var, width=5)
+        pct_entry.grid(row=0, column=5, sticky="w", padx=5, pady=2)
+        
         # Create a frame with scrolling capability for temperature blocks
         canvas_frame = Frame(main_frame, bg=APP_BACKGROUND_COLOR)
         canvas_frame.pack(fill='both', expand=True, pady=10)
@@ -498,7 +537,7 @@ class ViscosityCalculator:
     def create_temperature_block(self, parent, temperature):
         """
         Create a block for a temperature with a table for 3 runs
-    
+        
         Args:
             parent: Parent frame to add the block to
             temperature: Temperature value for this block
@@ -506,18 +545,18 @@ class ViscosityCalculator:
         # Create a frame for this temperature block with a border
         block_frame = Frame(parent, bg=APP_BACKGROUND_COLOR, bd=1, relief="solid")
         block_frame.pack(fill="x", expand=True, pady=5, padx=5)
-    
+
         # Track this block
         self.temperature_blocks.append((temperature, block_frame))
-    
+
         # Temperature header row
         temp_header = Frame(block_frame, bg=APP_BACKGROUND_COLOR)
         temp_header.pack(fill="x", padx=2, pady=2)
-    
+
         temp_label = Label(temp_header, text=f"{temperature}C", 
-                          bg="#000080", fg="white", font=FONT, width=10)
+                        bg="#000080", fg="white", font=FONT, width=10)
         temp_label.pack(side="left", fill="x", expand=True)
-    
+
         # Add a remove button for this block
         remove_btn = ttk.Button(
             temp_header,
@@ -526,42 +565,42 @@ class ViscosityCalculator:
             command=lambda t=temperature, bf=block_frame: self.remove_temperature_block(t, bf)
         )
         remove_btn.pack(side="right", padx=2)
-    
+
         # Speed input row
         speed_frame = Frame(block_frame, bg=APP_BACKGROUND_COLOR)
         speed_frame.pack(fill="x", padx=2, pady=2)
-    
+
         Label(speed_frame, text="Speed:", bg=APP_BACKGROUND_COLOR, fg="white", 
-              font=FONT).pack(side="left", padx=5)
-    
+            font=FONT).pack(side="left", padx=5)
+
         speed_var = StringVar(value="")
         speed_entry = Entry(speed_frame, textvariable=speed_var, width=15)
         speed_entry.pack(side="left", padx=5)
-    
+
         Label(speed_frame, text="(manual input)", bg=APP_BACKGROUND_COLOR, fg="white", 
-              font=FONT).pack(side="left", padx=5)
-    
+            font=FONT).pack(side="left", padx=5)
+
         self.speed_vars.append((temperature, speed_var))
-    
+
         # Create the table for runs
         table_frame = Frame(block_frame, bg=APP_BACKGROUND_COLOR)
         table_frame.pack(fill="x", padx=5, pady=5)
-    
+
         # Table headers
         headers = ["", "Torque", "Viscosity"]
         col_widths = [10, 15, 15]
-    
+
         # Create header row
         for col, header in enumerate(headers):
             Label(table_frame, text=header, bg="#000080", fg="white", 
-                  font=FONT, width=col_widths[col], relief="raised").grid(
+                font=FONT, width=col_widths[col], relief="raised").grid(
                 row=0, column=col, sticky="nsew", padx=1, pady=1)
-    
+
         # Create rows for each run
         for run in range(3):
             # Row label (Run 1, Run 2, Run 3)
             Label(table_frame, text=f"Run {run+1}", bg=APP_BACKGROUND_COLOR, fg="white", 
-                  font=FONT, width=col_widths[0]).grid(
+                font=FONT, width=col_widths[0]).grid(
                 row=run+1, column=0, sticky="nsew", padx=1, pady=1)
         
             # Create and track variables for this run
@@ -579,36 +618,110 @@ class ViscosityCalculator:
             self.viscosity_vars[run].append((temperature, visc_var))
         
             # Create entry for torque
-            Entry(table_frame, textvariable=torque_var, width=col_widths[1]).grid(
-                row=run+1, column=1, sticky="nsew", padx=1, pady=1)
+            torque_entry = Entry(table_frame, textvariable=torque_var, width=col_widths[1])
+            torque_entry.grid(row=run+1, column=1, sticky="nsew", padx=1, pady=1)
         
-            # Create entry for viscosity
-            Entry(table_frame, textvariable=visc_var, width=col_widths[2]).grid(
-                row=run+1, column=2, sticky="nsew", padx=1, pady=1)
-    
+            # Create entry for viscosity with event binding
+            visc_entry = Entry(table_frame, textvariable=visc_var, width=col_widths[2])
+            visc_entry.grid(row=run+1, column=2, sticky="nsew", padx=1, pady=1)
+            
+            # Add event binding for value changes in viscosity field
+            visc_var.trace_add("write", lambda name, index, mode, temp=temperature: 
+                            self.check_run_completion(temp))
+
         # Add average row
         Label(table_frame, text="Average", bg="#000080", fg="white", 
-              font=FONT, width=col_widths[0]).grid(
+            font=FONT, width=col_widths[0]).grid(
             row=4, column=0, sticky="nsew", padx=1, pady=1)
-    
+
         # Create variables for averages
         avg_torque_var = StringVar(value="")
         avg_visc_var = StringVar(value="")
-    
+
         # Store them for tracking
         if not hasattr(self, 'avg_torque_vars'):
             self.avg_torque_vars = []
         if not hasattr(self, 'avg_visc_vars'):
             self.avg_visc_vars = []
-    
+
         self.avg_torque_vars.append((temperature, avg_torque_var))
         self.avg_visc_vars.append((temperature, avg_visc_var))
-    
+
         # Create labels for averages
         Label(table_frame, textvariable=avg_torque_var, bg="#90EE90", 
-              width=col_widths[1]).grid(row=4, column=1, sticky="nsew", padx=1, pady=1)
+            width=col_widths[1]).grid(row=4, column=1, sticky="nsew", padx=1, pady=1)
         Label(table_frame, textvariable=avg_visc_var, bg="#90EE90", 
-              width=col_widths[2]).grid(row=4, column=2, sticky="nsew", padx=1, pady=1)
+            width=col_widths[2]).grid(row=4, column=2, sticky="nsew", padx=1, pady=1)
+        
+    def check_run_completion(self, temperature):
+        """
+        Check if all three runs have viscosity values for a given temperature.
+        If so, automatically calculate the averages.
+        
+        Args:
+            temperature: The temperature block to check
+        """
+        # Find all viscosity variables for this temperature
+        visc_values = []
+        torque_values = []
+        
+        # Check all runs for this temperature
+        for run in range(3):
+            # Get viscosity values
+            for temp, visc_var in self.viscosity_vars[run]:
+                if temp == temperature:
+                    try:
+                        value = visc_var.get().strip()
+                        if value:  # Check if not empty
+                            # Convert to float, handling commas if present
+                            visc_float = float(value.replace(',', ''))
+                            visc_values.append(visc_float)
+                    except (ValueError, AttributeError) as e:
+                        print(f"Error converting viscosity value: {e}")
+            
+            # Get torque values
+            for temp, torque_var in self.torque_vars[run]:
+                if temp == temperature:
+                    try:
+                        torque_value = torque_var.get().strip()
+                        if torque_value:  # Check if not empty
+                            # Convert to float, handling commas if present
+                            torque_float = float(torque_value.replace(',', ''))
+                            torque_values.append(torque_float)
+                    except (ValueError, AttributeError) as e:
+                        print(f"Error converting torque value: {e}")
+        
+        # If we have three viscosity values, calculate average
+        if len(visc_values) == 3:
+            try:
+                # Calculate viscosity average
+                avg_visc = sum(visc_values) / len(visc_values)
+                
+                # Update the average viscosity variable
+                for temp, avg_var in self.avg_visc_vars:
+                    if temp == temperature:
+                        # Format with commas for larger numbers
+                        if avg_visc >= 1000:
+                            avg_var.set(f"{avg_visc:,.1f}")
+                        else:
+                            avg_var.set(f"{avg_visc:.1f}")
+                        break
+                
+                # Calculate torque average if we have values
+                if torque_values:
+                    avg_torque = sum(torque_values) / len(torque_values)
+                    
+                    # Update the average torque variable
+                    for temp, avg_var in self.avg_torque_vars:
+                        if temp == temperature:
+                            avg_var.set(f"{avg_torque:.1f}")
+                            break
+                            
+                # Force update of the UI
+                self.root.update_idletasks()
+                
+            except Exception as e:
+                print(f"Error calculating averages: {e}")
 
     def add_temperature_block(self, parent):
         """Add a new temperature block with a user-specified temperature"""
@@ -644,32 +757,34 @@ class ViscosityCalculator:
 
     def calculate_viscosity_block_stats(self):
         """Calculate averages for each temperature block"""
-        import math
-    
+        
+        calculations_performed = False
+        
         for temp, _ in self.temperature_blocks:
             # Get the torque and viscosity values for this temperature
             torque_values = []
             visc_values = []
         
             for run in range(3):
-                # Find the corresponding variables for this temperature
-                for t, torque_var in self.torque_vars[run]:
-                    if t == temp:
-                        try:
-                            torque_value = torque_var.get().strip()
-                            if torque_value:  # Check if not empty
-                                torque = float(torque_value)
-                                torque_values.append(torque)
-                        except ValueError:
-                            pass
-            
+                # Collect viscosity values for this temperature
                 for t, visc_var in self.viscosity_vars[run]:
                     if t == temp:
                         try:
                             visc_value = visc_var.get().strip()
                             if visc_value:  # Check if not empty
-                                visc = float(visc_value)
+                                visc = float(visc_value.replace(',', ''))
                                 visc_values.append(visc)
+                        except ValueError:
+                            pass
+                
+                # Collect torque values for this temperature
+                for t, torque_var in self.torque_vars[run]:
+                    if t == temp:
+                        try:
+                            torque_value = torque_var.get().strip()
+                            if torque_value:  # Check if not empty
+                                torque = float(torque_value.replace(',', ''))
+                                torque_values.append(torque)
                         except ValueError:
                             pass
         
@@ -680,6 +795,7 @@ class ViscosityCalculator:
                 for t, avg_var in self.avg_torque_vars:
                     if t == temp:
                         avg_var.set(f"{avg_torque:.1f}")
+                        calculations_performed = True
                         break
         
             if visc_values:
@@ -687,87 +803,163 @@ class ViscosityCalculator:
                 # Find the average viscosity variable for this temperature
                 for t, avg_var in self.avg_visc_vars:
                     if t == temp:
-                        avg_var.set(f"{avg_visc:.1f}")
+                        # Format with commas for larger numbers
+                        if avg_visc >= 1000:
+                            avg_var.set(f"{avg_visc:,.1f}")
+                        else:
+                            avg_var.set(f"{avg_visc:.1f}")
+                        calculations_performed = True
                         break
-    
+
         # Show a message to confirm calculation
-        if self.temperature_blocks:
+        if calculations_performed:
             messagebox.showinfo("Calculation Complete", "Averages have been calculated successfully.")
 
     def save_block_measurements(self):
-        """Save the block-based viscosity measurements to the database"""
+        """Save the block-based viscosity measurements to the database with better error handling"""
         import datetime
-        # Create a data structure to save
-        measurements = {
-            "media": self.media_var.get(),
-            "media_brand": self.media_brand_var.get(),
-            "timestamp": datetime.datetime.now().isoformat(),
-            "temperature_data": []
-        }
-    
-        # Collect data from each temperature block
-        for temp, _ in self.temperature_blocks:
-            # Find the speed for this temperature
-            speed = ""
-            for t, speed_var in self.speed_vars:
-                if t == temp:
-                    speed = speed_var.get()
-                    break
+        import os
+        import traceback
         
-            block_data = {
-                "temperature": temp,
-                "speed": speed,
-                "runs": []
+        try:
+            # Get the terpene value, defaulting to "Raw" if empty
+            terpene_value = self.measure_terpene_var.get().strip()
+            if not terpene_value:
+                terpene_value = "Raw"
+            
+            # Get the terpene percentage, defaulting to 0.0 if empty
+            try:
+                terpene_pct = float(self.measure_terpene_pct_var.get())
+            except (ValueError, tk.TclError):
+                terpene_pct = 0.0
+            
+            # Create a data structure to save
+            measurements = {
+                "media": self.media_var.get(),
+                "terpene": terpene_value,
+                "terpene_pct": terpene_pct,
+                "timestamp": datetime.datetime.now().isoformat(),
+                "temperature_data": []
             }
-        
-            # Collect data for each run
-            for run in range(3):
-                run_data = {"torque": "", "viscosity": ""}
             
-                # Find the torque and viscosity for this run at this temperature
-                for t, torque_var in self.torque_vars[run]:
+            # Validate we have at least one temperature block with data
+            if not self.temperature_blocks:
+                messagebox.showwarning("Missing Data", "No temperature blocks found. Please add measurement blocks first.")
+                return
+            
+            # Collect data from each temperature block
+            for temp, _ in self.temperature_blocks:
+                # Find the speed for this temperature
+                speed = ""
+                for t, speed_var in self.speed_vars:
                     if t == temp:
-                        run_data["torque"] = torque_var.get()
+                        speed = speed_var.get()
+                        break
+                
+                block_data = {
+                    "temperature": temp,
+                    "speed": speed,
+                    "runs": []
+                }
+                
+                # Collect data for each run
+                for run in range(3):
+                    run_data = {"torque": "", "viscosity": ""}
+                    
+                    # Find the torque and viscosity for this run at this temperature
+                    for t, torque_var in self.torque_vars[run]:
+                        if t == temp:
+                            run_data["torque"] = torque_var.get()
+                            break
+                    
+                    for t, visc_var in self.viscosity_vars[run]:
+                        if t == temp:
+                            run_data["viscosity"] = visc_var.get()
+                            break
+                    
+                    block_data["runs"].append(run_data)
+                
+                # Find the averages
+                avg_torque = ""
+                avg_visc = ""
+                
+                for t, avg_var in self.avg_torque_vars:
+                    if t == temp:
+                        avg_torque = avg_var.get()
+                        break
+                
+                for t, avg_var in self.avg_visc_vars:
+                    if t == temp:
+                        avg_visc = avg_var.get()
+                        break
+                
+                block_data["average_torque"] = avg_torque
+                block_data["average_viscosity"] = avg_visc
+                
+                measurements["temperature_data"].append(block_data)
+            
+            # Check if measurements has any valid viscosity data
+            has_valid_data = False
+            for block in measurements["temperature_data"]:
+                if block["average_viscosity"] and block["average_viscosity"].strip():
+                    has_valid_data = True
+                    break
+                for run in block["runs"]:
+                    if run["viscosity"] and run["viscosity"].strip():
+                        has_valid_data = True
                         break
             
-                for t, visc_var in self.viscosity_vars[run]:
-                    if t == temp:
-                        run_data["viscosity"] = visc_var.get()
-                        break
+            if not has_valid_data:
+                messagebox.showwarning("Missing Data", 
+                                    "No valid viscosity measurements found. Please enter at least one viscosity value.")
+                return
             
-                block_data["runs"].append(run_data)
-        
-            # Find the averages
-            avg_torque = ""
-            avg_visc = ""
-        
-            for t, avg_var in self.avg_torque_vars:
-                if t == temp:
-                    avg_torque = avg_var.get()
-                    break
-        
-            for t, avg_var in self.avg_visc_vars:
-                if t == temp:
-                    avg_visc = avg_var.get()
-                    break
-        
-            block_data["average_torque"] = avg_torque
-            block_data["average_viscosity"] = avg_visc
-        
-            measurements["temperature_data"].append(block_data)
-    
-        # Add measurements to the database
-        key = f"{measurements['media']}_{measurements['media_brand']}_raw_viscosity_blocks"
-    
-        if key not in self.formulation_db:
-            self.formulation_db[key] = []
-    
-        self.formulation_db[key].append(measurements)
-    
-        # Save to file
-        self.save_formulation_database()
-    
-        messagebox.showinfo("Success", "Viscosity measurements saved successfully!")
+            # Add measurements to the database
+            key = f"{measurements['media']}_{measurements['terpene']}_{measurements['terpene_pct']}"
+            
+            if key not in self.formulation_db:
+                self.formulation_db[key] = []
+            
+            self.formulation_db[key].append(measurements)
+            
+            # Save to file - Handle database saving with explicit error feedback
+            try:
+                # Ensure the directory exists
+                db_dir = os.path.dirname(self.formulation_db_path)
+                if db_dir and not os.path.exists(db_dir):
+                    os.makedirs(db_dir, exist_ok=True)
+                    
+                # Save the database
+                with open(self.formulation_db_path, 'w') as f:
+                    json.dump(self.formulation_db, f, indent=4)
+                print(f"Successfully saved database to {self.formulation_db_path}")
+            except Exception as e:
+                traceback_str = traceback.format_exc()
+                error_msg = f"Error saving formulation database to {self.formulation_db_path}:\n{str(e)}"
+                print(error_msg)
+                print(traceback_str)
+                messagebox.showerror("Database Save Error", error_msg)
+                # Continue with CSV save anyway
+            
+            # Also save as CSV for machine learning - with explicit error feedback
+            try:
+                self.save_as_csv(measurements)
+            except Exception as e:
+                traceback_str = traceback.format_exc()
+                error_msg = f"Error saving CSV file:\n{str(e)}"
+                print(error_msg)
+                print(traceback_str)
+                messagebox.showerror("CSV Save Error", error_msg)
+            
+            messagebox.showinfo("Success", "Viscosity measurements saved successfully!")
+            
+        except Exception as e:
+            traceback_str = traceback.format_exc()
+            error_msg = f"Error processing measurements: {str(e)}"
+            print(error_msg)
+            print(traceback_str)
+            messagebox.showerror("Save Error", error_msg)
+
 
     def calculate_step1(self):
         """Calculate the first step amount of terpenes to add."""
@@ -949,6 +1141,99 @@ class ViscosityCalculator:
         except Exception as e:
             print(f"Error saving formulation database: {e}")
     
+    def save_as_csv(self, measurements):
+        """
+        Save the measurements in a standardized CSV format for machine learning.
+        
+        Args:
+            measurements (dict): The measurements data structure
+        """
+        import pandas as pd
+        import os
+        import datetime
+        import traceback
+        
+        # Create the data directory if it doesn't exist
+        data_dir = 'data'
+        try:
+            if not os.path.exists(data_dir):
+                os.makedirs(data_dir, exist_ok=True)
+                print(f"Created data directory at {os.path.abspath(data_dir)}")
+        except Exception as e:
+            raise Exception(f"Failed to create data directory at {os.path.abspath(data_dir)}: {str(e)}")
+        
+        # Generate a timestamp
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Create rows for the CSV
+        rows = []
+        
+        media = measurements['media']
+        terpene = measurements['terpene']
+        terpene_pct = measurements['terpene_pct']
+        
+        # Process each temperature block
+        for temp_block in measurements['temperature_data']:
+            temperature = temp_block['temperature']
+            speed = temp_block.get('speed', '')
+            
+            # Process each individual run
+            for run in temp_block['runs']:
+                torque = run.get('torque', '')
+                viscosity = run.get('viscosity', '')
+                
+                # Only add rows with valid viscosity values
+                if viscosity and viscosity.strip():
+                    try:
+                        viscosity_float = float(viscosity)
+                        row = {
+                            'media': media,
+                            'terpene': terpene,
+                            'terpene_pct': terpene_pct,
+                            'temperature': temperature,
+                            'speed': speed,
+                            'torque': torque,
+                            'viscosity': viscosity_float
+                        }
+                        rows.append(row)
+                    except ValueError as e:
+                        print(f"Warning: Could not convert viscosity value '{viscosity}' to float: {e}")
+            
+            # Add the average if available
+            avg_viscosity = temp_block.get('average_viscosity', '')
+            if avg_viscosity and avg_viscosity.strip():
+                try:
+                    avg_viscosity_float = float(avg_viscosity)
+                    row = {
+                        'media': media,
+                        'terpene': terpene,
+                        'terpene_pct': terpene_pct,
+                        'temperature': temperature,
+                        'speed': speed,
+                        'torque': temp_block.get('average_torque', ''),
+                        'viscosity': avg_viscosity_float,
+                        'is_average': True
+                    }
+                    rows.append(row)
+                except ValueError as e:
+                    print(f"Warning: Could not convert average viscosity value '{avg_viscosity}' to float: {e}")
+        
+        # Create a DataFrame and save to CSV
+        if rows:
+            df = pd.DataFrame(rows)
+            filename = f"data/viscosity_data_{timestamp}.csv"
+            full_path = os.path.abspath(filename)
+            
+            try:
+                df.to_csv(filename, index=False)
+                print(f"Saved viscosity data to {full_path}")
+                return full_path
+            except Exception as e:
+                raise Exception(f"Failed to save CSV to {full_path}: {str(e)}")
+        else:
+            print("No valid data rows to save to CSV")
+            return None
+
     def calculate_viscosity(self):
         """
         Calculate terpene percentage based on target viscosity using trained models.
@@ -1548,6 +1833,7 @@ class ViscosityCalculator:
         return report
     
     def analyze_models(self, show_dialog=True):
+        
         """Analyze trained viscosity models to identify potential issues."""
         import pandas as pd
         import matplotlib.pyplot as plt
@@ -1713,3 +1999,529 @@ class ViscosityCalculator:
             Button(report_window, text="Close", command=report_window.destroy).pack(pady=10)
         
         return report
+    
+    def filter_and_analyze_specific_combinations(self):
+        """
+        Analyze and build models for specific media-terpene combinations with robust error handling.
+        Focus on D8+Watermelon, D8+Skittlez, D8+Lemon, D8+Guava, raw D8, and D9+Grape Ape.
+        """
+        import pandas as pd
+        import numpy as np
+        import matplotlib.pyplot as plt
+        from tkinter import Toplevel, Text, Scrollbar, Label, Frame, Canvas
+        from sklearn.linear_model import LinearRegression
+        from scipy.optimize import curve_fit
+        import os
+        import threading
+        
+        # Target combinations
+        target_combinations = [
+            ("D8", "Watermelon"),
+            ("D8", "Skittlez"),
+            ("D8", "Lemon"),
+            ("D8", "Guava"),
+            ("D8", ""),
+            ("D8", "None"),
+            ("D9", "Grape Ape")
+        ]
+        
+        # Create progress window
+        progress_window = Toplevel(self.root)
+        progress_window.title("Analyzing Specific Combinations")
+        progress_window.geometry("700x500")  # Larger window for more text
+        progress_window.transient(self.root)
+        progress_window.grab_set()
+        
+        # Create scrollable text area for live updates
+        Label(progress_window, text="Analyzing Target Combinations", font=("Arial", 14, "bold")).pack(pady=10)
+        
+        text_frame = Frame(progress_window)
+        text_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        scrollbar = Scrollbar(text_frame)
+        scrollbar.pack(side="right", fill="y")
+        
+        text_widget = Text(text_frame, wrap="word", yscrollcommand=scrollbar.set)
+        text_widget.pack(side="left", fill="both", expand=True)
+        scrollbar.config(command=text_widget.yview)
+        
+        # Function to add text to the widget from any thread
+        def add_text(message):
+            self.root.after(0, lambda: text_widget.insert("end", message + "\n"))
+            self.root.after(0, lambda: text_widget.see("end"))
+        
+        # Create a progress bar
+        progress_frame = Frame(progress_window)
+        progress_frame.pack(fill="x", padx=10, pady=10)
+        
+        progress_canvas = Canvas(progress_frame, height=20, bg="white")
+        progress_canvas.pack(fill="x")
+        
+        # Function to update progress bar
+        def update_progress(percent):
+            progress_canvas.delete("progress")
+            width = progress_canvas.winfo_width() * percent / 100
+            progress_canvas.create_rectangle(0, 0, width, 20, fill="#4CAF50", tags="progress")
+        
+        # Start the analysis in a separate thread
+        def run_analysis():
+            # Create figures and plots in the main thread
+            figure_list = []
+            
+            try:
+                # Load all available data
+                add_text("Loading available data files...")
+                
+                data_files = []
+                data_dir = 'data'
+                if os.path.exists(data_dir):
+                    data_files = [f for f in os.listdir(data_dir) if f.startswith('viscosity_data_') and f.endswith('.csv')]
+                
+                if not data_files:
+                    add_text("No data files found. Please upload data first.")
+                    return
+                
+                # Load and combine all data files
+                all_data = []
+
+                processed_files = set()
+                data_frames = []
+
+                for file in data_files:
+                    if file in processed_files:
+                        add_text(f"Skipping already processed file: {file}")
+                        continue
+                    try:
+                        file_path = os.path.join(data_dir, file)
+                        df = pd.read_csv(file_path)
+                        data_frames.append(df)
+                        processed_files.add(file)
+                        add_text(f"Loaded {file} with {len(df)} records")
+                    except Exception as e:
+                        add_text(f"Error loading {file}: {str(e)}")
+                
+                if not all_data:
+                    add_text("Failed to load any valid data.")
+                    return
+                
+                # Combine all data
+                data = pd.concat(all_data, ignore_index=True)
+                add_text(f"Combined data: {len(data)} total records")
+                
+                # Clean data - convert columns to numeric
+                for col in ['terpene_pct', 'temperature', 'viscosity']:
+                    data[col] = pd.to_numeric(data[col], errors='coerce')
+                
+                # Remove rows with NaN values in key columns
+                data = data.dropna(subset=['terpene_pct', 'temperature', 'viscosity'])
+                add_text(f"After cleaning: {len(data)} valid records")
+                
+                # Process each target combination
+                results = {}
+                for idx, (media, terpene) in enumerate(target_combinations):
+                    add_text(f"\nProcessing {media}/{terpene} combination...")
+                    update_progress((idx / len(target_combinations)) * 100)
+                    
+                    # Filter data for this combination
+                    combo_filter = data['media'] == media
+                    
+                    # Handle different variants of "no terpenes"
+                    if not terpene:  # Raw D8/D9 (no terpenes)
+                        terpene_filter = (data['terpene'].isna()) | (data['terpene'] == '') | (data['terpene'] == 'None') | (data['terpene'] == 'Raw')
+                    else:
+                        terpene_filter = data['terpene'] == terpene
+                    
+                    combo_data = data[combo_filter & terpene_filter].copy()
+                    
+                    if len(combo_data) < 10:
+                        add_text(f"Not enough data for {media}/{terpene}. Only {len(combo_data)} records found.")
+                        continue
+                    
+                    add_text(f"Found {len(combo_data)} records for {media}/{terpene}")
+                    
+                    # Analyze the temperature distribution
+                    temp_min = combo_data['temperature'].min()
+                    temp_max = combo_data['temperature'].max()
+                    temp_count = combo_data['temperature'].nunique()
+                    
+                    add_text(f"Temperature range: {temp_min:.1f}°C to {temp_max:.1f}°C ({temp_count} distinct values)")
+                    
+                    # Check for multiple terpene percentages
+                    terpene_pcts = sorted(combo_data['terpene_pct'].unique())
+                    add_text(f"Terpene percentages: {', '.join([f'{p:.1f}%' for p in terpene_pcts])}")
+                    
+                    # For each terpene percentage, fit an Arrhenius model
+                    for terpene_pct in terpene_pcts:
+                        pct_data = combo_data[combo_data['terpene_pct'] == terpene_pct]
+                        
+                        if len(pct_data) < 5:
+                            add_text(f"  Skipping {terpene_pct}% - insufficient data ({len(pct_data)} points)")
+                            continue
+                        
+                        add_text(f"  Fitting Arrhenius model for {terpene_pct}% terpenes ({len(pct_data)} data points)")
+                        
+                        try:
+                            # Define a more stable Arrhenius model with bounds
+                            def arrhenius_model(T, A, E_a):
+                                R = 8.314  # Gas constant in J/(mol·K)
+                                T_kelvin = T + 273.15  # Convert °C to K
+                                # Clip the exponent to avoid overflow
+                                exponent = np.clip(E_a / (R * T_kelvin), -100, 100)
+                                return A * np.exp(exponent)
+                            
+                            # Extract temperature and viscosity data
+                            T = pct_data['temperature'].values
+                            visc = pct_data['viscosity'].values
+                            
+                            # Log transform the viscosity values for more stable fitting
+                            log_visc = np.log(visc)
+                            
+                            # Define linear version of Arrhenius for initial guess
+                            # ln(μ) = ln(A) + E_a/(R*T)
+                            X = 1/(T + 273.15)
+                            
+                            # Use linear regression to get initial parameters
+                            reg = LinearRegression().fit(X.reshape(-1, 1), log_visc)
+                            E_a_guess = reg.coef_[0] * 8.314  # R = 8.314 J/(mol·K)
+                            A_guess = np.exp(reg.intercept_)
+                            
+                            add_text(f"    Initial guess: A={A_guess:.4e}, E_a={E_a_guess:.2f} J/mol")
+                            
+                            # Define bounds for parameters
+                            # A should be positive, E_a typically 10-150 kJ/mol for viscosity
+                            bounds = ([1e-20, 1000], [1e10, 150000])
+                            
+                            # Fit the model with robust settings
+                            try:
+                                params, covariance = curve_fit(
+                                    arrhenius_model, T, visc,
+                                    p0=[A_guess, E_a_guess],
+                                    bounds=bounds,
+                                    maxfev=2000,  # Increase max iterations
+                                    method='trf'  # Use trust-region reflective algorithm
+                                )
+                                A, E_a = params
+                                
+                                # Calculate R-squared
+                                visc_pred = arrhenius_model(T, A, E_a)
+                                ss_tot = np.sum((visc - np.mean(visc))**2)
+                                ss_res = np.sum((visc - visc_pred)**2)
+                                r2 = 1 - (ss_res / ss_tot)
+                                
+                                add_text(f"    Fitted parameters: A={A:.4e}, E_a={E_a:.2f} J/mol")
+                                add_text(f"    R² = {r2:.4f}")
+                                
+                                # Store the results
+                                key = f"{media}_{terpene}_{terpene_pct}"
+                                results[key] = {
+                                    'A': A,
+                                    'E_a': E_a,
+                                    'r2': r2,
+                                    'data_points': len(pct_data),
+                                    'temp_range': (float(temp_min), float(temp_max))
+                                }
+                                
+                                # Prepare for plotting (in main thread later)
+                                if r2 > 0.5:  # More lenient threshold to see more fits
+                                    # Gather data for plotting later
+                                    figure_data = {
+                                        'title': f'{media} with {terpene} @ {terpene_pct}%',
+                                        'type': 'arrhenius',
+                                        'T': T.tolist(),
+                                        'visc': visc.tolist(),
+                                        'params': params.tolist(),
+                                        'r2': r2,
+                                        'filename': f'plots/{media}_{terpene}_{terpene_pct}_arrhenius.png'
+                                    }
+                                    figure_list.append(figure_data)
+                                    add_text(f"    Plot will be saved to {figure_data['filename']}")
+                                
+                            except RuntimeError as e:
+                                add_text(f"    Failed to fit Arrhenius model: {str(e)}")
+                                # Try a different fitting approach with log-transformed data
+                                add_text(f"    Trying linear fitting of log-transformed data...")
+                                try:
+                                    # Use the linear regression results directly
+                                    A = A_guess
+                                    E_a = E_a_guess
+                                    
+                                    # Calculate R-squared
+                                    visc_pred = arrhenius_model(T, A, E_a)
+                                    ss_tot = np.sum((visc - np.mean(visc))**2)
+                                    ss_res = np.sum((visc - visc_pred)**2)
+                                    r2 = 1 - (ss_res / ss_tot)
+                                    
+                                    add_text(f"    Linear fit parameters: A={A:.4e}, E_a={E_a:.2f} J/mol")
+                                    add_text(f"    R² = {r2:.4f}")
+                                    
+                                    # Store the results
+                                    key = f"{media}_{terpene}_{terpene_pct}"
+                                    results[key] = {
+                                        'A': float(A),
+                                        'E_a': float(E_a),
+                                        'r2': float(r2),
+                                        'data_points': len(pct_data),
+                                        'temp_range': (float(temp_min), float(temp_max)),
+                                        'method': 'linear_fit'
+                                    }
+                                    
+                                    # Prepare for plotting (in main thread later)
+                                    if r2 > 0.5:
+                                        figure_data = {
+                                            'title': f'{media} with {terpene} @ {terpene_pct}% (Linear Fit)',
+                                            'type': 'arrhenius',
+                                            'T': T.tolist(),
+                                            'visc': visc.tolist(),
+                                            'params': [float(A), float(E_a)],
+                                            'r2': float(r2),
+                                            'filename': f'plots/{media}_{terpene}_{terpene_pct}_linear_arrhenius.png'
+                                        }
+                                        figure_list.append(figure_data)
+                                        add_text(f"    Plot will be saved to {figure_data['filename']}")
+                                except Exception as e2:
+                                    add_text(f"    Linear fit also failed: {str(e2)}")
+                                
+                        except Exception as e:
+                            add_text(f"    Error processing {terpene_pct}%: {str(e)}")
+                    
+                    # Now try a model that includes terpene percentage as a parameter
+                    if len(terpene_pcts) > 1:
+                        add_text(f"\n  Fitting combined model for all terpene percentages")
+                        
+                        try:
+                            # Define a more stable combined model
+                            def combined_model(X, A, E_a, B):
+                                T, pct = X
+                                R = 8.314  # Gas constant in J/(mol·K)
+                                T_kelvin = T + 273.15
+                                exponent = np.clip(E_a / (R * T_kelvin), -100, 100)
+                                terpene_factor = np.clip(1 - B * pct/100, 0.01, 0.99)  # Prevent zeros or negatives
+                                return A * np.exp(exponent) * terpene_factor
+                            
+                            # Extract data
+                            T = combo_data['temperature'].values
+                            pct = combo_data['terpene_pct'].values
+                            visc = combo_data['viscosity'].values
+                            
+                            # Use median A and E_a values from individual models as initial guesses
+                            A_values = []
+                            E_a_values = []
+                            for k, v in results.items():
+                                if k.startswith(f"{media}_{terpene}_") and 'A' in v and 'E_a' in v:
+                                    A_values.append(v['A'])
+                                    E_a_values.append(v['E_a'])
+                            
+                            if A_values and E_a_values:
+                                A_guess = np.median(A_values)
+                                E_a_guess = np.median(E_a_values)
+                                B_guess = 0.05  # Initial guess for terpene effect parameter
+                            else:
+                                # Fallback initial parameters
+                                A_guess = 1e-10
+                                E_a_guess = 50000
+                                B_guess = 0.05
+                            
+                            add_text(f"    Initial combined model parameters: A={A_guess:.4e}, E_a={E_a_guess:.2f}, B={B_guess:.4f}")
+                            
+                            # Define parameter bounds
+                            bounds = ([1e-20, 1000, 0], [1e10, 150000, 0.2])
+                            
+                            # Fit the model
+                            try:
+                                params, covariance = curve_fit(
+                                    lambda T_pct, A, E_a, B: combined_model((T_pct[:, 0], T_pct[:, 1]), A, E_a, B),
+                                    np.column_stack((T, pct)), visc,
+                                    p0=[A_guess, E_a_guess, B_guess],
+                                    bounds=bounds,
+                                    maxfev=2000,  # Increase max iterations
+                                    method='trf'  # Use trust-region reflective algorithm
+                                )
+                                
+                                A, E_a, B = params
+                                
+                                # Calculate R-squared
+                                visc_pred = combined_model((T, pct), A, E_a, B)
+                                ss_tot = np.sum((visc - np.mean(visc))**2)
+                                ss_res = np.sum((visc - visc_pred)**2)
+                                r2 = 1 - (ss_res / ss_tot)
+                                
+                                add_text(f"    Combined model:")
+                                add_text(f"    Parameters: A={A:.4e}, E_a={E_a:.2f} J/mol, B={B:.4f}")
+                                add_text(f"    R² = {r2:.4f}")
+                                
+                                # Store the results
+                                key = f"{media}_{terpene}_combined"
+                                results[key] = {
+                                    'A': float(A),
+                                    'E_a': float(E_a),
+                                    'B': float(B),
+                                    'r2': float(r2),
+                                    'data_points': len(combo_data),
+                                    'terpene_pcts': [float(p) for p in terpene_pcts],
+                                    'temp_range': (float(temp_min), float(temp_max))
+                                }
+                                
+                                # Prepare surface plot data for later rendering
+                                if r2 > 0.5:
+                                    figure_data = {
+                                        'title': f'{media} with {terpene} - Combined Model',
+                                        'type': 'combined',
+                                        'T': T.tolist(),
+                                        'pct': pct.tolist(),
+                                        'visc': visc.tolist(),
+                                        'params': params.tolist(),
+                                        'r2': float(r2),
+                                        'filename': f'plots/{media}_{terpene}_combined_model.png',
+                                        'temp_range': (float(temp_min), float(temp_max)),
+                                        'pct_range': (float(min(terpene_pcts)), float(max(terpene_pcts)))
+                                    }
+                                    figure_list.append(figure_data)
+                                    add_text(f"    Combined model plot will be saved to {figure_data['filename']}")
+                            
+                            except Exception as e:
+                                add_text(f"    Error fitting combined model: {str(e)}")
+                                
+                        except Exception as e:
+                            add_text(f"    Error in combined model analysis: {str(e)}")
+                    
+                # Save results to a file
+                import json
+                try:
+                    with open('arrhenius_models.json', 'w') as f:
+                        json.dump(results, f, indent=4)
+                    add_text(f"\nSaved model parameters to arrhenius_models.json")
+                except Exception as e:
+                    add_text(f"Error saving model parameters: {str(e)}")
+                    
+                update_progress(100)
+                add_text("\nAnalysis complete!")
+                
+                # Create plots in the main thread to avoid matplotlib threading issues
+                self.root.after(0, lambda: self.create_plots_main_thread(figure_list))
+                
+            except Exception as e:
+                add_text(f"Error in analysis: {str(e)}")
+            finally:
+                # Add a close button
+                self.root.after(0, lambda: Button(progress_window, text="Close", 
+                                                command=progress_window.destroy).pack(pady=10))
+                
+        # Start the analysis thread
+        analysis_thread = threading.Thread(target=run_analysis)
+        analysis_thread.daemon = True
+        analysis_thread.start()
+        
+        # Create a separate function to handle plotting in the main thread
+    def create_plots_main_thread(self, figure_list):
+        import matplotlib.pyplot as plt
+        import numpy as np
+        import os
+        
+        os.makedirs('plots', exist_ok=True)
+        
+        for fig_data in figure_list:
+            try:
+                if fig_data['type'] == 'arrhenius':
+                    # Unpack data
+                    title = fig_data['title']
+                    T = np.array(fig_data['T'])
+                    visc = np.array(fig_data['visc'])
+                    A, E_a = fig_data['params']
+                    r2 = fig_data['r2']
+                    filename = fig_data['filename']
+                    
+                    # Define the model function
+                    def arrhenius_model(T, A, E_a):
+                        R = 8.314
+                        T_kelvin = T + 273.15
+                        exponent = np.clip(E_a / (R * T_kelvin), -100, 100)
+                        return A * np.exp(exponent)
+                    
+                    # Create the figure
+                    fig = plt.figure(figsize=(8, 6))
+                    ax = fig.add_subplot(111)
+                    
+                    # Plot the original data points
+                    ax.scatter(T, visc, color='blue', label='Measured data')
+                    
+                    # Generate curve for the full temperature range
+                    T_curve = np.linspace(20, 70, 100)
+                    visc_curve = arrhenius_model(T_curve, A, E_a)
+                    
+                    # Plot the curve
+                    ax.plot(T_curve, visc_curve, 'r-', label='Arrhenius model')
+                    
+                    # Set labels and title
+                    ax.set_xlabel('Temperature (°C)')
+                    ax.set_ylabel('Viscosity')
+                    ax.set_title(f'{title}\nR² = {r2:.4f}')
+                    ax.legend()
+                    
+                    # Use log scale if viscosity range is large
+                    if max(visc) / min(visc) > 10:
+                        ax.set_yscale('log')
+                    
+                    # Save the figure
+                    fig.savefig(filename)
+                    plt.close(fig)
+                    
+                elif fig_data['type'] == 'combined':
+                    # Unpack data
+                    title = fig_data['title']
+                    T = np.array(fig_data['T'])
+                    pct = np.array(fig_data['pct'])
+                    visc = np.array(fig_data['visc'])
+                    A, E_a, B = fig_data['params']
+                    r2 = fig_data['r2']
+                    filename = fig_data['filename']
+                    temp_range = fig_data['temp_range']
+                    pct_range = fig_data['pct_range']
+                    
+                    # Define the combined model function
+                    def combined_model(X, A, E_a, B):
+                        T, pct = X
+                        R = 8.314
+                        T_kelvin = T + 273.15
+                        exponent = np.clip(E_a / (R * T_kelvin), -100, 100)
+                        terpene_factor = np.clip(1 - B * pct/100, 0.01, 0.99)
+                        return A * np.exp(exponent) * terpene_factor
+                    
+                    # Create the figure
+                    fig = plt.figure(figsize=(10, 8))
+                    ax = fig.add_subplot(111, projection='3d')
+                    
+                    # Plot the original data points
+                    scatter = ax.scatter(T, pct, visc, color='blue', label='Measured data')
+                    
+                    # Generate surface data
+                    T_mesh = np.linspace(max(20, temp_range[0]-5), min(70, temp_range[1]+5), 20)
+                    pct_mesh = np.linspace(max(0, pct_range[0]-1), min(25, pct_range[1]+1), 20)
+                    T_grid, pct_grid = np.meshgrid(T_mesh, pct_mesh)
+                    
+                    # Calculate surface values safely
+                    visc_surf = combined_model((T_grid.flatten(), pct_grid.flatten()), A, E_a, B)
+                    visc_surf = visc_surf.reshape(T_grid.shape)
+                    
+                    # Plot the surface
+                    surf = ax.plot_surface(T_grid, pct_grid, visc_surf, cmap='viridis', alpha=0.7)
+                    
+                    # Set labels and title
+                    ax.set_xlabel('Temperature (°C)')
+                    ax.set_ylabel('Terpene %')
+                    ax.set_zlabel('Viscosity')
+                    ax.set_title(f'{title}\nR² = {r2:.4f}')
+                    
+                    # Use log scale if viscosity range is large
+                    if max(visc) / min(visc) > 10:
+                        ax.set_zscale('log')
+                    
+                    # Add a color bar
+                    fig.colorbar(surf, ax=ax, shrink=0.5, aspect=5)
+                    
+                    # Save the figure
+                    fig.savefig(filename)
+                    plt.close(fig)
+            except Exception as e:
+                print(f"Error creating plot {fig_data['filename']}: {str(e)}")
+        
+        
