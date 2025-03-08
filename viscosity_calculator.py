@@ -227,7 +227,7 @@ class ViscosityCalculator:
         analyze_btn = ttk.Button(
             button_frame,
             text="Analyze Data",
-            command=self.analyze_training_data
+            command=self.analyze_models
         )
         analyze_btn.pack(side="left", padx=5)
 
@@ -1100,16 +1100,25 @@ class ViscosityCalculator:
             return model, {"small_data": True}
 
         # Split data - using a smaller test size if we have limited data
-        test_size = min(0.2, 1/len(X))  # Ensure at least 1 test sample, but no more than 20%
+        
+        # Ensure at least 5 samples in test set, or 20% of data, whichever is larger
+        min_test_size = max(5, int(0.2 * len(X)))
+        test_size = min(min_test_size / len(X), 0.4)  # Cap at 40% max
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
         
         print(f"Training set size: {len(X_train)}, Test set size: {len(X_test)}")
 
         # Create models
+        # In build_viscosity_models, replace the models dictionary with:
         models = {
             'linear': LinearRegression(),
             'polynomial': make_pipeline(PolynomialFeatures(2), LinearRegression()),
-            'random_forest': RandomForestRegressor(n_estimators=100, random_state=42)
+            'random_forest': RandomForestRegressor(
+                n_estimators=50,        # Fewer trees
+                max_depth=5,            # Limit tree depth
+                min_samples_leaf=3,     # Require more samples per leaf
+                random_state=42
+            )
         }
 
         # Evaluate models
@@ -1446,6 +1455,8 @@ class ViscosityCalculator:
         training_thread = threading.Thread(target=train_thread)
         training_thread.daemon = True
         training_thread.start()
+
+
     def analyze_training_data(self, data=None, show_dialog=True):
         """Analyze the training data CSV to identify issues."""
         import pandas as pd
@@ -1517,6 +1528,173 @@ class ViscosityCalculator:
             report_window.geometry("600x400")
             
             Label(report_window, text="CSV Analysis Report", font=("Arial", 14, "bold")).pack(pady=10)
+            
+            text_frame = Frame(report_window)
+            text_frame.pack(fill="both", expand=True, padx=10, pady=10)
+            
+            scrollbar = Scrollbar(text_frame)
+            scrollbar.pack(side="right", fill="y")
+            
+            text_widget = Text(text_frame, wrap="word", yscrollcommand=scrollbar.set)
+            text_widget.pack(side="left", fill="both", expand=True)
+            
+            scrollbar.config(command=text_widget.yview)
+            
+            text_widget.insert("1.0", "\n".join(report))
+            text_widget.config(state="disabled")
+            
+            Button(report_window, text="Close", command=report_window.destroy).pack(pady=10)
+        
+        return report
+    
+    def analyze_models(self, show_dialog=True):
+        """Analyze trained viscosity models to identify potential issues."""
+        import pandas as pd
+        import matplotlib.pyplot as plt
+        import numpy as np
+        from tkinter import Toplevel, Text, Scrollbar, Label, Frame
+        import os
+        import pickle
+        
+        # Check if models exist
+        if not self.viscosity_models:
+            messagebox.showinfo("No Models", "No trained models found. Please train models first.")
+            return
+        
+        # Create a detailed analysis report
+        report = []
+        report.append("Model Analysis Report")
+        report.append("==================")
+        report.append(f"Total models: {len(self.viscosity_models)}")
+        report.append("")
+        
+        # Load validation data if available
+        validation_data = None
+        validation_files = []
+        
+        try:
+            data_dir = 'data'
+            if os.path.exists(data_dir):
+                validation_files = [f for f in os.listdir(data_dir) if f.startswith('viscosity_data_') and f.endswith('.csv')]
+        except Exception as e:
+            report.append(f"Error checking for validation data: {str(e)}")
+        
+        if validation_files:
+            try:
+                # Use the most recent data file for validation
+                validation_files.sort(reverse=True)
+                latest_file = os.path.join('data', validation_files[0])
+                validation_data = pd.read_csv(latest_file)
+                report.append(f"Using {os.path.basename(latest_file)} for validation")
+            except Exception as e:
+                report.append(f"Error loading validation data: {str(e)}")
+        
+        # Analyze each model
+        report.append("\nModel-by-Model Analysis:")
+        report.append("------------------------")
+        
+        for model_key, model in self.viscosity_models.items():
+            report.append(f"\nModel: {model_key}")
+            
+            # Get model type
+            model_type = type(model).__name__
+            if hasattr(model, 'steps'):
+                # Handle pipeline models
+                for name, step in model.steps:
+                    if 'classifier' in name or 'regressor' in name:
+                        model_type = type(step).__name__
+                        break
+            
+            report.append(f"Model type: {model_type}")
+            
+            # Extract and show model parameters for different model types
+            if hasattr(model, 'feature_importances_'):
+                # For Random Forest and tree-based models
+                importances = model.feature_importances_
+                report.append(f"Feature importances: terpene_pct={importances[0]:.4f}, temperature={importances[1]:.4f}")
+                
+                if hasattr(model, 'n_estimators'):
+                    report.append(f"Number of trees: {model.n_estimators}")
+                    report.append(f"Max depth: {model.max_depth if model.max_depth else 'None (unlimited)'}")
+            
+            elif hasattr(model, 'coef_'):
+                # For linear models
+                coefs = model.coef_
+                intercept = model.intercept_
+                report.append(f"Coefficients: {coefs}")
+                report.append(f"Intercept: {intercept}")
+            
+            # Check for possible overfitting with Random Forest
+            if 'RandomForest' in model_type:
+                report.append("\nPotential overfitting detected:")
+                report.append("Random Forest models often achieve perfect R² scores (1.0) when they overfit.")
+                report.append("For small datasets, this is especially common and means the model may")
+                report.append("memorize the training data rather than learn generalizable patterns.")
+                report.append("To address this, consider:")
+                report.append("1. Limiting tree depth (e.g., max_depth=5)")
+                report.append("2. Requiring more samples per leaf (e.g., min_samples_leaf=5)")
+                report.append("3. Using fewer trees (e.g., n_estimators=50)")
+                report.append("4. Using simpler models like LinearRegression for small datasets")
+            
+            # Validate model if validation data is available
+            if validation_data is not None:
+                try:
+                    # Filter validation data for this model's media/terpene combination
+                    media, terpene = model_key.split('_')
+                    model_validation_data = validation_data[
+                        (validation_data['media'] == media) & 
+                        (validation_data['terpene'] == terpene)
+                    ]
+                    
+                    # If we have validation data for this model
+                    if len(model_validation_data) >= 5:
+                        # Clean data
+                        model_validation_data = model_validation_data.dropna(
+                            subset=['terpene_pct', 'temperature', 'viscosity']
+                        )
+                        
+                        if len(model_validation_data) >= 3:
+                            # Extract features and target
+                            X_val = model_validation_data[['terpene_pct', 'temperature']]
+                            y_val = model_validation_data['viscosity']
+                            
+                            # Get predictions
+                            y_pred = model.predict(X_val)
+                            
+                            # Calculate metrics
+                            from sklearn.metrics import mean_squared_error, r2_score
+                            mse = mean_squared_error(y_val, y_pred)
+                            r2 = r2_score(y_val, y_pred)
+                            
+                            report.append(f"\nValidation results:")
+                            report.append(f"Validation samples: {len(model_validation_data)}")
+                            report.append(f"MSE: {mse:.2f}")
+                            report.append(f"R²: {r2:.4f}")
+                            
+                            if r2 < 0.5:
+                                report.append("WARNING: Poor validation performance indicates overfitting!")
+                except Exception as e:
+                    report.append(f"Error validating model: {str(e)}")
+        
+        # Add recommendations
+        report.append("\nGeneral Recommendations:")
+        report.append("------------------------")
+        report.append("1. Collect more training data to improve model generalization")
+        report.append("2. Use simpler models like LinearRegression for small datasets")
+        report.append("3. For RandomForest, limit complexity with max_depth, min_samples_leaf")
+        report.append("4. Consider cross-validation when training to better detect overfitting")
+        report.append("5. Create a separate test dataset to validate models after training")
+        
+        # Print to console
+        print("\n".join(report))
+        
+        # Show in dialog if requested
+        if show_dialog:
+            report_window = Toplevel(self.root)
+            report_window.title("Model Analysis Report")
+            report_window.geometry("700x500")
+            
+            Label(report_window, text="Model Analysis Report", font=("Arial", 14, "bold")).pack(pady=10)
             
             text_frame = Frame(report_window)
             text_frame.pack(fill="both", expand=True, padx=10, pady=10)
