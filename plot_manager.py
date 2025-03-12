@@ -36,11 +36,11 @@ class PlotManager:
     
         # Create a container frame for the plot with fixed height
         plot_container = ttk.Frame(frame)
-        plot_container.pack(fill='both', expand=True, pady=(0, 50))  # Add padding at bottom for dropdown
+        plot_container.pack(fill='both', expand=True, pady=(0, 5))  # Add padding at bottom for dropdown
     
         # Create a separate frame for the dropdown
         self.dropdown_frame = ttk.Frame(frame)
-        self.dropdown_frame.pack(side='bottom', fill='x', pady=10)
+        self.dropdown_frame.pack(side='bottom', fill='x', pady=2, before = plot_container)
     
         if self.figure:
             plt.close(self.figure)
@@ -105,31 +105,57 @@ class PlotManager:
 
     def add_plot_dropdown(self, frame: ttk.Frame) -> None:
         """
-        Create or update the plot type dropdown in the dedicated dropdown frame.
+        Create or update the plot type dropdown, centered with no background color.
         """
+        # Use existing dropdown frame or create a new one
         if not hasattr(self, 'dropdown_frame') or not self.dropdown_frame.winfo_exists():
-            # If there's no dropdown frame, create one
             self.dropdown_frame = ttk.Frame(frame)
-            self.dropdown_frame.pack(side='bottom', fill='x', pady=10)
+            self.dropdown_frame.pack(side='bottom', fill='x', pady=5)
     
-        # Clear any existing widgets in the dropdown frame
+        # Clear existing widgets
         for widget in self.dropdown_frame.winfo_children():
             widget.destroy()
     
-        # Create the dropdown in the dedicated frame
-        if self.plot_dropdown and self.plot_dropdown.winfo_exists():
-            self.plot_dropdown["values"] = self.plot_options
-        else:
-            self.plot_dropdown = ttk.Combobox(
-                self.dropdown_frame,  # Use the dedicated frame
-                textvariable=self.selected_plot_type,
-                values=self.plot_options,
-                state="readonly",
-                font=('Arial', 12)
-            )
-            self.plot_dropdown.pack(pady=5)
-            self.plot_dropdown.bind("<<ComboboxSelected>>", self.update_plot_from_dropdown)
+        # Create a container frame to center the dropdown components
+        center_frame = ttk.Frame(self.dropdown_frame)
+        center_frame.pack(side="top", fill="x")
     
+        # Use pack with expand=True to center the content
+        label_frame = ttk.Frame(center_frame)
+        label_frame.pack(side="top", fill="none", expand=True)
+    
+        # Create the dropdown label
+        dropdown_label = ttk.Label(
+            label_frame,
+            text="Plot Type:",
+            font=('Arial', 10)
+        )
+        dropdown_label.pack(side="left", padx=(0, 5))
+    
+        # Create the dropdown with no background styling
+        self.plot_dropdown = ttk.Combobox(
+            label_frame,
+            textvariable=self.selected_plot_type,
+            values=self.plot_options,
+            state="readonly",
+            font=('Arial', 10),
+            width=15
+        )
+        self.plot_dropdown.pack(side="left")
+    
+        # Remove ALL background styling
+        style = ttk.Style()
+        style.map('TCombobox', fieldbackground=[('readonly', 'white')])
+        style.map('TCombobox', selectbackground=[('readonly', 'white')])
+        style.configure('TCombobox', background='white')
+    
+        # Additional styling to ensure no blue background
+        self.plot_dropdown.configure(background='white')
+    
+        # Bind event handler
+        self.plot_dropdown.bind("<<ComboboxSelected>>", self.update_plot_from_dropdown)
+    
+        # Set default value if needed
         if self.selected_plot_type.get() not in self.plot_options:
             self.selected_plot_type.set(self.plot_options[0])
 
@@ -211,19 +237,22 @@ class PlotManager:
 
     def add_checkboxes(self, sample_names=None):
         """
-        Add checkboxes to toggle visibility of plot elements.
-        Uses wrap_text from utils to wrap labels.
+        Add checkboxes to toggle visibility of plot elements with properly balanced spacing.
         """
         self.parent.line_labels = []
         self.parent.original_lines_data = []
         self.label_mapping = {}
         wrapped_labels = []
+    
         if self.check_buttons:
             self.check_buttons.ax.clear()
             self.check_buttons = None
+        
         is_bar_chart = self.selected_plot_type.get() == "TPM (Bar)"
+    
         if sample_names is None:
             sample_names = self.parent.line_labels
+        
         if is_bar_chart and sample_names:
             self.parent.line_labels = sample_names
             self.parent.original_lines_data = [(patch.get_x(), patch.get_height()) for patch in self.axes.patches]
@@ -231,37 +260,74 @@ class PlotManager:
             if not self.parent.line_labels:
                 self.parent.line_labels = [line.get_label() for line in self.lines]
                 self.parent.original_lines_data = [(line.get_xdata(), line.get_ydata()) for line in self.lines]
+            
         for label in self.parent.line_labels:
             wrapped_label = wrap_text(text=label, max_width=10)
             self.label_mapping[wrapped_label] = label
             wrapped_labels.append(wrapped_label)
-        # Create a new axes for the checkboxes.
-        checkbox_ax = self.figure.add_axes([0.835, 0.38, 0.15, 0.5])
+    
+        # Adjusted positioning - increase top margin, reduce width on right
+        # Format: [left, bottom, width, height]
+        checkbox_ax = self.figure.add_axes([
+            0.835,      # Left position
+            0.33,       # Bottom position - lowered to give more space on top
+            0.125,      # Width - reduced to remove empty space on right
+            0.55        # Height - increased slightly to ensure all items fit
+        ])
+    
         self.check_buttons = CheckButtons(checkbox_ax, wrapped_labels, [True]*len(self.parent.line_labels))
         checkbox_ax.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
         checkbox_ax.grid(False)
+    
         for spine in checkbox_ax.spines.values():
             spine.set_visible(False)
+        
+        # Make font slightly smaller to ensure all labels fit
         for label in self.check_buttons.labels:
-            label.set_fontsize(8)
-        rect = plt.Rectangle((0.05, 0.05), 0.9, 0.9, transform=checkbox_ax.transAxes,
-                             facecolor='none', edgecolor='black', linewidth=1.5, zorder=10)
+            label.set_fontsize(7.5)
+    
+        # Adjust the rectangle border to have proper margins around checkboxes
+        rect = plt.Rectangle(
+            (0.05, 0.02),     # Slight adjustment to left and bottom insets
+            0.9,              # Width relative to axis
+            0.96,             # Height relative to axis - increased to fit content
+            transform=checkbox_ax.transAxes,
+            facecolor='none', 
+            edgecolor='black', 
+            linewidth=1.5, 
+            zorder=10
+        )
         checkbox_ax.add_patch(rect)
+    
+        # Adjust title position and border
         title_text = PLOT_CHECKBOX_TITLE
-        title_x = 0.835 + 0.15/2
-        title_y = 0.58 + 0.3 + 0.035
+        title_x = 0.835 + 0.125/2  # Center in checkbox area
+        title_y = 0.33 + 0.55 + 0.025  # Just above the checkbox area
+    
         self.figure.text(title_x, title_y, title_text, fontsize=8, ha='center', va='center', wrap=True)
+    
+        # Adjust title border
         title_border_x = 0.835
         title_border_y = title_y - 0.03
-        border_width = 0.15
+        border_width = 0.125
         border_height = 0.065
-        self.figure.add_artist(plt.Rectangle((title_border_x, title_border_y), border_width, border_height,
-                                               edgecolor='black', facecolor='white', lw=1, zorder=2))
-        # Bind the checkbox callbacks (using self.on_bar_checkbox_click and self.on_checkbox_click)
+    
+        self.figure.add_artist(plt.Rectangle(
+            (title_border_x, title_border_y), 
+            border_width, 
+            border_height,
+            edgecolor='black', 
+            facecolor='white', 
+            lw=1, 
+            zorder=2
+        ))
+    
+        # Bind callbacks
         if is_bar_chart:
             self.checkbox_cid = self.check_buttons.on_clicked(self.on_bar_checkbox_click)
         else:
             self.checkbox_cid = self.check_buttons.on_clicked(self.on_checkbox_click)
+        
         if self.canvas:
             self.canvas.draw_idle()
 

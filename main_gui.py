@@ -190,9 +190,7 @@ class TestingGUI:
 
     def setup_dynamic_frames(self, is_plotting_sheet: bool = False) -> None:
         """Create frames inside the dynamic_frame based on sheet type."""
-        #print(f"DEBUG: Setting up dynamic frames for sheet. Plotting: {is_plotting_sheet}")
-
-        # Ensure that any previous frames are cleared before adding new ones
+        # Clear previous widgets
         for widget in self.dynamic_frame.winfo_children():
             widget.destroy()
 
@@ -200,28 +198,29 @@ class TestingGUI:
         window_height = self.root.winfo_height()
         top_height = self.top_frame.winfo_height()
         bottom_height = self.bottom_frame.winfo_height()
-        padding = 20  # Adjust if needed
+        padding = 20
         display_height = window_height - top_height - bottom_height - padding
-        display_height = max(display_height, 100)  # Ensure it never becomes too small
-
-        #print(f"DEBUG: [setup_dynamic_frames] Window: {window_height}px | "
-          #f"Top: {top_height}px | Bottom: {bottom_height}px | "
-          #f"Available for display: {window_height - top_height - bottom_height}px")
+        display_height = max(display_height, 100)
 
         if is_plotting_sheet:
-            # Table takes 40%, Plot takes 60%
-            self.table_frame = ttk.Frame(self.dynamic_frame, height=int(display_height * 0.4))
-            self.table_frame.pack(side="left", fill="both", expand=True, padx=5, pady=5)
-
-            self.plot_frame = ttk.Frame(self.dynamic_frame, height=int(display_height * 0.6))
-            self.plot_frame.pack(side="right", fill="both", expand=True, padx=5, pady=5)
-
-            #print("DEBUG: Dynamic frames for plotting sheet created (table_frame, plot_frame).")
+            # Use grid layout for precise control of width proportions
+            self.dynamic_frame.columnconfigure(0, weight=1)  # Table column
+            self.dynamic_frame.columnconfigure(1, weight=1)  # Plot column
+        
+            # Table takes exactly 50% width
+            self.table_frame = ttk.Frame(self.dynamic_frame)
+            self.table_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 5), pady=5)
+        
+            # Plot takes remaining 50% width
+            self.plot_frame = ttk.Frame(self.dynamic_frame)
+            self.plot_frame.grid(row=0, column=1, sticky="nsew", padx=(5, 0), pady=5)
+        
+            # Make sure both frames expand properly
+            self.dynamic_frame.rowconfigure(0, weight=1)
         else:
-            # Non-plotting sheets should use the full space
+            # Non-plotting sheets use the full space
             self.table_frame = ttk.Frame(self.dynamic_frame, height=display_height)
             self.table_frame.pack(fill="both", expand=True, padx=5, pady=5)
-            #print("DEBUG: Dynamic frame for non-plotting sheet created (table_frame).")
 
     def show_startup_menu(self) -> None:
         """Display a startup menu with 'New' and 'Load' options."""
@@ -368,9 +367,20 @@ class TestingGUI:
         dbmenu.add_command(label="Load from Database", command=self.file_manager.load_from_database)
         menubar.add_cascade(label="Database", menu=dbmenu)
 
-        # Calculate menu (new)
+       # Calculate menu
         calculatemenu = tk.Menu(menubar, tearoff=0)
         calculatemenu.add_command(label="Viscosity", command=self.open_viscosity_calculator)
+        calculatemenu.add_separator()
+        calculatemenu.add_command(label="Upload Data", 
+                                 command=lambda: self.viscosity_calculator.upload_training_data())
+        calculatemenu.add_command(label="Train Models", 
+                                 command=lambda: self.viscosity_calculator.train_models_from_data())
+        calculatemenu.add_command(label="Analyze Models", 
+                                 command=lambda: self.viscosity_calculator.analyze_models())
+        calculatemenu.add_command(label="Arrhenius Analysis", 
+                                 command=lambda: self.viscosity_calculator.filter_and_analyze_specific_combinations())
+        calculatemenu.add_separator()
+        calculatemenu.add_command(label="Return to Main View", command=self.return_to_previous_view)
         menubar.add_cascade(label="Calculate", menu=calculatemenu)
 
         # Compare menu (empty for now)
@@ -672,11 +682,19 @@ class TestingGUI:
         if not hasattr(self, 'plot_frame') or self.plot_frame is None:
             self.plot_frame = ttk.Frame(self.display_frame)
             self.plot_frame.pack(side="right", fill="both", expand=True, padx=5, pady=5)
-
+    
+        # Clear existing widgets
+        for widget in self.plot_frame.winfo_children():
+            widget.destroy()
+    
         # Generate and embed the plot
         self.plot_manager.plot_all_samples(self.plot_frame, full_sample_data, 12)
-
+    
+        # Make sure dropdown is visible and properly positioned
         self.plot_manager.add_plot_dropdown(self.plot_frame)
+    
+        # Force immediate update of the UI
+        self.plot_frame.update_idletasks()
 
     def display_table(self, frame, data, sheet_name, is_plotting_sheet=False):
         #print(f"DEBUG: Displaying table for sheet: {sheet_name} (is_plotting_sheet={is_plotting_sheet})")
@@ -898,6 +916,55 @@ class TestingGUI:
             self.progress_dialog.hide_progress_bar()
 
     def open_viscosity_calculator(self):
-        """Open the viscosity calculator window."""
-        calculator = ViscosityCalculator(self)
-        calculator.show_calculator()
+        """Embed the viscosity calculator in the main interface."""
+        # Clear the dynamic frame for displaying the calculator
+        self.clear_dynamic_frame()
+    
+        # Hide the image frame if visible, as we don't need it for the calculator
+        if hasattr(self, 'bottom_frame') and self.bottom_frame.winfo_exists():
+            self.bottom_frame.pack_forget()
+    
+        # Create a container frame in the dynamic frame
+        container_frame = ttk.Frame(self.dynamic_frame)
+        container_frame.pack(fill='both', expand=True, padx=10, pady=10)
+    
+        # Add a title label
+        title_label = ttk.Label(
+            container_frame, 
+            text="Viscosity Calculator", 
+            font=('Arial', 16, 'bold'),
+            background=APP_BACKGROUND_COLOR,
+            foreground="white"
+        )
+        title_label.pack(pady=(0, 10))
+    
+        # Create the calculator frame with proper colors matching your screenshot
+        calculator_frame = ttk.Frame(container_frame)
+        calculator_frame.pack(fill='both', expand=True)
+    
+        # Embed the calculator in the frame
+        self.viscosity_calculator.embed_in_frame(calculator_frame)
+    
+        # Update the UI to reflect the current state
+        self.root.update_idletasks()
+
+    def return_to_previous_view(self):
+        """Return to the previous view from the calculator."""
+        # Restore the bottom frame if it was hidden
+        if hasattr(self, 'bottom_frame') and not self.bottom_frame.winfo_ismapped():
+            self.bottom_frame.pack(side="bottom", fill="x", padx=10, pady=(0,10))
+    
+        # Get the currently selected sheet
+        current_sheet = self.selected_sheet.get()
+    
+        # Return to the standard view with that sheet
+        if current_sheet in self.filtered_sheets:
+            self.update_displayed_sheet(current_sheet)
+        elif self.filtered_sheets:
+            # If current sheet is invalid, select the first available sheet
+            first_sheet = list(self.filtered_sheets.keys())[0]
+            self.selected_sheet.set(first_sheet)
+            self.update_displayed_sheet(first_sheet)
+        else:
+            # If no sheets available, just clear the display
+            self.clear_dynamic_frame()
