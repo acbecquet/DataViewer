@@ -33,21 +33,22 @@ class PlotManager:
         # Clear existing widgets
         for widget in frame.winfo_children():
             widget.destroy()
-    
-        # Create a container frame for the plot with fixed height
-        plot_container = ttk.Frame(frame)
-        plot_container.pack(fill='both', expand=True, pady=(0, 5))  # Add padding at bottom for dropdown
-    
-        # Create a separate frame for the dropdown
+
+            # Create a separate frame for the dropdown - ensure it's visible
         self.dropdown_frame = ttk.Frame(frame)
-        self.dropdown_frame.pack(side='bottom', fill='x', pady=2, before = plot_container)
+        self.dropdown_frame.pack(side='bottom', fill='x', pady=10)
+    
+        # Create a container frame for the plot
+        plot_container = ttk.Frame(frame)
+        plot_container.pack(fill='both', expand=True, pady=(0, 10))  
     
         if self.figure:
             plt.close(self.figure)
     
+        # Standard right margin - don't make it too small
         fig.subplots_adjust(right=0.82)
     
-        # Embed figure in the plot container (not the whole frame)
+        # Embed figure in the plot container
         self.canvas = FigureCanvasTkAgg(fig, master=plot_container)
         self.canvas.draw()
         self.canvas.get_tk_widget().pack(fill='both', expand=True)
@@ -128,7 +129,7 @@ class PlotManager:
         dropdown_label = ttk.Label(
             label_frame,
             text="Plot Type:",
-            font=('Arial', 10)
+            font=('Arial', 10), foreground = 'white'
         )
         dropdown_label.pack(side="left", padx=(0, 5))
     
@@ -262,7 +263,7 @@ class PlotManager:
                 self.parent.original_lines_data = [(line.get_xdata(), line.get_ydata()) for line in self.lines]
             
         for label in self.parent.line_labels:
-            wrapped_label = wrap_text(text=label, max_width=10)
+            wrapped_label = wrap_text(text=label, max_width=12)
             self.label_mapping[wrapped_label] = label
             wrapped_labels.append(wrapped_label)
     
@@ -284,12 +285,12 @@ class PlotManager:
         
         # Make font slightly smaller to ensure all labels fit
         for label in self.check_buttons.labels:
-            label.set_fontsize(7.5)
+            label.set_fontsize(7)
     
         # Adjust the rectangle border to have proper margins around checkboxes
         rect = plt.Rectangle(
             (0.05, 0.02),     # Slight adjustment to left and bottom insets
-            0.9,              # Width relative to axis
+            0.95,              # Width relative to axis
             0.96,             # Height relative to axis - increased to fit content
             transform=checkbox_ax.transAxes,
             facecolor='none', 
@@ -307,9 +308,9 @@ class PlotManager:
         self.figure.text(title_x, title_y, title_text, fontsize=8, ha='center', va='center', wrap=True)
     
         # Adjust title border
-        title_border_x = 0.835
+        title_border_x = 0.825
         title_border_y = title_y - 0.03
-        border_width = 0.125
+        border_width = 0.14
         border_height = 0.065
     
         self.figure.add_artist(plt.Rectangle(

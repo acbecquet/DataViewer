@@ -88,7 +88,7 @@ class TestingGUI:
         self.set_window_size(0.8, 0.8)
         self.root.minsize(1200,800)
         self.center_window(self.root)
-
+        #self.root.bind("<Configure>", lambda e: self.on_window_resize(e))
         self.create_static_frames()
         self.add_menu()
         self.file_manager.add_or_update_file_dropdown()
@@ -173,7 +173,7 @@ class TestingGUI:
         # Create display_frame for the table/plot area.
         if not hasattr(self, 'display_frame') or not self.display_frame:
             self.display_frame = ttk.Frame(self.root)
-            self.display_frame.pack(fill="both", expand=True, padx=10, pady=10)
+            self.display_frame.pack(fill="both", expand=True, padx=10, pady=5)
             #print("DEBUG: display_frame created.")
 
         # Create a dynamic subframe inside display_frame for table and plot content.
@@ -187,6 +187,13 @@ class TestingGUI:
         #print("DEBUG: Clearing dynamic_frame contents...")
         for widget in self.dynamic_frame.winfo_children():
             widget.destroy()
+
+    def on_window_resize(self, event):
+        """Handle window resize events to maintain layout proportions."""
+        # Only process if this is a window resize, not a child widget configure event
+        if event.widget == self.root:
+            # Update the width constraints
+            self.constrain_plot_width()
 
     def setup_dynamic_frames(self, is_plotting_sheet: bool = False) -> None:
         """Create frames inside the dynamic_frame based on sheet type."""
@@ -204,9 +211,11 @@ class TestingGUI:
 
         if is_plotting_sheet:
             # Use grid layout for precise control of width proportions
-            self.dynamic_frame.columnconfigure(0, weight=1)  # Table column
-            self.dynamic_frame.columnconfigure(1, weight=1)  # Plot column
+            self.dynamic_frame.columnconfigure(0, weight=5)  # Table column
+            self.dynamic_frame.columnconfigure(1, weight=5)  # Plot column
         
+            self.dynamic_frame.rowconfigure(0, weight = 1)
+
             # Table takes exactly 50% width
             self.table_frame = ttk.Frame(self.dynamic_frame)
             self.table_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 5), pady=5)
@@ -215,12 +224,38 @@ class TestingGUI:
             self.plot_frame = ttk.Frame(self.dynamic_frame)
             self.plot_frame.grid(row=0, column=1, sticky="nsew", padx=(5, 0), pady=5)
         
-            # Make sure both frames expand properly
-            self.dynamic_frame.rowconfigure(0, weight=1)
+            self.constrain_plot_width()
         else:
             # Non-plotting sheets use the full space
             self.table_frame = ttk.Frame(self.dynamic_frame, height=display_height)
             self.table_frame.pack(fill="both", expand=True, padx=5, pady=5)
+
+    def constrain_plot_width(self):
+        """
+        Ensure the plot doesn't exceed 50% of the window width by setting
+        a maximum width constraint.
+        """
+        if not hasattr(self, 'plot_frame') or not self.plot_frame:
+            return
+        
+        # Get the current window width
+        window_width = self.root.winfo_width()
+    
+        # Calculate 50% of the window width
+        max_plot_width = window_width // 2
+    
+        if max_plot_width > 50:  # Only apply if we have a reasonable width
+            # Set the maximum width for the plot frame
+            self.plot_frame.config(width=max_plot_width)
+        
+            # Prevent the plot from expanding beyond this width
+            self.plot_frame.grid_propagate(False)
+        
+            # Also set the table frame to the same width for balance
+            if hasattr(self, 'table_frame') and self.table_frame:
+                self.table_frame.config(width=max_plot_width)
+                self.table_frame.grid_propagate(False)
+
 
     def show_startup_menu(self) -> None:
         """Display a startup menu with 'New' and 'Load' options."""
@@ -681,16 +716,17 @@ class TestingGUI:
         """
         if not hasattr(self, 'plot_frame') or self.plot_frame is None:
             self.plot_frame = ttk.Frame(self.display_frame)
-            self.plot_frame.pack(side="right", fill="both", expand=True, padx=5, pady=5)
-    
-        # Clear existing widgets
+            self.plot_frame.grid(row=0, column=1, sticky="nsew", padx=(5, 0), pady=5)
+
+        # Clear existing plot contents
         for widget in self.plot_frame.winfo_children():
             widget.destroy()
-    
-        # Generate and embed the plot
+
+        # Generate and embed the plot - force it to respect container width
         self.plot_manager.plot_all_samples(self.plot_frame, full_sample_data, 12)
-    
-        # Make sure dropdown is visible and properly positioned
+
+        # Ensure plot stays within its frame
+        self.plot_frame.grid_propagate(True)  # Allow the frame to resize based on content
         self.plot_manager.add_plot_dropdown(self.plot_frame)
     
         # Force immediate update of the UI
