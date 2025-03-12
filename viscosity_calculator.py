@@ -2100,7 +2100,7 @@ class ViscosityCalculator:
                     except Exception as e:
                         add_text(f"Error loading {file}: {str(e)}")
                 
-                if not all_data:
+                if not data_frames:
                     add_text("Failed to load any valid data.")
                     return
                 
@@ -2524,4 +2524,32 @@ class ViscosityCalculator:
             except Exception as e:
                 print(f"Error creating plot {fig_data['filename']}: {str(e)}")
         
+    # Add this method to the ViscosityCalculator class to replace show_calculator()
+    def create_calculator_window(self, parent_frame):
+        """
+        Create the calculator window embedded in a parent frame instead of a Toplevel window.
+    
+        Args:
+            parent_frame: The parent frame to add the calculator to
+    
+        Returns:
+            ttk.Notebook: The notebook containing all calculator tabs
+        """
+        # Create notebook (tabbed interface)
+        self.notebook = ttk.Notebook(parent_frame)
+        self.notebook.pack(fill='both', expand=True, padx=10, pady=10)
+    
+        # Create Tab 1: Calculator
+        self.create_calculator_tab(self.notebook)
+    
+        # Create Tab 2: Iterative Method
+        self.create_advanced_tab(self.notebook)
+
+        # Create Tab 3: Measure
+        self.create_measure_tab(self.notebook)
+    
+        # Bind tab change event to update advanced tab
+        self.notebook.bind("<<NotebookTabChanged>>", lambda e: self.update_advanced_tab_fields())
+    
+        return self.notebook
         

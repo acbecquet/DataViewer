@@ -28,31 +28,45 @@ class PlotManager:
 
     def embed_plot_in_frame(self, fig: plt.Figure, frame: ttk.Frame) -> FigureCanvasTkAgg:
         """
-        Embed a Matplotlib figure into a Tkinter frame.
-        Clears any existing widgets in the frame, adjusts the figure, adds a toolbar,
-        and sets up event bindings (such as for zooming and checkboxes).
+        Embed a Matplotlib figure into a Tkinter frame with proper layout control.
         """
         # Clear existing widgets
         for widget in frame.winfo_children():
-            widget.pack_forget()
+            widget.destroy()
+    
+        # Create a container frame for the plot with fixed height
+        plot_container = ttk.Frame(frame)
+        plot_container.pack(fill='both', expand=True, pady=(0, 50))  # Add padding at bottom for dropdown
+    
+        # Create a separate frame for the dropdown
+        self.dropdown_frame = ttk.Frame(frame)
+        self.dropdown_frame.pack(side='bottom', fill='x', pady=10)
+    
         if self.figure:
             plt.close(self.figure)
+    
         fig.subplots_adjust(right=0.82)
-        # Embed figure in frame
-        self.canvas = FigureCanvasTkAgg(fig, master=frame)
+    
+        # Embed figure in the plot container (not the whole frame)
+        self.canvas = FigureCanvasTkAgg(fig, master=plot_container)
         self.canvas.draw()
         self.canvas.get_tk_widget().pack(fill='both', expand=True)
-        # Add toolbar
-        toolbar = NavigationToolbar2Tk(self.canvas, frame)
+    
+        # Add toolbar to the plot container
+        toolbar = NavigationToolbar2Tk(self.canvas, plot_container)
         toolbar.update()
+    
         # Save references to the figure and its axes
         self.figure = fig
         self.axes = fig.gca()
         self.lines = self.axes.lines
+    
         # Bind scroll event for zooming
         self.canvas.mpl_connect("scroll_event", lambda event: self.zoom(event))
+    
         # Add checkboxes for toggling plot elements
         self.add_checkboxes()
+    
         return self.canvas
 
     def plot_all_samples(self, frame: ttk.Frame, full_sample_data: pd.DataFrame, num_columns_per_sample: int) -> None:
@@ -91,21 +105,31 @@ class PlotManager:
 
     def add_plot_dropdown(self, frame: ttk.Frame) -> None:
         """
-        Create or update the plot type dropdown.
-        The dropdown uses the shared selected_plot_type variable and the plot_options list.
+        Create or update the plot type dropdown in the dedicated dropdown frame.
         """
+        if not hasattr(self, 'dropdown_frame') or not self.dropdown_frame.winfo_exists():
+            # If there's no dropdown frame, create one
+            self.dropdown_frame = ttk.Frame(frame)
+            self.dropdown_frame.pack(side='bottom', fill='x', pady=10)
+    
+        # Clear any existing widgets in the dropdown frame
+        for widget in self.dropdown_frame.winfo_children():
+            widget.destroy()
+    
+        # Create the dropdown in the dedicated frame
         if self.plot_dropdown and self.plot_dropdown.winfo_exists():
             self.plot_dropdown["values"] = self.plot_options
         else:
             self.plot_dropdown = ttk.Combobox(
-                frame,
+                self.dropdown_frame,  # Use the dedicated frame
                 textvariable=self.selected_plot_type,
                 values=self.plot_options,
                 state="readonly",
                 font=('Arial', 12)
             )
-            self.plot_dropdown.pack(pady=10)
+            self.plot_dropdown.pack(pady=5)
             self.plot_dropdown.bind("<<ComboboxSelected>>", self.update_plot_from_dropdown)
+    
         if self.selected_plot_type.get() not in self.plot_options:
             self.selected_plot_type.set(self.plot_options[0])
 

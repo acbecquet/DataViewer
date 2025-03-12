@@ -295,6 +295,10 @@ def process_plot_sheet(data, headers_row=3, data_start_row=4, num_columns_per_sa
                 if custom_extracted_data_fn:
                     extracted_data = custom_extracted_data_fn(sample_data)
                 else:
+                    tpm_data = pd.to_numeric(sample_data.iloc[3:, 8], errors='coerce').dropna()
+                    avg_tpm = round_values(tpm_data.mean()) if not tpm_data.empty else None
+                    std_tpm = round_values(tpm_data.std()) if not tpm_data.empty else None
+
                     extracted_data = {
                         "Sample Name": sample_data.columns[5],
                         "Media": sample_data.iloc[0, 1],
@@ -302,8 +306,8 @@ def process_plot_sheet(data, headers_row=3, data_start_row=4, num_columns_per_sa
                         "Voltage, Resistance, Power": f"{sample_data.iloc[1, 5]} V, "
                                                        f"{round_values(sample_data.iloc[0, 3])} Ω, "
                                                        f"{round_values(sample_data.iloc[0, 5])} W",
-                        "Average TPM": round_values(sample_data.iloc[0, 11]),
-                        "Standard Deviation": round_values(sample_data.iloc[1, 11]),
+                        "Average TPM": avg_tpm,
+                        "Standard Deviation": std_tpm,
                         "Initial Oil Mass": round_values(sample_data.iloc[1,7]),
                         "Usage Efficiency": round_values(sample_data.iloc[1,8]),
                         "Burn?": sample_data.columns[10],
@@ -342,6 +346,9 @@ def no_efficiency_extracted_data(sample_data):
     Returns:
         dict: Extracted data without efficiency metrics.
     """
+    tpm_data = pd.to_numeric(sample_data.iloc[3:, 8], errors='coerce').dropna()
+    avg_tpm = round_values(tpm_data.mean()) if not tpm_data.empty else None
+    std_tpm = round_values(tpm_data.std()) if not tpm_data.empty else None
     return {
         "Sample Name": sample_data.columns[5],
         "Media": sample_data.iloc[0, 1],
@@ -349,8 +356,8 @@ def no_efficiency_extracted_data(sample_data):
         "Voltage, Resistance, Power": f"{sample_data.iloc[1, 5]} V, "
                                        f"{round_values(sample_data.iloc[0, 3])} Ω, "
                                        f"{round_values(sample_data.iloc[0, 5])} W",
-        "Average TPM": round_values(sample_data.iloc[0, 11]),
-        "Standard Deviation": round_values(sample_data.iloc[1, 11]),
+        "Average TPM": avg_tpm,
+        "Standard Deviation": std_tpm,
         "Burn?": sample_data.columns[10],
         "Clog?": sample_data.iloc[0, 10],
         "Leak?": sample_data.iloc[1, 10],
@@ -1097,30 +1104,13 @@ def convert_legacy_file_using_template(legacy_file_path: str, template_path: str
 def convert_legacy_standards_using_template(legacy_file_path: str, template_path: str = None) -> dict:
     """
     Converts a legacy standards Excel file to the standardized template format.
-    
-    For each sheet in the template file:
-      - If the legacy file contains a sheet with the same name:
-           • If the sheet is a plotting sheet:
-                 - Unmerge merged cells on the legacy sheet,
-                 - Copy the entire legacy sheet (preserving header rows),
-                 - Extract meta_data using a simplified mapping,
-                 - Update the template sheet with that meta_data, then write the data.
-           • Otherwise (non-plotting):
-                 - Unmerge merged cells on the legacy sheet and the template sheet,
-                 - Clear the template sheet,
-                 - Copy the entire legacy sheet over.
-      - If the legacy file does not contain that sheet, leave the template sheet as is.
-      
-    The processed workbook is saved in the "legacy data" folder and then loaded
-    (via load_excel_file) so that the output is a dictionary of DataFrames.
-    
-    Returns:
-        dict: Dictionary of sheet names mapped to processed DataFrames.
     """
-
+    from openpyxl.cell.cell import MergedCell
+    
     if template_path is None:
         template_path = os.path.join(os.path.abspath("."), "resources", 
-                                     "Standardized Test Template - LATEST VERSION - 2025 Jan.xlsx")
+                                    "Standardized Test Template - LATEST VERSION - 2025 Jan.xlsx")
+    
     wb_template = load_workbook(template_path, read_only=False)
     legacy_wb = load_workbook(legacy_file_path, read_only=False)
     base_name = os.path.splitext(os.path.basename(legacy_file_path))[0]
@@ -1142,39 +1132,49 @@ def convert_legacy_standards_using_template(legacy_file_path: str, template_path
     }
     
     for sheet_name in wb_template.sheetnames:
-        ws = wb_template[sheet_name]
+        # Create a new sheet to avoid merged cell issues
+        new_sheet_name = f"{sheet_name}_new"
+        new_ws = wb_template.create_sheet(title=new_sheet_name)
+        
         if sheet_name in legacy_wb.sheetnames:
             legacy_ws = legacy_wb[sheet_name]
             legacy_df = read_sheet_with_values(legacy_file_path, sheet_name)
-            unmerge_all_cells(legacy_ws)
-            if plotting_sheet_test(sheet_name, legacy_df):
-                # For plotting sheets: copy the entire legacy sheet so headers are preserved.
+            
+            # Check if this is a plotting sheet
+            is_plotting = plotting_sheet_test(sheet_name, legacy_df)
+            
+            # Process based on sheet type
+            if is_plotting:
+                # For plotting sheets: copy the entire legacy sheet
                 processed_df = legacy_df.copy()
                 meta_data = extract_meta_data(legacy_ws, SIMPLE_meta_data_MAPPING)
-                map_meta_data_to_template(ws, meta_data)
-                # Clear the entire template sheet.
-                for row in ws.iter_rows():
-                    for cell in row:
-                        cell.value = None
-                # Write processed_df into ws, starting at row 1.
+                
+                # Write to the new sheet
                 for i, row in processed_df.iterrows():
                     for j, value in enumerate(row):
-                        ws.cell(row=i + 1, column=j + 1, value=value)
+                        new_ws.cell(row=i + 1, column=j + 1, value=value)
             else:
-                # For non-plotting sheets: clear template and copy the entire legacy sheet.
-                unmerge_all_cells(legacy_ws)
-                unmerge_all_cells(ws)
-                for row in ws.iter_rows():
-                    for cell in row:
-                        cell.value = None
+                # For non-plotting sheets: copy the legacy sheet
                 processed_df = legacy_df.copy()
                 for i, row in processed_df.iterrows():
                     for j, value in enumerate(row):
-                        ws.cell(row=i + 1, column=j + 1, value=value)
+                        new_ws.cell(row=i + 1, column=j + 1, value=value)
         else:
-            # If the legacy file does not have this sheet, leave the template sheet as is.
-            pass
-
+            # If sheet not in legacy file, copy from template sheet
+            ws = wb_template[sheet_name]
+            for row_idx, row in enumerate(ws.iter_rows(values_only=True), 1):
+                for col_idx, value in enumerate(row, 1):
+                    new_ws.cell(row=row_idx, column=col_idx, value=value)
+    
+    # Remove original sheets and rename new ones
+    for sheet_name in list(wb_template.sheetnames):
+        if not sheet_name.endswith('_new'):
+            del wb_template[sheet_name]
+    
+    for sheet_name in list(wb_template.sheetnames):
+        if sheet_name.endswith('_new'):
+            original_name = sheet_name[:-4]  # Remove _new suffix
+            wb_template[sheet_name].title = original_name
+    
     wb_template.save(new_file_path)
-    #print(f"Saved legacy standards file to: {new_file_path}")
     return load_excel_file(new_file_path)
