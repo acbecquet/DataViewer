@@ -406,17 +406,6 @@ class TestingGUI:
        # Calculate menu
         calculatemenu = tk.Menu(menubar, tearoff=0)
         calculatemenu.add_command(label="Viscosity", command=self.open_viscosity_calculator)
-        calculatemenu.add_separator()
-        calculatemenu.add_command(label="Upload Data", 
-                                 command=lambda: self.viscosity_calculator.upload_training_data())
-        calculatemenu.add_command(label="Train Models", 
-                                 command=lambda: self.viscosity_calculator.train_models_from_data())
-        calculatemenu.add_command(label="Analyze Models", 
-                                 command=lambda: self.viscosity_calculator.analyze_models())
-        calculatemenu.add_command(label="Arrhenius Analysis", 
-                                 command=lambda: self.viscosity_calculator.filter_and_analyze_specific_combinations())
-        calculatemenu.add_separator()
-        calculatemenu.add_command(label="Return to Main View", command=self.return_to_previous_view)
         menubar.add_cascade(label="Calculate", menu=calculatemenu)
 
         # Compare menu (empty for now)
@@ -959,45 +948,63 @@ class TestingGUI:
             self.progress_dialog.hide_progress_bar()
 
     def open_viscosity_calculator(self):
-        """Embed the viscosity calculator in the main interface."""
-        # Clear the dynamic frame for displaying the calculator and store window dimensions
-
-        self.previous_window_geometry = self.root.geometry()
-        self.previous_minsize = self.root.minsize()
-        self.root.minsize(0,0)
-        self.clear_dynamic_frame()
-
-        # Hide the image frame if visible, as we don't need it for the calculator
-        if hasattr(self, 'bottom_frame') and self.bottom_frame.winfo_exists():
-            self.bottom_frame.pack_forget()
+        """Open the viscosity calculator as a standalone window with a proper menubar."""
+        # Create a new top-level window
+        calculator_window = tk.Toplevel(self.root)
+        calculator_window.title("Viscosity Calculator")
+        calculator_window.geometry("550x500")
+        calculator_window.resizable(True, True)
+        calculator_window.configure(bg=APP_BACKGROUND_COLOR)
     
-        # Create a container frame in the dynamic frame
-        container_frame = ttk.Frame(self.dynamic_frame)
-        container_frame.pack(fill='both', expand=True, padx=10, pady=(0,8))
+        # Make the window modal
+        calculator_window.transient(self.root)
+        calculator_window.grab_set()
+    
+        # Center the window
+        self.center_window(calculator_window)
+    
+        # Create a menubar for the calculator window
+        menubar = tk.Menu(calculator_window)
+        calculator_window.config(menu=menubar)
+    
+        file_menu = tk.Menu(menubar, tearoff=0)
+        file_menu.add_command(label="Upload Viscosity Data", command = self.viscosity_calculator.upload_training_data)
+        menubar.add_cascade(label="File", menu=file_menu)
+
+        # Create Calculate menu with all the viscosity-related functions
+        calculate_menu = tk.Menu(menubar, tearoff=0)
+        calculate_menu.add_command(label="Train Models", 
+                                  command=self.viscosity_calculator.train_models_from_data)
+        calculate_menu.add_command(label="Analyze Models", 
+                                  command=self.viscosity_calculator.analyze_models)
+        calculate_menu.add_command(label="Arrhenius Analysis", 
+                                  command=self.viscosity_calculator.filter_and_analyze_specific_combinations)
+        menubar.add_cascade(label="Model", menu=calculate_menu)
+    
+        # Create main container
+        main_container = ttk.Frame(calculator_window)
+        main_container.pack(fill='both', expand=True, padx=8, pady=8)
     
         # Add a title label
         title_label = ttk.Label(
-            container_frame, 
+            main_container, 
             text="Viscosity Calculator", 
             font=('Arial', 16, 'bold'),
             background=APP_BACKGROUND_COLOR,
             foreground="white"
         )
-        title_label.pack(pady=(8, 8))
+        title_label.pack(pady=(5, 10))
     
-        # Create the calculator frame with proper colors matching your screenshot
-        calculator_frame = ttk.Frame(container_frame)
+        # Create the calculator frame and embed the calculator
+        calculator_frame = ttk.Frame(main_container)
         calculator_frame.pack(fill='both', expand=True)
     
-        # Embed the calculator in the frame
+        # Embed the calculator with all its tabs
         self.viscosity_calculator.embed_in_frame(calculator_frame)
 
-        self.root.geometry("570x520")
+        self.center_window(calculator_window, 550, 500)
 
-        self.center_window(self.root)
-    
-        # Update the UI to reflect the current state
-        self.root.update_idletasks()
+        return calculator_window
 
     def return_to_previous_view(self):
         """Return to the previous view from the calculator."""
