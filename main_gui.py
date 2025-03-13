@@ -985,16 +985,6 @@ class TestingGUI:
         main_container = ttk.Frame(calculator_window)
         main_container.pack(fill='both', expand=True, padx=8, pady=8)
     
-        # Add a title label
-        title_label = ttk.Label(
-            main_container, 
-            text="Viscosity Calculator", 
-            font=('Arial', 16, 'bold'),
-            background=APP_BACKGROUND_COLOR,
-            foreground="white"
-        )
-        title_label.pack(pady=(5, 10))
-    
         # Create the calculator frame and embed the calculator
         calculator_frame = ttk.Frame(main_container)
         calculator_frame.pack(fill='both', expand=True)
