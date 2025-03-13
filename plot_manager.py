@@ -40,7 +40,7 @@ class PlotManager:
     
         # Create a container frame for the plot
         plot_container = ttk.Frame(frame)
-        plot_container.pack(fill='both', expand=True, pady=(0, 10))  
+        plot_container.pack(fill='both', expand=True, pady=(0, 0))  
     
         if self.figure:
             plt.close(self.figure)

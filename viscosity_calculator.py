@@ -236,43 +236,7 @@ class ViscosityCalculator:
             text="Calculate",
             command=self.calculate_viscosity
         )
-        calculate_btn.pack(side="left", padx=(0, 5))
-
-        # Upload Data button
-        upload_btn = ttk.Button(
-            button_row1,
-            text="Upload Data",
-            command=self.upload_training_data
-        )
-        upload_btn.pack(side="left", padx=5)
-
-        # Create second row of buttons
-        button_row2 = Frame(button_frame, bg=APP_BACKGROUND_COLOR)
-        button_row2.pack(fill="x")
-
-        # Train Models button
-        train_btn = ttk.Button(
-            button_row2,
-            text="Train Models",
-            command=self.train_models_from_data
-        )
-        train_btn.pack(side="left", padx=(0, 5))
-
-        # Analyze Models button
-        analyze_models_btn = ttk.Button(
-            button_row2,
-            text="Analyze Models",
-            command=self.analyze_models
-        )
-        analyze_models_btn.pack(side="left", padx=5)
-
-        # Arrhenius Analysis button
-        arrhenius_btn = ttk.Button(
-            button_row2,
-            text="Arrhenius Analysis",
-            command=self.filter_and_analyze_specific_combinations
-        )
-        arrhenius_btn.pack(side="left", padx=5)
+        calculate_btn.pack(padx=(0, 5))
 
     def create_advanced_tab(self, notebook):
         """

@@ -69,6 +69,7 @@ class TestingGUI:
         self.checkbox_cid = None
         self.plot_options = ["TPM", "Draw Pressure", "Resistance", "Power Efficiency", "TPM (Bar)"]
         self.check_buttons = None
+        self.previous_window_geometry = None
 
         self.crop_enable = tk.BooleanVar(value = False)
         
@@ -587,6 +588,12 @@ class TestingGUI:
         #  f"display: {self.display_frame.winfo_height()}, "
         #  f"bottom: {self.bottom_frame.winfo_height()}")
 
+        # Ensure bottom_frame maintains its fixed height
+        if hasattr(self, 'bottom_frame') and self.bottom_frame.winfo_exists():
+            self.bottom_frame.configure(height=150)
+            self.bottom_frame.pack_propagate(False)
+            self.bottom_frame.grid_propagate(False)
+
         if not sheet_name or sheet_name not in self.filtered_sheets:
             return
 
@@ -780,12 +787,12 @@ class TestingGUI:
         table_data_dict = data.to_dict(orient='index')
         model.importDict(table_data_dict)
 
-        default_cellwidth = 120
-        default_rowheight = 30
+        default_cellwidth = 110
+        default_rowheight = 25
 
         if is_plotting_sheet:
             #print("DEBUG: Adjusting row height for plotting sheet.")
-            font_height = 20  # Taller rows to accommodate larger content
+            font_height = 16  # Taller rows to accommodate larger content
             char_per_line = 12  # Fewer characters per line for wider spacing
 
             # Calculate optimal row height
@@ -807,7 +814,7 @@ class TestingGUI:
         #print(f"DEBUG: Final row height: {default_rowheight}")
 
         table_canvas = TableCanvas(table_frame, model=model, cellwidth=calculated_cellwidth, cellbackgr='#4CC9F0',
-                                   thefont=('Arial', 12), rowheight=default_rowheight, rowselectedcolor='#FFFFFF',
+                                   thefont=('Arial', 10), rowheight=default_rowheight, rowselectedcolor='#FFFFFF',
                                    editable=False, yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set, showGrid=True)
 
         table_canvas.grid(row=0, column=0, sticky='nsew')
@@ -953,16 +960,20 @@ class TestingGUI:
 
     def open_viscosity_calculator(self):
         """Embed the viscosity calculator in the main interface."""
-        # Clear the dynamic frame for displaying the calculator
+        # Clear the dynamic frame for displaying the calculator and store window dimensions
+
+        self.previous_window_geometry = self.root.geometry()
+        self.previous_minsize = self.root.minsize()
+        self.root.minsize(0,0)
         self.clear_dynamic_frame()
-    
+
         # Hide the image frame if visible, as we don't need it for the calculator
         if hasattr(self, 'bottom_frame') and self.bottom_frame.winfo_exists():
             self.bottom_frame.pack_forget()
     
         # Create a container frame in the dynamic frame
         container_frame = ttk.Frame(self.dynamic_frame)
-        container_frame.pack(fill='both', expand=True, padx=10, pady=10)
+        container_frame.pack(fill='both', expand=True, padx=10, pady=(0,8))
     
         # Add a title label
         title_label = ttk.Label(
@@ -972,7 +983,7 @@ class TestingGUI:
             background=APP_BACKGROUND_COLOR,
             foreground="white"
         )
-        title_label.pack(pady=(0, 10))
+        title_label.pack(pady=(8, 8))
     
         # Create the calculator frame with proper colors matching your screenshot
         calculator_frame = ttk.Frame(container_frame)
@@ -980,6 +991,10 @@ class TestingGUI:
     
         # Embed the calculator in the frame
         self.viscosity_calculator.embed_in_frame(calculator_frame)
+
+        self.root.geometry("570x520")
+
+        self.center_window(self.root)
     
         # Update the UI to reflect the current state
         self.root.update_idletasks()
@@ -988,7 +1003,23 @@ class TestingGUI:
         """Return to the previous view from the calculator."""
         # Restore the bottom frame if it was hidden
         if hasattr(self, 'bottom_frame') and not self.bottom_frame.winfo_ismapped():
+            # Explicitly restore ALL original configuration values
+            self.bottom_frame.configure(height=150)  # Reset the explicit height
             self.bottom_frame.pack(side="bottom", fill="x", padx=10, pady=(0,10))
+            self.bottom_frame.pack_propagate(False)  # Re-apply propagate settings
+            self.bottom_frame.grid_propagate(False)
+            self.bottom_frame.update_idletasks()  # Force geometry manager to update
+    
+        # Restore original minimum size constraint
+        if hasattr(self, 'previous_minsize'):
+            self.root.minsize(*self.previous_minsize)
+        else:
+            self.root.minsize(1200, 800)  # Default fallback
+    
+        # Restore the previous window geometry
+        if hasattr(self, 'previous_window_geometry'):
+            self.root.geometry(self.previous_window_geometry)
+            self.center_window(self.root)
     
         # Get the currently selected sheet
         current_sheet = self.selected_sheet.get()
