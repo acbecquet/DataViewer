@@ -264,7 +264,7 @@ class ViscosityCalculator:
             text="Calculate",
             command=self.calculate_viscosity
         )
-        calculate_btn.pack(padx=(0, 5))
+        calculate_btn.pack(padx=5,pady=5)
 
         # Add a new button for calculating with chemistry
         calculate_with_chemistry_btn = ttk.Button(
@@ -272,7 +272,7 @@ class ViscosityCalculator:
             text="Calculate with Chemistry",
             command=self.calculate_viscosity_with_chemistry
         )
-        calculate_with_chemistry_btn.pack(padx=(5, 0))
+        calculate_with_chemistry_btn.pack(padx=5,pady=5)
 
     def create_advanced_tab(self, notebook):
         """
@@ -570,9 +570,9 @@ class ViscosityCalculator:
         # These are just example values - replace with actual values based on your data
         viscosity_map = {
             "D8": 18000000,
-            "D9": 12000000,
-            "Liquid Diamonds": 3000000,
-            "Other": 500000 
+            "D9": 20000000,
+            "Liquid Diamonds": 20000000,
+            "Other": 2000000 
         }
         
         return viscosity_map.get(media_type, 18000000)
@@ -1385,7 +1385,7 @@ class ViscosityCalculator:
         
         # If no data provided, try to load from saved files
         if data is None:
-            data_files = glob.glob('data/viscosity_data_*.csv')
+            data_files = glob.glob('data/Master_Viscosity_Data_processed.csv')
             if not data_files:
                 messagebox.showerror("Error", "No training data available. Please upload data first.")
                 return
@@ -1409,15 +1409,15 @@ class ViscosityCalculator:
         # Show a progress dialog
         progress_window = Toplevel(self.root)
         progress_window.title("Training Models")
-        progress_window.geometry("300x150")
+        progress_window.geometry("200x100")
         progress_window.transient(self.root)
         progress_window.grab_set()
 
         progress_label = Label(progress_window, text="Training models...", font=('Arial', 12))
-        progress_label.pack(pady=20)
+        progress_label.pack(pady=10)
 
         progress_bar = ttk.Progressbar(progress_window, mode='indeterminate')
-        progress_bar.pack(fill='x', padx=20)
+        progress_bar.pack(fill='x', padx=10)
         progress_bar.start()
 
         # Create a new thread for training to avoid freezing the UI
@@ -1993,7 +1993,7 @@ class ViscosityCalculator:
         if show_dialog:
             report_window = Toplevel(self.root)
             report_window.title("Model Analysis Report")
-            report_window.geometry("700x500")
+            report_window.geometry("800x1200")
         
             Label(report_window, text="Model Analysis Report", font=("Arial", 14, "bold")).pack(pady=10)
         
@@ -2017,20 +2017,31 @@ class ViscosityCalculator:
 
     def filter_and_analyze_specific_combinations(self):
         """
-        Analyze and build models for specific media-terpene combinations.
+        Analyze and build models for specific media-terpene combinations with potency integration.
         This function performs Arrhenius analysis to determine the relationship
-        between temperature and viscosity for different combinations.
+        between temperature and viscosity for different combinations, while
+        accounting for the effects of potency on viscosity.
         """
         # Display progress window immediately to show the user something is happening
         progress_window = Toplevel(self.root)
         progress_window.title("Analyzing Specific Combinations")
-        progress_window.geometry("700x500")  # Larger window for more text
+        progress_window.geometry("800x1200")  # Larger window for more text
         progress_window.transient(self.root)
         progress_window.grab_set()
-    
+
+        # Define a function to sanitize filenames
+        def sanitize_filename(name):
+            """Replace invalid filename characters with underscores."""
+            # Replace common invalid filename characters
+            invalid_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|', ' ']
+            sanitized = name
+            for char in invalid_chars:
+                sanitized = sanitized.replace(char, '_')
+            return sanitized
+
         # Import modules - lazily loaded only when this function is called
         import threading
-    
+
         # Create a background thread to do the heavy lifting
         def bg_thread():
             try:
@@ -2038,7 +2049,7 @@ class ViscosityCalculator:
                 import pandas as pd
                 import numpy as np
                 import matplotlib.pyplot as plt
-                from tkinter import Text, Scrollbar, Label, Frame, Canvas, Entry, StringVar, DoubleVar
+                from tkinter import Text, Scrollbar, Label, Frame, Canvas, Entry, StringVar, DoubleVar, Scale, HORIZONTAL
                 import os
                 import glob
                 from scipy import stats
@@ -2047,42 +2058,61 @@ class ViscosityCalculator:
                 import pickle
                 import math
                 from sklearn.metrics import r2_score
-            
+                from matplotlib.figure import Figure
+                from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+    
                 # Create scrollable text area for live updates
-                Label(progress_window, text="Arrhenius Analysis of Temperature-Viscosity Relationship", 
+                Label(progress_window, text="Arrhenius Analysis with Potency Integration", 
                       font=("Arial", 14, "bold")).pack(pady=10)
-            
-                # Add a frame for potency specification
+    
+                # Add a frame for potency specification with a slider for better UX
                 potency_frame = Frame(progress_window)
                 potency_frame.pack(fill="x", padx=10, pady=5)
-            
+    
                 potency_var = DoubleVar(value=80.0)  # Default value of 80%
-            
+    
                 Label(potency_frame, text="Total Potency (%) for analysis:").pack(side="left", padx=5)
-                potency_entry = Entry(potency_frame, textvariable=potency_var, width=10)
-                potency_entry.pack(side="left", padx=5)
-            
+        
+                # Add a slider for potency selection
+                potency_slider = Scale(potency_frame, variable=potency_var, from_=60.0, to=95.0, 
+                                      orient=HORIZONTAL, length=200, resolution=0.5)
+                potency_slider.pack(side="left", padx=5, fill="x", expand=True)
+        
+                # Add a dropdown to select the potency analysis mode
+                potency_mode_var = StringVar(value="fixed")
+                potency_modes = ["fixed", "variable"]
+        
+                Label(potency_frame, text="Potency Analysis Mode:").pack(side="left", padx=5)
+                potency_mode_dropdown = ttk.Combobox(
+                    potency_frame, 
+                    textvariable=potency_mode_var,
+                    values=potency_modes,
+                    state="readonly",
+                    width=10
+                )
+                potency_mode_dropdown.pack(side="left", padx=5)
+    
                 text_frame = Frame(progress_window)
                 text_frame.pack(fill="both", expand=True, padx=10, pady=10)
-            
+    
                 scrollbar = Scrollbar(text_frame)
                 scrollbar.pack(side="right", fill="y")
-            
+    
                 text_widget = Text(text_frame, wrap="word", yscrollcommand=scrollbar.set)
                 text_widget.pack(side="left", fill="both", expand=True)
                 scrollbar.config(command=text_widget.yview)
-            
+    
                 # Function to add text to the widget from any thread
                 def add_text(message):
                     self.root.after(0, lambda: text_widget.insert("end", message + "\n"))
                     self.root.after(0, lambda: text_widget.see("end"))
-            
+    
                 # Add a close button
                 self.root.after(0, lambda: Button(progress_window, text="Close", 
                                             command=progress_window.destroy).pack(pady=10))
-            
-                add_text("Starting Arrhenius analysis of viscosity-temperature relationship...")
-            
+    
+                add_text("Starting Arrhenius analysis of viscosity-temperature relationship with potency integration...")
+    
                 # Determine if enhanced models exist
                 using_enhanced_models = False
                 if os.path.exists('models/viscosity_models_with_chemistry.pkl'):
@@ -2095,25 +2125,25 @@ class ViscosityCalculator:
                                 add_text("Using enhanced models with potency data.")
                     except Exception as e:
                         add_text(f"Error loading enhanced models: {str(e)}")
-            
+    
                 if not using_enhanced_models:
                     if hasattr(self, 'viscosity_models') and self.viscosity_models:
                         add_text("Using standard models without potency data.")
                     else:
                         add_text("No trained models found. Please train models first.")
                         return
-            
+    
                 # Get the models to use
                 models_to_analyze = self.enhanced_viscosity_models if using_enhanced_models else self.viscosity_models
-            
-                # Get a representative potency value (from entry or default)
+    
+                # Get a representative potency value (from slider)
                 representative_potency = potency_var.get()
-                add_text(f"Using representative potency value of {representative_potency}% for analysis")
-            
+                add_text(f"Using reference potency value of {representative_potency}% for analysis")
+    
                 # Create plots directory if it doesn't exist
                 os.makedirs('plots', exist_ok=True)
-            
-                # Load training data to extract typical terpene percentages
+    
+                # Load training data to extract typical terpene percentages and potency ranges
                 training_data = None
                 try:
                     # Get all data files
@@ -2125,41 +2155,127 @@ class ViscosityCalculator:
                         latest_file = data_files[0]
                         training_data = pd.read_csv(latest_file)
                         add_text(f"Loaded training data from {latest_file}")
+                
+                        # Check if training data has potency information
+                        if 'total_potency' in training_data.columns:
+                            add_text(f"Training data includes potency information!")
+                            add_text(f"Potency range: {training_data['total_potency'].min():.1f}% - {training_data['total_potency'].max():.1f}%")
+                        else:
+                            add_text("Warning: Training data does not include potency information.")
                 except Exception as e:
                     add_text(f"Error loading training data: {str(e)}")
-            
+    
                 # Function to predict viscosity based on model type
-                def predict_viscosity(model, terpene_pct, temperature, potency=None):
-                    """Predict viscosity based on model type and available features."""
+                def predict_viscosity(model, terpene_pct, temperature, potency=None, d9_thc=None, d8_thc=None):
+                    """
+                    Predict viscosity based on model type and available features.
+
+                    This function intelligently handles models with different feature requirements
+                    by examining each model's expected inputs and formatting prediction data accordingly.
+
+                    Args:
+                        model: The trained model object or dict containing model information
+                        terpene_pct: Terpene percentage value
+                        temperature: Temperature in degrees C
+                        potency: Total potency percentage (optional)
+                        d9_thc: Delta-9 THC percentage (optional)
+                        d8_thc: Delta-8 THC percentage (optional)
+    
+                    Returns:
+                        float: Predicted viscosity value
+                    """
                     try:
+                        # Extract the actual model if it's in a dictionary
                         if isinstance(model, dict) and 'model' in model:
+                            # Get the feature list if available
+                            features = model.get('features', None)
                             actual_model = model['model']
                         else:
                             actual_model = model
-                        
-                        if using_enhanced_models and potency is not None:
-                            # Enhanced model with potency
-                            return actual_model.predict([[terpene_pct, temperature, potency]])[0]
+                            features = None
+    
+                        # Determine what features the model expects
+                        if hasattr(actual_model, 'n_features_in_'):
+                            # For scikit-learn models that have n_features_in_ attribute
+                            n_features = actual_model.n_features_in_
+                        elif features is not None:
+                            # If features list is provided in the model dict
+                            n_features = len(features)
                         else:
-                            # Standard model without potency
-                            return actual_model.predict([[terpene_pct, temperature]])[0]
+                            # Default to basic features if we can't determine
+                            n_features = 2
+    
+                        # Create prediction array based on the number of features the model expects
+                        if n_features == 2:
+                            # Basic model with only terpene_pct and temperature
+                            X = [[terpene_pct, temperature]]
+                        elif n_features == 3:
+                            # Model with terpene_pct, temperature, and total_potency
+                            if potency is None:
+                                potency = 80.0  # Default value if none provided
+                            X = [[terpene_pct, temperature, potency]]
+                        elif n_features == 5:
+                            # Model with all features: terpene_pct, temperature, potency, d9_thc, d8_thc
+                            if potency is None:
+                                potency = 80.0
+                            if d9_thc is None:
+                                d9_thc = potency * 0.85  # Estimate d9 as 85% of total if not provided
+                            if d8_thc is None:
+                                d8_thc = 0.0
+                            X = [[terpene_pct, temperature, potency, d9_thc, d8_thc]]
+                        else:
+                            # For any other feature count, try to build a sensible array
+                            X = [[terpene_pct, temperature]]
+                            if n_features > 2 and potency is not None:
+                                X[0].append(potency)
+                            if n_features > 3 and d9_thc is not None:
+                                X[0].append(d9_thc)
+                            if n_features > 4 and d8_thc is not None:
+                                X[0].append(d8_thc)
+        
+                            # Pad with zeros if still not enough features
+                            while len(X[0]) < n_features:
+                                X[0].append(0.0)
+    
+                        # Make prediction with properly formatted input
+                        return actual_model.predict(X)[0]
+    
                     except Exception as e:
-                        add_text(f"Error predicting viscosity: {str(e)}")
-                        return np.nan
-            
+                        print(f"Error predicting viscosity: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        return float('nan')  # Return NaN for invalid predictions
+    
                 # Arrhenius function: ln(viscosity) = ln(A) + (Ea/R)*(1/T)
                 def arrhenius_function(x, a, b):
                     # x is 1/T (inverse temperature in Kelvin)
                     # a is ln(A) where A is the pre-exponential factor
                     # b is Ea/R where Ea is activation energy and R is gas constant
                     return a + b * x
-            
+    
                 # Extend the temperature range for prediction
                 temperature_range = np.linspace(20, 70, 11)  # 20°C to 70°C in 11 steps
+    
+                # Define potency ranges for variable potency analysis
+                if potency_mode_var.get() == "variable":
+                    if training_data is not None and 'total_potency' in training_data.columns:
+                        # Use range from actual data
+                        potency_min = max(50, training_data['total_potency'].min())
+                        potency_max = min(99, training_data['total_potency'].max())
+                    else:
+                        # Default range if no data available
+                        potency_min = 50
+                        potency_max = 99
             
+                    potency_range = np.linspace(potency_min, potency_max, 4)  # 4 potency values for comparison
+                    add_text(f"Performing variable potency analysis with levels: {', '.join([f'{p:.1f}%' for p in potency_range])}")
+                else:
+                    # Fixed potency mode - just use the selected value
+                    potency_range = [representative_potency]
+    
                 # Counter for successful models
                 successful_models = 0
-            
+    
                 # Process each model
                 for model_key, model in models_to_analyze.items():
                     try:
@@ -2170,9 +2286,9 @@ class ViscosityCalculator:
                             media, terpene = display_key.split('_', 1)
                         else:
                             media, terpene = model_key.split('_', 1)
-                    
+            
                         add_text(f"\nAnalyzing {media}/{terpene}...")
-                    
+            
                         # Find typical terpene percentage for this combination from training data
                         terpene_pct = 5.0  # Default value
                         if training_data is not None:
@@ -2182,16 +2298,149 @@ class ViscosityCalculator:
                             ]
                             if 'terpene_pct' in combo_data.columns and not combo_data.empty:
                                 # Use median as a robust measure
-                                terpene_pct = combo_data['terpene_pct'].median()
+                                terpene_pct = 100 * combo_data['terpene_pct'].median() 
                                 if pd.isna(terpene_pct) or terpene_pct <= 0:
                                     terpene_pct = 5.0  # Default if invalid
-                    
+            
                         add_text(f"Using terpene percentage of {terpene_pct:.2f}% for analysis")
+                
+                        # Check if we're doing variable potency analysis
+                        if potency_mode_var.get() == "variable" and using_enhanced_models:
+                            # Create a figure for variable potency analysis
+                            plt.figure(figsize=(12, 10))
                     
+                            # Create two subplots - one for viscosity vs temp, one for ln(visc) vs 1/T
+                            ax1 = plt.subplot(211)
+                            ax2 = plt.subplot(212)
+                    
+                            # Store activation energies for different potency levels
+                            activation_energies = []
+                    
+                            # Plot for each potency level
+                            for potency in potency_range:
+                                # Generate viscosity predictions across temperature range
+                                temperatures_kelvin = temperature_range + 273.15  # Convert °C to K
+                                inverse_temp = 1 / temperatures_kelvin  # 1/T for Arrhenius plot
+                        
+                                predicted_visc = []
+                                for temp in temperature_range:
+                                    visc = predict_viscosity(model, terpene_pct, temp, potency)
+                                    predicted_visc.append(visc)
+                        
+                                predicted_visc = np.array(predicted_visc)
+                        
+                                # Filter out invalid values
+                                valid_indices = ~np.isnan(predicted_visc) & (predicted_visc > 0)
+                                if not any(valid_indices):
+                                    add_text(f"No valid viscosity predictions for {media}/{terpene} at {potency:.1f}% potency. Skipping.")
+                                    continue
+                        
+                                inv_temp_valid = inverse_temp[valid_indices]
+                                predicted_visc_valid = predicted_visc[valid_indices]
+                        
+                                # Calculate natural log of viscosity
+                                ln_visc = np.log(predicted_visc_valid)
+                        
+                                # Fit Arrhenius equation
+                                params, covariance = curve_fit(arrhenius_function, inv_temp_valid, ln_visc)
+                                a, b = params
+                        
+                                # Calculate activation energy (Ea = b * R)
+                                R = 8.314  # Gas constant in J/(mol·K)
+                                Ea = b * R  # Activation energy in J/mol
+                                Ea_kJ = Ea / 1000  # Convert to kJ/mol
+                        
+                                # Store for comparison
+                                activation_energies.append((potency, Ea_kJ))
+                        
+                                # Calculate predicted values from the fitted model
+                                ln_visc_pred = arrhenius_function(inv_temp_valid, a, b)
+                        
+                                # Calculate R-squared
+                                r2 = r2_score(ln_visc, ln_visc_pred)
+                        
+                                # Plot for this potency level with distinct colors
+                                ax1.semilogy(temperature_range[valid_indices], predicted_visc_valid, 
+                                         'o-', label=f'Potency {potency:.1f}%')
+                        
+                                ax2.scatter(inv_temp_valid, ln_visc, 
+                                        label=f'Potency {potency:.1f}%')
+                                ax2.plot(inv_temp_valid, ln_visc_pred, '--', 
+                                       label=f'Fit {potency:.1f}% (Ea={Ea_kJ:.1f} kJ/mol)')
+                    
+                            # Configure plots
+                            ax1.set_xlabel('Temperature (°C)')
+                            ax1.set_ylabel('Viscosity (cP)')
+                            ax1.set_title(f'Viscosity vs Temperature for {media}/{terpene}\nTerpene: {terpene_pct:.2f}%')
+                            ax1.grid(True)
+                            ax1.legend()
+                    
+                            ax2.set_xlabel('1/T (K⁻¹)')
+                            ax2.set_ylabel('ln(Viscosity)')
+                            ax2.set_title('Arrhenius Plots for Different Potency Levels')
+                            ax2.grid(True)
+                            ax2.legend()
+                    
+                            plt.tight_layout()
+                    
+                            # Save the variable potency plot
+                            plot_path = f'plots/Arrhenius_{sanitize_filename(media)}_{sanitize_filename(terpene)}_variable_potency.png'
+                            plt.savefig(plot_path)
+                            plt.close()
+                    
+                            # Create potency vs activation energy plot
+                            if len(activation_energies) > 1:
+                                plt.figure(figsize=(8, 6))
+                                potency_values, ea_values = zip(*activation_energies)
+                        
+                                plt.plot(potency_values, ea_values, 'o-', linewidth=2)
+                                plt.xlabel('Total Potency (%)')
+                                plt.ylabel('Activation Energy (kJ/mol)')
+                                plt.title(f'Effect of Potency on Activation Energy\n{media}/{terpene}')
+                                plt.grid(True)
+                        
+                                # Add a trendline
+                                if len(potency_values) > 2:
+                                    z = np.polyfit(potency_values, ea_values, 1)
+                                    p = np.poly1d(z)
+                                    plt.plot(potency_values, p(potency_values), "r--", 
+                                           label=f"Trend: {z[0]:.2f}x + {z[1]:.2f}")
+                                    plt.legend()
+                        
+                                # Save the potency influence plot
+                                potency_plot_path = f'plots/Potency_Effect_{sanitize_filename(media)}_{sanitize_filename(terpene)}.png'
+                                plt.savefig(potency_plot_path)
+                                plt.close()
+                        
+                                add_text(f"Variable potency analysis complete for {media}/{terpene}")
+                                add_text(f"  • Plot saved to: {plot_path}")
+                                add_text(f"  • Potency effect plot saved to: {potency_plot_path}")
+                        
+                                # Report the trend
+                                if len(potency_values) > 2:
+                                    if z[0] > 0:
+                                        add_text(f"  • Trend: Activation energy increases by {z[0]:.2f} kJ/mol per 1% increase in potency")
+                                    else:
+                                        add_text(f"  • Trend: Activation energy decreases by {abs(z[0]):.2f} kJ/mol per 1% increase in potency")
+                            
+                                    slope_significance = abs(z[0]) / (max(ea_values) - min(ea_values)) * 100
+                                    if slope_significance < 5:
+                                        add_text("  • Potency has minimal effect on temperature sensitivity")
+                                    elif slope_significance < 15:
+                                        add_text("  • Potency has moderate effect on temperature sensitivity")
+                                    else:
+                                        add_text("  • Potency has significant effect on temperature sensitivity")
+                    
+                            # Skip the standard analysis for this model when doing variable potency analysis
+                            successful_models += 1
+                            continue
+                
+                        # --- Standard single-potency analysis for all models ---
+                
                         # Generate viscosity predictions across temperature range
                         temperatures_kelvin = temperature_range + 273.15  # Convert °C to K
                         inverse_temp = 1 / temperatures_kelvin  # 1/T for Arrhenius plot
-                    
+            
                         predicted_visc = []
                         for temp in temperature_range:
                             if using_enhanced_models:
@@ -2199,51 +2448,54 @@ class ViscosityCalculator:
                             else:
                                 visc = predict_viscosity(model, terpene_pct, temp)
                             predicted_visc.append(visc)
-                    
+            
                         predicted_visc = np.array(predicted_visc)
-                    
+            
                         # Filter out invalid values
                         valid_indices = ~np.isnan(predicted_visc) & (predicted_visc > 0)
                         if not any(valid_indices):
                             add_text(f"No valid viscosity predictions for {media}/{terpene}. Skipping.")
                             continue
-                    
+            
                         inv_temp_valid = inverse_temp[valid_indices]
                         predicted_visc_valid = predicted_visc[valid_indices]
-                    
+            
                         # Calculate natural log of viscosity
                         ln_visc = np.log(predicted_visc_valid)
-                    
+            
                         # Fit Arrhenius equation
                         params, covariance = curve_fit(arrhenius_function, inv_temp_valid, ln_visc)
                         a, b = params
-                    
+            
                         # Calculate activation energy (Ea = b * R)
                         R = 8.314  # Gas constant in J/(mol·K)
                         Ea = b * R  # Activation energy in J/mol
                         Ea_kJ = Ea / 1000  # Convert to kJ/mol
-                    
+            
                         # Calculate pre-exponential factor
                         A = np.exp(a)
-                    
+            
                         # Calculate predicted values from the fitted model
                         ln_visc_pred = arrhenius_function(inv_temp_valid, a, b)
-                    
+            
                         # Calculate R-squared
                         r2 = r2_score(ln_visc, ln_visc_pred)
-                    
+            
                         # Generate plot
                         plt.figure(figsize=(10, 8))
-                    
+            
                         # Create two subplots
                         plt.subplot(211)
                         plt.scatter(temperature_range[valid_indices], predicted_visc_valid, color='blue', label='Predicted viscosity')
                         plt.yscale('log')
                         plt.xlabel('Temperature (°C)')
                         plt.ylabel('Viscosity (cP)')
-                        plt.title(f'Viscosity vs Temperature for {media}/{terpene}\nTerpene: {terpene_pct:.2f}%')
+                        if using_enhanced_models:
+                            plt.title(f'Viscosity vs Temperature for {media}/{terpene}\nTerpene: {terpene_pct:.2f}%, Potency: {representative_potency:.1f}%')
+                        else:
+                            plt.title(f'Viscosity vs Temperature for {media}/{terpene}\nTerpene: {terpene_pct:.2f}%')
                         plt.grid(True)
-                    
+            
                         # Arrhenius plot
                         plt.subplot(212)
                         plt.scatter(inv_temp_valid, ln_visc, color='blue', label='ln(Viscosity)')
@@ -2253,14 +2505,17 @@ class ViscosityCalculator:
                         plt.title(f'Arrhenius Plot: Ea = {Ea_kJ:.2f} kJ/mol, ln(A) = {a:.2f}')
                         plt.grid(True)
                         plt.legend()
-                    
+            
                         plt.tight_layout()
-                    
+            
                         # Save the plot
-                        plot_path = f'plots/Arrhenius_{media}_{terpene}.png'
+                        if using_enhanced_models:
+                            plot_path = f'plots/Arrhenius_{sanitize_filename(media)}_{sanitize_filename(terpene)}_potency{int(representative_potency)}.png'
+                        else:
+                            plot_path = f'plots/Arrhenius_{sanitize_filename(media)}_{sanitize_filename(terpene)}.png'
                         plt.savefig(plot_path)
                         plt.close()
-                    
+            
                         # Update report
                         add_text(f"Results for {media}/{terpene}:")
                         add_text(f"  • Activation energy (Ea): {Ea_kJ:.2f} kJ/mol")
@@ -2268,7 +2523,7 @@ class ViscosityCalculator:
                         add_text(f"  • Arrhenius equation: ln(viscosity) = {a:.2f} + {b:.2f}*(1/T)")
                         add_text(f"  • R-squared: {r2:.4f}")
                         add_text(f"  • Plot saved to: {plot_path}")
-                    
+            
                         # Categorize the activation energy
                         if Ea_kJ < 20:
                             add_text("  • Low activation energy: less temperature-sensitive")
@@ -2276,43 +2531,61 @@ class ViscosityCalculator:
                             add_text("  • Medium activation energy: moderately temperature-sensitive")
                         else:
                             add_text("  • High activation energy: highly temperature-sensitive")
-                    
+            
                         successful_models += 1
-                    
+            
                     except Exception as e:
                         add_text(f"Error analyzing {model_key}: {str(e)}")
-            
+    
                 # Summary
                 add_text(f"\nAnalysis complete! Successfully analyzed {successful_models} models.")
                 add_text(f"Plot files are saved in the 'plots' directory.")
-            
+    
                 if successful_models > 0:
                     # Generate summary plot comparing activation energies
                     self.generate_activation_energy_comparison(models_to_analyze, representative_potency, using_enhanced_models)
                     add_text("Generated comparison plot of activation energies.")
-            
+    
             except Exception as e:
                 import traceback
                 traceback_str = traceback.format_exc()
                 add_text(f"Error in analysis thread: {e}\n{traceback_str}")
                 self.root.after(0, lambda: messagebox.showerror("Error", f"Analysis failed: {str(e)}"))
-    
+
         # Start background thread
         thread = threading.Thread(target=bg_thread)
         thread.daemon = True
         thread.start()
 
+
     def generate_activation_energy_comparison(self, models, potency_value=None, using_enhanced_models=False):
         """
         Generate a comparison plot of activation energies for different media-terpene combinations.
+        Includes potency information when available.
+    
+        Args:
+            models: Dictionary of trained models
+            potency_value: Potency value to use for enhanced models
+            using_enhanced_models: Flag indicating if enhanced models with potency are being used
         """
         import numpy as np
         import matplotlib.pyplot as plt
         from scipy.optimize import curve_fit
+        from scipy import stats
         import os
+
+        # Define function to sanitize filenames
+        def sanitize_filename(name):
+            """Replace invalid filename characters with underscores."""
+            # Replace common invalid filename characters
+            invalid_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|', ' ']
+            sanitized = name
+            for char in invalid_chars:
+                sanitized = sanitized.replace(char, '_')
+            return sanitized
     
         # Create a figure
-        plt.figure(figsize=(12, 8))
+        plt.figure(figsize=(12, 10))
     
         # Arrhenius function: ln(viscosity) = ln(A) + (Ea/R)*(1/T)
         def arrhenius_function(x, a, b):
@@ -2329,6 +2602,59 @@ class ViscosityCalculator:
         # Store results for comparison
         media_types = set()
         results = []
+    
+        # Default values for additional chemical properties
+        if using_enhanced_models and potency_value is not None:
+            d9_thc_value = potency_value * 0.85  # Estimate d9-THC as 85% of potency
+            d8_thc_value = 0.0  # Default to zero
+        else:
+            d9_thc_value = 0.0
+            d8_thc_value = 0.0
+    
+        # Define a consistent prediction function
+        def predict_model_viscosity(model_obj, terpene_pct, temp, pot=None):
+            """Intelligently predict viscosity handling different feature sets"""
+            try:
+                if isinstance(model_obj, dict) and 'model' in model_obj:
+                    features = model_obj.get('features', None)
+                    actual_model = model_obj['model']
+                else:
+                    actual_model = model_obj
+                    features = None
+            
+                # Determine expected feature count
+                if hasattr(actual_model, 'n_features_in_'):
+                    n_features = actual_model.n_features_in_
+                elif features is not None:
+                    n_features = len(features)
+                else:
+                    n_features = 2  # Default
+            
+                # Create appropriate input array
+                if n_features == 2:
+                    return actual_model.predict([[terpene_pct, temp]])[0]
+                elif n_features == 3:
+                    return actual_model.predict([[terpene_pct, temp, pot or 80.0]])[0]
+                elif n_features == 5:
+                    return actual_model.predict([[terpene_pct, temp, pot or 80.0, d9_thc_value, d8_thc_value]])[0]
+                else:
+                    # Create flexible input array for other feature counts
+                    X = [terpene_pct, temp]
+                    if n_features > 2:
+                        X.append(pot or 80.0)
+                    if n_features > 3:
+                        X.append(d9_thc_value)
+                    if n_features > 4:
+                        X.append(d8_thc_value)
+                
+                    # Pad with zeros if needed
+                    while len(X) < n_features:
+                        X.append(0.0)
+                
+                    return actual_model.predict([X])[0]
+            except Exception as e:
+                print(f"Prediction error: {e}")
+                return np.nan
     
         # Process each model
         for model_key, model in models.items():
@@ -2349,10 +2675,7 @@ class ViscosityCalculator:
                 # Generate viscosity predictions
                 predicted_visc = []
                 for temp in temperature_range:
-                    if using_enhanced_models and potency_value is not None:
-                        visc = model.predict([[terpene_pct, temp, potency_value]])[0]
-                    else:
-                        visc = model.predict([[terpene_pct, temp]])[0]
+                    visc = predict_model_viscosity(model, terpene_pct, temp, potency_value)
                     predicted_visc.append(visc)
             
                 predicted_visc = np.array(predicted_visc)
@@ -2360,6 +2683,7 @@ class ViscosityCalculator:
                 # Filter out invalid values
                 valid_indices = ~np.isnan(predicted_visc) & (predicted_visc > 0)
                 if not any(valid_indices):
+                    print(f"Warning: No valid predictions for {model_key}")
                     continue
             
                 inv_temp_valid = inverse_temp[valid_indices]
@@ -2381,13 +2705,17 @@ class ViscosityCalculator:
                     'media': media,
                     'terpene': terpene,
                     'Ea_kJ': Ea_kJ,
-                    'ln_A': a
+                    'ln_A': a,
+                    'potency': potency_value if using_enhanced_models else None
                 })
             
             except Exception as e:
                 print(f"Error processing {model_key}: {e}")
+                import traceback
+                traceback.print_exc()
     
         if not results:
+            print("No valid results generated. Cannot create comparison plot.")
             return
     
         # Convert to DataFrame
@@ -2403,14 +2731,14 @@ class ViscosityCalculator:
         results_df = results_df.sort_values('Ea_kJ', ascending=False)
     
         # Plot bar chart
-        ax = plt.subplot(111)
+        ax1 = plt.subplot(211)
     
         # Create positions for bars
         positions = np.arange(len(results_df))
         bar_height = 0.8
     
         # Create bars with colors based on media type
-        bars = ax.barh(
+        bars = ax1.barh(
             positions, 
             results_df['Ea_kJ'], 
             height=bar_height,
@@ -2418,31 +2746,183 @@ class ViscosityCalculator:
         )
     
         # Add labels
-        ax.set_yticks(positions)
-        ax.set_yticklabels([f"{row['terpene']} ({row['media']})" for _, row in results_df.iterrows()])
-        ax.set_xlabel('Activation Energy (kJ/mol)')
-        ax.set_title('Activation Energy Comparison by Media-Terpene Combination')
+        ax1.set_yticks(positions)
+        ax1.set_yticklabels([f"{row['terpene']} ({row['media']})" for _, row in results_df.iterrows()])
+        ax1.set_xlabel('Activation Energy (kJ/mol)')
+    
+        if using_enhanced_models and potency_value is not None:
+            ax1.set_title(f'Activation Energy Comparison by Media-Terpene Combination\nPotency: {potency_value:.1f}%')
+        else:
+            ax1.set_title('Activation Energy Comparison by Media-Terpene Combination')
     
         # Add a legend for media types
         from matplotlib.patches import Patch
         legend_elements = [Patch(facecolor=color_map[media], label=media) for media in media_list]
-        ax.legend(handles=legend_elements, loc='upper right')
+        ax1.legend(handles=legend_elements, loc='upper right')
     
         # Add value labels
         for i, bar in enumerate(bars):
-            ax.text(
+            ax1.text(
                 bar.get_width() + 0.5, 
                 bar.get_y() + bar.get_height()/2, 
                 f"{results_df['Ea_kJ'].iloc[i]:.1f}", 
                 va='center'
             )
     
+        # Create a scatter plot showing ln(A) vs Ea correlation (compensation effect)
+        ax2 = plt.subplot(212)
+    
+        # Extract data for scatter plot
+        Ea_values = results_df['Ea_kJ']
+        lnA_values = results_df['ln_A']
+    
+        # Create scatter plot with points colored by media type
+        for media in media_list:
+            media_indices = results_df['media'] == media
+            ax2.scatter(
+                Ea_values[media_indices], 
+                lnA_values[media_indices],
+                color=color_map[media],
+                label=media,
+                s=80,
+                alpha=0.7
+            )
+    
+        # Add text labels for each point
+        for i, row in results_df.iterrows():
+            ax2.annotate(
+                row['terpene'],
+                (row['Ea_kJ'], row['ln_A']),
+                xytext=(5, 0),
+                textcoords='offset points',
+                fontsize=8
+            )
+    
+        # Add a trend line if there are enough points
+        if len(results_df) > 2:
+            try:
+                # Calculate linear fit
+                slope, intercept, r_value, p_value, std_err = stats.linregress(Ea_values, lnA_values)
+            
+                # Calculate endpoints for the line
+                x_min, x_max = min(Ea_values), max(Ea_values)
+                x_line = np.array([x_min, x_max])
+                y_line = intercept + slope * x_line
+            
+                # Plot the line
+                ax2.plot(x_line, y_line, 'k--', 
+                         label=f'Enthalpy-Entropy Compensation\ny = {slope:.2f}x + {intercept:.2f}, R² = {r_value**2:.2f}')
+            except Exception as e:
+                print(f"Error creating trend line: {e}")
+                # Continue without the trend line
+    
+        ax2.set_xlabel('Activation Energy, Ea (kJ/mol)')
+        ax2.set_ylabel('ln(A)')
+        ax2.set_title('Enthalpy-Entropy Compensation Effect')
+        ax2.grid(True, linestyle='--', alpha=0.7)
+        ax2.legend(loc='upper left')
+    
         plt.tight_layout()
     
-        # Save the plot
-        plot_path = 'plots/Activation_Energy_Comparison.png'
-        plt.savefig(plot_path)
+        # Save the plot with potency information in the filename if relevant
+        try:
+            if using_enhanced_models and potency_value is not None:
+                plot_path = f'plots/Activation_Energy_Comparison_Potency{int(potency_value)}.png'
+            else:
+                plot_path = 'plots/Activation_Energy_Comparison.png'
+            plt.savefig(plot_path)
+            print(f"Plot saved to: {plot_path}")
+        except Exception as e:
+            print(f"Error saving plot: {e}")
+    
         plt.close()
+    
+        # Additionally, if we're using enhanced models, create a plot showing potency vs viscosity
+        # for a fixed temperature and terpene percentage
+        if using_enhanced_models and isinstance(potency_value, (int, float)):
+            try:
+                # Create a new figure for potency vs viscosity at fixed temperature
+                plt.figure(figsize=(10, 8))
+            
+                # Pick a fixed temperature (25°C is common reference)
+                fixed_temp = 25.0
+            
+                # Pick a single model to analyze (preferably one with good performance)
+                # Just use the first valid model we find
+                example_model = None
+                model_key = None
+                for mk, model in models.items():
+                    if isinstance(model, dict) and 'model' in model:
+                        example_model = model['model']
+                        model_key = mk
+                        break
+                    elif hasattr(model, 'predict'):
+                        example_model = model
+                        model_key = mk
+                        break
+            
+                if example_model is not None:
+                    # Extract media/terpene from the model key
+                    if "_with_chemistry" in model_key:
+                        display_key = model_key.replace("_with_chemistry", "")
+                        media, terpene = display_key.split('_', 1)
+                    else:
+                        media, terpene = model_key.split('_', 1)
+                
+                    # Generate a range of potency values
+                    potency_range = np.linspace(60, 95, 15)
+                
+                    # For a few typical terpene percentages
+                    terpene_percentages = [3.0, 5.0, 7.0]
+                
+                    for terpene_pct in terpene_percentages:
+                        # Generate viscosity predictions across potency range
+                        predicted_visc = []
+                        for pot in potency_range:
+                            visc = predict_model_viscosity(
+                                {'model': example_model},
+                                terpene_pct, 
+                                fixed_temp, 
+                                pot
+                            )
+                            predicted_visc.append(visc)
+                    
+                        # Filter out any NaN values
+                        valid_indices = ~np.isnan(predicted_visc)
+                        if not any(valid_indices):
+                            continue
+                        
+                        # Plot this terpene percentage with only valid values
+                        plt.plot(
+                            potency_range[valid_indices], 
+                            np.array(predicted_visc)[valid_indices], 
+                            'o-', 
+                            label=f'Terpene {terpene_pct:.1f}%', 
+                            linewidth=2
+                        )
+                
+                    plt.xlabel('Total Potency (%)')
+                    plt.ylabel('Viscosity (cP)')
+                    plt.title(f'Effect of Potency on Viscosity at {fixed_temp}°C\n{media}/{terpene}')
+                    plt.grid(True)
+                    plt.legend()
+                
+                    # Save the plot
+                    try:
+                        if using_enhanced_models and potency_value is not None:
+                            plot_path = f'plots/Activation_Energy_Comparison_Potency{int(potency_value)}.png'
+                        else:
+                            plot_path = 'plots/Activation_Energy_Comparison.png'
+                        plt.savefig(plot_path)
+                        print(f"Plot saved to: {plot_path}")
+                    except Exception as e:
+                        print(f"Error saving plot: {e}")
+
+                    plt.close()
+            except Exception as e:
+                print(f"Error creating potency vs viscosity plot: {e}")
+                import traceback
+                traceback.print_exc()
 
     def embed_in_frame(self, parent_frame):
         """
@@ -2883,6 +3363,8 @@ class ViscosityCalculator:
         import numpy as np
         import os
         from tkinter import Toplevel, Label, Frame
+        from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+        from matplotlib.figure import Figure
     
         # Check if enhanced models exist
         enhanced_model_path = 'models/viscosity_models_with_chemistry.pkl'
@@ -2906,7 +3388,7 @@ class ViscosityCalculator:
         # Create window for the analysis
         analysis_window = Toplevel(self.root)
         analysis_window.title("Chemical Properties Importance Analysis")
-        analysis_window.geometry("800x600")
+        analysis_window.geometry("800x800")  # Increased height
         analysis_window.transient(self.root)
     
         # Add title
@@ -2920,12 +3402,8 @@ class ViscosityCalculator:
         frame = Frame(analysis_window)
         frame.pack(fill="both", expand=True, padx=10, pady=10)
     
-        # Import matplotlib with tkinter backend
-        from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-        from matplotlib.figure import Figure
-    
         # Create figure with subplots
-        fig = Figure(figsize=(10, 8))
+        fig = Figure(figsize=(10, 12))  # Taller figure
     
         # Get all unique features and media types
         all_features = set()
@@ -2937,7 +3415,8 @@ class ViscosityCalculator:
             media_types.add(media)
         
             # Add features
-            all_features.update(model_data['features'])
+            if isinstance(model_data, dict) and 'features' in model_data:
+                all_features.update(model_data['features'])
     
         # Remove temperature as it's always included
         if 'temperature' in all_features:
@@ -2965,10 +3444,12 @@ class ViscosityCalculator:
             else:
                 model = model_data
                 features = ['terpene_pct', 'temperature', 'total_potency']
-    
-            # Get feature importances
-            if hasattr(model, 'feature_importances_'):
-                importances = model.feature_importances_
+        
+            # Skip if model doesn't have feature_importances_
+            if not hasattr(model, 'feature_importances_'):
+                continue
+            
+            importances = model.feature_importances_
         
             # Map importances to features
             for i, feature in enumerate(features):
@@ -2993,6 +3474,7 @@ class ViscosityCalculator:
         ax1.set_title('Importance of Chemical Properties by Media Type')
         ax1.set_xticks(x + bar_width * (len(media_list) - 1) / 2)
         ax1.set_xticklabels(feature_list)
+        
         ax1.legend()
     
         # Create heatmap showing feature importance across models
@@ -3008,11 +3490,28 @@ class ViscosityCalculator:
         heatmap_data = []
         ylabels = []
     
+        # Limit the number of models per media type to prevent overcrowding
+        MAX_MODELS_PER_MEDIA = 5
+    
         for media in media_list:
-            for model_key in model_keys_by_media[media]:
+            # Sort and limit model keys
+            media_models = sorted(model_keys_by_media[media])[:MAX_MODELS_PER_MEDIA]
+        
+            for model_key in media_models:
                 model_data = enhanced_models[model_key]
+            
+                # Skip if not a dict with 'features' and 'model'
+                if not isinstance(model_data, dict) or 'features' not in model_data or 'model' not in model_data:
+                    continue
+                
                 features = model_data['features']
-                importances = model_data['model'].feature_importances_
+                model = model_data['model']
+            
+                # Skip if model doesn't have feature_importances_
+                if not hasattr(model, 'feature_importances_'):
+                    continue
+                
+                importances = model.feature_importances_
             
                 # Map features to importances
                 row = []
@@ -3024,17 +3523,24 @@ class ViscosityCalculator:
                         row.append(0)
             
                 heatmap_data.append(row)
-                # Create label with media and terpene
+            
+                # Create shorter label with media and terpene
                 parts = model_key.split('_')
                 if len(parts) >= 2:
-                    label = f"{parts[0]}: {parts[1]}"
+                    # Truncate terpene name if too long
+                    terpene = parts[1][:10] + '..' if len(parts[1]) > 12 else parts[1]
+                    label = f"{parts[0]}: {terpene}"
                 else:
                     label = model_key
                 ylabels.append(label)
     
         # Create heatmap
         if heatmap_data:
-            im = ax2.imshow(heatmap_data, cmap='viridis')
+            # Set appropriate figure size for the number of models
+            fig_height = min(0.3 * len(heatmap_data) + 6, 12)
+            fig.set_figheight(fig_height)
+        
+            im = ax2.imshow(heatmap_data, cmap='viridis', aspect='auto')
         
             # Add colorbar
             fig.colorbar(im, ax=ax2)
@@ -3044,6 +3550,10 @@ class ViscosityCalculator:
             ax2.set_yticks(np.arange(len(ylabels)))
             ax2.set_xticklabels(feature_list)
             ax2.set_yticklabels(ylabels)
+            ax2.tick_params(axis='both', which='major', labelsize=5)
+        
+            # Ensure ylabels are readable
+            plt.setp(ax2.get_yticklabels(), fontsize=8)
         
             # Rotate x labels for better readability
             plt.setp(ax2.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
