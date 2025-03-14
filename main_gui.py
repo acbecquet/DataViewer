@@ -973,12 +973,17 @@ class TestingGUI:
 
         # Create Calculate menu with all the viscosity-related functions
         calculate_menu = tk.Menu(menubar, tearoff=0)
-        calculate_menu.add_command(label="Train Models", 
-                                  command=self.viscosity_calculator.train_models_from_data)
+
+        calculate_menu.add_command(label="Train Standard Models", 
+                                  command=self.train_models_from_data)
+        calculate_menu.add_command(label="Train Enhanced Models with Potency", 
+                                  command=self.train_models_with_potency)
         calculate_menu.add_command(label="Analyze Models", 
                                   command=self.viscosity_calculator.analyze_models)
         calculate_menu.add_command(label="Arrhenius Analysis", 
                                   command=self.viscosity_calculator.filter_and_analyze_specific_combinations)
+          
+        
         menubar.add_cascade(label="Model", menu=calculate_menu)
     
         # Create main container
