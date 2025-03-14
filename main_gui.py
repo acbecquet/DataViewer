@@ -977,7 +977,7 @@ class TestingGUI:
         calculate_menu.add_command(label="Train Standard Models", 
                                   command=self.train_models_from_data)
         calculate_menu.add_command(label="Train Enhanced Models with Potency", 
-                                  command=self.train_models_with_potency)
+                                  command=self.train_models_with_chemistry)
         calculate_menu.add_command(label="Analyze Models", 
                                   command=self.viscosity_calculator.analyze_models)
         calculate_menu.add_command(label="Arrhenius Analysis", 

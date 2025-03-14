@@ -100,8 +100,10 @@ class ViscosityGUI:
         
         # Models menu
         models_menu = tk.Menu(menubar, tearoff=0)
-        models_menu.add_command(label="Train Models", command=self.calculator.train_models_from_data)
+        models_menu.add_command(label="Train Models simple", command=self.calculator.train_models_from_data)
+        models_menu.add_command(label="Train Models with Chemistry Data", command=self.calculator.train_models_with_chemistry)
         models_menu.add_command(label="Analyze Models", command=self.calculator.analyze_models)
+        models_menu.add_command(label="Analyze Chemical Properties Impact", command=self.calculator.analyze_chemical_importance)
         models_menu.add_command(label="Arrhenius Analysis", 
                                command=self.calculator.filter_and_analyze_specific_combinations)
         menubar.add_cascade(label="Models", menu=models_menu)

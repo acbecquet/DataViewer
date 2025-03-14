@@ -8,6 +8,9 @@ def extract_media_database(excel_path):
     Extract data from the complex multi-block Excel structure and format
     it for viscosity analysis with Total Potency included.
     
+    This improved version ensures that each viscosity measurement at different
+    temperatures has the associated terpene and potency values.
+    
     Args:
         excel_path: Path to the Excel file
         
@@ -33,20 +36,68 @@ def extract_media_database(excel_path):
         print(f"Processing sheets: {sheet_names}")
         print(f"Sheet dimensions - Potency: {potency_df.shape}, Terpenes: {terpene_df.shape}, Viscosity: {viscosity_df.shape}")
         
-        # Extract potency data
+        # Extract data from each sheet
         potency_data = extract_potency_blocks(potency_df)
-        
-        # Extract terpene data
         terpene_data = extract_terpene_blocks(terpene_df)
-        
-        # Extract viscosity data - use our new specialized function
         viscosity_data = extract_viscosity_blocks(viscosity_df)
+        
+        # Print summary of extracted data
+        print("\nExtraction Summary:")
+        print(f"Potency data: {len(potency_data)} rows, {len(potency_data.columns)} columns")
+        print(f"Terpene data: {len(terpene_data)} rows, {len(terpene_data.columns)} columns")
+        print(f"Viscosity data: {len(viscosity_data)} rows, {len(viscosity_data.columns)} columns")
+        
+        # Verify we have the key columns in each dataset
+        if not potency_data.empty:
+            print("\nPotency columns:")
+            for col in sorted(potency_data.columns):
+                if 'potency' in col.lower() or 'thc' in col.lower():
+                    count = potency_data[col].count()
+                    print(f"  - {col}: {count} non-null values")
+        
+        if not terpene_data.empty:
+            print("\nTerpene columns:")
+            for col in sorted(terpene_data.columns):
+                if 'terpene' in col.lower():
+                    count = terpene_data[col].count()
+                    print(f"  - {col}: {count} non-null values")
+        
+        if not viscosity_data.empty:
+            print("\nViscosity data summary:")
+            count = viscosity_data['viscosity'].count()
+            print(f"  - Viscosity: {count} non-null values")
+            if 'temperature' in viscosity_data.columns:
+                temp_count = viscosity_data['temperature'].count()
+                print(f"  - Temperature: {temp_count} non-null values")
+                print(f"  - Temperature range: {viscosity_data['temperature'].min()} to {viscosity_data['temperature'].max()}C")
         
         # Merge the data
         merged_data = merge_data(potency_data, terpene_data, viscosity_data)
         
-        # Format for training
+        # Format for training - this now properly associates properties with each viscosity measurement
         formatted_data = format_for_training(merged_data)
+        
+        # Final verification - make sure each row has a complete set of data
+        if not formatted_data.empty:
+            print("\nFinal data verification:")
+            print(f"Total rows: {len(formatted_data)}")
+            print("Complete rows (with temp, viscosity, potency, and terpene):")
+            complete_rows = formatted_data.dropna(subset=['temperature', 'viscosity', 'total_potency', 'terpene_pct'])
+            print(f"  - {len(complete_rows)} rows ({len(complete_rows)/len(formatted_data)*100:.1f}%)")
+            
+            # Group by media/terpene to verify structure
+            groups = formatted_data.groupby(['media', 'media_brand', 'terpene']).size()
+            print(f"Number of unique media/brand/terpene combinations: {len(groups)}")
+            
+            # Check for repeating property values within temperature groups
+            print("Verifying property value consistency within temperature groups...")
+            for name, group in formatted_data.groupby(['media', 'media_brand', 'terpene']):
+                if 'total_potency' in group.columns and 'terpene_pct' in group.columns:
+                    potency_std = group['total_potency'].std()
+                    terpene_std = group['terpene_pct'].std()
+                    if pd.notna(potency_std) and pd.notna(terpene_std):
+                        if potency_std > 0.001 or terpene_std > 0.001:
+                            print(f"  - WARNING: Inconsistent property values for {name}")
         
         return formatted_data
         
@@ -520,11 +571,26 @@ def extract_terpene_blocks(df):
         print("No terpene data extracted")
         return pd.DataFrame()
 
+
 def merge_data(potency_df, terpene_df, viscosity_df):
     """
-    Merge the potency, terpene, and viscosity data.
-    Enhanced to better preserve percentage values during the merge operation.
+    Merge the potency, terpene, and viscosity data to ensure that terpene and potency
+    data is properly associated with each viscosity measurement.
+    
+    This modified version ensures that rows with viscosity measurements include
+    the corresponding terpene and potency values from their media/strain combination.
+    
+    Args:
+        potency_df: DataFrame with potency data
+        terpene_df: DataFrame with terpene data
+        viscosity_df: DataFrame with viscosity data
+        
+    Returns:
+        DataFrame with properly merged data where each viscosity measurement
+        has associated terpene and potency values
     """
+    print("Starting enhanced merge process...")
+    
     # Handle empty DataFrames
     if potency_df.empty and terpene_df.empty and viscosity_df.empty:
         print("All data frames are empty, nothing to merge")
@@ -533,242 +599,240 @@ def merge_data(potency_df, terpene_df, viscosity_df):
     # Make copies of the dataframes to avoid modifying the originals
     potency_copy = potency_df.copy() if not potency_df.empty else None
     terpene_copy = terpene_df.copy() if not terpene_df.empty else None
+    viscosity_copy = viscosity_df.copy() if not viscosity_df.empty else None
     
-    # Pre-merge processing: Make sure key columns have the right data types
-    # And create explicit copies of the total potency and total terpene columns
-    if potency_copy is not None:
-        if 'Total Potency' in potency_copy.columns:
-            # Create a specific column for total potency that won't be lost in the merge
-            potency_copy['total_potency_value'] = pd.to_numeric(potency_copy['Total Potency'], errors='coerce')
-            print(f"Created 'total_potency_value' column with {potency_copy['total_potency_value'].count()} non-null values")
-            print(f"Sample potency values: {potency_copy['total_potency_value'].head(3).tolist()}")
+    # NORMALIZE THE KEY COLUMNS IN EACH DATAFRAME
+    for df in [potency_copy, terpene_copy, viscosity_copy]:
+        if df is not None and not df.empty:
+            # Clean up media_brand
+            if 'media_brand' in df.columns:
+                df['media_brand'] = df['media_brand'].str.strip().str.lower()
+            
+            # Clean up strain - extract the main part before any '/' character
+            if 'strain' in df.columns:
+                # Option 1: Keep only the part before the first '/'
+                df['strain_key'] = df['strain'].str.split('/').str[0].str.strip().str.lower()
+                
+                # Option 2: Remove the part after and including "/"
+                # df['strain_key'] = df['strain'].str.replace(r'/.*$', '', regex=True).str.strip().str.lower()
+            
+            # Clean up media_type
+            if 'media_type' in df.columns:
+                df['media_type'] = df['media_type'].str.strip().str.lower()
+
+    # Check if we have viscosity data - this is key for our merge strategy
+    if viscosity_copy is None or viscosity_copy.empty:
+        print("No viscosity data available for merging")
         
-        if 'd9-THC' in potency_copy.columns:
-            # Create a specific column for d9-THC that won't be lost in the merge
-            potency_copy['d9_thc_value'] = pd.to_numeric(potency_copy['d9-THC'], errors='coerce')
-            print(f"Created 'd9_thc_value' column with {potency_copy['d9_thc_value'].count()} non-null values")
+        # If no viscosity data, just merge potency and terpene data as before
+        if potency_copy is not None and terpene_copy is not None:
+            merged = pd.merge(
+                potency_copy, 
+                terpene_copy,
+                on=['media_brand', 'strain', 'media_type'],
+                how='outer',
+                suffixes=('_potency', '_terpene')
+            )
+        elif potency_copy is not None:
+            merged = potency_copy
+        elif terpene_copy is not None:
+            merged = terpene_copy
+        else:
+            merged = pd.DataFrame()
+            
+        return merged
     
-    if terpene_copy is not None:
-        if 'Total Terpene' in terpene_copy.columns:
-            # Create a specific column for total terpene that won't be lost in the merge
-            terpene_copy['terpene_pct_value'] = pd.to_numeric(terpene_copy['Total Terpene'], errors='coerce')
-            print(f"Created 'terpene_pct_value' column with {terpene_copy['terpene_pct_value'].count()} non-null values")
-            print(f"Sample terpene values: {terpene_copy['terpene_pct_value'].head(3).tolist()}")
+    # If we have viscosity data, use a different approach focusing on preserving viscosity values
+    print(f"Viscosity data shape: {viscosity_copy.shape}")
     
-    # Merge terpene data into potency data first (if both exist)
+    # First, merge potency and terpene data to create a "properties" dataframe
     if potency_copy is not None and terpene_copy is not None:
-        merged = pd.merge(
+        properties_df = pd.merge(
             potency_copy, 
             terpene_copy,
             on=['media_brand', 'strain', 'media_type'],
             how='outer',
             suffixes=('_potency', '_terpene')
         )
-        
-        # Check if our special columns made it through the merge
-        for col in ['total_potency_value', 'd9_thc_value', 'terpene_pct_value']:
-            if col in merged.columns:
-                print(f"After merge 1: '{col}' has {merged[col].count()} non-null values")
-            else:
-                print(f"WARNING: '{col}' did not survive the merge!")
-                
     elif potency_copy is not None:
-        merged = potency_copy
+        properties_df = potency_copy
     elif terpene_copy is not None:
-        merged = terpene_copy
+        properties_df = terpene_copy
     else:
-        merged = pd.DataFrame()
+        properties_df = pd.DataFrame()
     
-    # Then merge with viscosity data
-    if not merged.empty and not viscosity_df.empty:
-        final_merged = pd.merge(
-            merged,
-            viscosity_df,
-            on=['media_brand', 'strain', 'media_type'],
-            how='outer'
-        )
-        
-        # Check if our special columns made it through the final merge
-        for col in ['total_potency_value', 'd9_thc_value', 'terpene_pct_value']:
-            if col in final_merged.columns:
-                print(f"After merge 2: '{col}' has {final_merged[col].count()} non-null values")
-            else:
-                print(f"WARNING: '{col}' did not survive the final merge!")
-    elif not viscosity_df.empty:
-        final_merged = viscosity_df
-    else:
-        final_merged = merged
+    if properties_df.empty:
+        print("No potency or terpene data available")
+        return viscosity_copy
     
-    print(f"Merged data shape: {final_merged.shape}")
-    return final_merged
+    print(f"Combined properties data shape: {properties_df.shape}")
+    
+    # Now, for each viscosity measurement, associate the corresponding properties
+    # using media_brand, strain, and media_type as keys
+    merged_data = pd.merge(
+        viscosity_copy,
+        properties_df,
+        on=['media_brand', 'strain', 'media_type'],
+        how='left'
+    )
+    
+    # Check merge results
+    print(f"Final merged data shape: {merged_data.shape}")
+    print(f"Number of rows with viscosity values: {merged_data['viscosity'].count()}")
+    
+    # Check if key property columns made it through
+    for column in ['Total Potency', 'total_potency_value', 'Total Terpene', 'terpene_pct_value']:
+        if column in merged_data.columns:
+            non_null_count = merged_data[column].count()
+            print(f"Column '{column}' has {non_null_count} non-null values")
+    
+    return merged_data
 
 def format_for_training(df):
     """
     Format the merged data for viscosity training, ensuring Total Potency and
-    Total Terpene values make it to the final output.
+    Total Terpene values are properly associated with each viscosity measurement.
     
-    Enhanced to handle complex Excel data structures and different column name variations.
+    This modified version focuses on creating a clean dataset where each row
+    represents a viscosity measurement with its associated properties.
+    
+    Args:
+        df: The merged DataFrame from merge_data()
+        
+    Returns:
+        DataFrame properly formatted for training models
     """
     if df.empty:
         return pd.DataFrame()
     
-    # Debug: Print all available columns to help identify what's available
+    # Start with a copy of the input DataFrame to avoid modifying the original
+    working_df = df.copy()
+    
+    # Print all available columns to help identify what's available
     print("\nAvailable columns in merged data:")
-    for col in sorted(df.columns):
+    for col in sorted(working_df.columns):
         print(f"  - {col}")
     
     # Create a new DataFrame with columns matching the expected training format
     training_df = pd.DataFrame()
     
     # Map source columns to training format columns
-    if 'media_type' in df.columns:
-        training_df['media'] = df['media_type']
+    if 'media_type' in working_df.columns:
+        training_df['media'] = working_df['media_type']
     else:
         training_df['media'] = 'Unknown'
         
-    if 'media_brand' in df.columns:
-        training_df['media_brand'] = df['media_brand']
+    if 'media_brand' in working_df.columns:
+        training_df['media_brand'] = working_df['media_brand']
     
-    if 'strain' in df.columns:
-        training_df['terpene'] = df['strain']
+    if 'strain' in working_df.columns:
+        training_df['terpene'] = working_df['strain']
     
-    # First check for our special pre-processed columns created in merge_data
-    if 'total_potency_value' in df.columns:
+    # Add temperature and viscosity if available - these are the key measurements
+    if 'temperature' in working_df.columns:
+        training_df['temperature'] = pd.to_numeric(working_df['temperature'], errors='coerce')
+    
+    if 'viscosity' in working_df.columns:
+        training_df['viscosity'] = pd.to_numeric(working_df['viscosity'], errors='coerce')
+    
+    # Process total potency - try multiple possible column names
+    potency_found = False
+    
+    # First try our pre-processed column
+    if 'total_potency_value' in working_df.columns:
         print(f"Using pre-processed 'total_potency_value' column for total_potency")
-        training_df['total_potency'] = df['total_potency_value']
-        print(f"Sample from total_potency_value: {df['total_potency_value'].head(3).tolist()}")
-        
-        # Add debugging info
-        non_null_count = df['total_potency_value'].count()
-        total_count = len(df)
-        print(f"total_potency_value has {non_null_count}/{total_count} non-null values")
-    elif 'Total Potency' in df.columns:
+        training_df['total_potency'] = working_df['total_potency_value']
+        potency_found = True
+    elif 'Total Potency' in working_df.columns:
         print(f"Using column 'Total Potency' for total_potency")
-        training_df['total_potency'] = pd.to_numeric(df['Total Potency'], errors='coerce')
+        training_df['total_potency'] = pd.to_numeric(working_df['Total Potency'], errors='coerce')
+        potency_found = True
     else:
-        # Try various case variations and naming patterns
+        # Try various case/name variations
         potency_variations = [
             'TOTAL POTENCY', 'Total potency', 'total potency', 'TotalPotency', 
             'Potency, Total', 'Total_Potency', 'Potency (Total)', 'total_potency'
         ]
         
-        # Try exact matches first
-        total_potency_col = None
         for var in potency_variations:
-            if var in df.columns:
-                total_potency_col = var
+            if var in working_df.columns:
+                print(f"Using column '{var}' for total_potency")
+                training_df['total_potency'] = pd.to_numeric(
+                    working_df[var].astype(str).str.replace('%', '').str.strip(), 
+                    errors='coerce'
+                )
+                potency_found = True
                 break
                 
-        # If not found, try case-insensitive matching
-        if total_potency_col is None:
-            for col in df.columns:
-                if isinstance(col, str) and col.lower() in [v.lower() for v in potency_variations]:
-                    total_potency_col = col
-                    break
-                    
-        # If still not found, try partial matching
-        if total_potency_col is None:
-            for col in df.columns:
+        # If not found with exact names, try case-insensitive search
+        if not potency_found:
+            for col in working_df.columns:
                 if isinstance(col, str) and 'total' in col.lower() and 'potency' in col.lower():
-                    total_potency_col = col
+                    print(f"Using column '{col}' for total_potency using partial match")
+                    training_df['total_potency'] = pd.to_numeric(
+                        working_df[col].astype(str).str.replace('%', '').str.strip(), 
+                        errors='coerce'
+                    )
+                    potency_found = True
                     break
-        
-        # Use the column if found
-        if total_potency_col:
-            print(f"Using column '{total_potency_col}' for total_potency")
-            # First convert to string, then remove % symbols, then convert to numeric
-            training_df['total_potency'] = pd.to_numeric(
-                df[total_potency_col].astype(str).str.replace('%', '').str.strip(), 
-                errors='coerce'
-            )
-        else:
-            print("WARNING: Could not find Total Potency column")
-            # Suggest potential columns that might be related
-            potency_candidates = []
-            for col in df.columns:
-                if isinstance(col, str) and ('potency' in col.lower() or 'thc' in col.lower()):
-                    potency_candidates.append(col)
-            
-            if potency_candidates:
-                print(f"Potential potency columns: {potency_candidates}")
     
-    # Check for special pre-processed terpene column first
-    if 'terpene_pct_value' in df.columns:
+    if not potency_found:
+        print("WARNING: Could not find Total Potency column")
+    
+    # Process total terpene - similar approach as total potency
+    terpene_found = False
+    
+    # First try our pre-processed column
+    if 'terpene_pct_value' in working_df.columns:
         print(f"Using pre-processed 'terpene_pct_value' column for terpene_pct")
-        training_df['terpene_pct'] = df['terpene_pct_value']
-        print(f"Sample from terpene_pct_value: {df['terpene_pct_value'].head(3).tolist()}")
-        
-        # Add debugging info
-        non_null_count = df['terpene_pct_value'].count()
-        total_count = len(df)
-        print(f"terpene_pct_value has {non_null_count}/{total_count} non-null values")
-    elif 'Total Terpene' in df.columns:
+        training_df['terpene_pct'] = working_df['terpene_pct_value']
+        terpene_found = True
+    elif 'Total Terpene' in working_df.columns:
         print(f"Using column 'Total Terpene' for terpene_pct")
-        training_df['terpene_pct'] = pd.to_numeric(df['Total Terpene'], errors='coerce')
+        training_df['terpene_pct'] = pd.to_numeric(working_df['Total Terpene'], errors='coerce')
+        terpene_found = True
     else:
-        # Try various case variations and naming patterns
+        # Try various case/name variations
         terpene_variations = [
             'TOTAL TERPENE', 'Total terpene', 'total terpene', 'TotalTerpene', 
             'Terpene, Total', 'Total_Terpene', 'Terpene (Total)', 'total_terpene'
         ]
         
-        # Try exact matches first
-        total_terpene_col = None
         for var in terpene_variations:
-            if var in df.columns:
-                total_terpene_col = var
+            if var in working_df.columns:
+                print(f"Using column '{var}' for terpene_pct")
+                training_df['terpene_pct'] = pd.to_numeric(
+                    working_df[var].astype(str).str.replace('%', '').str.strip(), 
+                    errors='coerce'
+                )
+                terpene_found = True
                 break
                 
-        # If not found, try case-insensitive matching
-        if total_terpene_col is None:
-            for col in df.columns:
-                if isinstance(col, str) and col.lower() in [v.lower() for v in terpene_variations]:
-                    total_terpene_col = col
-                    break
-                    
-        # If still not found, try partial matching
-        if total_terpene_col is None:
-            for col in df.columns:
+        # If not found with exact names, try case-insensitive search
+        if not terpene_found:
+            for col in working_df.columns:
                 if isinstance(col, str) and 'total' in col.lower() and 'terpene' in col.lower():
-                    total_terpene_col = col
+                    print(f"Using column '{col}' for terpene_pct using partial match")
+                    training_df['terpene_pct'] = pd.to_numeric(
+                        working_df[col].astype(str).str.replace('%', '').str.strip(), 
+                        errors='coerce'
+                    )
+                    terpene_found = True
                     break
-        
-        # Use the column if found
-        if total_terpene_col:
-            print(f"Using column '{total_terpene_col}' for terpene_pct")
-            training_df['terpene_pct'] = pd.to_numeric(
-                df[total_terpene_col].astype(str).str.replace('%', '').str.strip(), 
-                errors='coerce'
-            )
-        else:
-            print("WARNING: Could not find Total Terpene column")
-            # Suggest potential columns that might be related
-            terpene_candidates = []
-            for col in df.columns:
-                if isinstance(col, str) and 'terpene' in col.lower():
-                    terpene_candidates.append(col)
-            
-            if terpene_candidates:
-                print(f"Potential terpene columns: {terpene_candidates}")
     
-    # Add temperature and viscosity if available
-    if 'temperature' in df.columns:
-        training_df['temperature'] = pd.to_numeric(df['temperature'], errors='coerce')
+    if not terpene_found:
+        print("WARNING: Could not find Total Terpene column")
     
-    if 'viscosity' in df.columns:
-        training_df['viscosity'] = pd.to_numeric(df['viscosity'], errors='coerce')
-    
-    # Add key cannabinoids with flexible matching
+    # Add key cannabinoids if available (use flexible matching)
     cannabinoid_mappings = {
-        'd9-THC': ['d9-THC', 'D9-THC', 'd9 THC', 'D9 THC', 'd9THC', 'D9THC', 'delta9-THC', 'Delta9-THC', 'delta 9 THC'],
+        'd9-THC': ['d9-THC', 'D9-THC', 'd9 THC', 'D9 THC', 'd9THC', 'D9THC', 'delta9-THC'],
         'THCA': ['THCA', 'THCa', 'thca', 'THC-A', 'THC A'],
         'CBD': ['CBD', 'cbd'],
         'CBDA': ['CBDA', 'CBDa', 'cbda', 'CBD-A', 'CBD A'],
-        'd8-THC': ['d8-THC', 'D8-THC', 'd8 THC', 'D8 THC', 'd8THC', 'D8THC', 'delta8-THC', 'Delta8-THC', 'delta 8 THC'],
+        'd8-THC': ['d8-THC', 'D8-THC', 'd8 THC', 'D8 THC', 'd8THC', 'D8THC', 'delta8-THC'],
         'CBG': ['CBG', 'cbg']
     }
     
-    # Target column names in our output DataFrame
     target_mappings = {
         'd9-THC': 'd9_thc',
         'THCA': 'thca',
@@ -778,38 +842,37 @@ def format_for_training(df):
         'CBG': 'cbg'
     }
     
-    # Special case for d9-THC which has our pre-processed column
-    if 'd9_thc_value' in df.columns:
+    # Special case for d9-THC with pre-processed column
+    if 'd9_thc_value' in working_df.columns:
         print(f"Using pre-processed 'd9_thc_value' column for d9_thc")
-        training_df['d9_thc'] = df['d9_thc_value']
-        print(f"Sample from d9_thc_value: {df['d9_thc_value'].head(3).tolist()}")
+        training_df['d9_thc'] = working_df['d9_thc_value']
         
-        # Remove d9-THC from the cannabinoid mapping since we've already handled it
+        # Remove d9-THC from the mappings since we've handled it
         if 'd9-THC' in cannabinoid_mappings:
             del cannabinoid_mappings['d9-THC']
             del target_mappings['d9-THC']
     
-    # For each remaining cannabinoid, try all possible variations of the column name
+    # Process remaining cannabinoids
     for cannabinoid, variations in cannabinoid_mappings.items():
         target_col = target_mappings[cannabinoid]
         
         # Try exact matches first
         found_col = None
         for var in variations:
-            if var in df.columns:
+            if var in working_df.columns:
                 found_col = var
                 break
                 
         # If not found, try case-insensitive matching
         if found_col is None:
-            for col in df.columns:
+            for col in working_df.columns:
                 if isinstance(col, str) and col.lower() in [v.lower() for v in variations]:
                     found_col = col
                     break
                     
         # If still not found, try partial matching
         if found_col is None:
-            for col in df.columns:
+            for col in working_df.columns:
                 if isinstance(col, str):
                     col_lower = col.lower()
                     # For d8-THC, look for both 'd8' and 'thc' in the column name
@@ -824,47 +887,34 @@ def format_for_training(df):
         # Use the column if found
         if found_col:
             print(f"Using column '{found_col}' for {target_col}")
-            training_df[target_col] = pd.to_numeric(df[found_col], errors='coerce')
+            training_df[target_col] = pd.to_numeric(working_df[found_col], errors='coerce')
     
     # Add timestamp and source
     from datetime import datetime
     training_df['timestamp'] = datetime.now().isoformat()
     training_df['original_filename'] = 'Media Database V3 2023'
     
-    # Create a copy of all data before filtering
-    all_data = training_df.copy()
-    
-    # Create a filtered dataset for viscosity analysis
-    viscosity_data = None
-    if 'viscosity' in training_df.columns:
-        viscosity_data = training_df.dropna(subset=['viscosity'])
-        print(f"Created filtered dataset for viscosity analysis: {len(viscosity_data)} rows")
-    
-    # IMPORTANT: For this fix, we're returning ALL data, not just rows with viscosity values
-    # This ensures we don't lose potency and terpene values
-    final_data = all_data
+    # CRITICAL FIX: Filter out rows without a temperature or viscosity value
+    # These rows are not useful for training viscosity models
+    final_data = training_df.dropna(subset=['temperature', 'viscosity'])
     
     print(f"\nFinal training data shape: {final_data.shape}")
     print(f"Final training data columns: {final_data.columns.tolist()}")
     
-    # Print a sample of potency and terpene values to verify
+    # Print a sample of the data to verify the fix worked
     if len(final_data) > 0:
-        print("\nSample of extracted values:")
-        if 'total_potency' in final_data.columns:
-            print(f"total_potency sample: {final_data['total_potency'].head(3).tolist()}")
-        if 'terpene_pct' in final_data.columns:
-            print(f"terpene_pct sample: {final_data['terpene_pct'].head(3).tolist()}")
-            
-        # Add more detailed statistics to help troubleshoot
-        if 'total_potency' in final_data.columns:
-            non_null = final_data['total_potency'].count()
-            total = len(final_data)
-            print(f"Total potency non-null values: {non_null}/{total} ({non_null/total*100:.1f}%)")
-            
-        if 'terpene_pct' in final_data.columns:
-            non_null = final_data['terpene_pct'].count()
-            total = len(final_data)
-            print(f"Terpene percent non-null values: {non_null}/{total} ({non_null/total*100:.1f}%)")
+        print("\nSample of final data (first 3 rows):")
+        print(final_data[['media', 'media_brand', 'terpene', 'temperature', 'viscosity', 'total_potency', 'terpene_pct']].head(3))
+        
+        # Add detailed statistics 
+        print("\nStatistics for key columns:")
+        for col in ['temperature', 'viscosity', 'total_potency', 'terpene_pct']:
+            if col in final_data.columns:
+                non_null = final_data[col].count()
+                total = len(final_data)
+                print(f"{col}: {non_null}/{total} non-null values ({non_null/total*100:.1f}%)")
+                if non_null > 0:
+                    print(f"  - Min: {final_data[col].min()}, Max: {final_data[col].max()}, Mean: {final_data[col].mean():.2f}")
     
     return final_data
 

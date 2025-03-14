@@ -26,6 +26,8 @@ class ViscosityCalculator:
         self.terpene_brand_var = StringVar()
         self.mass_of_oil_var = DoubleVar(value=0.0)
         self.target_viscosity_var = DoubleVar(value=0.0)
+        self.d9_thc_var = DoubleVar(value=0.0)
+        self.d8_thc_var = DoubleVar(value=0.0)
         
         # Initialize variables for result fields
         self.exact_percent_var = StringVar(value="0.0%")
@@ -194,47 +196,63 @@ class ViscosityCalculator:
     
         potency_entry = Entry(form_frame, textvariable=self.total_potency_var, width=15)
         potency_entry.grid(row=5, column=1, sticky="w", padx=5, pady=5)
-        
-        # Separator for results
-        ttk.Separator(form_frame, orient='horizontal').grid(row=5, column=0, columnspan=4, sticky="ew", pady=15)
-        
-        # Results section - Row 6: Results header
+
+        # Row for d9-THC
+        Label(form_frame, text="d9-THC (%):", bg=APP_BACKGROUND_COLOR, fg="white", 
+              font=FONT, anchor="w").grid(row=6, column=0, sticky="w", pady=5)
+
+        d9_thc_entry = Entry(form_frame, textvariable=self.d9_thc_var, width=15)
+        d9_thc_entry.grid(row=6, column=1, sticky="w", padx=5, pady=5)
+
+        # Row for d8-THC  
+        Label(form_frame, text="d8-THC (%):", bg=APP_BACKGROUND_COLOR, fg="white", 
+              font=FONT, anchor="w").grid(row=6, column=2, sticky="w", pady=5)
+
+        d8_thc_entry = Entry(form_frame, textvariable=self.d8_thc_var, width=15)
+        d8_thc_entry.grid(row=6, column=3, sticky="w", padx=5, pady=5)
+
+        # Adjust the rows of later elements accordingly
+        # Separator for results - update row number
+        ttk.Separator(form_frame, orient='horizontal').grid(row=7, column=0, columnspan=4, sticky="ew", pady=15)
+
+        # Results section header - update row number
         Label(form_frame, text="Results:", bg=APP_BACKGROUND_COLOR, fg="white", 
-              font=(FONT[0], FONT[1], "bold"), anchor="w").grid(row=6, column=0, sticky="w", pady=5)
+              font=(FONT[0], FONT[1], "bold"), anchor="w").grid(row=8, column=0, sticky="w", pady=5)
+        
         
         # Row 7: Exact % and Exact Mass
         Label(form_frame, text="Exact %:", bg=APP_BACKGROUND_COLOR, fg="white", 
-              font=FONT, anchor="w").grid(row=7, column=0, sticky="w", pady=3)
+              font=FONT, anchor="w").grid(row=9, column=0, sticky="w", pady=3)
         
         exact_percent_label = Label(form_frame, textvariable=self.exact_percent_var, 
                               bg=APP_BACKGROUND_COLOR, fg="#90EE90", font=FONT)
-        exact_percent_label.grid(row=7, column=1, sticky="w", pady=3)
+        exact_percent_label.grid(row=9, column=1, sticky="w", pady=3)
         
         Label(form_frame, text="Exact Mass:", bg=APP_BACKGROUND_COLOR, fg="white", 
-              font=FONT, anchor="w").grid(row=7, column=2, sticky="w", pady=3)
+              font=FONT, anchor="w").grid(row=9, column=2, sticky="w", pady=3)
         
         exact_mass_label = Label(form_frame, textvariable=self.exact_mass_var, 
                            bg=APP_BACKGROUND_COLOR, fg="#90EE90", font=FONT)
-        exact_mass_label.grid(row=7, column=3, sticky="w", pady=3)
+        exact_mass_label.grid(row=9, column=3, sticky="w", pady=3)
         
         # Row 8: Start % and Start Mass
         Label(form_frame, text="Start %:", bg=APP_BACKGROUND_COLOR, fg="white", 
-              font=FONT, anchor="w").grid(row=8, column=0, sticky="w", pady=3)
+              font=FONT, anchor="w").grid(row=10, column=0, sticky="w", pady=3)
         
         start_percent_label = Label(form_frame, textvariable=self.start_percent_var, 
                               bg=APP_BACKGROUND_COLOR, fg="#90EE90", font=FONT)
-        start_percent_label.grid(row=8, column=1, sticky="w", pady=3)
+        start_percent_label.grid(row=10, column=1, sticky="w", pady=3)
         
         Label(form_frame, text="Start Mass:", bg=APP_BACKGROUND_COLOR, fg="white", 
-              font=FONT, anchor="w").grid(row=8, column=2, sticky="w", pady=3)
+              font=FONT, anchor="w").grid(row=10, column=2, sticky="w", pady=3)
         
         start_mass_label = Label(form_frame, textvariable=self.start_mass_var, 
                            bg=APP_BACKGROUND_COLOR, fg="#90EE90", font=FONT)
-        start_mass_label.grid(row=8, column=3, sticky="w", pady=3)
+        start_mass_label.grid(row=10, column=3, sticky="w", pady=3)
         
         # Create button frame for organized rows of buttons
         button_frame = Frame(form_frame, bg=APP_BACKGROUND_COLOR)
-        button_frame.grid(row=9, column=0, columnspan=4, pady=10)
+        button_frame.grid(row=11, column=0, columnspan=4, pady=10)
 
         # Create first row of buttons
         button_row1 = Frame(button_frame, bg=APP_BACKGROUND_COLOR)
@@ -248,13 +266,13 @@ class ViscosityCalculator:
         )
         calculate_btn.pack(padx=(0, 5))
 
-        # Add a new button for calculating with potency
-        calculate_with_potency_btn = ttk.Button(
+        # Add a new button for calculating with chemistry
+        calculate_with_chemistry_btn = ttk.Button(
             button_row1,
-            text="Calculate with Potency",
-            command=self.calculate_viscosity_with_potency
+            text="Calculate with Chemistry",
+            command=self.calculate_viscosity_with_chemistry
         )
-        calculate_with_potency_btn.pack(padx=(5, 0))
+        calculate_with_chemistry_btn.pack(padx=(5, 0))
 
     def create_advanced_tab(self, notebook):
         """
@@ -1637,8 +1655,8 @@ class ViscosityCalculator:
         enhanced_models_exist = False
         enhanced_models = {}
         try:
-            if os.path.exists('models/viscosity_models_with_potency.pkl'):
-                with open('models/viscosity_models_with_potency.pkl', 'rb') as f:
+            if os.path.exists('models/viscosity_models_with_chemistry.pkl'):
+                with open('models/viscosity_models_with_chemistry.pkl', 'rb') as f:
                     enhanced_models = pickle.load(f)
                     enhanced_models_exist = bool(enhanced_models)
                     if not hasattr(self, 'enhanced_viscosity_models'):
@@ -1829,9 +1847,9 @@ class ViscosityCalculator:
                 # Validate enhanced model if validation data includes potency
                 if validation_data is not None and 'total_potency' in validation_data.columns:
                     try:
-                        # Extract media/terpene from model key (handle the "_with_potency" suffix)
-                        if "_with_potency" in model_key:
-                            base_key = model_key.replace("_with_potency", "")
+                        # Extract media/terpene from model key (handle the "_with_chemistry" suffix)
+                        if "_with_chemistry" in model_key:
+                            base_key = model_key.replace("_with_chemistry", "")
                         else:
                             base_key = model_key
                         
@@ -1880,8 +1898,8 @@ class ViscosityCalculator:
             # Find pairs of models for the same media/terpene combo
             common_keys = []
             for enh_key in enhanced_models.keys():
-                if "_with_potency" in enh_key:
-                    std_key = enh_key.replace("_with_potency", "")
+                if "_with_chemistry" in enh_key:
+                    std_key = enh_key.replace("_with_chemistry", "")
                     if std_key in self.viscosity_models:
                         common_keys.append((std_key, enh_key))
         
@@ -2067,9 +2085,9 @@ class ViscosityCalculator:
             
                 # Determine if enhanced models exist
                 using_enhanced_models = False
-                if os.path.exists('models/viscosity_models_with_potency.pkl'):
+                if os.path.exists('models/viscosity_models_with_chemistry.pkl'):
                     try:
-                        with open('models/viscosity_models_with_potency.pkl', 'rb') as f:
+                        with open('models/viscosity_models_with_chemistry.pkl', 'rb') as f:
                             enhanced_models = pickle.load(f)
                             if enhanced_models:
                                 using_enhanced_models = True
@@ -2114,12 +2132,17 @@ class ViscosityCalculator:
                 def predict_viscosity(model, terpene_pct, temperature, potency=None):
                     """Predict viscosity based on model type and available features."""
                     try:
+                        if isinstance(model, dict) and 'model' in model:
+                            actual_model = model['model']
+                        else:
+                            actual_model = model
+                        
                         if using_enhanced_models and potency is not None:
                             # Enhanced model with potency
-                            return model.predict([[terpene_pct, temperature, potency]])[0]
+                            return actual_model.predict([[terpene_pct, temperature, potency]])[0]
                         else:
                             # Standard model without potency
-                            return model.predict([[terpene_pct, temperature]])[0]
+                            return actual_model.predict([[terpene_pct, temperature]])[0]
                     except Exception as e:
                         add_text(f"Error predicting viscosity: {str(e)}")
                         return np.nan
@@ -2141,9 +2164,9 @@ class ViscosityCalculator:
                 for model_key, model in models_to_analyze.items():
                     try:
                         # Extract media and terpene from the model key
-                        if using_enhanced_models and "_with_potency" in model_key:
-                            # Remove the "_with_potency" suffix for display purposes
-                            display_key = model_key.replace("_with_potency", "")
+                        if using_enhanced_models and "_with_chemistry" in model_key:
+                            # Remove the "_with_chemistry" suffix for display purposes
+                            display_key = model_key.replace("_with_chemistry", "")
                             media, terpene = display_key.split('_', 1)
                         else:
                             media, terpene = model_key.split('_', 1)
@@ -2311,9 +2334,9 @@ class ViscosityCalculator:
         for model_key, model in models.items():
             try:
                 # Extract media and terpene from the model key
-                if using_enhanced_models and "_with_potency" in model_key:
-                    # Remove the "_with_potency" suffix
-                    display_key = model_key.replace("_with_potency", "")
+                if using_enhanced_models and "_with_chemistry" in model_key:
+                    # Remove the "_with_chemistry" suffix
+                    display_key = model_key.replace("_with_chemistry", "")
                     media, terpene = display_key.split('_', 1)
                 else:
                     media, terpene = model_key.split('_', 1)
@@ -2448,59 +2471,32 @@ class ViscosityCalculator:
 
     # Add to viscosity_calculator.py
 
-    def train_models_with_potency(self, data=None):
+    def train_models_with_chemistry(self, data=None):
         """
-        Train viscosity prediction models including total potency as a feature.
+        Train enhanced viscosity prediction models using all available chemical properties.
     
         Args:
             data (pd.DataFrame, optional): DataFrame with training data. If None,
                                          attempts to use data from saved CSV files.
         """
-        # Import required libraries for model training
         import glob
+        import os
         import pandas as pd
         import numpy as np
-        from sklearn.model_selection import train_test_split
-        from sklearn.linear_model import LinearRegression
-        from sklearn.preprocessing import PolynomialFeatures
-        from sklearn.ensemble import RandomForestRegressor
-        from sklearn.pipeline import make_pipeline
         import pickle
-        import os
+        import threading
+        from sklearn.ensemble import RandomForestRegressor
     
-        # If no data provided, load from saved files
-        if data is None:
-            data_files = glob.glob('data/viscosity_data_*.csv')
-            if not data_files:
-                messagebox.showerror("Error", "No training data available. Please upload data first.")
-                return
-        
-            # Load and combine all data files
-            data_frames = []
-            for file in data_files:
-                try:
-                    df = pd.read_csv(file)
-                    data_frames.append(df)
-                except Exception as e:
-                    print(f"Error loading {file}: {str(e)}")
-                    continue
-        
-            if not data_frames:
-                messagebox.showerror("Error", "Failed to load any training data.")
-                return
-        
-            data = pd.concat(data_frames, ignore_index=True)
-    
-        # Show a progress dialog
+        # Create progress window - keep existing code
         progress_window = tk.Toplevel(self.root)
-        progress_window.title("Training Models with Potency")
+        progress_window.title("Training Enhanced Viscosity Models")
         progress_window.geometry("400x200")
         progress_window.transient(self.root)
         progress_window.grab_set()
     
         progress_label = tk.Label(
             progress_window, 
-            text="Training enhanced models with potency data...",
+            text="Training enhanced models with chemical properties...",
             font=('Arial', 12)
         )
         progress_label.pack(pady=20)
@@ -2509,122 +2505,234 @@ class ViscosityCalculator:
         progress_bar.pack(fill='x', padx=20)
         progress_bar.start()
     
-        # Define function to update the label
         def update_label(text):
             progress_label.config(text=text)
             progress_window.update_idletasks()
     
-        # Start training in a new thread
+        # Define training thread
         def train_thread():
+            nonlocal data
             try:
-                update_label("Preprocessing data...")
+                update_label("Loading and preprocessing data...")
             
-                # Check if total_potency column exists
-                has_potency = 'total_potency' in data.columns
+                # If no data provided, load from files
+                if data is None:
+                    # Load Master_Viscosity_Data files first, as they have the most complete data
+                    master_files = glob.glob('data/Master_Viscosity_Data_*.csv')
+                    regular_files = glob.glob('data/viscosity_data_*.csv')
+                
+                    if not master_files and not regular_files:
+                        self.root.after(0, lambda: messagebox.showerror(
+                            "Error", "No training data available. Please extract media database data first."
+                        ))
+                        progress_window.after(0, progress_window.destroy)
+                        return
+                
+                    data_frames = []
+                    # Load master files first
+                    for file in master_files:
+                        try:
+                            df = pd.read_csv(file)
+                            data_frames.append(df)
+                            print(f"Loaded master file: {file}")
+                        except Exception as e:
+                            print(f"Error loading {file}: {str(e)}")
+                
+                    # Then load regular files
+                    for file in regular_files:
+                        try:
+                            df = pd.read_csv(file)
+                            data_frames.append(df)
+                            print(f"Loaded data file: {file}")
+                        except Exception as e:
+                            print(f"Error loading {file}: {str(e)}")
+                
+                    if not data_frames:
+                        self.root.after(0, lambda: messagebox.showerror(
+                            "Error", "Failed to load any training data."
+                        ))
+                        progress_window.after(0, progress_window.destroy)
+                        return
+                
+                    data = pd.concat(data_frames, ignore_index=True)
             
-                # Group data by media and terpene type
-                media_terpene_combos = data[['media', 'terpene']].drop_duplicates()
+                update_label("Checking chemical properties...")
             
-                # Models dictionary to store results
-                models_dict = {}
-                enhanced_models_dict = {}  # For models with potency
+                # Check which chemical properties are available
+                chem_properties = []
+                if 'total_potency' in data.columns:
+                    chem_properties.append('total_potency')
+                    print(f"Found total_potency column with {data['total_potency'].count()} non-null values")
             
-                update_label("Training models for each media/terpene combination...")
+                if 'terpene_pct' in data.columns:
+                    chem_properties.append('terpene_pct')
+                    print(f"Found terpene_pct column with {data['terpene_pct'].count()} non-null values")
             
-                # Process each combination
+                if 'd9_thc' in data.columns:
+                    chem_properties.append('d9_thc')
+                    print(f"Found d9_thc column with {data['d9_thc'].count()} non-null values")
+            
+                if 'd8_thc' in data.columns:
+                    chem_properties.append('d8_thc')
+                    print(f"Found d8_thc column with {data['d8_thc'].count()} non-null values")
+            
+                # Standard models will use just temperature and terpene_pct
+                standard_features = ['terpene_pct', 'temperature']
+            
+                # Enhanced models will use all available chemical properties
+                enhanced_features = ['terpene_pct', 'temperature'] + chem_properties
+                # Remove duplicates (terpene_pct might be in both lists)
+                enhanced_features = list(dict.fromkeys(enhanced_features))
+            
+                print(f"Standard features: {standard_features}")
+                print(f"Enhanced features: {enhanced_features}")
+            
+                # Clean up the data
+                update_label("Cleaning data...")
+                data_cleaned = data.copy()
+            
+                # Convert columns to numeric
+                numeric_columns = ['temperature', 'viscosity'] + chem_properties
+                for col in numeric_columns:
+                    if col in data_cleaned.columns:
+                        data_cleaned[col] = pd.to_numeric(data_cleaned[col], errors='coerce')
+            
+                # Fill missing values with appropriate defaults
+                # For chemical properties, 0 might be appropriate for missing values
+                for col in chem_properties:
+                    if col in data_cleaned.columns:
+                        data_cleaned[col] = data_cleaned[col].fillna(0)
+            
+                # Train models by media/terpene combination
+                update_label("Training models...")
+            
+                media_terpene_combos = data_cleaned[['media', 'terpene']].drop_duplicates()
+                standard_models = {}
+                enhanced_models = {}
+            
                 for idx, row in media_terpene_combos.iterrows():
                     media = row['media']
                     terpene = row['terpene']
                 
+                    print(f"Processing {media}/{terpene} combination...")
+                
                     # Filter data for this combination
-                    combo_data = data[(data['media'] == media) & (data['terpene'] == terpene)]
+                    combo_data = data_cleaned[
+                        (data_cleaned['media'] == media) & 
+                        (data_cleaned['terpene'] == terpene)
+                    ]
                 
                     # Skip if not enough data
                     if len(combo_data) < 5:
+                        print(f"Skipping {media}/{terpene} - insufficient data ({len(combo_data)} samples)")
                         continue
                 
-                    # Basic model (just terpene_pct and temperature)
-                    if 'terpene_pct' in combo_data.columns and 'temperature' in combo_data.columns:
-                        # Standard model features
-                        basic_features = combo_data[['terpene_pct', 'temperature']].dropna()
-                        if len(basic_features) >= 5:
+                    # Train standard model (temperature and terpene_pct only)
+                    try:
+                        # Extract features and target
+                        X_std = combo_data[standard_features].dropna()
+                        if len(X_std) >= 5:
                             # Get corresponding viscosity values
-                            basic_target = combo_data.loc[basic_features.index, 'viscosity']
+                            y_std = combo_data.loc[X_std.index, 'viscosity']
                         
                             # Train a model
                             model = RandomForestRegressor(
-                                n_estimators=50,
-                                max_depth=5,
+                                n_estimators=100,
+                                max_depth=15,
                                 min_samples_leaf=3,
                                 random_state=42
                             )
-                            model.fit(basic_features, basic_target)
+                            model.fit(X_std, y_std)
                         
                             # Store the model
                             model_key = f"{media}_{terpene}"
-                            models_dict[model_key] = model
+                            standard_models[model_key] = model
+                            print(f"Trained standard model for {media}/{terpene} with {len(X_std)} samples")
+                    except Exception as e:
+                        print(f"Error training standard model for {media}/{terpene}: {str(e)}")
                 
-                    # Enhanced model with potency if available
-                    if has_potency and 'terpene_pct' in combo_data.columns and 'temperature' in combo_data.columns:
-                        # Enhanced features including potency
-                        enhanced_features = combo_data[['terpene_pct', 'temperature', 'total_potency']].dropna()
-                        if len(enhanced_features) >= 5:
-                            # Get corresponding viscosity values
-                            enhanced_target = combo_data.loc[enhanced_features.index, 'viscosity']
+                    # Train enhanced model with chemical properties
+                    # Only if we have at least one chemical property to use
+                    if len(enhanced_features) > len(standard_features):
+                        try:
+                            # Filter features that exist in this dataset
+                            valid_features = [f for f in enhanced_features if f in combo_data.columns]
+                            X_enh = combo_data[valid_features].dropna()
                         
-                            # Train an enhanced model
-                            enhanced_model = RandomForestRegressor(
-                                n_estimators=50,
-                                max_depth=5,
-                                min_samples_leaf=3,
-                                random_state=42
-                            )
-                            enhanced_model.fit(enhanced_features, enhanced_target)
-                        
-                            # Store the enhanced model
-                            model_key = f"{media}_{terpene}_with_potency"
-                            enhanced_models_dict[model_key] = enhanced_model
+                            if len(X_enh) >= 5:
+                                # Get corresponding viscosity values
+                                y_enh = combo_data.loc[X_enh.index, 'viscosity']
+                            
+                                # Train enhanced model
+                                model = RandomForestRegressor(
+                                    n_estimators=100,
+                                    max_depth=15,
+                                    min_samples_leaf=3,
+                                    random_state=42
+                                )
+                                model.fit(X_enh, y_enh)
+                            
+                                # Store the model
+                                model_key = f"{media}_{terpene}_with_chemistry"
+                                enhanced_models[model_key] = {
+                                    'model': model,
+                                    'features': valid_features  # Save which features this model uses
+                                }
+                                print(f"Trained enhanced model for {media}/{terpene} with {len(X_enh)} samples")
+                                print(f"  Features used: {valid_features}")
+                        except Exception as e:
+                            print(f"Error training enhanced model for {media}/{terpene}: {str(e)}")
             
+                # Save models
                 update_label("Saving models...")
             
-                # Save standard models
-                if models_dict:
-                    os.makedirs('models', exist_ok=True)
-                    with open('models/viscosity_models.pkl', 'wb') as f:
-                        pickle.dump(models_dict, f)
-                    self.viscosity_models = models_dict
+                # Create models directory if it doesn't exist
+                os.makedirs('models', exist_ok=True)
             
-                # Save enhanced models with potency
-                if enhanced_models_dict:
-                    os.makedirs('models', exist_ok=True)
-                    with open('models/viscosity_models_with_potency.pkl', 'wb') as f:
-                        pickle.dump(enhanced_models_dict, f)
-                    self.enhanced_viscosity_models = enhanced_models_dict
+                # Save standard models
+                if standard_models:
+                    with open('models/viscosity_models.pkl', 'wb') as f:
+                        pickle.dump(standard_models, f)
+                    print(f"Saved {len(standard_models)} standard models")
+                    self.viscosity_models = standard_models
+            
+                # Save enhanced models with chemical properties
+                if enhanced_models:
+                    with open('models/viscosity_models_with_chemistry.pkl', 'wb') as f:
+                        pickle.dump(enhanced_models, f)
+                    print(f"Saved {len(enhanced_models)} enhanced models")
+                    self.enhanced_viscosity_models = enhanced_models
             
                 # Close progress window and show success message
                 progress_window.after(0, progress_window.destroy)
-                messagebox.showinfo(
-                    "Success", 
-                    f"Successfully trained {len(models_dict)} standard models and "
-                    f"{len(enhanced_models_dict)} enhanced models with potency."
-                )
+            
+                # Report results to user
+                message = f"Training complete!\n\n"
+                message += f"Standard models: {len(standard_models)}\n"
+                message += f"Enhanced models: {len(enhanced_models)}\n\n"
+            
+                if len(enhanced_models) > 0:
+                    sample_model = list(enhanced_models.values())[0]
+                    message += f"Enhanced models use features: {sample_model['features']}"
+            
+                self.root.after(0, lambda: messagebox.showinfo("Success", message))
             
             except Exception as e:
                 import traceback
                 traceback_str = traceback.format_exc()
                 print(f"Error in training thread: {e}\n{traceback_str}")
                 progress_window.after(0, progress_window.destroy)
-                messagebox.showerror("Error", f"Error training models: {str(e)}")
+                error_msg = str(e) # capture error
+                self.root.after(0, lambda: messagebox.showerror("Error", f"Training failed: {str(e)}"))
     
         # Start the training thread
-        import threading
         training_thread = threading.Thread(target=train_thread)
         training_thread.daemon = True
         training_thread.start()
 
-    def calculate_viscosity_with_potency(self):
+    def calculate_viscosity_with_chemistry(self):
         """
-        Calculate terpene percentage based on target viscosity using models that include potency data.
+        Calculate terpene percentage based on target viscosity using models with chemical properties.
         """
         try:
             # Extract input values
@@ -2635,74 +2743,324 @@ class ViscosityCalculator:
             mass_of_oil = float(self.mass_of_oil_var.get())
             target_viscosity = float(self.target_viscosity_var.get())
         
-            # Add new UI element to get total potency
-            total_potency = None
+            # Get total potency
+            total_potency = 0.0
             if hasattr(self, 'total_potency_var'):
                 try:
                     total_potency = float(self.total_potency_var.get())
                 except (ValueError, tk.TclError):
-                    pass
+                    total_potency = 0.0
         
-            # First try to load enhanced models
-            enhanced_models = {}
             try:
-                with open('models/viscosity_models_with_potency.pkl', 'rb') as f:
-                    enhanced_models = pickle.load(f)
-            except:
-                enhanced_models = {}
+                d9_thc = float(self.d9_thc_var.get())
+            except (ValueError, tk.TclError):
+                # Fallback to estimation if the input is invalid
+                d9_thc = total_potency * 0.85  # Assuming d9-THC is about 85% of total potency
+
+            try:
+                d8_thc = float(self.d8_thc_var.get())
+            except (ValueError, tk.TclError):
+                d8_thc = 0.0  # Default value
         
-            # Load standard models as fallback
+            # Load enhanced models
+            enhanced_models = {}
+            enhanced_model_path = 'models/viscosity_models_with_chemistry.pkl'
+            if os.path.exists(enhanced_model_path):
+                try:
+                    with open(enhanced_model_path, 'rb') as f:
+                        enhanced_models = pickle.load(f)
+                except Exception as e:
+                    print(f"Error loading enhanced models: {e}")
+                    enhanced_models = {}
+        
+            # Fallback to standard model if needed
             model_key = f"{media}_{terpene}"
-            enhanced_key = f"{model_key}_with_potency"
+            enhanced_key = f"{media}_{terpene}_with_chemistry"
         
-            if enhanced_key in enhanced_models and total_potency is not None:
-                # Use enhanced model with potency
-                from scipy.optimize import fsolve
+            # Import required packages here to maintain lazy loading
+            from scipy.optimize import fsolve
+            import numpy as np
+        
+            # Check if we have an enhanced model
+            if enhanced_key in enhanced_models:
+                # Get the model and its features
+                model_info = enhanced_models[enhanced_key]
+
+                if isinstance(model_info, dict) and 'model' in model_info:
+                    model = model_info['model']
+                    features = model_info['features']
+                else:
+                    model = model_info
+                    features = ['terpene_pct', 'temperature', 'total_potency', 'd9_thc', 'd8_thc']
+                    features = [f for f in features if f in ['terpene_pct', 'temperature','total_potency','d9_thc','d8_thc']]
+
+                model = model_info['model']
+                features = model_info['features']
             
-                model = enhanced_models[enhanced_key]
+                # Check if total_potency is one of the features the model uses
+                if 'total_potency' in features and total_potency > 0:
+                    # Create a function to find the terpene percentage that gives target viscosity
+                    def objective(terpene_pct):
+                        # Create input array based on model features
+                        X = np.zeros(len(features))
+                        for i, feature in enumerate(features):
+                            if feature == 'terpene_pct':
+                                X[i] = terpene_pct
+                            elif feature == 'temperature':
+                                X[i] = 25.0  # Fixed reference temperature
+                            elif feature == 'total_potency':
+                                X[i] = total_potency
+                            elif feature == 'd9_thc':
+                                X[i] = d9_thc
+                            elif feature == 'd8_thc':
+                                X[i] = d8_thc
+                    
+                        # Predict viscosity with these inputs
+                        predicted_viscosity = model.predict([X])[0]
+                        return predicted_viscosity - target_viscosity
+                
+                    # Solve for terpene percentage (start with a guess of 5%)
+                    exact_percent = fsolve(objective, 5.0)[0]
+                
+                    # Ensure the percentage is reasonable
+                    exact_percent = max(0.1, min(15.0, exact_percent))
+                    exact_mass = mass_of_oil * (exact_percent / 100)
+                
+                    # Suggested starting point (slightly higher)
+                    start_percent = exact_percent * 1.1
+                    start_mass = mass_of_oil * (start_percent / 100)
+                
+                    # Update result variables
+                    self.exact_percent_var.set(f"{exact_percent:.1f}%")
+                    self.exact_mass_var.set(f"{exact_mass:.2f}g")
+                    self.start_percent_var.set(f"{start_percent:.1f}%")
+                    self.start_mass_var.set(f"{start_mass:.2f}g")
+                
+                    # Show which features were used
+                    features_text = ", ".join(features)
+                    messagebox.showinfo(
+                        "Calculation Complete", 
+                        f"Calculation performed using enhanced model with chemical properties.\n\n"
+                        f"Features used: {features_text}\n\n"
+                        f"For {exact_percent:.1f}% terpenes, estimated viscosity: {target_viscosity:.1f}"
+                    )
+                    return
         
-                # For numerical solution, find terpene percentage that gives target viscosity
-                def objective(terpene_pct):
-                    # Predict viscosity at 25°C with given terpene & potency percentage
-                    predicted_viscosity = model.predict([[terpene_pct, 25.0, total_potency]])[0]
-                    return predicted_viscosity - target_viscosity
-        
-                # Solve for terpene percentage (start with a guess of 5%)
-                exact_percent = fsolve(objective, 5.0)[0]
-        
-                # Ensure the percentage is reasonable
-                exact_percent = max(0.1, min(15.0, exact_percent))
-                exact_mass = mass_of_oil * (exact_percent / 100)
-        
-                # Suggested starting point (slightly higher)
-                start_percent = exact_percent * 1.1
-                start_mass = mass_of_oil * (start_percent / 100)
-        
-                # Update result variables
-                self.exact_percent_var.set(f"{exact_percent:.1f}%")
-                self.exact_mass_var.set(f"{exact_mass:.2f}g")
-                self.start_percent_var.set(f"{start_percent:.1f}%")
-                self.start_mass_var.set(f"{start_mass:.2f}g")
-            
-                # Indicate that enhanced model was used
-                messagebox.showinfo("Calculation Complete", 
-                                  "Calculation performed using enhanced model with potency data.")
-            
-            elif model_key in self.viscosity_models:
-                # Fallback to standard model without potency
-                self.calculate_viscosity()  # Use the original method
-            
-                if total_potency is not None:
-                    messagebox.showinfo("Notice", 
-                                     "Enhanced model with potency not available for this combination. "
-                                     "Used standard model instead.")
+            # No enhanced model, or total_potency not available
+            # Fall back to existing methods
+            if model_key in self.viscosity_models:
+                # Use the standard model
+                self.calculate_viscosity()
+                messagebox.showinfo(
+                    "Notice", 
+                    "Enhanced model with chemical properties not available for this combination.\n"
+                    "Used standard model instead."
+                )
             else:
-                # No model available, use iterative method
-                messagebox.askyesno("No Model Available", 
-                                  "No prediction model found for this combination.\n\n"
-                                  "Would you like to use the Iterative Method instead?")
-
+                # No models available - suggest iterative method
+                result = messagebox.askyesno(
+                    "No Model Available", 
+                    "No prediction model found for this combination.\n\n"
+                    "Would you like to use the Iterative Method instead?"
+                )
+                if result:
+                    # Switch to the iterative tab
+                    self.notebook.select(1)  # Assuming tab index 1 is the iterative method tab
+    
         except Exception as e:
-            messagebox.showerror("Calculation Error", f"An error occurred: {e}")
+            import traceback
+            traceback_str = traceback.format_exc()
+            print(f"Error during calculation: {e}\n{traceback_str}")
+            messagebox.showerror("Calculation Error", f"An error occurred: {str(e)}")
 
 
+    def analyze_chemical_importance(self):
+        """
+        Analyze and visualize the importance of chemical properties in viscosity models.
+        """
+        # Import required libraries
+        import matplotlib.pyplot as plt
+        import numpy as np
+        import os
+        from tkinter import Toplevel, Label, Frame
+    
+        # Check if enhanced models exist
+        enhanced_model_path = 'models/viscosity_models_with_chemistry.pkl'
+        if not os.path.exists(enhanced_model_path):
+            messagebox.showinfo(
+                "No Enhanced Models",
+                "No enhanced models with chemical properties found.\n\n"
+                "Please train models with chemical properties first."
+            )
+            return
+    
+        # Load enhanced models
+        try:
+            import pickle
+            with open(enhanced_model_path, 'rb') as f:
+                enhanced_models = pickle.load(f)
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load enhanced models: {str(e)}")
+            return
+    
+        # Create window for the analysis
+        analysis_window = Toplevel(self.root)
+        analysis_window.title("Chemical Properties Importance Analysis")
+        analysis_window.geometry("800x600")
+        analysis_window.transient(self.root)
+    
+        # Add title
+        Label(
+            analysis_window, 
+            text="Impact of Chemical Properties on Viscosity",
+            font=("Arial", 16, "bold")
+        ).pack(pady=10)
+    
+        # Create a frame for the plots
+        frame = Frame(analysis_window)
+        frame.pack(fill="both", expand=True, padx=10, pady=10)
+    
+        # Import matplotlib with tkinter backend
+        from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+        from matplotlib.figure import Figure
+    
+        # Create figure with subplots
+        fig = Figure(figsize=(10, 8))
+    
+        # Get all unique features and media types
+        all_features = set()
+        media_types = set()
+    
+        for model_key, model_data in enhanced_models.items():
+            # Extract media type from the model key
+            media = model_key.split('_')[0]  
+            media_types.add(media)
+        
+            # Add features
+            all_features.update(model_data['features'])
+    
+        # Remove temperature as it's always included
+        if 'temperature' in all_features:
+            all_features.remove('temperature')
+    
+        # Create bar plot for feature importance
+        ax1 = fig.add_subplot(211)
+    
+        # Calculate average importance for each feature by media type
+        media_list = sorted(list(media_types))
+        feature_list = sorted(list(all_features))
+    
+        # Create arrays to store importance values
+        importance_data = {media: {feature: [] for feature in feature_list} for media in media_list}
+    
+        # Collect importance values
+        for model_key, model_data in enhanced_models.items():
+            # Extract media type
+            media = model_key.split('_')[0]
+        
+            # Get the model and its features with proper type checking
+            if isinstance(model_data, dict) and 'model' in model_data:
+                model = model_data['model']
+                features = model_data['features']
+            else:
+                model = model_data
+                features = ['terpene_pct', 'temperature', 'total_potency']
+    
+            # Get feature importances
+            if hasattr(model, 'feature_importances_'):
+                importances = model.feature_importances_
+        
+            # Map importances to features
+            for i, feature in enumerate(features):
+                if feature in feature_list:  # Skip temperature
+                    importance_data[media][feature].append(importances[i])
+    
+        # Calculate averages
+        avg_importances = {media: {feature: np.mean(values) if values else 0 
+                                  for feature, values in media_data.items()}
+                          for media, media_data in importance_data.items()}
+    
+        # Plot bar chart
+        bar_width = 0.8 / len(media_list)
+        x = np.arange(len(feature_list))
+    
+        for i, media in enumerate(media_list):
+            values = [avg_importances[media][feature] for feature in feature_list]
+            ax1.bar(x + i * bar_width, values, bar_width, label=media)
+    
+        ax1.set_xlabel('Chemical Property')
+        ax1.set_ylabel('Average Importance')
+        ax1.set_title('Importance of Chemical Properties by Media Type')
+        ax1.set_xticks(x + bar_width * (len(media_list) - 1) / 2)
+        ax1.set_xticklabels(feature_list)
+        ax1.legend()
+    
+        # Create heatmap showing feature importance across models
+        ax2 = fig.add_subplot(212)
+    
+        # Get all model keys and organize by media type
+        model_keys_by_media = {media: [] for media in media_list}
+        for model_key in enhanced_models.keys():
+            media = model_key.split('_')[0]
+            model_keys_by_media[media].append(model_key)
+    
+        # Create heatmap data
+        heatmap_data = []
+        ylabels = []
+    
+        for media in media_list:
+            for model_key in model_keys_by_media[media]:
+                model_data = enhanced_models[model_key]
+                features = model_data['features']
+                importances = model_data['model'].feature_importances_
+            
+                # Map features to importances
+                row = []
+                for feature in feature_list:
+                    if feature in features:
+                        idx = features.index(feature)
+                        row.append(importances[idx])
+                    else:
+                        row.append(0)
+            
+                heatmap_data.append(row)
+                # Create label with media and terpene
+                parts = model_key.split('_')
+                if len(parts) >= 2:
+                    label = f"{parts[0]}: {parts[1]}"
+                else:
+                    label = model_key
+                ylabels.append(label)
+    
+        # Create heatmap
+        if heatmap_data:
+            im = ax2.imshow(heatmap_data, cmap='viridis')
+        
+            # Add colorbar
+            fig.colorbar(im, ax=ax2)
+        
+            # Set labels
+            ax2.set_xticks(np.arange(len(feature_list)))
+            ax2.set_yticks(np.arange(len(ylabels)))
+            ax2.set_xticklabels(feature_list)
+            ax2.set_yticklabels(ylabels)
+        
+            # Rotate x labels for better readability
+            plt.setp(ax2.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
+        
+            ax2.set_title("Feature Importance Heatmap by Model")
+    
+        # Adjust layout
+        fig.tight_layout()
+    
+        # Create a canvas to display the figure
+        canvas = FigureCanvasTkAgg(fig, master=frame)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill="both", expand=True)
+    
+        # Add a button to close the window
+        ttk.Button(
+            analysis_window,
+            text="Close",
+            command=analysis_window.destroy
+        ).pack(pady=10)
