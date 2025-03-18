@@ -1638,6 +1638,12 @@ class ViscosityCalculator:
         training_thread.daemon = True
         training_thread.start()
 
+    def get_actual_model(self,model_obj):
+        """Extract the actual model from a dictionary if needed"""
+        if isinstance(model_obj, dict) and 'model' in model_obj:
+            return model_obj['model']
+        return model_obj
+
     def analyze_models(self, show_dialog=True):
         """Analyze trained viscosity models to identify potential issues."""
         # Import modules only when needed
@@ -1914,8 +1920,8 @@ class ViscosityCalculator:
                     
                         try:
                             # Get the models
-                            std_model = self.viscosity_models[std_key]
-                            enh_model = enhanced_models[enh_key]
+                            std_model = self.get_actual_model(self.viscosity_models[std_key])
+                            enh_model = self.get_actual_model(enhanced_models[enh_key])
                         
                             # Extract media/terpene
                             media, terpene = std_key.split('_', 1)
@@ -2202,15 +2208,15 @@ class ViscosityCalculator:
                     return len(complete_rows) >= 5
             
                 # Function to predict viscosity based on model type
-                def predict_viscosity(model, terpene_pct, temperature, potency=None):
+                def predict_viscosity(model_obj, terpene_pct, temperature, potency=None):
                     """Predict viscosity based on model type and available features."""
                     try:
                         # Extract the actual model and features if it's in a dictionary
-                        if isinstance(model, dict) and 'model' in model:
-                            features = model.get('features', [])
-                            actual_model = model['model']
+                        if isinstance(model_obj, dict) and 'model' in model_obj:             
+                            actual_model = model_obj['model']
+                            features = model_obj.get('features', [])
                         else:
-                            actual_model = model
+                            actual_model = model_obj
                             # Try to infer features from the model if available
                             if hasattr(actual_model, 'feature_names_in_'):
                                 features = actual_model.feature_names_in_
