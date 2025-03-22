@@ -1,7 +1,6 @@
 ﻿"""
 viscosity_calculator.py
-Module for calculating terpene percentages based on viscosity.
-This version uses lazy loading to minimize startup time and memory usage.
+Module for calculating terpene percentages based on viscosity and vice versa.
 """
 import os
 import json
@@ -221,11 +220,10 @@ class ViscosityCalculator:
         viscosity_entry = Entry(form_frame, textvariable=self.target_viscosity_var, width=15)
         viscosity_entry.grid(row=4, column=1, sticky="w", padx=5, pady=5)
 
-        # Adjust the rows of later elements accordingly
-        # Separator for results - update row number
+        # Separator for results
         ttk.Separator(form_frame, orient='horizontal').grid(row=5, column=0, columnspan=4, sticky="ew", pady=15)
 
-        # Results section header - update row number
+        # Results section header
         Label(form_frame, text="Results:", bg=APP_BACKGROUND_COLOR, fg="white", 
               font=(FONT[0], FONT[1], "bold"), anchor="w").grid(row=6, column=0, sticky="w", pady=5)
         
@@ -567,7 +565,7 @@ class ViscosityCalculator:
     def get_raw_oil_viscosity(self, media_type):
         """
         Get the estimated raw oil viscosity based on media type.
-        These are placeholder values - replace with your actual data.
+        These are placeholder values - replace with actual data. <--- need to do this
         """
         # These are just example values - replace with actual values based on your data
         viscosity_map = {
