@@ -95,13 +95,11 @@ class ViscosityGUI:
         file_menu.add_command(label="Load Data", command=self.calculator.upload_training_data)
         file_menu.add_command(label="Save", command=self.save_database)
         file_menu.add_separator()
-        file_menu.add_command(label="Exit", command=self.root.quit)
         menubar.add_cascade(label="File", menu=file_menu)
         
         # Models menu
         models_menu = tk.Menu(menubar, tearoff=0)
-        models_menu.add_command(label="Train Models simple", command=self.calculator.train_models_from_data)
-        models_menu.add_command(label="Train Models with Chemistry Data", command=self.calculator.train_models_with_chemistry)
+        models_menu.add_command(label="Train Models (Unified)", command=self.calculator.train_unified_models)
         models_menu.add_command(label="Analyze Models", command=self.calculator.analyze_models)
         models_menu.add_command(label="Analyze Chemical Properties Impact", command=self.calculator.analyze_chemical_importance)
         models_menu.add_command(label="Arrhenius Analysis", 

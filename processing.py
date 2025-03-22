@@ -304,7 +304,7 @@ def process_plot_sheet(data, headers_row=3, data_start_row=4, num_columns_per_sa
                         "Media": sample_data.iloc[0, 1],
                         "Viscosity": sample_data.iloc[1, 1],
                         "Voltage, Resistance, Power": f"{sample_data.iloc[1, 5]} V, "
-                                                       f"{round_values(sample_data.iloc[0, 3])} Ω, "
+                                                       f"{round_values(sample_data.iloc[0, 3])} ohm, "
                                                        f"{round_values(sample_data.iloc[0, 5])} W",
                         "Average TPM": avg_tpm,
                         "Standard Deviation": std_tpm,
@@ -354,7 +354,7 @@ def no_efficiency_extracted_data(sample_data):
         "Media": sample_data.iloc[0, 1],
         "Viscosity": sample_data.iloc[1, 1],
         "Voltage, Resistance, Power": f"{sample_data.iloc[1, 5]} V, "
-                                       f"{round_values(sample_data.iloc[0, 3])} Ω, "
+                                       f"{round_values(sample_data.iloc[0, 3])} ohm, "
                                        f"{round_values(sample_data.iloc[0, 5])} W",
         "Average TPM": avg_tpm,
         "Standard Deviation": std_tpm,
