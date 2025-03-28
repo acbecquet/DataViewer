@@ -104,6 +104,12 @@ class ViscosityGUI:
         models_menu.add_command(label="Analyze Chemical Properties Impact", command=self.calculator.analyze_chemical_importance)
         models_menu.add_command(label="Arrhenius Analysis", 
                                command=self.calculator.filter_and_analyze_specific_combinations)
+        models_menu.add_separator()
+        models_menu.add_command(label="Diagnose Issues", command = self.calculator.diagnose_models)
+        models_menu.add_command(label="Create Potency Demo Model", 
+                               command=self.calculator.create_potency_demo_model)
+        models_menu.add_command(label="Analyze Model Response", 
+                               command=self.calculator.analyze_model_feature_response)
         menubar.add_cascade(label="Models", menu=models_menu)
         
         # Help menu
