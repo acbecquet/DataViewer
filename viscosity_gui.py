@@ -95,6 +95,8 @@ class ViscosityGUI:
         file_menu.add_command(label="Load Data", command=self.calculator.upload_training_data)
         file_menu.add_command(label="Save", command=self.save_database)
         file_menu.add_separator()
+        # In the ViscosityGUI.create_menu method, add this line after "Save" but before the separator
+        file_menu.add_command(label="Manage Data", command=self.calculator.view_formulation_data)
         menubar.add_cascade(label="File", menu=file_menu)
         
         # Models menu
