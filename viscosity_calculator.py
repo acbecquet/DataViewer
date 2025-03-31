@@ -863,12 +863,13 @@ class ViscosityCalculator:
             # Create two separate rows - one for step 1, one for step 2 (final)
             csv_rows = []
         
-            # Common fields for both rows
+             # Common fields for both rows
             common_fields = {
                 'media': media,
                 'media_brand': media_brand,
                 'terpene': terpene,
                 'terpene_brand': terpene_brand,
+                'combined_terpene': f"{terpene}_{terpene_brand}" if terpene_brand else terpene,
                 'temperature': 25.0,  # Standard measurement temperature
                 'timestamp': timestamp
             }
@@ -1791,11 +1792,13 @@ class ViscosityCalculator:
             # Create a data structure to save
             measurements = {
                 "media": self.media_var.get(),
+                "media_brand": self.media_brand_var.get(),  # Add this line if needed
                 "terpene": terpene_value,
+                "terpene_brand": self.terpene_brand_var.get(),  # Add this line
                 "terpene_pct": terpene_pct,
                 "timestamp": datetime.datetime.now().isoformat(),
                 "temperature_data": []
-            }
+                }
             
             # Validate we have at least one temperature block with data
             if not self.temperature_blocks:
@@ -1895,7 +1898,7 @@ class ViscosityCalculator:
     def save_as_csv(self, measurements):
         """
         Save the measurements to the master CSV file.
-    
+
         Args:
             measurements (dict): The measurements data structure
         """
@@ -1903,35 +1906,39 @@ class ViscosityCalculator:
         import pandas as pd
         import os
         import datetime
-    
+
         try:
             # Load existing master file if it exists
-            master_file = './data_scraper/Master_Viscosity_Data_processed.csv'
+            master_file = './data/Master_Viscosity_Data_processed.csv'
             if os.path.exists(master_file):
                 master_df = pd.read_csv(master_file)
             else:
                 # Create directory if it doesn't exist
-                os.makedirs('./data_scraper', exist_ok=True)
+                os.makedirs('./data', exist_ok=True)
                 master_df = pd.DataFrame()
-        
+    
             # Create rows for the CSV
             rows = []
-        
+    
             media = measurements['media']
             terpene = measurements['terpene']
+            terpene_brand = measurements.get('terpene_brand', '')
             terpene_pct = measurements['terpene_pct']
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
+            # Create the combined terpene field
+            combined_terpene = f"{terpene}_{terpene_brand}" if terpene_brand else terpene
+    
             # Process each temperature block
             for temp_block in measurements['temperature_data']:
                 temperature = temp_block['temperature']
                 speed = temp_block.get('speed', '')
-            
+        
                 # Process each individual run
                 for run in temp_block['runs']:
                     torque = run.get('torque', '')
                     viscosity = run.get('viscosity', '')
-                
+            
                     # Only add rows with valid viscosity values
                     if viscosity and viscosity.strip():
                         try:
@@ -1940,7 +1947,8 @@ class ViscosityCalculator:
                                 'media': media,
                                 'media_brand': measurements.get('media_brand', ''),
                                 'terpene': terpene,
-                                'terpene_brand': measurements.get('terpene_brand', ''),
+                                'terpene_brand': terpene_brand,
+                                'combined_terpene': combined_terpene,
                                 'terpene_pct': terpene_pct,
                                 'temperature': temperature,
                                 'speed': speed,
@@ -1951,7 +1959,7 @@ class ViscosityCalculator:
                             rows.append(row)
                         except ValueError as e:
                             print(f"Warning: Could not convert viscosity value '{viscosity}' to float: {e}")
-            
+        
                 # Add the average if available
                 avg_viscosity = temp_block.get('average_viscosity', '')
                 if avg_viscosity and avg_viscosity.strip():
@@ -1961,7 +1969,8 @@ class ViscosityCalculator:
                             'media': media,
                             'media_brand': measurements.get('media_brand', ''),
                             'terpene': terpene,
-                            'terpene_brand': measurements.get('terpene_brand', ''),
+                            'terpene_brand': terpene_brand,
+                            'combined_terpene': combined_terpene,
                             'terpene_pct': terpene_pct,
                             'temperature': temperature,
                             'speed': speed,
@@ -1973,7 +1982,7 @@ class ViscosityCalculator:
                         rows.append(row)
                     except ValueError as e:
                         print(f"Warning: Could not convert average viscosity value '{avg_viscosity}' to float: {e}")
-        
+    
             # Create a DataFrame and append to master file
             if rows:
                 new_df = pd.DataFrame(rows)
@@ -1987,19 +1996,19 @@ class ViscosityCalculator:
                     for col in master_df.columns:
                         if col not in new_df.columns:
                             new_df[col] = None
-                
-                    master_df = pd.concat([master_df, new_df], ignore_index=True)
             
+                    master_df = pd.concat([master_df, new_df], ignore_index=True)
+        
                 # Save back to master file
                 master_df.to_csv(master_file, index=False)
-            
+        
                 messagebox.showinfo("Success", 
                                    f"Added {len(rows)} new measurements to master data file.")
                 return master_file
             else:
                 print("No valid data rows to save")
                 return None
-            
+        
         except Exception as e:
             import traceback
             print(f"Error saving to master file: {e}")
@@ -2050,9 +2059,9 @@ class ViscosityCalculator:
                                    f"CSV missing required columns: {', '.join(missing_cols)}")
                 return None
     
-            # Copy the file to the data_scraper directory
-            os.makedirs('./data_scraper', exist_ok=True)
-            dest_path = './data_scraper/Master_Viscosity_Data_processed.csv'
+            # Copy the file to the data directory
+            os.makedirs('./data', exist_ok=True)
+            dest_path = './data/Master_Viscosity_Data_processed.csv'
             shutil.copy2(file_path, dest_path)
     
             messagebox.showinfo("Success", 
@@ -2155,6 +2164,7 @@ class ViscosityCalculator:
                 residual_model = model['residual_model']
                 baseline_features = model['baseline_features']
                 residual_features = model['residual_features']
+                residual_features = [f for f in residual_features if f != 'terpene_brand']
             
                 # Get metadata
                 metadata = model.get('metadata', {})
@@ -2261,13 +2271,27 @@ class ViscosityCalculator:
                                 report.append("  - Skipping validation due to missing features")
                                 continue
                         
-                            # One-hot encode terpenes for validation
-                            encoded_val_data = pd.get_dummies(
-                                media_val_data,
-                                columns=['terpene'],
-                                prefix=['terpene']
-                            )
-                        
+                            # Create combined terpene field before one-hot encoding
+                            if 'terpene' in media_val_data.columns and 'terpene_brand' in media_val_data.columns:
+                                media_val_data['combined_terpene'] = media_val_data.apply(
+                                    lambda row: f"{row['terpene']}_{row['terpene_brand']}" if pd.notna(row['terpene_brand']) and row['terpene_brand'] != '' 
+                                    else row['terpene'], 
+                                    axis=1
+                                )
+                                # Use combined_terpene for one-hot encoding
+                                encoded_val_data = pd.get_dummies(
+                                    media_val_data,
+                                    columns=['combined_terpene'],
+                                    prefix=['terpene']
+                                )
+                            else:
+                                # Fall back to just terpene if terpene_brand isn't available
+                                encoded_val_data = pd.get_dummies(
+                                    media_val_data,
+                                    columns=['terpene'],
+                                    prefix=['terpene']
+                                )
+                            
                             # Step 1: Evaluate baseline model
                             X_baseline = encoded_val_data[baseline_features]
                             y_true = encoded_val_data['log_viscosity']
@@ -2281,44 +2305,86 @@ class ViscosityCalculator:
                         
                             # Step 2: Evaluate residual model
                         
-                            # Add any missing columns required by the model
+                            # First, print more diagnostic information
+                            print(f"DEBUG - Validation DataFrame columns: {encoded_val_data.columns.tolist()}")
+                            print(f"DEBUG - Required features: {residual_features}")
+                            print(f"DEBUG - Missing features: {[f for f in residual_features if f not in encoded_val_data.columns]}")
+    
+                            # Check if 'terpene_brand' is in the required features and remove it
+                            clean_residual_features = [f for f in residual_features if f != 'terpene_brand']
+    
+                            print(f"DEBUG - Removed 'terpene_brand' from features. Original count: {len(residual_features)}, New count: {len(clean_residual_features)}")
+    
+                            # Create a properly aligned DataFrame with correct features
+                            aligned_data = pd.DataFrame(0, index=encoded_val_data.index, columns=clean_residual_features)
+    
+                            # Fill in values from encoded_val_data where available
+                            for col in clean_residual_features:
+                                if col in encoded_val_data.columns:
+                                    aligned_data[col] = encoded_val_data[col]
+                                elif col == 'potency_terpene_ratio' and 'total_potency' in encoded_val_data.columns and 'terpene_pct' in encoded_val_data.columns:
+                                    aligned_data[col] = encoded_val_data['total_potency'] / encoded_val_data['terpene_pct'].clip(lower=0.01)
+    
+                            # Use the aligned data for residual model validation
+                            X_residual = aligned_data
+    
+                            # Debug output
+                            print(f"DEBUG - X_residual final shape: {X_residual.shape}, expected shape: ({len(encoded_val_data)}, {len(clean_residual_features)})")
+   
+
+                            # Debug feature alignment and duplicates
+                            print(f"\nDEBUG - Model: {media} validation")
+                            print(f"residual_features length: {len(residual_features)}")
+                            print(f"residual_features unique length: {len(set(residual_features))}")
+                            print(f"X_residual columns length: {len(X_residual.columns)}")
+
+                            # Check for duplicates in residual_features and handle them
+                            duplicates = {}
+                            seen = set()
                             for feature in residual_features:
-                                if feature not in encoded_val_data.columns:
-                                    # For terpene one-hot features
-                                    if feature.startswith('terpene_'):
-                                        encoded_val_data[feature] = 0
-                                    # For interaction features
-                                    elif feature == 'potency_terpene_ratio':
-                                        encoded_val_data[feature] = encoded_val_data['total_potency'] / encoded_val_data['terpene_pct'].clip(lower=0.01)
-                                    # For other features
-                                    else:
-                                        encoded_val_data[feature] = 0
-                        
-                            # Select features needed for residual model
-                            X_residual = encoded_val_data[residual_features]
-                            
-                            # Check for feature set alignment
-                            if len(X_residual.columns) != len(residual_features):
-                                # First, report the discrepancy
-                                missing = set(residual_features) - set(X_residual.columns)
-                                extra = set(X_residual.columns) - set(residual_features)
-                                if missing:
-                                    report.append(f"  - Missing features in validation data: {', '.join(missing)}")
-                                if extra:
-                                    report.append(f"  - Extra features in validation data: {', '.join(extra)}")
-                
-                                # Create a properly aligned DataFrame with zeros for missing features
-                                aligned_data = pd.DataFrame(0, index=X_residual.index, columns=residual_features)
-                
-                                # Fill in values from X_residual where available
-                                for col in X_residual.columns:
-                                    if col in residual_features:
-                                        aligned_data[col] = X_residual[col]
-                
-                                # Use the aligned data
-                                X_residual = aligned_data
-                                report.append("  - Aligned validation data by adding missing columns with zero values")
-            
+                                if feature in seen:
+                                    duplicates[feature] = duplicates.get(feature, 1) + 1
+                                else:
+                                    seen.add(feature)
+
+                            duplicate_features = list(duplicates.keys())
+                            if duplicate_features:
+                                print(f"FOUND DUPLICATE FEATURES: {duplicate_features}")
+    
+                                # Create DataFrame with correct shape (matching residual_features exactly)
+                                X_aligned = pd.DataFrame(index=X_residual.index, columns=range(len(residual_features)))
+    
+                                # Copy values from X_residual, repeating values for duplicated features
+                                for i, feature in enumerate(residual_features):
+                                    if feature in X_residual.columns:
+                                        X_aligned.iloc[:, i] = X_residual[feature].values
+    
+                                # Now we have the exact shape required by the model, but with numeric column names
+                                # Rename columns to match expected feature names for better debugging
+                                X_aligned.columns = [f"{f}_{i}" if f in duplicate_features and i > 0 
+                                                    else f for i, f in enumerate([
+                                                        next(feat for feat in residual_features if feat == f 
+                                                            or feat not in residual_features[:i]) 
+                                                        for f in residual_features
+                                                    ])]
+    
+                                report.append(f"  - Handled duplicate features: {duplicate_features}")
+                                X_residual = X_aligned
+                            else:
+                                # Original alignment code if no duplicates
+                                missing_cols = set(residual_features) - set(X_residual.columns)
+                                extra_cols = set(X_residual.columns) - set(residual_features)
+    
+                                if missing_cols or extra_cols:
+                                    aligned_data = pd.DataFrame(0, index=X_residual.index, columns=residual_features)
+                                    for col in X_residual.columns:
+                                        if col in residual_features:
+                                            aligned_data[col] = X_residual[col]
+                                    X_residual = aligned_data
+                            # Final verification - ensure shape matches exactly what the model expects
+                            if hasattr(residual_model, 'n_features_in_'):
+                                assert X_residual.shape[1] == residual_model.n_features_in_, \
+                                    f"Shape mismatch: {X_residual.shape[1]} vs expected {residual_model.n_features_in_}"
 
                             # Handle NaN values
                             if X_residual.isna().any().any():
@@ -3430,6 +3496,13 @@ class ViscosityCalculator:
                 # Fill missing terpene_pct with 0 for raw data
                 data_cleaned.loc[data_cleaned['is_raw'] & data_cleaned['terpene_pct'].isna(), 'terpene_pct'] = 0.0
             
+                # Combine terpene and terpene_brand into a single feature
+                data_cleaned['combined_terpene'] = data_cleaned.apply(
+                    lambda row: f"{row['terpene']}_{row['terpene_brand']}" if pd.notna(row['terpene_brand']) and row['terpene_brand'] != '' 
+                    else row['terpene'], 
+                    axis=1
+                )
+
                 # Add physical constraint features if potency data available
                 if 'total_potency' in data_cleaned.columns and 'terpene_pct' in data_cleaned.columns:
                     # Calculate theoretical maximum terpene percentage
@@ -3567,92 +3640,57 @@ class ViscosityCalculator:
                 
                     # One-hot encode terpenes
                     # Get most common terpenes for this media
-                    terpene_counts = media_data['terpene'].value_counts()
+                    #
+                    terpene_counts = media_data['combined_terpene'].value_counts()
                     valid_terpenes = terpene_counts[terpene_counts >= 2].index.tolist()
-                
+
                     # Filter data to include only valid terpenes
-                    filtered_data = media_data[media_data['terpene'].isin(valid_terpenes)]
-                
-                    if len(filtered_data) < 10:
-                        self.root.after(0, lambda m=media: status_label.config(
-                            text=f"Skipping {m} - insufficient data after terpene filtering"
-                        ))
-                        continue
-                
-                    # Create one-hot encoding for terpenes
+                    filtered_data = media_data[media_data['combined_terpene'].isin(valid_terpenes)]
+
+                    # Create one-hot encoding for combined terpenes
                     encoded_data = pd.get_dummies(
                         filtered_data,
-                        columns=['terpene'],
-                        prefix=['terpene']
+                        columns=['combined_terpene'],
+                        prefix=['terpene']  # Keep 'terpene_' prefix for backward compatibility
                     )
-                
-                    # Sometimes pd.get_dummies can create duplicate column names if values have special characters
-                    if len(encoded_data.columns) != len(set(encoded_data.columns)):
-                        # Find duplicates
-                        seen = set()
-                        dupes = [col for col in encoded_data.columns if col in seen or seen.add(col)]
-                        print(f"Warning: Duplicate columns detected: {dupes}")
-    
-                        # Make column names unique by adding suffixes
-                        unique_cols = []
-                        col_counts = {}
-    
-                        for col in encoded_data.columns:
-                            if col in col_counts:
-                                col_counts[col] += 1
-                                unique_cols.append(f"{col}_{col_counts[col]}")
-                            else:
-                                col_counts[col] = 0
-                                unique_cols.append(col)
-    
-                        encoded_data.columns = unique_cols
+                    
+                    terpene_cols = [c for c in encoded_data.columns if c.startswith('terpene_') and c != 'terpene_pct']
 
-                    # Get terpene one-hot columns
-                    terpene_cols = [c for c in encoded_data.columns if c.startswith('terpene_')]
-                
-                    # Define comprehensive feature set including:
-                    # - Basic features (potency, terpene %)
-                    # - Physical constraint features
-                    # - Terpene-specific one-hot features
-                    # - Interaction features
-                    comprehensive_features = [
-                        'total_potency', 
-                        'terpene_pct', 
-                        'is_raw'
-                    ]
-                
+                    # Get available columns for feature construction
+                    available_columns = encoded_data.columns.tolist()
+
+                    # Start with empty sets to avoid duplicates
+                    primary_features = set(['total_potency', 'terpene_pct', 'is_raw'])
+                    physical_features = set()
+                    terpene_features = set()
+
                     # Add physical constraint features if available
-                    physical_features = [
-                        'theoretical_max_terpene',
-                        'terpene_headroom',
-                        'terpene_max_ratio'
-                    ]
-                
-                    for feature in physical_features:
-                        if feature in encoded_data.columns:
-                            comprehensive_features.append(feature)
-                
+                    if 'theoretical_max_terpene' in available_columns:
+                        physical_features.add('theoretical_max_terpene')
+                    if 'terpene_headroom' in available_columns:
+                        physical_features.add('terpene_headroom')
+                    if 'terpene_max_ratio' in available_columns:
+                        physical_features.add('terpene_max_ratio')
+
                     # Add interaction feature - potency/terpene ratio
-                    if 'total_potency' in encoded_data.columns and 'terpene_pct' in encoded_data.columns:
+                    if 'total_potency' in available_columns and 'terpene_pct' in available_columns:
                         encoded_data['potency_terpene_ratio'] = encoded_data['total_potency'] / encoded_data['terpene_pct'].clip(lower=0.01)
-                        comprehensive_features.append('potency_terpene_ratio')
-                
-                    # Add all terpene one-hot columns
-                    comprehensive_features.extend(terpene_cols)
-                
-                    # Make sure residual column has no NaNs
-                    encoded_data = encoded_data.dropna(subset=['residual'])
-                
-                    if len(encoded_data) < 10:
-                        self.root.after(0, lambda m=media: status_label.config(
-                            text=f"Skipping {m} - insufficient non-NaN residual data"
-                        ))
-                        continue
-                
+                        physical_features.add('potency_terpene_ratio')
+
+                    # Add terpene one-hot features
+                    for column in encoded_data.columns:
+                        if column.startswith('terpene_') and column != 'terpene_pct':
+                            terpene_features.add(column)
+
+                    # Create comprehensive feature list without duplicates
+                    comprehensive_features = list(primary_features | physical_features | terpene_features)
+
+                    print(f"Total features for {media}: {len(comprehensive_features)} (all unique)")
+
                     # Create feature dataframe and handle NaNs
                     X_residual = encoded_data[comprehensive_features]
                     X_residual = self.check_features_for_nan(X_residual)
-                
+
                     y_residual = encoded_data['residual']
                 
                     # Train residual model
@@ -3872,8 +3910,7 @@ class ViscosityCalculator:
        
     def load_consolidated_models(self):
         """
-        Load consolidated viscosity models from disk.
-        This replaces all previous model loading functions.
+        Load consolidated viscosity models from disk and clean feature lists.
         """
         import pickle
         import os
@@ -3884,8 +3921,14 @@ class ViscosityCalculator:
             try:
                 with open(model_path, 'rb') as f:
                     models = pickle.load(f)
-                    self.consolidated_models = models
-                    print(f"Loaded {len(models)} consolidated models from {model_path}")
+                
+                    # Clean up models by removing terpene_brand from feature lists
+                    cleaned_models = {}
+                    for key, model in models.items():
+                        cleaned_models[key] = self.remove_terpene_brand_from_features(model)
+                
+                    self.consolidated_models = cleaned_models
+                    print(f"Loaded and cleaned {len(models)} consolidated models from {model_path}")
             except Exception as e:
                 print(f"Error loading consolidated models: {e}")
                 self.consolidated_models = {}
@@ -4043,7 +4086,10 @@ class ViscosityCalculator:
             residual_inputs['potency_terpene_ratio'] = residual_inputs['total_potency'] / max(0.05, residual_inputs['terpene_pct'])
         
             # Handle one-hot encoding of terpenes
-            terpene_features = [f for f in residual_features if f.startswith('terpene_')]
+
+            residual_features = [f for f in model_obj['residual_features'] if f != 'terpene_brand']
+
+            terpene_features = [f for f in residual_features if f.startswith('terpene_') and f != 'terpene_pct']
         
             # Initialize all terpene columns to 0
             for feature in terpene_features:
@@ -4051,9 +4097,22 @@ class ViscosityCalculator:
         
             # Set the specific terpene to 1 if provided
             if terpene_name and not residual_inputs['is_raw']:
-                terpene_col = f"terpene_{terpene_name}"
+                # Check if there's a brand specified
+                brand = inputs.get('terpene_brand', '')
+                if brand:
+                    combined_name = f"{terpene_name}_{brand}"
+                    terpene_col = f"terpene_{combined_name}"
+                else:
+                    terpene_col = f"terpene_{terpene_name}"
+                
+                # If this exact feature exists, set it to 1
                 if terpene_col in terpene_features:
                     residual_inputs[terpene_col] = 1
+                else:
+                    # If the exact feature doesn't exist, fall back to just the terpene name
+                    basic_terpene_col = f"terpene_{terpene_name}"
+                    if basic_terpene_col in terpene_features:
+                        residual_inputs[basic_terpene_col] = 1
         
             # Convert to DataFrame with all required features
             residual_df = pd.DataFrame([residual_inputs])
@@ -4506,3 +4565,34 @@ class ViscosityCalculator:
                     df.loc[:, partial_nan_columns] = imputed_values
     
         return df
+
+    def remove_terpene_brand_from_features(self, model_info):
+        """
+        Creates a copy of the model info with terpene_brand removed from features.
+    
+        Args:
+            model_info: Original model info dictionary
+        
+        Returns:
+            dict: Updated model info with terpene_brand removed from features
+        """
+        # Create a shallow copy of the model
+        updated_model = model_info.copy()
+    
+        # Update residual_features if present
+        if 'residual_features' in updated_model:
+            updated_model['residual_features'] = [
+                f for f in updated_model['residual_features'] 
+                if f != 'terpene_brand'
+            ]
+    
+        # If there's metadata, update feature lists there too
+        if 'metadata' in updated_model and isinstance(updated_model['metadata'], dict):
+            for key in updated_model['metadata']:
+                if isinstance(updated_model['metadata'][key], list):
+                    updated_model['metadata'][key] = [
+                        f for f in updated_model['metadata'][key] 
+                        if f != 'terpene_brand'
+                    ]
+    
+        return updated_model    
