@@ -59,7 +59,7 @@ class ViscosityCalculator:
         self.notebook = None
 
         # Lazy load models
-        self._viscosity_models = None
+        self._consolidated = None
         
     # ---- Database access properties with lazy loading ----
     
@@ -69,40 +69,19 @@ class ViscosityCalculator:
         if self._formulation_db is None:
             self._formulation_db = self.load_formulation_database()
         return self._formulation_db
-    
-    @property
-    def viscosity_models(self):
-        """Lazy load the standard viscosity models"""
-        if self._viscosity_models is None:
-            self._viscosity_models = self.load_standard_models()
-        return self._viscosity_models
 
     @property
-    def enhanced_viscosity_models(self):
-        """Lazy load the enhanced viscosity models with chemistry"""
-        if not hasattr(self, '_enhanced_viscosity_models') or self._enhanced_viscosity_models is None:
-            self._enhanced_viscosity_models = self.load_enhanced_models()
-        return self._enhanced_viscosity_models
+    def consolidated_models(self):
+        """Lazy load the consolidated models"""
+        if not hasattr(self, '_consolidated_models') or self._consolidated_models is None:
+            self._consolidated_models = {}
+            self.load_consolidated_models()
+        return self._consolidated_models
 
-    @property 
-    def combined_viscosity_models(self):
-        """Lazy load the combined viscosity models"""
-        if not hasattr(self, '_combined_viscosity_models') or self._combined_viscosity_models is None:
-            self._enhanced_viscosity_models = self.load_combined_models()
-        return self._combined_viscosity_models
-
-    @enhanced_viscosity_models.setter
-    def enhanced_viscosity_models(self, value):
-        """Setter for enhanced viscosity models"""
-        self._enhanced_viscosity_models = value
-
-    @viscosity_models.setter
-    def viscosity_models(self, value):
-        self._viscosity_models = value
-
-    @combined_viscosity_models.setter
-    def combined_viscosity_models(self,value):
-        self._combined_viscosity_models = value
+    @consolidated_models.setter
+    def consolidated_models(self, value):
+        """Setter for consolidated_models"""
+        self._consolidated_models = value
 
     @formulation_db.setter
     def formulation_db(self, value):
@@ -567,9 +546,9 @@ class ViscosityCalculator:
         Get the estimated raw oil viscosity based on media type.
         These are placeholder values - replace with actual data. <--- need to do this
         """
-        # These are just example values - replace with actual values based on your data
+        
         viscosity_map = {
-            "D8": 18000000,
+            "D8": 54346667,
             "D9": 20000000,
             "Liquid Diamonds": 20000000,
             "Other": 2000000 
@@ -644,150 +623,104 @@ class ViscosityCalculator:
     
     def calculate_step2(self):
         """
-        Calculate the second step amount of terpenes to add using an improved model
-        that accounts for the non-linear relationship between terpene percentage and viscosity.
+        Calculate the second step amount of terpenes to add using the consolidated model.
+        This method is for the iterative approach when no direct formula is available.
         """
         try:
             # Get the inputs
             mass_of_oil = float(self.mass_of_oil_var.get())
             target_viscosity = float(self.target_viscosity_var.get())
             step1_viscosity_text = self.step1_viscosity_var.get()
-        
+    
             if not step1_viscosity_text:
                 messagebox.showerror("Input Error", 
                                     "Please enter the measured viscosity from Step 1.")
                 return
-        
+    
             step1_viscosity = float(step1_viscosity_text)
             step1_amount = float(self.step1_amount_var.get().replace('g', ''))
-        
+    
             # Get raw oil viscosity based on media type
             raw_oil_viscosity = self.get_raw_oil_viscosity(self.media_var.get())
-        
+    
             # Convert to percentages for calculations
             step1_percent = (step1_amount / mass_of_oil) * 100
+    
+            # Get media and terpene values
+            media = self.media_var.get()
+            terpene = self.terpene_var.get() or "Raw"
         
-            # First, try to use existing models if available
+            # Get potency values (if available)
+            potency = self._total_potency_var.get()
+            # Calculate total potency if not provided directly
+            if potency == 0:
+                d9_thc = self._d9_thc_var.get()
+                d8_thc = self._d8_thc_var.get()
+                if d9_thc > 0 or d8_thc > 0:
+                    potency = d9_thc + d8_thc
+                else:
+                    # If no potency is explicitly provided, estimate it from terpene
+                    potency = 100 - step1_percent
+        
+            # First check if we have consolidated models
             have_model = False
+            if hasattr(self, 'consolidated_models') and self.consolidated_models:
+                have_model = True
         
-            if hasattr(self, 'combined_viscosity_models') and self.combined_viscosity_models:
-                have_model = True
-            elif hasattr(self, 'enhanced_viscosity_models') and self.enhanced_viscosity_models:
-                have_model = True
-            elif hasattr(self, 'viscosity_models') and self.viscosity_models:
-                have_model = True
-            
-            
-
+            # Try to use model-based prediction if available
             if have_model:
-                # Use model-based prediction
                 try:
-                    media = self.media_var.get()
-                    
+                    # Look for consolidated model for this media
+                    model_key = f"{media}_consolidated"
                 
-                    # Estimate potency (if needed)
-                    potency = None
-                    if hasattr(self, '_total_potency_var'):
-                        potency = self._total_potency_var.get()
-                        if potency <= 0:
-                            # If no potency is explicitly provided, estimate it from terpene
-                            # Assuming potency + terpene % ≈ 100%
-                            potency = 100 - step1_percent
+                    if model_key not in self.consolidated_models:
+                        raise ValueError(f"No consolidated model found for {media}")
                 
-                    # Only look for general models
-                    general_key = f"{media}_general"
-                    model_info = None
-                    model_source = None
+                    model_info = self.consolidated_models[model_key]
                 
-                    # Search in combined models first
-                    if hasattr(self, 'combined_viscosity_models') and self.combined_viscosity_models:
-                        if general_key in self.combined_viscosity_models:
-                            model_info = self.combined_viscosity_models[general_key]
-                            model_source = "combined"
+                    # Debug the model inputs
+                    print(f"Using consolidated model for {media}")
+                    print(f"Step 1: {step1_percent}%, viscosity = {step1_viscosity}")
                 
-                    # Fall back to enhanced models
-                    if model_info is None and hasattr(self, 'enhanced_viscosity_models') and self.enhanced_viscosity_models:
-                        if general_key in self.enhanced_viscosity_models:
-                            model_info = self.enhanced_viscosity_models[general_key]
-                            model_source = "enhanced"
+                    # Use optimization to find optimal terpene percentage
+                    from scipy.optimize import minimize_scalar
                 
-                    # Fall back to standard models
-                    if model_info is None and hasattr(self, 'viscosity_models') and self.viscosity_models:
-                        if general_key in self.viscosity_models:
-                            model_info = self.viscosity_models[general_key]
-                            model_source = "standard"
+                    def objective(terpene_pct):
+                        # Calculate predicted viscosity at this terpene percentage
+                        predicted_visc = self.predict_model_viscosity(model_info, terpene_pct, 25.0, potency, terpene)
+                        # Return the absolute error relative to target
+                        return abs(predicted_visc - target_viscosity)
                 
-                    if model_info is not None:
-                        # We found a suitable model, now use a sampling approach to find 
-                        # the terpene percentage that gives a viscosity closest to the target
-                    
-                        # Define a function to predict viscosity based on terpene percentage
-                        def predict_viscosity_at_percent(terpene_pct):
-                            if model_source in ["combined", "enhanced"] and potency is not None:
-                                return self.predict_model_viscosity(model_info, terpene_pct, 25.0, potency)
-                            else:
-                                return self.predict_model_viscosity(model_info, terpene_pct, 25.0)
-                    
-                        # Define a function to calculate error from target
-                        def viscosity_error(terpene_pct):
-                            visc = predict_viscosity_at_percent(terpene_pct)
-                            return abs(visc - target_viscosity) / target_viscosity  # Relative error
-                    
-                        # Sample a range of percentages and find the one with the lowest error
-                        best_percent = step1_percent
-                        best_error = viscosity_error(step1_percent)
-                    
-                        # Sample more densely near the current percentage and more sparsely farther away
-                        test_percentages = [step1_percent + 0.1 * i for i in range(1, 10)] + \
-                                          [step1_percent + 0.5 * i for i in range(2, 20)] + \
-                                          [step1_percent + i for i in range(1, 11)]
-                    
-                        # Limit to reasonable range (0-15%)
-                        test_percentages = [p for p in test_percentages if 0 <= p <= 15]
-                    
-                        for test_percent in test_percentages:
-                            error = viscosity_error(test_percent)
-                            if error < best_error:
-                                best_percent = test_percent
-                                best_error = error
-                    
-                        # Refine search around the best percentage
-                        for offset in [-0.2, -0.1, 0.1, 0.2]:
-                            test_percent = best_percent + offset
-                            if 0 <= test_percent <= 15:
-                                error = viscosity_error(test_percent)
-                                if error < best_error:
-                                    best_percent = test_percent
-                                    best_error = error
-                    
-                        # Calculate additional percentage needed
-                        total_percent_needed = best_percent
-                        percent_needed = max(0, total_percent_needed - step1_percent)
-                    
-                        # Calculate amount for step 2
-                        step2_amount = (percent_needed / 100) * mass_of_oil
-                    
-                        # Update the UI
-                        self.step2_amount_var.set(f"{step2_amount:.2f}g")
-                    
-                        # Predict final viscosity
-                        expected_viscosity = predict_viscosity_at_percent(total_percent_needed)
-                        self.expected_viscosity_var.set(f"{expected_viscosity:.2f}")
-                    
-                        # Show information about the model used
-                        model_type = {
-                            "combined": "combined (terpene+potency)",
-                            "enhanced": "potency-based",
-                            "standard": "terpene-based"
-                        }.get(model_source, model_source)
-                    
-                        messagebox.showinfo("Step 2 (Model-based)", 
-                                           f"Add an additional {step2_amount:.2f}g of {self.terpene_var.get()} terpenes.\n"
-                                           f"Mix thoroughly and then measure the final viscosity at 25C.\n"
-                                           f"The expected final viscosity is {expected_viscosity:.2f}.\n\n"
-                                           f"(Using {model_type} model)")
-                    
-                        return
+                    # Start optimization from the current terpene percentage
+                    result = minimize_scalar(objective, 
+                                            bounds=(step1_percent, 15.0), 
+                                            method='bounded')
+                
+                    # Get the optimal terpene percentage
+                    total_percent_needed = result.x
+                
+                    # Calculate additional percentage needed
+                    percent_needed = max(0, total_percent_needed - step1_percent)
+                
+                    # Calculate amount for step 2
+                    step2_amount = (percent_needed / 100) * mass_of_oil
+                
+                    # Update the UI
+                    self.step2_amount_var.set(f"{step2_amount:.2f}g")
+                
+                    # Predict final viscosity
+                    expected_viscosity = self.predict_model_viscosity(model_info, total_percent_needed, 25.0, potency, terpene)
+                    self.expected_viscosity_var.set(f"{expected_viscosity:.2f}")
+                
+                    # Show information about the model used
+                    messagebox.showinfo("Step 2 (Model-based)", 
+                                       f"Add an additional {step2_amount:.2f}g of {terpene} terpenes.\n"
+                                       f"Mix thoroughly and then measure the final viscosity at 25C.\n"
+                                       f"The expected final viscosity is {expected_viscosity:.2f}.\n\n"
+                                       f"(Using consolidated model for {media})")
+                
+                    return
+                
                 except Exception as e:
                     import traceback
                     print(f"Error using model for prediction: {str(e)}")
@@ -801,14 +734,14 @@ class ViscosityCalculator:
             # viscosity = raw_oil_viscosity * exp(-k * terpene_percentage)
             if step1_viscosity <= 0 or raw_oil_viscosity <= 0:
                 raise ValueError("Viscosity values must be positive")
-            
+        
             # Calculate decay constant k
             k = -math.log(step1_viscosity / raw_oil_viscosity) / step1_percent
         
             # Solve for the total percentage needed to reach target viscosity
             if target_viscosity <= 0:
                 raise ValueError("Target viscosity must be positive")
-            
+        
             total_percent_needed = -math.log(target_viscosity / raw_oil_viscosity) / k
         
             # Calculate additional percentage needed
@@ -825,11 +758,11 @@ class ViscosityCalculator:
             self.expected_viscosity_var.set(f"{expected_viscosity:.2f}")
         
             messagebox.showinfo("Step 2 (Exponential Model)", 
-                               f"Add an additional {step2_amount:.2f}g of {self.terpene_var.get()} terpenes.\n"
+                               f"Add an additional {step2_amount:.2f}g of {terpene} terpenes.\n"
                                f"Mix thoroughly and then measure the final viscosity at 25C.\n"
                                f"The expected final viscosity is {expected_viscosity:.2f}.\n\n"
                                f"(Using exponential model based on your measurements)")
-        
+    
         except (ValueError, tk.TclError) as e:
             messagebox.showerror("Input Error", 
                                 f"Please ensure all numeric fields contain valid numbers: {str(e)}")
@@ -2076,25 +2009,6 @@ class ViscosityCalculator:
 
     # ---- Advanced Data Analysis Methods (Lazily Loaded) ----
 
-    def load_models(self):
-        """
-        Load trained viscosity prediction models from disk.
-    
-        Returns:
-            dict: Dictionary of trained models for different media/terpene combinations
-        """
-        import pickle
-        import os
-    
-        model_path = 'models/viscosity_models.pkl'
-        if os.path.exists(model_path):
-            try:
-                with open(model_path, 'rb') as f:
-                    return pickle.load(f)
-            except Exception as e:
-                print(f"Error loading models: {e}")
-        return {}
-
     def upload_training_data(self):
         """
         Allow the user to upload the master CSV data file for training viscosity models.
@@ -2151,14 +2065,11 @@ class ViscosityCalculator:
             messagebox.showerror("Error", f"Failed to load data: {str(e)}")
             return None
 
-    def get_actual_model(self,model_obj):
-        """Extract the actual model from a dictionary if needed"""
-        if isinstance(model_obj, dict) and 'model' in model_obj:
-            return model_obj['model']
-        return model_obj
-
     def analyze_models(self, show_dialog=True):
-        """Analyze trained two-step viscosity models with a focus on residual performance."""
+        """
+        Analyze consolidated viscosity models with a focus on residual performance.
+        Provides insights into temperature sensitivity, feature importance, and predictive accuracy.
+        """
         import pandas as pd
         import numpy as np
         import matplotlib.pyplot as plt
@@ -2167,21 +2078,19 @@ class ViscosityCalculator:
         import pickle
         import traceback
         from sklearn.metrics import mean_squared_error, r2_score
-        from sklearn.impute import SimpleImputer  # Add this import for NaN handling
+        from sklearn.impute import SimpleImputer
 
-        # Check if models exist
-        standard_models_exist = hasattr(self, 'viscosity_models') and self.viscosity_models
-        enhanced_models_exist = hasattr(self, 'enhanced_viscosity_models') and self.enhanced_viscosity_models
-        combined_models_exist = hasattr(self, 'combined_viscosity_models') and self.combined_viscosity_models
+        # Check if consolidated models exist
+        consolidated_models_exist = hasattr(self, 'consolidated_models') and self.consolidated_models
 
-        if not standard_models_exist and not enhanced_models_exist and not combined_models_exist:
-            messagebox.showinfo("No Models", "No trained models found. Please train models first.")
+        if not consolidated_models_exist:
+            messagebox.showinfo("No Models", "No consolidated models found. Please train models first.")
             return
 
         # Create analysis report
         report = []
-        report.append("Two-Step Model Analysis Report")
-        report.append("=============================")
+        report.append("Consolidated Model Analysis Report")
+        report.append("===================================")
 
         # Load validation data
         validation_data = None
@@ -2198,665 +2107,281 @@ class ViscosityCalculator:
                     latest_file = os.path.join('data', validation_files[0])
                     validation_data = pd.read_csv(latest_file)
                     report.append(f"Using {os.path.basename(latest_file)} for validation")
-    
+
                     # Prepare data for Arrhenius models
                     validation_data['temperature_kelvin'] = validation_data['temperature'] + 273.15
                     validation_data['inverse_temp'] = 1 / validation_data['temperature_kelvin']
                     validation_data['log_viscosity'] = np.log(validation_data['viscosity'])
-    
+
                     # Add is_raw flag if missing
                     if 'is_raw' not in validation_data.columns:
-                        validation_data['is_raw'] = validation_data['terpene'].isna() | (validation_data['terpene'] == '')
-        
+                        validation_data['is_raw'] = validation_data['terpene'].isna() | (validation_data['terpene'] == '') | (validation_data['terpene'] == 'Raw')
+    
                     # Clean up terpene values
                     validation_data.loc[validation_data['terpene'].isna(), 'terpene'] = 'Raw'
                     validation_data.loc[validation_data['terpene'] == '', 'terpene'] = 'Raw'
-            
-                    # Create model_feature columns if primary features exist
-                    if 'total_potency' in validation_data.columns:
-                        validation_data['model_feature'] = validation_data['total_potency']
-                    elif 'terpene_pct' in validation_data.columns:
-                        validation_data['model_feature'] = validation_data['terpene_pct']
+        
+                    # Convert terpene_pct to decimal if over 1
+                    if 'terpene_pct' in validation_data.columns and (validation_data['terpene_pct'] > 1).any():
+                        validation_data.loc[validation_data['terpene_pct'] > 1, 'terpene_pct'] = validation_data.loc[validation_data['terpene_pct'] > 1, 'terpene_pct'] / 100
+                
+                    # Convert total_potency to decimal if over 1
+                    if 'total_potency' in validation_data.columns and (validation_data['total_potency'] > 1).any():
+                        validation_data.loc[validation_data['total_potency'] > 1, 'total_potency'] = validation_data.loc[validation_data['total_potency'] > 1, 'total_potency'] / 100
+                
+                    # Add physical constraint features
+                    if 'total_potency' in validation_data.columns and 'terpene_pct' in validation_data.columns:
+                        validation_data['theoretical_max_terpene'] = 1.0 - validation_data['total_potency']
+                        validation_data['terpene_headroom'] = validation_data['theoretical_max_terpene'] - validation_data['terpene_pct']
+                        validation_data['terpene_max_ratio'] = validation_data['terpene_pct'] / validation_data['theoretical_max_terpene'].clip(lower=0.01)
+                        validation_data['potency_terpene_ratio'] = validation_data['total_potency'] / validation_data['terpene_pct'].clip(lower=0.01)
         except Exception as e:
             report.append(f"Error loading validation data: {str(e)}")
 
-        # Define a helper function to check model structure
-        def is_valid_model(model):
-            return (isinstance(model, dict) and 
-                    'baseline_model' in model and 
-                    'residual_model' in model and
-                    'baseline_features' in model and
-                    'residual_features' in model)
-
-        # Analyze standard models
-        if standard_models_exist:
-            report.append(f"\nStandard Models (terpene-based): {len(self.viscosity_models)}")
-            report.append("-" * 40)
-        
-            # Check model format and offer to retrain if needed
-            should_retrain = False
-            if self.viscosity_models:
-                sample_key = next(iter(self.viscosity_models))
-                sample_model = self.viscosity_models[sample_key]
-                if not is_valid_model(sample_model):
-                    should_retrain = messagebox.askyesno("Retrain Models", 
-                                                        "Your standard models have an incompatible format. Would you like to retrain them?")
-                
-            if should_retrain:
-                self.train_unified_models()
-                return  # Exit early as we'll reanalyze with new models
-        
-            # Process each model
-            for model_key, model in self.viscosity_models.items():
-                report.append(f"\nModel: {model_key}")
-            
-                try:
-                    # Check if model has the correct structure
-                    if not is_valid_model(model):
-                        report.append("Error analyzing model: incompatible model format")
-                        continue
-                    
-                    # Extract model components
-                    baseline_model = model['baseline_model']
-                    residual_model = model['residual_model']
-                    baseline_features = model['baseline_features']
-                    residual_features = model['residual_features']
-            
-                    # Get metadata
-                    metadata = model.get('metadata', {})
-                    primary_feature = metadata.get('primary_feature', 'terpene_pct')
-        
-                    # Analyze baseline model (Arrhenius)
-                    report.append("1. Temperature baseline model (Arrhenius)")
-        
-                    if hasattr(baseline_model, 'coef_'):
-                        # Extract Arrhenius parameters
-                        coef = baseline_model.coef_[0]
-                        intercept = baseline_model.intercept_
-            
-                        # Calculate activation energy
-                        R = 8.314  # Gas constant (J/mol·K)
-                        Ea = coef * R
-                        Ea_kJ = Ea / 1000  # Convert to kJ/mol
-            
-                        report.append(f"  - Equation: log(viscosity) = {intercept:.4f} + {coef:.4f} * (1/T)")
-                        report.append(f"  - Activation energy: {Ea_kJ:.2f} kJ/mol")
-        
-                    # Analyze residual model (terpene effects)
-                    report.append("2. Residual model (terpene effects)")
-                    report.append(f"  - Model type: {type(residual_model).__name__}")
-        
-                    if hasattr(residual_model, 'feature_importances_'):
-                        # Report feature importance
-                        importances = residual_model.feature_importances_
-            
-                        if len(importances) == len(residual_features):
-                            report.append("  - Feature importances:")
-                            for i, feature in enumerate(residual_features):
-                                report.append(f"    * {feature}: {importances[i]:.4f}")
-            
-                        # Check terpene importance
-                        if primary_feature in residual_features:
-                            feature_idx = residual_features.index(primary_feature)
-                            feature_importance = importances[feature_idx]
-                
-                            if feature_importance > 0.3:
-                                report.append(f"  - {primary_feature} has HIGH importance in viscosity deviation")
-                            elif feature_importance > 0.1:
-                                report.append(f"  - {primary_feature} has MODERATE importance in viscosity deviation")
-                            elif feature_importance > 0.01:
-                                report.append(f"  - {primary_feature} has LOW importance in viscosity deviation")
-                            else:
-                                report.append(f"  - {primary_feature} has NEGLIGIBLE importance in viscosity deviation")
-        
-                    elif hasattr(residual_model, 'coef_'):
-                        # For linear models
-                        coefs = residual_model.coef_
-                        intercept = residual_model.intercept_
-            
-                        if len(coefs) == len(residual_features):
-                            report.append("  - Coefficients:")
-                            report.append(f"    * Intercept: {intercept:.4f}")
-                            for i, feature in enumerate(residual_features):
-                                report.append(f"    * {feature}: {coefs[i]:.4f}")
-        
-                    # Validate with data if available
-                    if validation_data is not None:
-                        try:
-                            # Extract media/terpene from model key
-                            components = model_key.split('_', 1)
-                            media = components[0]
-                
-                            # Handle general models
-                            if len(components) > 1 and components[1] == 'general':
-                                model_val_data = validation_data[validation_data['media'] == media].copy()
-                    
-                                # One-hot encode terpenes
-                                model_val_data = pd.get_dummies(
-                                    model_val_data, 
-                                    columns=['terpene'],
-                                    prefix=['terpene']
-                                )
-                            else:
-                                # Extract terpene from key
-                                terpene = components[1] if len(components) > 1 else 'Raw'
-                                model_val_data = validation_data[
-                                    (validation_data['media'] == media) & 
-                                    (validation_data['terpene'] == terpene)
-                                ].copy()
-                
-                            if len(model_val_data) >= 5:
-                                report.append(f"\nValidation results ({len(model_val_data)} samples):")
-                    
-                                # Drop NaN values in key features
-                                model_val_data = model_val_data.dropna(subset=['inverse_temp', 'log_viscosity'])
-                            
-                                # Ensure primary feature exists
-                                if primary_feature not in model_val_data.columns:
-                                    if primary_feature == 'terpene_pct' and 'terpene_pct' in validation_data.columns:
-                                        model_val_data['terpene_pct'] = validation_data.loc[model_val_data.index, 'terpene_pct']
-                            
-                                # Filter out rows with NaN in primary feature
-                                model_val_data = model_val_data.dropna(subset=[primary_feature])
-                        
-                                if len(model_val_data) < 5:
-                                    report.append(f"Insufficient data after removing NaN values. Only {len(model_val_data)} samples left.")
-                                    continue
-                            
-                                # Create model_feature column if needed
-                                if 'model_feature' in residual_features and 'model_feature' not in model_val_data.columns:
-                                    model_val_data['model_feature'] = model_val_data[primary_feature]
-                    
-                                # Step 1: Evaluate baseline model
-                                X_baseline = model_val_data[baseline_features]
-                                y_true = model_val_data['log_viscosity']
-                    
-                                # Get baseline predictions
-                                baseline_preds = baseline_model.predict(X_baseline)
-                    
-                                # Calculate residuals
-                                model_val_data['baseline_pred'] = baseline_preds
-                                model_val_data['residual'] = y_true - baseline_preds
-                    
-                                # Step 2: Evaluate residual model
-                                # Check if we have all required features
-                                missing_features = [f for f in residual_features if f not in model_val_data.columns]
-                            
-                                # Better handling of missing features
-                                if missing_features:
-                                    if 'model_feature' in missing_features and primary_feature in model_val_data.columns:
-                                        # Create model_feature explicitly from primary feature
-                                        model_val_data['model_feature'] = model_val_data[primary_feature]
-                                        missing_features.remove('model_feature')
-                                
-                                    if 'potency_terpene_ratio' in missing_features and 'total_potency' in model_val_data.columns and 'terpene_pct' in model_val_data.columns:
-                                        # Create ratio with safety for division by zero
-                                        model_val_data['potency_terpene_ratio'] = model_val_data['total_potency'] / model_val_data['terpene_pct'].clip(lower=0.01)
-                                        missing_features.remove('potency_terpene_ratio')
-
-                                    # If we still have missing features, report and skip
-                                    if missing_features:
-                                        report.append(f"Missing required features for validation: {', '.join(missing_features)}")
-                                        continue
-                    
-                                # Extract features and residuals
-                                X_residual = model_val_data[residual_features]
-                                y_residual = model_val_data['residual']
-                            
-                                # Handle NaN values in the feature data
-                                if X_residual.isna().any().any():
-                                    # Use SimpleImputer to replace NaN values with mean
-                                    imputer = SimpleImputer(strategy='mean')
-                                    X_residual_values = imputer.fit_transform(X_residual)
-                                    X_residual = pd.DataFrame(X_residual_values, 
-                                                              index=X_residual.index, 
-                                                              columns=X_residual.columns)
-                    
-                                # Get residual predictions
-                                residual_preds = residual_model.predict(X_residual)
-                    
-                                # Calculate metrics for residual model
-                                r2_residual = r2_score(y_residual, residual_preds)
-                                mse_residual = mean_squared_error(y_residual, residual_preds)
-                    
-                                report.append(f"Residual model - MSE: {mse_residual:.2f}, R^2: {r2_residual:.4f}")
-                    
-                                # Combined prediction metrics
-                                combined_preds = baseline_preds + residual_preds
-                    
-                                # Log scale metrics
-                                r2_log = r2_score(y_true, combined_preds)
-                                mse_log = mean_squared_error(y_true, combined_preds)
-                    
-                                # Original scale metrics
-                                y_orig = np.exp(y_true)
-                                preds_orig = np.exp(combined_preds)
-                    
-                                r2_orig = r2_score(y_orig, preds_orig)
-                                mse_orig = mean_squared_error(y_orig, preds_orig)
-                    
-                                report.append(f"Log scale - MSE: {mse_log:.2f}, R^2: {r2_log:.4f}")
-                                report.append(f"Original scale - MSE: {mse_orig:.2f}, R^2: {r2_orig:.4f}")
-                    
-                                if r2_orig < 0.5:
-                                    report.append("WARNING: Poor validation performance (R^2 < 0.5)!")
-                            else:
-                                report.append(f"Insufficient validation data: {len(model_val_data)} samples")
-                        except Exception as e:
-                            report.append(f"Error validating model: {str(e)}")
-                            report.append(traceback.format_exc())
-                except Exception as e:
-                    report.append(f"Error analyzing model: {str(e)}")
-                    report.append(traceback.format_exc())
-
-        # Analyze enhanced models using same approach
-        if enhanced_models_exist:
-            report.append(f"\nEnhanced Models (potency-based): {len(self.enhanced_viscosity_models)}")
-            report.append("-" * 40)
-
-            for model_key, model in self.enhanced_viscosity_models.items():
-                report.append(f"\nModel: {model_key}")
+        # Analyze consolidated models
+        report.append(f"\nConsolidated Media Models: {len(self.consolidated_models)}")
+        report.append("-" * 50)
     
-                try:
-                    # Check if model has the correct structure
-                    if not is_valid_model(model):
-                        report.append("Error analyzing model: incompatible model format")
-                        continue
+        # Process each consolidated model
+        for model_key, model in self.consolidated_models.items():
+            report.append(f"\nModel: {model_key}")
+        
+            try:
+                # Extract media type from model key
+                media = model_key.split('_')[0]
+            
+                # Extract model components
+                baseline_model = model['baseline_model']
+                residual_model = model['residual_model']
+                baseline_features = model['baseline_features']
+                residual_features = model['residual_features']
+            
+                # Get metadata
+                metadata = model.get('metadata', {})
+            
+                # Analyze baseline model (Arrhenius temperature relationship)
+                report.append("1. Temperature baseline model (Arrhenius)")
+            
+                if hasattr(baseline_model, 'coef_'):
+                    # Extract Arrhenius parameters
+                    coef = baseline_model.coef_[0]
+                    intercept = baseline_model.intercept_
+                
+                    # Calculate activation energy
+                    R = 8.314  # Gas constant (J/mol·K)
+                    Ea = coef * R
+                    Ea_kJ = Ea / 1000  # Convert to kJ/mol
+                
+                    report.append(f"  - Equation: log(viscosity) = {intercept:.4f} + {coef:.4f} * (1/T)")
+                    report.append(f"  - Activation energy: {Ea_kJ:.2f} kJ/mol")
+                
+                    # Categorize temperature sensitivity
+                    if Ea_kJ < 20:
+                        report.append("  - Low temperature sensitivity")
+                    elif Ea_kJ < 40:
+                        report.append("  - Medium temperature sensitivity")
+                    else:
+                        report.append("  - High temperature sensitivity")
+            
+                # Analyze residual model (terpene and potency effects)
+                report.append("\n2. Residual model analysis")
+                report.append(f"  - Model type: {type(residual_model).__name__}")
+            
+                # Extract one-hot encoded terpene features
+                terpene_features = [f for f in residual_features if f.startswith('terpene_')]
+                report.append(f"  - Model handles {len(terpene_features)} distinct terpenes")
+            
+                # Extract other feature categories
+                physical_features = [f for f in residual_features if f in ['theoretical_max_terpene', 'terpene_headroom', 'terpene_max_ratio']]
+                primary_features = ['terpene_pct', 'total_potency', 'is_raw']
+                interaction_features = [f for f in residual_features if f == 'potency_terpene_ratio']
+            
+                # Analyze feature importance if available
+                if hasattr(residual_model, 'feature_importances_'):
+                    importances = residual_model.feature_importances_
+                    features_with_importance = list(zip(residual_features, importances))
+                    sorted_features = sorted(features_with_importance, key=lambda x: x[1], reverse=True)
+                
+                    # Report top features
+                    report.append("  - Top 5 most important features:")
+                    for feature, importance in sorted_features[:5]:
+                        report.append(f"    * {feature}: {importance:.4f}")
+                
+                    # Calculate importance by feature type
+                    total_importance = sum(importances)
+                    terpene_total_importance = sum(importance for feature, importance in features_with_importance 
+                                              if feature in terpene_features)
+                    physical_total_importance = sum(importance for feature, importance in features_with_importance 
+                                               if feature in physical_features)
+                    primary_total_importance = sum(importance for feature, importance in features_with_importance 
+                                              if feature in primary_features)
+                
+                    report.append("\n  - Feature importance by category:")
+                    report.append(f"    * Primary features: {primary_total_importance:.4f} ({primary_total_importance/total_importance*100:.1f}%)")
+                    report.append(f"    * Terpene-specific features: {terpene_total_importance:.4f} ({terpene_total_importance/total_importance*100:.1f}%)")
+                    report.append(f"    * Physical constraint features: {physical_total_importance:.4f} ({physical_total_importance/total_importance*100:.1f}%)")
+                
+                    # Analyze key feature importance
+                    if 'terpene_pct' in residual_features and 'total_potency' in residual_features:
+                        terpene_idx = residual_features.index('terpene_pct')
+                        potency_idx = residual_features.index('total_potency')
                     
-                    # Extract model components
-                    baseline_model = model['baseline_model']
-                    residual_model = model['residual_model']
-                    baseline_features = model['baseline_features']
-                    residual_features = model['residual_features']
-            
-                    # Get metadata
-                    metadata = model.get('metadata', {})
-                    primary_feature = metadata.get('primary_feature', 'total_potency')
-        
-                    # Analyze baseline model (Arrhenius)
-                    report.append("1. Temperature baseline model (Arrhenius)")
-        
-                    if hasattr(baseline_model, 'coef_'):
-                        # Extract Arrhenius parameters
-                        coef = baseline_model.coef_[0]
-                        intercept = baseline_model.intercept_
-            
-                        # Calculate activation energy
-                        R = 8.314  # Gas constant (J/mol·K)
-                        Ea = coef * R
-                        Ea_kJ = Ea / 1000  # Convert to kJ/mol
-            
-                        report.append(f"  - Equation: log(viscosity) = {intercept:.4f} + {coef:.4f} * (1/T)")
-                        report.append(f"  - Activation energy: {Ea_kJ:.2f} kJ/mol")
-        
-                    # Analyze residual model (potency effects)
-                    report.append("2. Residual model (potency and chemistry effects)")
-                    report.append(f"  - Model type: {type(residual_model).__name__}")
-        
-                    if hasattr(residual_model, 'feature_importances_'):
-                        # Report feature importance
-                        importances = residual_model.feature_importances_
-            
-                        if len(importances) == len(residual_features):
-                            report.append("  - Feature importances:")
-                            for i, feature in enumerate(residual_features):
-                                report.append(f"    * {feature}: {importances[i]:.4f}")
-            
-                        # Check potency importance
-                        if primary_feature in residual_features and 'terpene_pct' in residual_features:
-                            potency_idx = residual_features.index(primary_feature)
-                            terpene_idx = residual_features.index('terpene_pct')
-                
-                            potency_imp = importances[potency_idx]
-                            terpene_imp = importances[terpene_idx]
-                
-                            # Compare relative importance
-                            if potency_imp > terpene_imp * 2:
-                                report.append("  - Potency is MUCH MORE important than terpene percentage")
-                            elif potency_imp > terpene_imp:
-                                report.append("  - Potency is more important than terpene percentage")
-                            elif terpene_imp > potency_imp * 2:
-                                report.append("  - Terpene percentage is MUCH MORE important than potency")
-                            elif terpene_imp > potency_imp:
-                                report.append("  - Terpene percentage is more important than potency")
-                            else:
-                                report.append("  - Terpene percentage and potency have similar importance")
-                            
-                    # Same validation code as for standard models - reusing the same pattern
-                    if validation_data is not None:
-                        try:
-                            # Extract media/terpene from model key
-                            components = model_key.split('_', 1)
-                            media = components[0]
-                
-                            # Handle general models
-                            if len(components) > 1 and components[1] == 'general':
-                                model_val_data = validation_data[validation_data['media'] == media].copy()
+                        terpene_importance = importances[terpene_idx]
+                        potency_importance = importances[potency_idx]
                     
-                                # One-hot encode terpenes
-                                model_val_data = pd.get_dummies(
-                                    model_val_data, 
-                                    columns=['terpene'],
-                                    prefix=['terpene']
-                                )
-                            else:
-                                # Extract terpene from key
-                                terpene = components[1] if len(components) > 1 else 'Raw'
-                                model_val_data = validation_data[
-                                    (validation_data['media'] == media) & 
-                                    (validation_data['terpene'] == terpene)
-                                ].copy()
-                
-                            if len(model_val_data) >= 5:
-                                report.append(f"\nValidation results ({len(model_val_data)} samples):")
+                        report.append("\n  - Key feature comparison:")
+                        report.append(f"    * Terpene %: {terpene_importance:.4f}")
+                        report.append(f"    * Potency: {potency_importance:.4f}")
+                    
+                        if potency_importance > 1.5 * terpene_importance:
+                            report.append("    * Potency has significantly more impact than terpene %")
+                        elif terpene_importance > 1.5 * potency_importance:
+                            report.append("    * Terpene % has significantly more impact than potency")
+                        else:
+                            report.append("    * Terpene % and potency have similar importance")
+            
+                # Validation with available data
+                if validation_data is not None:
+                    try:
+                        # Filter validation data for this media type
+                        media_val_data = validation_data[validation_data['media'] == media].copy()
+                    
+                        if len(media_val_data) >= 10:
+                            report.append(f"\nValidation on {len(media_val_data)} samples for {media}:")
                         
-                                # Calculate potency from individual cannabinoids if total_potency is missing
-                                if primary_feature == 'total_potency' and primary_feature not in model_val_data.columns:
-                                    if 'd9_thc' in model_val_data.columns and 'd8_thc' in model_val_data.columns:
-                                        model_val_data['total_potency'] = model_val_data[['d9_thc', 'd8_thc']].sum(axis=1, skipna=True)
-                                        report.append("Calculated total_potency from individual cannabinoid values")
+                            # Drop NaN values in key features
+                            media_val_data = media_val_data.dropna(subset=['inverse_temp', 'log_viscosity'])
+                        
+                            # Ensure primary features exist
+                            required_features = ['terpene_pct', 'total_potency']
+                            missing_features = [f for f in required_features if f not in media_val_data.columns]
+                        
+                            if missing_features:
+                                report.append(f"  - Missing required features: {', '.join(missing_features)}")
+                                report.append("  - Skipping validation due to missing features")
+                                continue
+                        
+                            # One-hot encode terpenes for validation
+                            encoded_val_data = pd.get_dummies(
+                                media_val_data,
+                                columns=['terpene'],
+                                prefix=['terpene']
+                            )
+                        
+                            # Step 1: Evaluate baseline model
+                            X_baseline = encoded_val_data[baseline_features]
+                            y_true = encoded_val_data['log_viscosity']
+                        
+                            # Get baseline predictions
+                            baseline_preds = baseline_model.predict(X_baseline)
+                        
+                            # Calculate residuals
+                            encoded_val_data['baseline_prediction'] = baseline_preds
+                            encoded_val_data['residual'] = y_true - baseline_preds
+                        
+                            # Step 2: Evaluate residual model
+                        
+                            # Add any missing columns required by the model
+                            for feature in residual_features:
+                                if feature not in encoded_val_data.columns:
+                                    # For terpene one-hot features
+                                    if feature.startswith('terpene_'):
+                                        encoded_val_data[feature] = 0
+                                    # For interaction features
+                                    elif feature == 'potency_terpene_ratio':
+                                        encoded_val_data[feature] = encoded_val_data['total_potency'] / encoded_val_data['terpene_pct'].clip(lower=0.01)
+                                    # For other features
                                     else:
-                                        report.append("Cannot calculate total_potency - missing cannabinoid data")
-                                        continue
+                                        encoded_val_data[feature] = 0
                         
-                                # Drop NaN values in key features
-                                model_val_data = model_val_data.dropna(subset=['inverse_temp', 'log_viscosity'])
+                            # Select features needed for residual model
+                            X_residual = encoded_val_data[residual_features]
                             
-                                # Ensure primary feature exists 
-                                if primary_feature not in model_val_data.columns:
-                                    if primary_feature == 'total_potency' and 'total_potency' in validation_data.columns:
-                                        model_val_data['total_potency'] = validation_data.loc[model_val_data.index, 'total_potency']
-                                
-                                # Filter out rows with NaN in primary feature
-                                model_val_data = model_val_data.dropna(subset=[primary_feature])
-                        
-                                if len(model_val_data) < 5:
-                                    report.append(f"Insufficient data after removing NaN values. Only {len(model_val_data)} samples left.")
-                                    continue
-                            
-                                # Create model_feature column if needed
-                                if 'model_feature' in residual_features and 'model_feature' not in model_val_data.columns:
-                                    model_val_data['model_feature'] = model_val_data[primary_feature]
-                            
-                                # Step 1: Evaluate baseline model
-                                X_baseline = model_val_data[baseline_features]
-                                y_true = model_val_data['log_viscosity']
-                    
-                                # Get baseline predictions
-                                baseline_preds = baseline_model.predict(X_baseline)
-                    
-                                # Calculate residuals
-                                model_val_data['baseline_pred'] = baseline_preds
-                                model_val_data['residual'] = y_true - baseline_preds
-                    
-                                # Step 2: Evaluate residual model
-                                # Check if we have all required features
-                                missing_features = [f for f in residual_features if f not in model_val_data.columns]
-                            
-                                # Better handling of missing features
-                                if missing_features:
-                                    if 'model_feature' in missing_features and primary_feature in model_val_data.columns:
-                                        # Create model_feature explicitly from primary feature
-                                        model_val_data['model_feature'] = model_val_data[primary_feature]
-                                        missing_features.remove('model_feature')
-                                
-                                    # If we still have missing features, report and skip
-                                    if missing_features:
-                                        report.append(f"Missing required features for validation: {', '.join(missing_features)}")
-                                        continue
-                        
-                                # Extract features and residuals
-                                X_residual = model_val_data[residual_features]
-                                y_residual = model_val_data['residual']
-                            
-                                # Handle NaN values in the feature data
-                                if X_residual.isna().any().any():
-                                    # Use SimpleImputer to replace NaN values with mean
-                                    imputer = SimpleImputer(strategy='mean')
-                                    X_residual_values = imputer.fit_transform(X_residual)
-                                    X_residual = pd.DataFrame(X_residual_values, 
-                                                              index=X_residual.index, 
-                                                              columns=X_residual.columns)
-                    
-                                # Get residual predictions
-                                residual_preds = residual_model.predict(X_residual)
-                    
-                                # Calculate metrics for residual model
-                                r2_residual = r2_score(y_residual, residual_preds)
-                                mse_residual = mean_squared_error(y_residual, residual_preds)
-                    
-                                report.append(f"Residual model - MSE: {mse_residual:.2f}, R^2: {r2_residual:.4f}")
-                    
-                                # Combined prediction metrics
-                                combined_preds = baseline_preds + residual_preds
-                    
-                                # Log scale metrics
-                                r2_log = r2_score(y_true, combined_preds)
-                                mse_log = mean_squared_error(y_true, combined_preds)
-                    
-                                # Original scale metrics
-                                y_orig = np.exp(y_true)
-                                preds_orig = np.exp(combined_preds)
-                    
-                                r2_orig = r2_score(y_orig, preds_orig)
-                                mse_orig = mean_squared_error(y_orig, preds_orig)
-                    
-                                report.append(f"Log scale - MSE: {mse_log:.2f}, R^2: {r2_log:.4f}")
-                                report.append(f"Original scale - MSE: {mse_orig:.2f}, R^2: {r2_orig:.4f}")
-                    
-                                if r2_orig < 0.5:
-                                    report.append("WARNING: Poor validation performance (R^2 < 0.5)!")
-                            else:
-                                report.append(f"Insufficient validation data: {len(model_val_data)} samples")
-                        except Exception as e:
-                            report.append(f"Error validating model: {str(e)}")
-                            report.append(traceback.format_exc())
-                except Exception as e:
-                    report.append(f"Error analyzing model: {str(e)}")
-                    report.append(traceback.format_exc())
+                            # Check for feature set alignment
+                            if len(X_residual.columns) != len(residual_features):
+                                # First, report the discrepancy
+                                missing = set(residual_features) - set(X_residual.columns)
+                                extra = set(X_residual.columns) - set(residual_features)
+                                if missing:
+                                    report.append(f"  - Missing features in validation data: {', '.join(missing)}")
+                                if extra:
+                                    report.append(f"  - Extra features in validation data: {', '.join(extra)}")
+                
+                                # Create a properly aligned DataFrame with zeros for missing features
+                                aligned_data = pd.DataFrame(0, index=X_residual.index, columns=residual_features)
+                
+                                # Fill in values from X_residual where available
+                                for col in X_residual.columns:
+                                    if col in residual_features:
+                                        aligned_data[col] = X_residual[col]
+                
+                                # Use the aligned data
+                                X_residual = aligned_data
+                                report.append("  - Aligned validation data by adding missing columns with zero values")
+            
 
-        # Analyze combined models
-        if combined_models_exist:
-            report.append(f"\nCombined Models (terpene + potency): {len(self.combined_viscosity_models)}")
-            report.append("-" * 40)
+                            # Handle NaN values
+                            if X_residual.isna().any().any():
+                                imputer = SimpleImputer(strategy='mean')
+                                X_residual_values = imputer.fit_transform(X_residual)
+                                X_residual = pd.DataFrame(X_residual_values, 
+                                                      index=X_residual.index, 
+                                                      columns=X_residual.columns)
+                        
+                            # Get residual predictions
+                            y_residual = encoded_val_data['residual']
+                            residual_preds = residual_model.predict(X_residual)
+                        
+                            # Calculate metrics for residual model
+                            r2_residual = r2_score(y_residual, residual_preds)
+                            mse_residual = mean_squared_error(y_residual, residual_preds)
+                        
+                            report.append(f"  - Residual model - MSE: {mse_residual:.2f}, R²: {r2_residual:.4f}")
+                        
+                            # Combined prediction metrics
+                            combined_preds = baseline_preds + residual_preds
+                        
+                            # Log scale metrics
+                            r2_log = r2_score(y_true, combined_preds)
+                            mse_log = mean_squared_error(y_true, combined_preds)
+                        
+                            # Original scale metrics
+                            y_orig = np.exp(y_true)
+                            preds_orig = np.exp(combined_preds)
+                        
+                            r2_orig = r2_score(y_orig, preds_orig)
+                            mse_orig = mean_squared_error(y_orig, preds_orig)
+                        
+                            report.append(f"  - Log scale - MSE: {mse_log:.2f}, R²: {r2_log:.4f}")
+                            report.append(f"  - Original scale - MSE: {mse_orig:.2f}, R²: {r2_orig:.4f}")
+                        
+                            # Quality assessment
+                            if r2_orig >= 0.9:
+                                report.append("  - EXCELLENT model performance (R² ≥ 0.9)")
+                            elif r2_orig >= 0.8:
+                                report.append("  - GOOD model performance (R² ≥ 0.8)")
+                            elif r2_orig >= 0.7:
+                                report.append("  - ACCEPTABLE model performance (R² ≥ 0.7)")
+                            elif r2_orig >= 0.5:
+                                report.append("  - FAIR model performance (R² ≥ 0.5)")
+                            else:
+                                report.append("  - POOR model performance (R² < 0.5)")
+                        else:
+                            report.append(f"  - Insufficient validation data: only {len(media_val_data)} samples for {media}")
+                    except Exception as e:
+                        report.append(f"  - Error during validation: {str(e)}")
+            except Exception as e:
+                report.append(f"Error analyzing model: {str(e)}")
+                report.append(traceback.format_exc())
 
-            for model_key, model in self.combined_viscosity_models.items():
-                report.append(f"\nModel: {model_key}")
-    
-                try:
-                    # Check if model has the correct structure
-                    if not is_valid_model(model):
-                        report.append("Error analyzing model: incompatible model format")
-                        continue
-                    
-                    # Extract model components
-                    baseline_model = model['baseline_model']
-                    residual_model = model['residual_model']
-                    baseline_features = model['baseline_features']
-                    residual_features = model['residual_features']
-            
-                    # Get metadata
-                    metadata = model.get('metadata', {})
-                    primary_feature = metadata.get('primary_feature', 'terpene_pct')
-        
-                    # Analyze baseline model (Arrhenius)
-                    report.append("1. Temperature baseline model (Arrhenius)")
-        
-                    if hasattr(baseline_model, 'coef_'):
-                        # Extract Arrhenius parameters
-                        coef = baseline_model.coef_[0]
-                        intercept = baseline_model.intercept_
-            
-                        # Calculate activation energy
-                        R = 8.314  # Gas constant (J/mol·K)
-                        Ea = coef * R
-                        Ea_kJ = Ea / 1000  # Convert to kJ/mol
-            
-                        report.append(f"  - Equation: log(viscosity) = {intercept:.4f} + {coef:.4f} * (1/T)")
-                        report.append(f"  - Activation energy: {Ea_kJ:.2f} kJ/mol")
-        
-                    # Analyze residual model (terpene effects)
-                    report.append("2. Residual model (terpene effects)")
-                    report.append(f"  - Model type: {type(residual_model).__name__}")
-        
-                    if hasattr(residual_model, 'feature_importances_'):
-                        # Report feature importance
-                        importances = residual_model.feature_importances_
-            
-                        if len(importances) == len(residual_features):
-                            report.append("  - Feature importances:")
-                            for i, feature in enumerate(residual_features):
-                                report.append(f"    * {feature}: {importances[i]:.4f}")
-            
-                        # Check terpene importance
-                        if primary_feature in residual_features:
-                            feature_idx = residual_features.index(primary_feature)
-                            feature_importance = importances[feature_idx]
-                
-                            if feature_importance > 0.3:
-                                report.append(f"  - {primary_feature} has HIGH importance in viscosity deviation")
-                            elif feature_importance > 0.1:
-                                report.append(f"  - {primary_feature} has MODERATE importance in viscosity deviation")
-                            elif feature_importance > 0.01:
-                                report.append(f"  - {primary_feature} has LOW importance in viscosity deviation")
-                            else:
-                                report.append(f"  - {primary_feature} has NEGLIGIBLE importance in viscosity deviation")
-                
-                    # Same validation code as for standard and enhanced models
-                    if validation_data is not None:
-                        try:
-                            # Extract media/terpene from model key
-                            components = model_key.split('_', 1)
-                            media = components[0]
-                
-                            # Handle general models
-                            if len(components) > 1 and components[1] == 'general':
-                                model_val_data = validation_data[validation_data['media'] == media].copy()
-                    
-                                # One-hot encode terpenes
-                                model_val_data = pd.get_dummies(
-                                    model_val_data, 
-                                    columns=['terpene'],
-                                    prefix=['terpene']
-                                )
-                            else:
-                                # Extract terpene from key
-                                terpene = components[1] if len(components) > 1 else 'Raw'
-                                model_val_data = validation_data[
-                                    (validation_data['media'] == media) & 
-                                    (validation_data['terpene'] == terpene)
-                                ].copy()
-                
-                            if len(model_val_data) >= 5:
-                                report.append(f"\nValidation results ({len(model_val_data)} samples):")
-                    
-                                # Drop NaN values in key features
-                                model_val_data = model_val_data.dropna(subset=['inverse_temp', 'log_viscosity'])
-                            
-                                # Ensure primary feature exists
-                                if primary_feature not in model_val_data.columns:
-                                    if primary_feature == 'terpene_pct' and 'terpene_pct' in validation_data.columns:
-                                        model_val_data['terpene_pct'] = validation_data.loc[model_val_data.index, 'terpene_pct']
-                            
-                                # Filter out rows with NaN in primary feature
-                                model_val_data = model_val_data.dropna(subset=[primary_feature])
-                        
-                                if len(model_val_data) < 5:
-                                    report.append(f"Insufficient data after removing NaN values. Only {len(model_val_data)} samples left.")
-                                    continue
-                            
-                                # Create model_feature column if needed
-                                if 'model_feature' in residual_features and 'model_feature' not in model_val_data.columns:
-                                    model_val_data['model_feature'] = model_val_data[primary_feature]
-                    
-                                # Step 1: Evaluate baseline model
-                                X_baseline = model_val_data[baseline_features]
-                                y_true = model_val_data['log_viscosity']
-                    
-                                # Get baseline predictions
-                                baseline_preds = baseline_model.predict(X_baseline)
-                    
-                                # Calculate residuals
-                                model_val_data['baseline_pred'] = baseline_preds
-                                model_val_data['residual'] = y_true - baseline_preds
-                    
-                                # Step 2: Evaluate residual model
-                                # Get valid features
-                                valid_features = [f for f in residual_features if f in model_val_data.columns]
-                        
-                                # Check if we have all required features
-                                missing_features = [f for f in residual_features if f not in model_val_data.columns]
-                            
-                                # Better handling of missing features
-                                if missing_features:
-                                    if 'model_feature' in missing_features and primary_feature in model_val_data.columns:
-                                        # Create model_feature explicitly from primary feature
-                                        model_val_data['model_feature'] = model_val_data[primary_feature]
-                                        missing_features.remove('model_feature')
-                                
-                                    # If we still have missing features, report and skip
-                                    if missing_features:
-                                        report.append(f"Missing required features for validation: {', '.join(missing_features)}")
-                                        continue
-                    
-                                # Extract features and residuals
-                                X_residual = model_val_data[residual_features]
-                                y_residual = model_val_data['residual']
-                            
-                                # Handle NaN values in the feature data
-                                if X_residual.isna().any().any():
-                                    # Use SimpleImputer to replace NaN values with mean
-                                    imputer = SimpleImputer(strategy='mean')
-                                    X_residual_values = imputer.fit_transform(X_residual)
-                                    X_residual = pd.DataFrame(X_residual_values, 
-                                                              index=X_residual.index, 
-                                                              columns=X_residual.columns)
-                    
-                                # Get residual predictions
-                                residual_preds = residual_model.predict(X_residual)
-                    
-                                # Calculate metrics for residual model
-                                r2_residual = r2_score(y_residual, residual_preds)
-                                mse_residual = mean_squared_error(y_residual, residual_preds)
-                    
-                                report.append(f"Residual model - MSE: {mse_residual:.2f}, R^2: {r2_residual:.4f}")
-                    
-                                # Combined prediction metrics
-                                combined_preds = baseline_preds + residual_preds
-                    
-                                # Log scale metrics
-                                r2_log = r2_score(y_true, combined_preds)
-                                mse_log = mean_squared_error(y_true, combined_preds)
-                    
-                                # Original scale metrics
-                                y_orig = np.exp(y_true)
-                                preds_orig = np.exp(combined_preds)
-                    
-                                r2_orig = r2_score(y_orig, preds_orig)
-                                mse_orig = mean_squared_error(y_orig, preds_orig)
-                    
-                                report.append(f"Log scale - MSE: {mse_log:.2f}, R^2: {r2_log:.4f}")
-                                report.append(f"Original scale - MSE: {mse_orig:.2f}, R^2: {r2_orig:.4f}")
-                    
-                                if r2_orig < 0.5:
-                                    report.append("WARNING: Poor validation performance (R^2 < 0.5)!")
-                            else:
-                                report.append(f"Insufficient validation data: {len(model_val_data)} samples")
-                        except Exception as e:
-                            report.append(f"Error validating model: {str(e)}")
-                            report.append(traceback.format_exc())
-                except Exception as e:
-                    report.append(f"Error analyzing model: {str(e)}")
-                    report.append(traceback.format_exc())
-    
         # Add recommendations
         report.append("\nRecommendations:")
         report.append("---------------")
-        report.append("1. Focus on residual model R² values for terpene effect analysis")
-        report.append("2. Compare baseline activation energies across media types")
-        report.append("3. Consider using Ridge regression for small datasets")
-        report.append("4. For better models, standardize features before training")
-        report.append("5. Use log-scale metrics for model evaluation")
+        report.append("1. Focus on high R² and low MSE values to identify quality models")
+        report.append("2. Compare activation energies across media types for temperature sensitivity")
+        report.append("3. Review feature importance to understand what drives viscosity")
+        report.append("4. For media with poor models, consider collecting more diverse data")
+        report.append("5. Physical constraint features should have significant importance")
 
         # Print report to console
         print("\n".join(report))
@@ -2864,10 +2389,10 @@ class ViscosityCalculator:
         # Show dialog if requested
         if show_dialog:
             report_window = Toplevel(self.root)
-            report_window.title("Two-Step Model Analysis")
-            report_window.geometry("700x500")
+            report_window.title("Consolidated Model Analysis")
+            report_window.geometry("800x600")
 
-            Label(report_window, text="Two-Step Model Analysis", 
+            Label(report_window, text="Consolidated Model Analysis", 
                   font=("Arial", 14, "bold")).pack(pady=10)
 
             text_frame = Frame(report_window)
@@ -2889,79 +2414,24 @@ class ViscosityCalculator:
 
         return report
 
-    def ensure_model_compatibility(self):
-        """
-        Check if models have the expected structure and offer to retrain if not.
-        This function helps transition to the new model format.
-        """
-        from tkinter import messagebox
-    
-        # Define what a valid model structure looks like
-        def is_valid_model(model):
-            return (isinstance(model, dict) and 
-                    'baseline_model' in model and 
-                    'residual_model' in model and
-                    'baseline_features' in model and
-                    'residual_features' in model)
-    
-        # Check standard models
-        retraining_needed = False
-        if hasattr(self, 'viscosity_models') and self.viscosity_models:
-            # Sample check - just look at the first model
-            sample_key = next(iter(self.viscosity_models))
-            sample_model = self.viscosity_models[sample_key]
-        
-            if not is_valid_model(sample_model):
-                retraining_needed = True
-    
-        # Similar checks for enhanced and combined models
-        if hasattr(self, 'enhanced_viscosity_models') and self.enhanced_viscosity_models:
-            sample_key = next(iter(self.enhanced_viscosity_models))
-            sample_model = self.enhanced_viscosity_models[sample_key]
-        
-            if not is_valid_model(sample_model):
-                retraining_needed = True
-    
-        if hasattr(self, 'combined_viscosity_models') and self.combined_viscosity_models:
-            sample_key = next(iter(self.combined_viscosity_models))
-            sample_model = self.combined_viscosity_models[sample_key]
-        
-            if not is_valid_model(sample_model):
-                retraining_needed = True
-    
-        # If any models have incompatible format, offer to retrain
-        if retraining_needed:
-            if messagebox.askyesno("Model Format", 
-                                 "Some models appear to use an older format. Would you like to retrain them with the new format?"):
-                # Clear old models
-                if hasattr(self, 'viscosity_models'):
-                    self.viscosity_models = {}
-                if hasattr(self, 'enhanced_viscosity_models'):
-                    self.enhanced_viscosity_models = {}
-                if hasattr(self, 'combined_viscosity_models'):
-                    self.combined_viscosity_models = {}
-                
-                # Retrain models in the new format
-                self.train_unified_models()
-                return True
-    
-        return False
-
     def filter_and_analyze_specific_combinations(self):
         """
-        Analyze and build models for specific media-terpene combinations with potency integration.
-        Shows a configuration window and only starts analysis when the Run Analysis button is clicked.
-        Only processes combinations that have terpene percentage, viscosity, temperature, and potency data.
+        Analyze and visualize Arrhenius relationships for consolidated models.
+        Shows temperature sensitivity and potency effects on viscosity.
         """
-        import tkinter as tk
-        from tkinter import ttk, StringVar, DoubleVar, Frame, Label, Scale, HORIZONTAL, Toplevel, Text, Scrollbar
-
-        
-
-        # Create the main window without starting analysis
+        import os
+        import pandas as pd
+        import numpy as np
+        import matplotlib
+        import matplotlib.pyplot as plt
+        from tkinter import Toplevel, StringVar, DoubleVar, Frame, Label, Scale, HORIZONTAL, Text, Scrollbar
+        from scipy.optimize import curve_fit
+        from sklearn.metrics import r2_score
+    
+        # Create the main window
         progress_window = Toplevel(self.root)
         progress_window.title("Arrhenius Analysis Configuration")
-        progress_window.geometry("800x600")  # Initial window size
+        progress_window.geometry("800x600")
         progress_window.transient(self.root)
         progress_window.grab_set()
     
@@ -2998,6 +2468,32 @@ class ViscosityCalculator:
         )
         potency_mode_dropdown.grid(row=0, column=3, padx=5, pady=5, sticky="w")
     
+        # Add terpene selection
+        Label(config_frame, text="Default Terpene:").grid(row=1, column=0, padx=5, pady=5, sticky="w")
+    
+        # Get available terpenes from consolidated models
+        available_terpenes = ["Raw"]  # Start with Raw as default
+    
+        if hasattr(self, 'consolidated_models') and self.consolidated_models:
+            # Try to extract terpene features from the first model
+            model_key = next(iter(self.consolidated_models))
+            model = self.consolidated_models[model_key]
+            residual_features = model.get('residual_features', [])
+            for feature in residual_features:
+                if feature.startswith('terpene_'):
+                    terpene_name = feature[8:]  # Remove 'terpene_' prefix
+                    available_terpenes.append(terpene_name)
+    
+        terpene_var = StringVar(value=available_terpenes[0] if available_terpenes else "Raw")
+        terpene_dropdown = ttk.Combobox(
+            config_frame, 
+            textvariable=terpene_var,
+            values=available_terpenes,
+            state="readonly",
+            width=15
+        )
+        terpene_dropdown.grid(row=1, column=1, padx=5, pady=5, sticky="w")
+    
         # Text area for showing progress
         text_frame = Frame(progress_window)
         text_frame.pack(fill="both", expand=True, padx=10, pady=10)
@@ -3016,36 +2512,24 @@ class ViscosityCalculator:
             progress_window.update_idletasks()  # Force UI update
     
         # Add initial message
-        add_text("Configure the potency settings above and click 'Run Analysis' to start.")
-        add_text("Analysis will only include combinations with complete data for:")
-        add_text("- Terpene percentage")
-        add_text("- Viscosity")
-        add_text("- Temperature")
-        add_text("- Potency (for chemistry-aware models)")
-    
-        # Create control buttons at the bottom
-        button_frame = Frame(progress_window)
-        button_frame.pack(pady=10)
+        add_text("Configure the settings above and click 'Run Analysis' to start.")
+        add_text("This analysis will visualize how viscosity varies with temperature.")
+        add_text("The Arrhenius relationship helps understand temperature sensitivity.")
     
         # Define function for the background thread to run the analysis
-        def run_analysis_thread(potency_value, potency_mode):
+        def run_analysis_thread(potency_value, potency_mode, terpene_name):
             try:
                 # Import required modules
                 import glob
                 import threading
-                import pandas as pd
-                import numpy as np
-                import matplotlib
-                # Use Agg backend for matplotlib when running in thread
-                matplotlib.use('Agg')
-                import matplotlib.pyplot as plt
-                from scipy import stats
-                from scipy.optimize import curve_fit
                 import os
                 import pickle
                 import math
-                from sklearn.metrics import r2_score
-     
+                from scipy import stats
+            
+                # Set matplotlib to use non-interactive backend
+                matplotlib.use('Agg')
+            
                 # Function to sanitize filenames
                 def sanitize_filename(name):
                     """Replace invalid filename characters with underscores."""
@@ -3055,87 +2539,13 @@ class ViscosityCalculator:
                         sanitized = sanitized.replace(char, '_')
                     return sanitized
             
-                # First try to load all model types if they're not already loaded
-                if not hasattr(self, 'viscosity_models') or not self.viscosity_models:
-                    self.load_standard_models()
-                if not hasattr(self, 'enhanced_viscosity_models') or not self.enhanced_viscosity_models:
-                    self.load_enhanced_models()
-                if not hasattr(self, 'combined_viscosity_models') or not self.combined_viscosity_models:
-                    # Check if the combined models loading function exists
-                    if hasattr(self, 'load_combined_models'):
-                        self.load_combined_models()
-                    else:
-                        # Try to load combined models directly
-                        combined_model_path = 'models/viscosity_models_combined.pkl'
-                        if os.path.exists(combined_model_path):
-                            try:
-                                with open(combined_model_path, 'rb') as f:
-                                    self.combined_viscosity_models = pickle.load(f)
-                            except Exception as e:
-                                add_text(f"Error loading combined models: {str(e)}")
-                                self.combined_viscosity_models = {}
-                        else:
-                            self.combined_viscosity_models = {}
-    
-                # Check which models are available to use
-                using_combined_models = hasattr(self, 'combined_viscosity_models') and self.combined_viscosity_models
-                using_enhanced_models = hasattr(self, 'enhanced_viscosity_models') and self.enhanced_viscosity_models
-                using_standard_models = hasattr(self, 'viscosity_models') and self.viscosity_models
-    
-                # Determine which models to use (in priority order: combined, enhanced, standard)
-                if using_combined_models:
-                    models_to_analyze = self.combined_viscosity_models
-                    add_text("Using combined models with both terpene and potency data.")
-                elif using_enhanced_models:
-                    models_to_analyze = self.enhanced_viscosity_models
-                    add_text("Using enhanced models with potency data.")
-                elif using_standard_models:
-                    models_to_analyze = self.viscosity_models
-                    add_text("Using standard models with terpene data.")
-                else:
-                    # Fall back to checking file paths directly if attributes don't exist
-                    if os.path.exists('models/viscosity_models_combined.pkl'):
-                        try:
-                            with open('models/viscosity_models_combined.pkl', 'rb') as f:
-                                combined_models = pickle.load(f)
-                                if combined_models:
-                                    self.combined_viscosity_models = combined_models
-                                    models_to_analyze = combined_models
-                                    using_combined_models = True
-                                    add_text("Using combined models loaded from file.")
-                                    using_enhanced_models = False
-                        except Exception as e:
-                            add_text(f"Error loading combined models file: {str(e)}")
-            
-                    if not using_combined_models and os.path.exists('models/viscosity_models_potency.pkl'):
-                        try:
-                            with open('models/viscosity_models_potency.pkl', 'rb') as f:
-                                enhanced_models = pickle.load(f)
-                                if enhanced_models:
-                                    self.enhanced_viscosity_models = enhanced_models
-                                    models_to_analyze = enhanced_models
-                                    using_enhanced_models = True
-                                    add_text("Using potency models loaded from file.")
-                        except Exception as e:
-                            add_text(f"Error loading potency models file: {str(e)}")
-            
-                    if not using_combined_models and not using_enhanced_models and os.path.exists('models/viscosity_models.pkl'):
-                        try:
-                            with open('models/viscosity_models.pkl', 'rb') as f:
-                                standard_models = pickle.load(f)
-                                if standard_models:
-                                    self.viscosity_models = standard_models
-                                    models_to_analyze = standard_models
-                                    using_standard_models = True
-                                    add_text("Using standard models loaded from file.")
-                        except Exception as e:
-                            add_text(f"Error loading standard models file: {str(e)}")
-        
-                # Check if any models were found
-                if not using_combined_models and not using_enhanced_models and not using_standard_models:
-                    add_text("No trained models found. Please train models first.")
-                    run_button.config(state="normal")  # Re-enable run button
+                # First check if we have consolidated models
+                if not hasattr(self, 'consolidated_models') or not self.consolidated_models:
+                    add_text("No consolidated models found. Please train models first.")
+                    self.root.after(0, lambda: run_button.config(state="normal"))
                     return
+            
+                add_text(f"Found {len(self.consolidated_models)} consolidated models to analyze.")
             
                 # Create plots directory if it doesn't exist
                 os.makedirs('plots', exist_ok=True)
@@ -3151,7 +2561,7 @@ class ViscosityCalculator:
                         latest_file = data_files[0]
                         training_data = pd.read_csv(latest_file)
                         add_text(f"Loaded training data from {latest_file}")
-                
+            
                         # Check if potency data is available
                         has_potency = 'total_potency' in training_data.columns
                         if has_potency:
@@ -3163,35 +2573,6 @@ class ViscosityCalculator:
                         add_text("No training data files found.")
                 except Exception as e:
                     add_text(f"Error loading training data: {str(e)}")
-            
-                # Function to check if a media-terpene combination has complete data
-                def has_complete_data(media, terpene):
-                    """Check if this combination has all required data fields."""
-                    if training_data is None:
-                        # No data to check against, assume it has complete data
-                        return True
-                
-                    # Filter training data for this combination
-                    combo_data = training_data[
-                        (training_data['media'] == media) & 
-                        (training_data['terpene'] == terpene)
-                    ].copy()
-                
-                    if combo_data.empty:
-                        return False
-                
-                    # Check for required columns
-                    required_columns = ['terpene_pct', 'temperature', 'viscosity']
-                
-                    # If using enhanced models, also require potency data
-                    if using_enhanced_models or using_combined_models:
-                        required_columns.append('total_potency')
-                
-                    # Check if any rows have all required fields
-                    complete_rows = combo_data.dropna(subset=required_columns)
-                
-                    # Return True if there's at least 5 samples with complete data
-                    return len(complete_rows) >= 5
             
                 # Arrhenius function: ln(viscosity) = ln(A) + (Ea/R)*(1/T)
                 def arrhenius_function(x, a, b):
@@ -3212,7 +2593,7 @@ class ViscosityCalculator:
                     potency_range = [min(100, p) for p in potency_range]
                     # Remove duplicates and sort
                     potency_range = sorted(list(set(potency_range)))
-    
+
                     add_text(f"Performing variable potency analysis with levels: {', '.join([f'{p:.1f}%' for p in potency_range])}")
                 else:
                     # Fixed potency mode
@@ -3221,67 +2602,17 @@ class ViscosityCalculator:
             
                 # Count successful models
                 successful_models = 0
-                successful_combinations = []
             
                 # Process each model
-                for model_key, model in models_to_analyze.items():
+                for model_key, model in self.consolidated_models.items():
                     try:
-                        # Extract media and terpene from model key
-                        if using_enhanced_models and "_with_chemistry" in model_key:
-                            display_key = model_key.replace("_with_chemistry", "")
-                            media, terpene = display_key.split('_', 1)
-                            components = display_key.split('_')
-                        else:
-                            media, terpene = model_key.split('_', 1)
-                            components = model_key.split('_')
+                        # Extract media type from model key
+                        media = model_key.split('_')[0]
                     
-                        # Handle general models better
-                        if len(components) > 1:
-                            media = components[0]
-                            terpene = components[1]
-                            is_general = (terpene == 'general')
-                        else:
-                            media = components[0]
-                            terpene = 'Raw'
-                            is_general = False
-
-                        add_text(f"\nAnalyzing {media}/{terpene}...")
-
-                        # For general models, select a representative terpene for visualization
-                        if is_general:
-                            # Find a representative terpene from the data
-                            if training_data is not None:
-                                media_data = training_data[training_data['media'] == media]
-                                if not media_data.empty:
-                                    # Count terpenes and pick most common that's not 'Raw'
-                                    terpene_counts = media_data['terpene'].value_counts()
-                                    valid_terpenes = [t for t in terpene_counts.index if t != 'Raw' and terpene_counts[t] >= 5]
-                                    if valid_terpenes:
-                                        visualization_terpene = valid_terpenes[0]
-                                        add_text(f"Using {visualization_terpene} as representative terpene for {media} general model")
-                                        terpene = visualization_terpene  # Use this for visualization
+                        add_text(f"\nAnalyzing consolidated model for {media}...")
                     
-                        # Check if this combination has complete data
-                        if not has_complete_data(media, terpene):
-                            add_text(f"Skipping {media}/{terpene} - incomplete data")
-                            continue
-                    
-                        # Find typical Terpene percentage for this combo from data
-                        terpene_pct = 1.0  # Default
-                        if training_data is not None:
-                            combo_data = training_data[
-                                (training_data['media'] == media) & 
-                                (training_data['terpene'] == terpene)
-                            ].copy()
-                            if 'terpene_pct' in combo_data.columns and not combo_data.empty:
-                                terpene_pct = 100 * combo_data['terpene_pct'].median()
-                                if pd.isna(terpene_pct) or terpene_pct <= 0:
-                                    terpene_pct = 1.0
-                    
-                        add_text(f"Using terpene percentage of {terpene_pct:.2f}% for analysis")
-                        
                         # Variable potency analysis if requested
-                        if potency_mode == "variable" and using_enhanced_models:
+                        if potency_mode == "variable":
                             # Create figure for variable potency analysis
                             plt.figure(figsize=(12, 10))
                         
@@ -3297,80 +2628,77 @@ class ViscosityCalculator:
                                 # Calculate temperatures in Kelvin
                                 temperatures_kelvin = temperature_range + 273.15
                                 inverse_temp = 1 / temperatures_kelvin
-    
+                            
                                 # Convert percentage to decimal (e.g., 80% -> 0.8)
-                                # This is the correct scale for the model (no further scaling needed)
                                 decimal_potency = potency / 100.0
-    
+                            
                                 add_text(f"  • Using potency {potency:.1f}% (decimal: {decimal_potency:.4f})")
-    
+                            
                                 # Debug the model inputs and outputs
-                                add_text(f"  • Debug: terpene_pct={terpene_pct}, temp=25.0, potency={decimal_potency}")
+                                add_text(f"  • Debug: terpene_name={terpene_name}, temp=25.0, potency={decimal_potency}")
                                 try:
-                                    viscosity_at_25C = self.predict_model_viscosity(model, 100*(1-decimal_potency), 25.0, decimal_potency)
+                                    viscosity_at_25C = self.predict_model_viscosity(model, 5.0, 25.0, potency, terpene_name)
                                     add_text(f"  • At 25°C: predicted viscosity = {viscosity_at_25C:.0f} cP")
-        
+                                
                                     # Get predictions for each temperature
                                     predicted_visc = []
                                     for temp in temperature_range:
-                                        visc = self.predict_model_viscosity(model, 100*(1-decimal_potency), temp, decimal_potency)
+                                        visc = self.predict_model_viscosity(model, 5.0, temp, potency, terpene_name)
                                         predicted_visc.append(visc)
-                            
+                                
                                     predicted_visc = np.array(predicted_visc)
-                            
+                                
                                     # Filter invalid values
                                     valid_indices = ~np.isnan(predicted_visc) & (predicted_visc > 0)
                                     if not any(valid_indices):
                                         add_text(f"No valid predictions for {potency:.1f}% potency. Skipping.")
                                         continue
-                            
+                                
                                     # Extract valid data
                                     inv_temp_valid = inverse_temp[valid_indices]
                                     predicted_visc_valid = predicted_visc[valid_indices]
-                            
+                                
                                     # Calculate ln(viscosity)
                                     ln_visc = np.log(predicted_visc_valid)
-                            
+                                
                                     # Fit Arrhenius equation
                                     params, covariance = curve_fit(arrhenius_function, inv_temp_valid, ln_visc)
                                     a, b = params
-                            
+                                
                                     # Calculate activation energy
                                     R = 8.314  # Gas constant
                                     Ea = b * R
                                     Ea_kJ = Ea / 1000  # Convert to kJ/mol
-                            
+                                
                                     # Store for comparison
                                     activation_energies.append((potency, Ea_kJ))
-                            
+                                
                                     # Calculate predicted values
                                     ln_visc_pred = arrhenius_function(inv_temp_valid, a, b)
-                            
+                                
                                     # Calculate R-squared
                                     r2 = r2_score(ln_visc, ln_visc_pred)
-                            
+                                
                                     # Plot with distinct colors
                                     ax1.semilogy(temperature_range[valid_indices], predicted_visc_valid,
                                             'o-', label=f'Potency {potency:.1f}% (25C = {viscosity_at_25C:.0f} cP)')
-        
-                            
+                                
                                     ax2.scatter(inv_temp_valid, ln_visc,
                                              label=f'Potency {potency:.1f}%')
                                     ax2.plot(inv_temp_valid, ln_visc_pred, '--',
                                             label=f'Fit {potency:.1f}% (Ea={Ea_kJ:.1f} kJ/mol)')
-
+                                
                                     add_text(f"  • At {potency:.1f}% potency: viscosity at 25C = {viscosity_at_25C:.0f} cP")
-
+                                    add_text(f"  • Activation Energy: {Ea_kJ:.1f} kJ/mol")
+                                
                                 except Exception as e:
-                                    add_text(f" -error in prediction: {str(e)}")
-                                    add_text(" - skipping this potency level due to prediction error")
-
-
+                                    add_text(f" - Error in prediction: {str(e)}")
+                                    add_text(" - Skipping this potency level due to prediction error")
                         
                             # Configure plots
                             ax1.set_xlabel('Temperature (C)')
                             ax1.set_ylabel('Viscosity (cP)')
-                            ax1.set_title(f'Viscosity vs Temperature for {media}/{terpene}\nTerpene: {terpene_pct:.2f}%')
+                            ax1.set_title(f'Viscosity vs Temperature for {media}\nTerpene: {terpene_name}, Terpene %: 5.0%')
                             ax1.grid(True)
                             ax1.legend()
                         
@@ -3383,7 +2711,7 @@ class ViscosityCalculator:
                             plt.tight_layout()
                         
                             # Save plot
-                            plot_path = f'plots/Arrhenius_{sanitize_filename(media)}_{sanitize_filename(terpene)}_variable_potency.png'
+                            plot_path = f'plots/Arrhenius_{sanitize_filename(media)}_{sanitize_filename(terpene_name)}_variable_potency.png'
                             plt.savefig(plot_path)
                             plt.close()
                         
@@ -3395,7 +2723,7 @@ class ViscosityCalculator:
                                 plt.plot(potency_values, ea_values, 'o-', linewidth=2)
                                 plt.xlabel('Total Potency (%)')
                                 plt.ylabel('Activation Energy (kJ/mol)')
-                                plt.title(f'Effect of Potency on Activation Energy\n{media}/{terpene}')
+                                plt.title(f'Effect of Potency on Activation Energy\n{media}/{terpene_name}')
                                 plt.grid(True)
                             
                                 # Add trendline
@@ -3407,7 +2735,7 @@ class ViscosityCalculator:
                                     plt.legend()
                             
                                 # Save plot
-                                potency_plot_path = f'plots/Potency_Effect_{sanitize_filename(media)}_{sanitize_filename(terpene)}.png'
+                                potency_plot_path = f'plots/Potency_Effect_{sanitize_filename(media)}_{sanitize_filename(terpene_name)}.png'
                                 plt.savefig(potency_plot_path)
                                 plt.close()
                             
@@ -3432,7 +2760,6 @@ class ViscosityCalculator:
                         
                             # Skip standard analysis
                             successful_models += 1
-                            successful_combinations.append((media, terpene))
                             continue
                     
                         # --- Standard single-potency analysis ---
@@ -3444,10 +2771,7 @@ class ViscosityCalculator:
                         # Get predictions
                         predicted_visc = []
                         for temp in temperature_range:
-                            if using_enhanced_models or using_combined_models:
-                                visc = self.predict_model_viscosity(model, terpene_pct, temp, potency_value)
-                            else:
-                                visc = self.predict_model_viscosity(model, terpene_pct, temp)
+                            visc = self.predict_model_viscosity(model, 5.0, temp, potency_value, terpene_name)
                             predicted_visc.append(visc)
                     
                         predicted_visc = np.array(predicted_visc)
@@ -3455,7 +2779,7 @@ class ViscosityCalculator:
                         # Filter invalid values
                         valid_indices = ~np.isnan(predicted_visc) & (predicted_visc > 0)
                         if not any(valid_indices):
-                            add_text(f"No valid predictions for {media}/{terpene}. Skipping.")
+                            add_text(f"No valid predictions for {media}/{terpene_name}. Skipping.")
                             continue
                     
                         # Extract valid data
@@ -3492,16 +2816,13 @@ class ViscosityCalculator:
                         plt.yscale('log')
                         plt.xlabel('Temperature (C)')
                         plt.ylabel('Viscosity (cP)')
-                        if using_enhanced_models:
-                            plt.title(f'Viscosity vs Temperature for {media}/{terpene}\nTerpene: {terpene_pct:.2f}%, Potency: {potency_value:.1f}%')
-                        else:
-                            plt.title(f'Viscosity vs Temperature for {media}/{terpene}\nTerpene: {terpene_pct:.2f}%')
+                        plt.title(f'Viscosity vs Temperature for {media}\nTerpene: {terpene_name}, Terpene %: 5.0%, Potency: {potency_value:.1f}%')
                         plt.grid(True)
                     
                         # Arrhenius plot
                         plt.subplot(212)
                         plt.scatter(inv_temp_valid, ln_visc, color='blue', label='ln(Viscosity)')
-                        plt.plot(inv_temp_valid, ln_visc_pred, 'r-', label=f'Arrhenius fit (R^2 = {r2:.4f})')
+                        plt.plot(inv_temp_valid, ln_visc_pred, 'r-', label=f'Arrhenius fit (R² = {r2:.4f})')
                         plt.xlabel('1/T (K⁻¹)')
                         plt.ylabel('ln(Viscosity)')
                         plt.title(f'Arrhenius Plot: Ea = {Ea_kJ:.2f} kJ/mol, ln(A) = {a:.2f}')
@@ -3511,15 +2832,12 @@ class ViscosityCalculator:
                         plt.tight_layout()
                     
                         # Save plot
-                        if using_enhanced_models:
-                            plot_path = f'plots/Arrhenius_{sanitize_filename(media)}_{sanitize_filename(terpene)}_potency{int(potency_value)}.png'
-                        else:
-                            plot_path = f'plots/Arrhenius_{sanitize_filename(media)}_{sanitize_filename(terpene)}.png'
+                        plot_path = f'plots/Arrhenius_{sanitize_filename(media)}_{sanitize_filename(terpene_name)}_potency{int(potency_value)}.png'
                         plt.savefig(plot_path)
                         plt.close()
                     
                         # Report results
-                        add_text(f"Results for {media}/{terpene}:")
+                        add_text(f"Results for {media}/{terpene_name}:")
                         add_text(f"  • Activation energy (Ea): {Ea_kJ:.2f} kJ/mol")
                         add_text(f"  • Pre-exponential factor ln(A): {a:.2f}")
                         add_text(f"  • Arrhenius equation: ln(viscosity) = {a:.2f} + {b:.2f}*(1/T)")
@@ -3535,7 +2853,6 @@ class ViscosityCalculator:
                             add_text("  • High activation energy: highly temperature-sensitive")
                     
                         successful_models += 1
-                        successful_combinations.append((media, terpene))
                     
                     except Exception as e:
                         add_text(f"Error analyzing {model_key}: {str(e)}")
@@ -3551,9 +2868,8 @@ class ViscosityCalculator:
                 if successful_models > 0:
                     try:
                         # Generate activation energy comparison plot
-                        self.generate_fixed_activation_energy_comparison(
-                            models_to_analyze, potency_value, using_enhanced_models, 
-                            successful_combinations, add_text
+                        self.generate_activation_energy_comparison(
+                            potency_value, terpene_name, add_text
                         )
                         add_text("Generated comparison plot of activation energies.")
                     except Exception as e:
@@ -3584,7 +2900,8 @@ class ViscosityCalculator:
             analysis_thread = threading.Thread(
                 target=lambda: run_analysis_thread(
                     potency_var.get(), 
-                    potency_mode_var.get()
+                    potency_mode_var.get(),
+                    terpene_var.get()
                 )
             )
             analysis_thread.daemon = True
@@ -3604,16 +2921,14 @@ class ViscosityCalculator:
             command=progress_window.destroy
         ).pack(side="left", padx=10)
 
-    def generate_fixed_activation_energy_comparison(self,models, potency_value, using_enhanced_models, valid_combinations, log_func=None):
+    def generate_activation_energy_comparison(self, potency_value, terpene_name, log_func=None):
         """
-        Generate a fixed version of the activation energy comparison plot.
-        Only includes combinations that have been successfully analyzed.
+        Generate a comparison plot of activation energies across different media types.
+        Uses the consolidated model structure with one-hot encoding.
     
         Args:
-            models: Dictionary of trained models
-            potency_value: Potency value used for predictions
-            using_enhanced_models: Flag indicating if enhanced models are being used
-            valid_combinations: List of (media, terpene) tuples that were successfully analyzed
+            potency_value: Potency value to use for predictions (as percentage)
+            terpene_name: Name of terpene to use for analysis
             log_func: Optional function to log messages
         """
         import numpy as np
@@ -3622,7 +2937,8 @@ class ViscosityCalculator:
         import matplotlib.pyplot as plt
         from scipy.optimize import curve_fit
         import os
-    
+        from sklearn.metrics import r2_score
+
         def sanitize_filename(name):
             """Replace invalid filename characters with underscores."""
             invalid_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|', ' ']
@@ -3630,61 +2946,32 @@ class ViscosityCalculator:
             for char in invalid_chars:
                 sanitized = sanitized.replace(char, '_')
             return sanitized
-    
-        # Filter models to only include validated combinations
-        filtered_models = {}
-        for model_key, model in models.items():
-            # Extract media and terpene
-            if using_enhanced_models and "_with_chemistry" in model_key:
-                base_key = model_key.replace("_with_chemistry", "")
-                media, terpene = base_key.split('_', 1)
-            else:
-                media, terpene = model_key.split('_', 1)
-        
-            # Check if this is a valid combination
-            if (media, terpene) in valid_combinations:
-                filtered_models[model_key] = model
-    
-        if not filtered_models:
-            if log_func:
-                log_func("No valid models for comparison plot")
-            return
-    
+
         # Store results for comparison
-        media_types = set()
         results = []
-    
+
         # Arrhenius function
         def arrhenius_function(x, a, b):
             return a + b * x
-    
+
         # Temperature range
         temperature_range = np.linspace(20, 70, 11)
         temperatures_kelvin = temperature_range + 273.15
         inverse_temp = 1 / temperatures_kelvin
-    
+
         # R constant
         R = 8.314  # Gas constant
-    
+
         # Process each model
-        for model_key, model in filtered_models.items():
+        for model_key, model in self.consolidated_models.items():
             try:
-                # Extract media and terpene
-                if using_enhanced_models and "_with_chemistry" in model_key:
-                    display_key = model_key.replace("_with_chemistry", "")
-                    media, terpene = display_key.split('_', 1)
-                else:
-                    media, terpene = model_key.split('_', 1)
-            
-                media_types.add(media)
-            
-                # Default terpene percentage
-                terpene_pct = 5.0
+                # Extract media type from model key
+                media = model_key.split('_')[0]
             
                 # Generate predictions
                 predicted_visc = []
                 for temp in temperature_range:
-                    visc = self.predict_model_viscosity(model, terpene_pct, temp, potency_value)
+                    visc = self.predict_model_viscosity(model, 5.0, temp, potency_value, terpene_name)
                     predicted_visc.append(visc)
             
                 predicted_visc = np.array(predicted_visc)
@@ -3692,7 +2979,8 @@ class ViscosityCalculator:
                 # Filter invalid values
                 valid_indices = ~np.isnan(predicted_visc) & (predicted_visc > 0)
                 if not any(valid_indices):
-                    print(f"Warning: No valid predictions for {model_key}")
+                    if log_func:
+                        log_func(f"Warning: No valid predictions for {model_key}")
                     continue
             
                 inv_temp_valid = inverse_temp[valid_indices]
@@ -3709,70 +2997,73 @@ class ViscosityCalculator:
                 Ea = b * R
                 Ea_kJ = Ea / 1000
             
+                # Calculate R-squared
+                ln_visc_pred = arrhenius_function(inv_temp_valid, a, b)
+                r2 = r2_score(ln_visc, ln_visc_pred)
+            
+                # Get viscosity at 25C
+                visc_25C = None
+                if 25 in temperature_range:
+                    idx = list(temperature_range).index(25)
+                    if idx < len(predicted_visc) and not np.isnan(predicted_visc[idx]):
+                        visc_25C = predicted_visc[idx]
+            
                 # Store result
                 results.append({
                     'media': media,
-                    'terpene': terpene,
                     'Ea_kJ': Ea_kJ,
                     'ln_A': a,
-                    'potency': potency_value if using_enhanced_models else None
+                    'r2': r2,
+                    'visc_25C': visc_25C,
+                    'potency': potency_value
                 })
         
             except Exception as e:
-                print(f"Error processing {model_key}: {e}")
-    
+                if log_func:
+                    log_func(f"Error processing {model_key}: {e}")
+
         if not results:
             if log_func:
                 log_func("No valid results for comparison plot")
             return
-    
+
         # Convert to DataFrame
         import pandas as pd
         results_df = pd.DataFrame(results)
-    
+
         # Sort by activation energy
         results_df = results_df.sort_values('Ea_kJ', ascending=False)
-    
-        # Limit to top and bottom results if many entries
-        if len(results_df) > 50:
-            top_entries = results_df.head(25)
-            bottom_entries = results_df.tail(25)
-            results_df = pd.concat([top_entries, bottom_entries])
-    
+
         # Create figure
         plt.figure(figsize=(15, max(8, len(results_df) * 0.25)))
-    
+
         # Create positions for bars
         positions = np.arange(len(results_df))
         bar_height = 0.6
-    
-        # Create colormap for media types
-        media_list = sorted(list(media_types))
-        colors = plt.cm.tab20(np.linspace(0, 1, len(media_list)))
-        color_map = dict(zip(media_list, colors))
-    
+
+        # Create colormap based on viscosity at 25C
+        if 'visc_25C' in results_df.columns and not results_df['visc_25C'].isna().all():
+            visc_values = results_df['visc_25C'].fillna(0)
+            normalized_visc = (visc_values - visc_values.min()) / (visc_values.max() - visc_values.min() + 1)
+            colors = plt.cm.viridis(normalized_visc)
+        else:
+            # Fallback to default colors if viscosity not available
+            colors = plt.cm.tab10(np.linspace(0, 1, len(results_df)))
+
         # Create horizontal bars
         bars = plt.barh(
             positions, 
             results_df['Ea_kJ'], 
             height=bar_height,
-            color=[color_map[media] for media in results_df['media']]
+            color=colors
         )
-    
-        # Add labels with smaller font
-        plt.yticks(positions, [f"{t[:15]}... ({m})" for t, m in zip(results_df['terpene'], results_df['media'])], fontsize=6)
-    
+
+        # Add labels
+        plt.yticks(positions, results_df['media'], fontsize=8)
+
         plt.xlabel('Activation Energy (kJ/mol)', fontsize=12)
-        if using_enhanced_models and potency_value is not None:
-            plt.title(f'Activation Energy Comparison by Media-Terpene Combination\nPotency: {potency_value:.1f}%', fontsize=14)
-        else:
-            plt.title('Activation Energy Comparison by Media-Terpene Combination', fontsize=14)
-    
-        # Add legend for media types
-        from matplotlib.patches import Patch
-        legend_elements = [Patch(facecolor=color_map[media], label=media) for media in media_list]
-        plt.legend(handles=legend_elements, loc='upper right', fontsize=8)
-    
+        plt.title(f'Activation Energy Comparison by Media Type\nTerpene: {terpene_name}, Potency: {potency_value:.1f}%', fontsize=14)
+
         # Add value labels
         for i, bar in enumerate(bars):
             plt.text(
@@ -3780,24 +3071,21 @@ class ViscosityCalculator:
                 bar.get_y() + bar.get_height()/2, 
                 f"{results_df['Ea_kJ'].iloc[i]:.1f}", 
                 va='center',
-                fontsize=6
+                fontsize=8
             )
-    
+
         plt.tight_layout()
-    
+
         # Save plot
         try:
-            if using_enhanced_models and potency_value is not None:
-                plot_path = f'plots/Activation_Energy_Comparison_Potency{int(potency_value)}.png'
-            else:
-                plot_path = 'plots/Activation_Energy_Comparison.png'
+            plot_path = f'plots/Activation_Energy_Comparison_{sanitize_filename(terpene_name)}_Potency{int(potency_value)}.png'
             plt.savefig(plot_path, dpi=300)
             if log_func:
                 log_func(f"Comparison plot saved to: {plot_path}")
         except Exception as e:
             if log_func:
                 log_func(f"Error saving comparison plot: {e}")
-    
+
         plt.close()
 
     def embed_in_frame(self, parent_frame):
@@ -3827,7 +3115,8 @@ class ViscosityCalculator:
 
     def analyze_chemical_importance(self):
         """
-        Analyze and visualize the importance of chemical properties in viscosity models.
+        Analyze and visualize the importance of chemical properties in consolidated viscosity models.
+        Creates bar charts and heatmaps showing the relative importance of features across media types.
         """
         # Import required libraries
         import matplotlib.pyplot as plt
@@ -3837,23 +3126,13 @@ class ViscosityCalculator:
         from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
         from matplotlib.figure import Figure
     
-        # Check if enhanced models exist
-        enhanced_model_path = 'models/viscosity_models_with_chemistry.pkl'
-        if not os.path.exists(enhanced_model_path):
+        # Check if consolidated models exist
+        if not hasattr(self, 'consolidated_models') or not self.consolidated_models:
             messagebox.showinfo(
-                "No Enhanced Models",
-                "No enhanced models with chemical properties found.\n\n"
-                "Please train models with chemical properties first."
+                "No Consolidated Models",
+                "No consolidated models found.\n\n"
+                "Please train models first."
             )
-            return
-    
-        # Load enhanced models
-        try:
-            import pickle
-            with open(enhanced_model_path, 'rb') as f:
-                enhanced_models = pickle.load(f)
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to load enhanced models: {str(e)}")
             return
     
         # Create window for the analysis
@@ -3879,52 +3158,61 @@ class ViscosityCalculator:
         # Get all unique features and media types
         all_features = set()
         media_types = set()
+        terpene_features = set()
     
-        for model_key, model_data in enhanced_models.items():
+        # Track all feature types
+        primary_features = ['terpene_pct', 'total_potency', 'is_raw']
+        physical_features = ['theoretical_max_terpene', 'terpene_headroom', 'terpene_max_ratio', 'potency_terpene_ratio']
+    
+        for model_key, model_data in self.consolidated_models.items():
             # Extract media type from the model key
             media = model_key.split('_')[0]  
             media_types.add(media)
         
             # Add features
-            if isinstance(model_data, dict) and 'features' in model_data:
-                all_features.update(model_data['features'])
+            if isinstance(model_data, dict) and 'residual_features' in model_data:
+                residual_features = model_data['residual_features']
+                all_features.update(residual_features)
+            
+                # Identify terpene one-hot features
+                for feature in residual_features:
+                    if feature.startswith('terpene_') and feature != 'terpene_pct':
+                        terpene_features.add(feature)
     
-        # Remove temperature as it's always included
-        if 'temperature' in all_features:
-            all_features.remove('temperature')
+        # Remove specific features from general analysis as they're handled separately
+        base_features = all_features - terpene_features
     
         # Create bar plot for feature importance
         ax1 = fig.add_subplot(211)
     
         # Calculate average importance for each feature by media type
         media_list = sorted(list(media_types))
-        feature_list = sorted(list(all_features))
+        feature_list = sorted(list(base_features))
     
         # Create arrays to store importance values
         importance_data = {media: {feature: [] for feature in feature_list} for media in media_list}
     
         # Collect importance values
-        for model_key, model_data in enhanced_models.items():
+        for model_key, model_data in self.consolidated_models.items():
             # Extract media type
             media = model_key.split('_')[0]
         
             # Get the model and its features with proper type checking
-            if isinstance(model_data, dict) and 'model' in model_data:
-                model = model_data['model']
-                features = model_data['features']
+            if isinstance(model_data, dict) and 'residual_model' in model_data:
+                residual_model = model_data['residual_model']
+                residual_features = model_data['residual_features']
             else:
-                model = model_data
-                features = ['terpene_pct', 'temperature', 'total_potency']
+                continue
         
             # Skip if model doesn't have feature_importances_
-            if not hasattr(model, 'feature_importances_'):
+            if not hasattr(residual_model, 'feature_importances_'):
                 continue
-            
-            importances = model.feature_importances_
+        
+            importances = residual_model.feature_importances_
         
             # Map importances to features
-            for i, feature in enumerate(features):
-                if feature in feature_list:  # Skip temperature
+            for i, feature in enumerate(residual_features):
+                if feature in feature_list:  # Only include base features
                     importance_data[media][feature].append(importances[i])
     
         # Calculate averages
@@ -3944,92 +3232,93 @@ class ViscosityCalculator:
         ax1.set_ylabel('Average Importance')
         ax1.set_title('Importance of Chemical Properties by Media Type')
         ax1.set_xticks(x + bar_width * (len(media_list) - 1) / 2)
-        ax1.set_xticklabels(feature_list)
-        
+        ax1.set_xticklabels(feature_list, rotation=45, ha='right')
+    
         ax1.legend()
     
         # Create heatmap showing feature importance across models
         ax2 = fig.add_subplot(212)
     
+        # Special handling for terpene features - combine them into a single "terpene type" feature
         # Get all model keys and organize by media type
         model_keys_by_media = {media: [] for media in media_list}
-        for model_key in enhanced_models.keys():
+        for model_key in self.consolidated_models.keys():
             media = model_key.split('_')[0]
             model_keys_by_media[media].append(model_key)
     
-        # Create heatmap data
-        heatmap_data = []
-        ylabels = []
+        # Prepare data for heatmap - group features by category
+        feature_categories = {
+            'Primary': primary_features,
+            'Physical': physical_features,
+            'Terpene Type': list(terpene_features)
+        }
     
-        # Limit the number of models per media type to prevent overcrowding
-        MAX_MODELS_PER_MEDIA = 5
+        # Create a simpler matrix for the heatmap - media types vs feature categories
+        category_importances = {media: {category: 0.0 for category in feature_categories} 
+                               for media in media_list}
     
+        # Combine terpene feature importances for each media
         for media in media_list:
-            # Sort and limit model keys
-            media_models = sorted(model_keys_by_media[media])[:MAX_MODELS_PER_MEDIA]
+            # For each media, calculate the average importance of each feature category
+            for model_key in model_keys_by_media[media]:
+                model_data = self.consolidated_models[model_key]
+            
+                # Skip if not a proper model or no feature importances
+                if not isinstance(model_data, dict) or 'residual_model' not in model_data:
+                    continue
+                
+                residual_model = model_data['residual_model']
+                if not hasattr(residual_model, 'feature_importances_'):
+                    continue
+                
+                residual_features = model_data['residual_features']
+                importances = residual_model.feature_importances_
+            
+                # Calculate importance for each category
+                for category, cat_features in feature_categories.items():
+                    # Sum importance of features in this category
+                    category_importance = 0.0
+                    count = 0
+                
+                    for feature in cat_features:
+                        if feature in residual_features:
+                            idx = residual_features.index(feature)
+                            if idx < len(importances):
+                                category_importance += importances[idx]
+                                count += 1
+                
+                    # Average the importance if we found any features
+                    if count > 0:
+                        category_importances[media][category] += category_importance / count
         
-            for model_key in media_models:
-                model_data = enhanced_models[model_key]
-            
-                # Skip if not a dict with 'features' and 'model'
-                if not isinstance(model_data, dict) or 'features' not in model_data or 'model' not in model_data:
-                    continue
-                
-                features = model_data['features']
-                model = model_data['model']
-            
-                # Skip if model doesn't have feature_importances_
-                if not hasattr(model, 'feature_importances_'):
-                    continue
-                
-                importances = model.feature_importances_
-            
-                # Map features to importances
-                row = []
-                for feature in feature_list:
-                    if feature in features:
-                        idx = features.index(feature)
-                        row.append(importances[idx])
-                    else:
-                        row.append(0)
-            
-                heatmap_data.append(row)
-            
-                # Create shorter label with media and terpene
-                parts = model_key.split('_')
-                if len(parts) >= 2:
-                    # Truncate terpene name if too long
-                    terpene = parts[1][:10] + '..' if len(parts[1]) > 12 else parts[1]
-                    label = f"{parts[0]}: {terpene}"
-                else:
-                    label = model_key
-                ylabels.append(label)
+            # Average across all models for this media
+            model_count = len(model_keys_by_media[media])
+            if model_count > 0:
+                for category in feature_categories:
+                    category_importances[media][category] /= model_count
+    
+        # Create heatmap data matrix
+        heatmap_data = []
+        for media in media_list:
+            row = [category_importances[media][category] for category in feature_categories]
+            heatmap_data.append(row)
     
         # Create heatmap
-        if heatmap_data:
-            # Set appropriate figure size for the number of models
-            fig_height = min(0.3 * len(heatmap_data) + 6, 12)
-            fig.set_figheight(fig_height)
-        
-            im = ax2.imshow(heatmap_data, cmap='viridis', aspect='auto')
-        
-            # Add colorbar
-            fig.colorbar(im, ax=ax2)
-        
-            # Set labels
-            ax2.set_xticks(np.arange(len(feature_list)))
-            ax2.set_yticks(np.arange(len(ylabels)))
-            ax2.set_xticklabels(feature_list)
-            ax2.set_yticklabels(ylabels)
-            ax2.tick_params(axis='both', which='major', labelsize=5)
-        
-            # Ensure ylabels are readable
-            plt.setp(ax2.get_yticklabels(), fontsize=8)
-        
-            # Rotate x labels for better readability
-            plt.setp(ax2.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
-        
-            ax2.set_title("Feature Importance Heatmap by Model")
+        im = ax2.imshow(heatmap_data, cmap='viridis', aspect='auto')
+    
+        # Add colorbar
+        fig.colorbar(im, ax=ax2)
+    
+        # Set labels
+        ax2.set_xticks(np.arange(len(feature_categories)))
+        ax2.set_yticks(np.arange(len(media_list)))
+        ax2.set_xticklabels(feature_categories.keys())
+        ax2.set_yticklabels(media_list)
+    
+        # Rotate x labels for better readability
+        plt.setp(ax2.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
+    
+        ax2.set_title("Feature Category Importance by Media Type")
     
         # Adjust layout
         fig.tight_layout()
@@ -4048,9 +3337,10 @@ class ViscosityCalculator:
 
     def train_unified_models(self, data=None):
         """
-        Trains viscosity models using a two-step approach with improved data classification:
-        1. First models the temperature-viscosity relationship (Arrhenius)
-        2. Then models the residuals using available features (both potency and terpene when possible)
+        Trains consolidated viscosity models using a hierarchical approach:
+        1. One model per media type that handles all terpene variations
+        2. Uses two-step approach: temperature baseline + residual effects
+        3. Incorporates potency, terpene percentage, and terpene-specific features
         """
         import os
         import pandas as pd
@@ -4060,10 +3350,11 @@ class ViscosityCalculator:
         from sklearn.ensemble import RandomForestRegressor
         from sklearn.linear_model import LinearRegression, Ridge
         from tkinter import Toplevel, StringVar, Frame, Label, messagebox, OptionMenu
+        from sklearn.impute import SimpleImputer
 
         # Create configuration window
         config_window = Toplevel(self.root)
-        config_window.title("Train Two-Step Models")
+        config_window.title("Train Consolidated Models")
         config_window.geometry("500x300")
         config_window.transient(self.root)
         config_window.grab_set()
@@ -4088,37 +3379,18 @@ class ViscosityCalculator:
         model_dropdown.grid(row=0, column=1, sticky="w", pady=10)
 
         # Status label
-        status_label = Label(options_frame, text="Click Train Models to begin training with combined features",
+        status_label = Label(options_frame, text="Click Train Models to begin training consolidated media models",
                          bg=APP_BACKGROUND_COLOR, fg="white", font=FONT)
         status_label.grid(row=4, column=0, columnspan=2, pady=20)
 
-        # Function to start training
-        def start_training():
-            status_label.config(text="Training models... Please wait.")
-            config_window.update_idletasks()
-
-            # Store configuration
-            config = {
-                "model_type": model_type_var.get()
-            }
-
-            # Start training in a thread
-            training_thread = threading.Thread(
-                target=lambda: train_models_thread(config, status_label, config_window)
-            )
-            training_thread.daemon = True
-            training_thread.start()
-    
         # Training thread function
         def train_models_thread(config, status_label, window):
-            from sklearn.impute import SimpleImputer
-
             try:
                 # Load data if not provided
                 nonlocal data
                 if data is None:
-                    specific_file = './data_scraper/Master_Viscosity_Data_processed.csv'
-            
+                    specific_file = './data/Master_Viscosity_Data_processed.csv'
+        
                     try:
                         if os.path.exists(specific_file):
                             data = pd.read_csv(specific_file)
@@ -4137,128 +3409,109 @@ class ViscosityCalculator:
                         ))
                         window.after(0, window.destroy)
                         return
-        
+    
                 # Clean and prepare data
                 self.root.after(0, lambda: status_label.config(text="Performing initial data cleaning..."))
                 data_cleaned = data.copy()
-        
+    
                 # Convert columns to numeric and handle errors
                 num_columns = ['terpene_pct', 'temperature', 'viscosity', 'd9_thc', 'd8_thc', 'thca', 'total_potency']
                 for col in num_columns:
                     if col in data_cleaned.columns:
                         data_cleaned[col] = pd.to_numeric(data_cleaned[col], errors='coerce')
-        
-                # Clean terpene values - safe replacement
+    
+                # Clean terpene values
                 data_cleaned.loc[data_cleaned['terpene'].isna(), 'terpene'] = 'Raw'
                 data_cleaned.loc[data_cleaned['terpene'] == '', 'terpene'] = 'Raw'
-            
+        
                 # Add is_raw flag
                 data_cleaned['is_raw'] = (data_cleaned['terpene'] == 'Raw')
-            
+        
                 # Fill missing terpene_pct with 0 for raw data
                 data_cleaned.loc[data_cleaned['is_raw'] & data_cleaned['terpene_pct'].isna(), 'terpene_pct'] = 0.0
-                
+            
+                # Add physical constraint features if potency data available
                 if 'total_potency' in data_cleaned.columns and 'terpene_pct' in data_cleaned.columns:
                     # Calculate theoretical maximum terpene percentage
                     data_cleaned['theoretical_max_terpene'] = 1.0 - data_cleaned['total_potency']
-        
+    
                     # Calculate how close the formulation is to theoretical maximum
                     data_cleaned['terpene_headroom'] = data_cleaned['theoretical_max_terpene'] - data_cleaned['terpene_pct']
-        
+    
                     # Flag physically impossible formulations (allowing for small measurement error)
                     data_cleaned['physically_valid'] = data_cleaned['terpene_pct'] <= (1.05 * data_cleaned['theoretical_max_terpene'])
-        
+    
                     # Calculate ratio as a proportion of theoretical maximum
                     data_cleaned['terpene_max_ratio'] = data_cleaned['terpene_pct'] / data_cleaned['theoretical_max_terpene'].clip(lower=0.01)
-        
+    
                     # Log information about the constraints
                     valid_pct = 100 * data_cleaned['physically_valid'].mean()
                     self.root.after(0, lambda p=valid_pct: status_label.config(
                         text=f"Added physical constraints. {p:.1f}% of formulations are physically valid."
                     ))
 
-
-                # Calculate total_potency if missing
+                # Calculate total_potency if missing but component cannabinoid data available
                 if 'total_potency' in data_cleaned.columns:
                     missing_potency = data_cleaned['total_potency'].isna()
                     if missing_potency.any():
                         self.root.after(0, lambda: status_label.config(text="Calculating missing potency values..."))
                         # Get individual cannabinoid columns
                         cannabinoid_cols = [col for col in ['d9_thc', 'd8_thc', 'thca'] if col in data_cleaned.columns]
-                    
+                
                         if cannabinoid_cols:
                             # Calculate sum of available cannabinoids (skip NaN)
                             cannabinoid_sum = data_cleaned[cannabinoid_cols].sum(axis=1, skipna=True)
                             data_cleaned.loc[missing_potency, 'total_potency'] = cannabinoid_sum[missing_potency]
-                        
+                    
                             self.root.after(0, lambda: status_label.config(
                                 text=f"Calculated potency for {missing_potency.sum()} records"
                             ))
-            
+                
+                # Add inverse relationship logic after existing preprocessing
+                # For rows with missing potency but available terpene percentage (non-raw)
+                potency_missing = data_cleaned['total_potency'].isna()
+                terpene_available = ~data_cleaned['terpene_pct'].isna() & ~data_cleaned['is_raw']
+                mask = potency_missing & terpene_available
+
+                if mask.any():
+                    # Ensure terpene_pct is in decimal format
+                    terpene_decimal = data_cleaned.loc[mask, 'terpene_pct'].copy()
+                    if (terpene_decimal > 1).any():
+                        terpene_decimal = terpene_decimal / 100.0
+    
+                    data_cleaned.loc[mask, 'total_potency'] = 1.0 - terpene_decimal
+                    self.root.after(0, lambda count=mask.sum(): status_label.config(
+                        text=f"Filled {count} missing potency values using inverse relationship with terpene %"
+                    ))
+
+                # For rows with missing terpene but available potency (non-raw)
+                terpene_missing = data_cleaned['terpene_pct'].isna()
+                potency_available = ~data_cleaned['total_potency'].isna() & ~data_cleaned['is_raw']
+                mask = terpene_missing & potency_available
+
+                if mask.any():
+                    # Ensure potency is in decimal format
+                    potency_decimal = data_cleaned.loc[mask, 'total_potency'].copy()
+                    if (potency_decimal > 1).any():
+                        potency_decimal = potency_decimal / 100.0
+    
+                    data_cleaned.loc[mask, 'terpene_pct'] = (1.0 - potency_decimal) * 100.0
+                    self.root.after(0, lambda count=mask.sum(): status_label.config(
+                        text=f"Filled {count} missing terpene values using inverse relationship with potency"
+                    ))
+
                 # Apply Arrhenius transformation
                 data_cleaned['temperature_kelvin'] = data_cleaned['temperature'] + 273.15
                 data_cleaned['inverse_temp'] = 1 / data_cleaned['temperature_kelvin']
                 data_cleaned['log_viscosity'] = np.log(data_cleaned['viscosity'])
-            
-                # -- Feature Selection and Classification Logic --
-                self.root.after(0, lambda: status_label.config(text="Classifying data points by available features..."))
-            
-                # Identify points with different feature combinations
-                has_potency = ~data_cleaned['total_potency'].isna() if 'total_potency' in data_cleaned.columns else pd.Series(False, index=data_cleaned.index)
-                has_terpene = ~data_cleaned['terpene_pct'].isna()
-            
-                # NEW CODE: Add validation for physical constraints
-                if 'total_potency' in data_cleaned.columns and 'terpene_pct' in data_cleaned.columns:
-                    # Check for physically impossible formulations
-                    impossible_mask = data_cleaned['terpene_pct'] > (1.0 - data_cleaned['total_potency'] + 0.05)
-                    impossible_count = impossible_mask.sum()
-    
-                    if impossible_count > 0:
-                        # Log a warning but don't remove the data
-                        self.root.after(0, lambda c=impossible_count: status_label.config(
-                            text=f"Warning: {c} data points exceed physical constraints (terpene% + potency% > 100%). "
-                                 f"These may contain measurement errors but will still be used for training."
-                        ))
         
-                        # Optionally, you could add a flag for these points
-                        data_cleaned['potential_error'] = impossible_mask
+                # Create one model per media type
+                self.root.after(0, lambda: status_label.config(text="Creating consolidated models by media type..."))
+        
+                # Get unique media types
+                media_types = data_cleaned['media'].unique()
 
-                # Create three distinct datasets:
-                # 1. Combined: Points with both potency AND terpene data
-                combined_mask = has_potency & has_terpene
-                combined_data = data_cleaned[combined_mask].copy()
-                combined_data['feature_type'] = 'combined'
-            
-                # 2. Potency-only: Points with ONLY potency data (no terpene data)
-                potency_only_mask = has_potency & ~has_terpene
-                potency_data = data_cleaned[potency_only_mask].copy()
-                potency_data['feature_type'] = 'potency'
-            
-                # 3. Terpene-only: Points with ONLY terpene data (no potency data)
-                terpene_only_mask = ~has_potency & has_terpene
-                terpene_data = data_cleaned[terpene_only_mask].copy()
-                terpene_data['feature_type'] = 'terpene'
-            
-                # Data stats for information
-                self.root.after(0, lambda: status_label.config(
-                    text=f"Found {len(combined_data)} points with both features, "
-                         f"{len(potency_data)} with only potency, "
-                         f"{len(terpene_data)} with only terpene"
-                ))
-            
-                # Drop rows with NaN in critical columns from all datasets
-                critical_cols = ['temperature', 'viscosity', 'inverse_temp', 'log_viscosity']
-                combined_data = combined_data.dropna(subset=critical_cols + ['total_potency', 'terpene_pct'])
-                potency_data = potency_data.dropna(subset=critical_cols + ['total_potency'])
-                terpene_data = terpene_data.dropna(subset=critical_cols + ['terpene_pct'])
-            
-                self.root.after(0, lambda: status_label.config(
-                    text=f"After NaN removal: {len(combined_data)} combined, "
-                         f"{len(potency_data)} potency-only, "
-                         f"{len(terpene_data)} terpene-only"
-                ))
-            
-                # Model creation function
+                # Model creation helper function
                 def build_residual_model(config):
                     if config["model_type"] == "RandomForest":
                         return RandomForestRegressor(
@@ -4271,512 +3524,206 @@ class ViscosityCalculator:
                         return Ridge(alpha=1.0)
                     else:
                         return LinearRegression()
+
+                # Initialize model dictionary for consolidated models
+                consolidated_models = {}
             
-                # Initialize model dictionaries
-                combined_models = {}  # Uses both features
-                potency_models = {}   # Uses only potency
-                terpene_models = {}   # Uses only terpene
-            
-                # Process media types for baseline models
-                self.root.after(0, lambda: status_label.config(
-                    text="Creating temperature baseline models..."
-                ))
-            
-                # Combine all datasets for baseline modeling
-                all_clean_data = pd.concat([combined_data, potency_data, terpene_data])
-            
-                media_types = all_clean_data['media'].unique()
-                baseline_models = {}
-            
-                # Step 1: Create temperature baseline models for each media type
-                for media in media_types:
-                    media_data = all_clean_data[all_clean_data['media'] == media].copy()
-            
+                # Process each media type
+                for media_idx, media in enumerate(media_types):
+                    # Update progress
+                    progress = f"Training consolidated model {media_idx+1}/{len(media_types)}: {media}"
+                    self.root.after(0, lambda p=progress: status_label.config(text=p))
+                
+                    # Filter data for this media type
+                    media_data = data_cleaned[data_cleaned['media'] == media].copy()
+                
+                    # Skip if not enough data
+                    if len(media_data) < 10:
+                        self.root.after(0, lambda m=media: status_label.config(
+                            text=f"Skipping {m} - insufficient data ({len(media_data)} points)"
+                        ))
+                        continue
+                
+                    # Drop rows with NaN in critical columns
+                    critical_cols = ['temperature', 'viscosity', 'inverse_temp', 'log_viscosity']
+                    media_data = media_data.dropna(subset=critical_cols)
+                
                     if len(media_data) < 10:
                         continue
                 
-                    # Data is already cleaned for NaNs in critical columns
+                    # STEP 1: Create temperature baseline model
                     X_temp = media_data[['inverse_temp']]
                     y_temp = media_data['log_viscosity']
-            
-                    # Create and fit baseline model
+                
                     temp_model = LinearRegression()
                     temp_model.fit(X_temp, y_temp)
-            
-                    baseline_models[media] = temp_model
-            
-                    # Calculate and store baseline predictions and residuals
+                
+                    # Calculate baseline predictions and residuals
                     baseline_preds = temp_model.predict(X_temp)
                     media_data['baseline_prediction'] = baseline_preds
                     media_data['residual'] = y_temp - baseline_preds
                 
-                    
-                    def update_indices(df):
-                        df.loc[df.index.intersection(media_data.index), 
-                               ['baseline_prediction', 'residual']] = media_data.loc[
-                                   df.index.intersection(media_data.index), 
-                                   ['baseline_prediction', 'residual']]
-                        # No return needed as dataframes are modified in-place
+                    # STEP 2: Create comprehensive residual model with all features
+                
+                    # One-hot encode terpenes
+                    # Get most common terpenes for this media
+                    terpene_counts = media_data['terpene'].value_counts()
+                    valid_terpenes = terpene_counts[terpene_counts >= 2].index.tolist()
+                
+                    # Filter data to include only valid terpenes
+                    filtered_data = media_data[media_data['terpene'].isin(valid_terpenes)]
+                
+                    if len(filtered_data) < 10:
+                        self.root.after(0, lambda m=media: status_label.config(
+                            text=f"Skipping {m} - insufficient data after terpene filtering"
+                        ))
+                        continue
+                
+                    # Create one-hot encoding for terpenes
+                    encoded_data = pd.get_dummies(
+                        filtered_data,
+                        columns=['terpene'],
+                        prefix=['terpene']
+                    )
+                
+                    # Sometimes pd.get_dummies can create duplicate column names if values have special characters
+                    if len(encoded_data.columns) != len(set(encoded_data.columns)):
+                        # Find duplicates
+                        seen = set()
+                        dupes = [col for col in encoded_data.columns if col in seen or seen.add(col)]
+                        print(f"Warning: Duplicate columns detected: {dupes}")
+    
+                        # Make column names unique by adding suffixes
+                        unique_cols = []
+                        col_counts = {}
+    
+                        for col in encoded_data.columns:
+                            if col in col_counts:
+                                col_counts[col] += 1
+                                unique_cols.append(f"{col}_{col_counts[col]}")
+                            else:
+                                col_counts[col] = 0
+                                unique_cols.append(col)
+    
+                        encoded_data.columns = unique_cols
 
-                    # Then call the function as before
-                    update_indices(combined_data)
-                    update_indices(potency_data)
-                    update_indices(terpene_data)
+                    # Get terpene one-hot columns
+                    terpene_cols = [c for c in encoded_data.columns if c.startswith('terpene_')]
+                
+                    # Define comprehensive feature set including:
+                    # - Basic features (potency, terpene %)
+                    # - Physical constraint features
+                    # - Terpene-specific one-hot features
+                    # - Interaction features
+                    comprehensive_features = [
+                        'total_potency', 
+                        'terpene_pct', 
+                        'is_raw'
+                    ]
+                
+                    # Add physical constraint features if available
+                    physical_features = [
+                        'theoretical_max_terpene',
+                        'terpene_headroom',
+                        'terpene_max_ratio'
+                    ]
+                
+                    for feature in physical_features:
+                        if feature in encoded_data.columns:
+                            comprehensive_features.append(feature)
+                
+                    # Add interaction feature - potency/terpene ratio
+                    if 'total_potency' in encoded_data.columns and 'terpene_pct' in encoded_data.columns:
+                        encoded_data['potency_terpene_ratio'] = encoded_data['total_potency'] / encoded_data['terpene_pct'].clip(lower=0.01)
+                        comprehensive_features.append('potency_terpene_ratio')
+                
+                    # Add all terpene one-hot columns
+                    comprehensive_features.extend(terpene_cols)
+                
+                    # Make sure residual column has no NaNs
+                    encoded_data = encoded_data.dropna(subset=['residual'])
+                
+                    if len(encoded_data) < 10:
+                        self.root.after(0, lambda m=media: status_label.config(
+                            text=f"Skipping {m} - insufficient non-NaN residual data"
+                        ))
+                        continue
+                
+                    # Create feature dataframe and handle NaNs
+                    X_residual = encoded_data[comprehensive_features]
+                    X_residual = self.check_features_for_nan(X_residual)
+                
+                    y_residual = encoded_data['residual']
+                
+                    # Train residual model
+                    residual_model = build_residual_model(config)
+                    residual_model.fit(X_residual, y_residual)
+                
+                    # Calculate and report model quality metrics
+                    self.root.after(0, lambda m=media, n=len(encoded_data): status_label.config(
+                        text=f"Trained consolidated model for {m} using {n} data points"
+                    ))
+                
+                    # Store consolidated model
+                    consolidated_models[f"{media}_consolidated"] = {
+                        'baseline_model': temp_model,
+                        'residual_model': residual_model,
+                        'baseline_features': ['inverse_temp'],
+                        'residual_features': comprehensive_features,
+                        'metadata': {
+                            'use_arrhenius': True,
+                            'temperature_feature': 'inverse_temp',
+                            'target_feature': 'log_viscosity',
+                            'use_two_step': True,
+                            'feature_type': 'consolidated',
+                            'primary_features': ['total_potency', 'terpene_pct'],
+                            'terpene_features': terpene_cols,
+                            'physical_features': [f for f in physical_features if f in comprehensive_features]
+                        }
+                    }
+                
+                    # Quick validation
+                    if hasattr(residual_model, 'feature_importances_'):
+                        importances = dict(zip(comprehensive_features, residual_model.feature_importances_))
+                        top_features = sorted(importances.items(), key=lambda x: x[1], reverse=True)[:3]
+                        top_features_str = ", ".join([f"{k}:{v:.3f}" for k, v in top_features])
+                        self.root.after(0, lambda m=media, f=top_features_str: status_label.config(
+                            text=f"Model for {m} - Top features: {f}"
+                        ))
             
-                # Step 2A: Create combined-feature residual models
-                if not combined_data.empty:
-                    self.root.after(0, lambda: status_label.config(
-                        text="Training combined-feature residual models..."
-                    ))
-                
-                    # Process each media/terpene combination
-                    for idx, (media, terpene) in enumerate(combined_data.groupby(['media', 'terpene']).groups.keys()):
-                        # Update progress
-                        progress = f"Processing combined model {idx+1}/{len(combined_data.groupby(['media', 'terpene']))} - {media}/{terpene}"
-                        self.root.after(0, lambda p=progress: status_label.config(text=p))
-                
-                        # Skip if no baseline model
-                        if media not in baseline_models:
-                            continue
-                    
-                        # Filter data for this combination
-                        combo_data = combined_data[
-                            (combined_data['media'] == media) & 
-                            (combined_data['terpene'] == terpene)
-                        ].copy()
-                
-                        # Skip if not enough data
-                        if len(combo_data) < 5:
-                            continue
-                
-                        # Get the baseline model
-                        baseline_model = baseline_models[media]
-                
-                        # Create residual model using both features
-                        combined_features = [
-                            'total_potency', 
-                            'terpene_pct', 
-                            'is_raw',
-                            'theoretical_max_terpene',   # Add the theoretical maximum
-                            'terpene_headroom',          # Add the headroom
-                            'terpene_max_ratio'          # Add the proportion of maximum
-                        ]
-                        # Make sure these columns exist in the data
-                        for feature in combined_features:
-                            if feature not in combo_data.columns:
-                                combo_data[feature] = 0.0
-                        # Add potency-terpene ratio as an interaction feature
-                        combo_data['potency_terpene_ratio'] = combo_data['total_potency'] / combo_data['terpene_pct'].clip(lower=0.01)
-                        combined_features.append('potency_terpene_ratio')
-
-                        # Make sure residual column exists and has no NaNs
-                        combo_data = combo_data.dropna(subset=['residual'])
-                        if len(combo_data) < 5:
-                            continue
-                    
-                        X_combined = combo_data[combined_features]
-                        y_combined = combo_data['residual']
-                
-                        # Train residual model
-                        combined_model = build_residual_model(config)
-                        combined_model.fit(X_combined, y_combined)
-                
-                        # Store model with metadata
-                        model_key = f"{media}_{terpene}"
-                        combined_models[model_key] = {
-                            'baseline_model': baseline_model,
-                            'residual_model': combined_model,
-                            'baseline_features': ['inverse_temp'],
-                            'residual_features': combined_features,  # Now includes physical constraints
-                            'metadata': {
-                                'use_arrhenius': True,
-                                'temperature_feature': 'inverse_temp',
-                                'target_feature': 'log_viscosity',
-                                'use_two_step': True,
-                                'feature_type': 'combined',
-                                'primary_features': ['total_potency', 'terpene_pct'],
-                                'physical_features': ['theoretical_max_terpene', 'terpene_headroom', 'terpene_max_ratio']
-                            }
-                        }
-                
-                    # Create general combined models for each media type
-                    self.root.after(0, lambda: status_label.config(
-                        text="Training general combined models..."
-                    ))
-                
-                    for media in media_types:
-                        if media not in baseline_models:
-                            continue
-                    
-                        # Get data for this media with both features
-                        media_data = combined_data[combined_data['media'] == media]
-                    
-                        if len(media_data) < 10:
-                            continue
-                    
-                        # One-hot encode terpenes for general model
-                        terpene_counts = media_data['terpene'].value_counts()
-                        valid_terpenes = terpene_counts[terpene_counts >= 2].index.tolist()
-                    
-                        # Filter data with valid terpenes
-                        filtered_data = media_data[media_data['terpene'].isin(valid_terpenes)]
-                        if len(filtered_data) < 10:
-                            continue
-                    
-                        # Create one-hot encoding
-                        encoded_data = pd.get_dummies(
-                            filtered_data,
-                            columns=['terpene'],
-                            prefix=['terpene']
-                        )
-                    
-                        # Get terpene_X columns
-                        terpene_cols = [c for c in encoded_data.columns if c.startswith('terpene_')]
-                    
-                        # Define features for general model
-                        gen_features = [
-                            'total_potency', 
-                            'terpene_pct', 
-                            'is_raw',
-                            'theoretical_max_terpene',  
-                            'terpene_headroom',        
-                            'terpene_max_ratio'
-                        ] + terpene_cols
-                    
-                        # Make sure residual column exists and has no NaNs
-                        encoded_data = encoded_data.dropna(subset=['residual'])
-                        if len(encoded_data) < 10:
-                            continue
-                    
-                        X_gen = encoded_data[gen_features]
-                        y_gen = encoded_data['residual']
-
-                        X_gen = self.check_features_for_nan(X_gen)
-
-                        # Now fit the model with the cleaned data
-                        gen_model = build_residual_model(config)
-                        gen_model.fit(X_gen, y_gen)
-                    
-                        # Store general model
-                        combined_models[f"{media}_general"] = {
-                            'baseline_model': baseline_models[media],
-                            'residual_model': gen_model,
-                            'baseline_features': ['inverse_temp'],
-                            'residual_features': gen_features,
-                            'metadata': {
-                                'use_arrhenius': True,
-                                'temperature_feature': 'inverse_temp',
-                                'target_feature': 'log_viscosity',
-                                'use_two_step': True,
-                                'feature_type': 'combined',
-                                'primary_features': ['total_potency', 'terpene_pct']
-                            }
-                        }
-            
-                # Step 2B: Create potency-only residual models
-                if not potency_data.empty:
-                    self.root.after(0, lambda: status_label.config(
-                        text="Training potency-only residual models..."
-                    ))
-                
-                    # Process each media/terpene combination
-                    for idx, (media, terpene) in enumerate(potency_data.groupby(['media', 'terpene']).groups.keys()):
-                        # Update progress
-                        progress = f"Processing potency model {idx+1}/{len(potency_data.groupby(['media', 'terpene']))} - {media}/{terpene}"
-                        self.root.after(0, lambda p=progress: status_label.config(text=p))
-                
-                        # Skip if no baseline model
-                        if media not in baseline_models:
-                            continue
-                    
-                        # Filter data for this combination
-                        combo_data = potency_data[
-                            (potency_data['media'] == media) & 
-                            (potency_data['terpene'] == terpene)
-                        ].copy()
-                
-                        # Skip if not enough data
-                        if len(combo_data) < 5:
-                            continue
-                
-                        # Get the baseline model
-                        baseline_model = baseline_models[media]
-                
-                        # Create potency-based residual model
-                        pot_features = ['total_potency', 'is_raw']
-                    
-                        # Make sure residual column exists and has no NaNs
-                        combo_data = combo_data.dropna(subset=['residual'])
-                        if len(combo_data) < 5:
-                            continue
-                    
-                        X_pot = combo_data[pot_features]
-                        y_pot = combo_data['residual']
-                
-                        # Train residual model
-                        pot_model = build_residual_model(config)
-                        pot_model.fit(X_pot, y_pot)
-                
-                        # Store model with metadata
-                        model_key = f"{media}_{terpene}"
-                        potency_models[model_key] = {
-                            'baseline_model': baseline_model,
-                            'residual_model': pot_model,
-                            'baseline_features': ['inverse_temp'],
-                            'residual_features': pot_features,
-                            'metadata': {
-                                'use_arrhenius': True,
-                                'temperature_feature': 'inverse_temp',
-                                'target_feature': 'log_viscosity',
-                                'use_two_step': True,
-                                'feature_type': 'potency',
-                                'primary_feature': 'total_potency'
-                            }
-                        }
-                
-                    # Create general potency models for each media type
-                    self.root.after(0, lambda: status_label.config(
-                        text="Training general potency models..."
-                    ))
-                
-                    for media in media_types:
-                        if media not in baseline_models:
-                            continue
-                    
-                        # Get data for this media with potency values
-                        media_data = potency_data[potency_data['media'] == media]
-                    
-                        if len(media_data) < 10:
-                            continue
-                    
-                        # One-hot encode terpenes for general model
-                        terpene_counts = media_data['terpene'].value_counts()
-                        valid_terpenes = terpene_counts[terpene_counts >= 2].index.tolist()
-                    
-                        # Filter data with valid terpenes
-                        filtered_data = media_data[media_data['terpene'].isin(valid_terpenes)]
-                        if len(filtered_data) < 10:
-                            continue
-                    
-                        # Create one-hot encoding
-                        encoded_data = pd.get_dummies(
-                            filtered_data,
-                            columns=['terpene'],
-                            prefix=['terpene']
-                        )
-                    
-                        # Get terpene_X columns
-                        terpene_cols = [c for c in encoded_data.columns if c.startswith('terpene_')]
-                    
-                        # Define features for general model
-                        gen_features = ['total_potency', 'is_raw'] + terpene_cols
-                    
-                        # Make sure residual column exists and has no NaNs
-                        encoded_data = encoded_data.dropna(subset=['residual'])
-                        if len(encoded_data) < 10:
-                            continue
-                    
-                        X_gen = encoded_data[gen_features]
-                        y_gen = encoded_data['residual']
-
-                        # Check for NaN values in features
-                        
-                        X_gen = self.check_features_for_nan(X_gen)
-
-                        # Now fit the model with the cleaned data
-                        gen_model = build_residual_model(config)
-                        gen_model.fit(X_gen, y_gen)
-                    
-                        # Store general model
-                        potency_models[f"{media}_general"] = {
-                            'baseline_model': baseline_models[media],
-                            'residual_model': gen_model,
-                            'baseline_features': ['inverse_temp'],
-                            'residual_features': gen_features,
-                            'metadata': {
-                                'use_arrhenius': True,
-                                'temperature_feature': 'inverse_temp',
-                                'target_feature': 'log_viscosity',
-                                'use_two_step': True,
-                                'feature_type': 'potency',
-                                'primary_feature': 'total_potency'
-                            }
-                        }
-            
-                # Step 2C: Create terpene-only residual models
-                if not terpene_data.empty:
-                    self.root.after(0, lambda: status_label.config(
-                        text="Training terpene-only residual models..."
-                    ))
-                
-                    # Process each media/terpene combination
-                    for idx, (media, terpene) in enumerate(terpene_data.groupby(['media', 'terpene']).groups.keys()):
-                        # Update progress
-                        progress = f"Processing terpene model {idx+1}/{len(terpene_data.groupby(['media', 'terpene']))} - {media}/{terpene}"
-                        self.root.after(0, lambda p=progress: status_label.config(text=p))
-                
-                        # Skip if no baseline model
-                        if media not in baseline_models:
-                            continue
-                    
-                        # Filter data for this combination
-                        combo_data = terpene_data[
-                            (terpene_data['media'] == media) & 
-                            (terpene_data['terpene'] == terpene)
-                        ].copy()
-                
-                        # Skip if not enough data
-                        if len(combo_data) < 5:
-                            continue
-                
-                        # Get the baseline model
-                        baseline_model = baseline_models[media]
-                
-                        # Create terpene-based residual model
-                        terp_features = ['terpene_pct', 'is_raw']
-                    
-                        # Make sure residual column exists and has no NaNs
-                        combo_data = combo_data.dropna(subset=['residual'])
-                        if len(combo_data) < 5:
-                            continue
-                    
-                        X_terp = combo_data[terp_features]
-                        y_terp = combo_data['residual']
-                
-                        # Train residual model
-                        terp_model = build_residual_model(config)
-                        terp_model.fit(X_terp, y_terp)
-                
-                        # Store model with metadata
-                        model_key = f"{media}_{terpene}"
-                        terpene_models[model_key] = {
-                            'baseline_model': baseline_model,
-                            'residual_model': terp_model,
-                            'baseline_features': ['inverse_temp'],
-                            'residual_features': terp_features,
-                            'metadata': {
-                                'use_arrhenius': True,
-                                'temperature_feature': 'inverse_temp',
-                                'target_feature': 'log_viscosity',
-                                'use_two_step': True,
-                                'feature_type': 'terpene',
-                                'primary_feature': 'terpene_pct'
-                            }
-                        }
-                
-                    # Create general terpene models for each media type
-                    self.root.after(0, lambda: status_label.config(
-                        text="Training general terpene models..."
-                    ))
-                
-                    for media in media_types:
-                        if media not in baseline_models:
-                            continue
-                    
-                        # Get data for this media with terpene values
-                        media_data = terpene_data[terpene_data['media'] == media]
-                    
-                        if len(media_data) < 10:
-                            continue
-                    
-                        # One-hot encode terpenes for general model
-                        terpene_counts = media_data['terpene'].value_counts()
-                        valid_terpenes = terpene_counts[terpene_counts >= 2].index.tolist()
-                    
-                        # Filter data with valid terpenes
-                        filtered_data = media_data[media_data['terpene'].isin(valid_terpenes)]
-                        if len(filtered_data) < 10:
-                            continue
-                    
-                        # Create one-hot encoding
-                        encoded_data = pd.get_dummies(
-                            filtered_data,
-                            columns=['terpene'],
-                            prefix=['terpene']
-                        )
-                    
-                        # Get terpene_X columns
-                        terpene_cols = [c for c in encoded_data.columns if c.startswith('terpene_')]
-                    
-                        # Define features for general model
-                        gen_features = ['terpene_pct', 'is_raw'] + terpene_cols
-                    
-                        # Make sure residual column exists and has no NaNs
-                        encoded_data = encoded_data.dropna(subset=['residual'])
-                        if len(encoded_data) < 10:
-                            continue
-                    
-                        X_gen = encoded_data[gen_features]
-                        y_gen = encoded_data['residual']
-
-                        X_gen = self.check_features_for_nan(X_gen)
-
-                        # Now fit the model with the cleaned data
-                        gen_model = build_residual_model(config)
-                        gen_model.fit(X_gen, y_gen)
-                    
-                        # Store general model
-                        terpene_models[f"{media}_general"] = {
-                            'baseline_model': baseline_models[media],
-                            'residual_model': gen_model,
-                            'baseline_features': ['inverse_temp'],
-                            'residual_features': gen_features,
-                            'metadata': {
-                                'use_arrhenius': True,
-                                'temperature_feature': 'inverse_temp',
-                                'target_feature': 'log_viscosity',
-                                'use_two_step': True,
-                                'feature_type': 'terpene',
-                                'primary_feature': 'terpene_pct'
-                            }
-                        }
-            
-                # Save models
+                # Save consolidated models
                 os.makedirs('models', exist_ok=True)
             
-                # Save combined models (new!)
-                if combined_models:
+                if consolidated_models:
                     self.root.after(0, lambda: status_label.config(
-                        text=f"Saving {len(combined_models)} combined-feature models..."
+                        text=f"Saving {len(consolidated_models)} consolidated models..."
                     ))
-                    with open('models/viscosity_models_combined.pkl', 'wb') as f:
-                        pickle.dump(combined_models, f)
-                    # Store in a new attribute
-                    self.combined_viscosity_models = combined_models
                 
-                # Save potency-based models
-                if potency_models:
-                    self.root.after(0, lambda: status_label.config(
-                        text=f"Saving {len(potency_models)} potency-only models..."
+                    # Save as the primary model set
+                    with open('models/viscosity_models_consolidated.pkl', 'wb') as f:
+                        pickle.dump(consolidated_models, f)
+
+                    # Store in class attribute for immediate use
+                    self.consolidated_models = consolidated_models
+                
+                    # Show success message
+                    message = f"Training complete!\n\n"
+                    message += f"Created {len(consolidated_models)} consolidated media models\n"
+                    message += f"Models saved to models/viscosity_models_consolidated.pkl\n\n"
+            
+                    total_points = len(data_cleaned)
+                    total_original = len(data)
+                    message += f"Data cleaning: Used {total_points} clean points out of {total_original} total points"
+            
+                    self.root.after(0, lambda: messagebox.showinfo("Success", message))
+                else:
+                    self.root.after(0, lambda: messagebox.showwarning(
+                        "Warning", "No models were created. Check data quality and availability."
                     ))
-                    with open('models/viscosity_models_potency.pkl', 'wb') as f:
-                        pickle.dump(potency_models, f)
-                    self.enhanced_viscosity_models = potency_models
-            
-                # Save terpene-based models
-                if terpene_models:
-                    self.root.after(0, lambda: status_label.config(
-                        text=f"Saving {len(terpene_models)} terpene-only models..."
-                    ))
-                    with open('models/viscosity_models.pkl', 'wb') as f:
-                        pickle.dump(terpene_models, f)
-                    self.viscosity_models = terpene_models
-            
-                # Show success message
-                message = f"Training complete!\n\n"
-                message += f"Created {len(combined_models)} combined-feature models\n"
-                message += f"Created {len(potency_models)} potency-only models\n"
-                message += f"Created {len(terpene_models)} terpene-only models\n\n"
-            
-                total_points = len(all_clean_data)
-                total_original = len(data)
-                message += f"Data cleaning: Used {total_points} clean points out of {total_original} total points"
-            
-                self.root.after(0, lambda: messagebox.showinfo("Success", message))
             
                 # Close window
                 window.after(0, window.destroy)
-        
+            
             except Exception as e:
                 import traceback
                 error_msg = f"Training error: {str(e)}\n\n{traceback.format_exc()}"
@@ -4784,12 +3731,31 @@ class ViscosityCalculator:
                 self.root.after(0, lambda: messagebox.showerror("Error", f"Training failed: {str(e)}"))
                 window.after(0, window.destroy)
 
+        # Function to start the training thread
+        def start_training():
+            # Disable the run button while training is running
+            import threading
+            train_button.config(state="disabled")
+            status_label.config(text="Starting model training...")
+        
+            # Start training in a background thread
+            training_thread = threading.Thread(
+                target=lambda: train_models_thread(
+                    {"model_type": model_type_var.get()}, 
+                    status_label,
+                    config_window
+                )
+            )
+            training_thread.daemon = True
+            training_thread.start()
+
         # Create button frame
         button_frame = Frame(config_window, bg=APP_BACKGROUND_COLOR)
         button_frame.pack(pady=10)
 
         # Add buttons
-        ttk.Button(button_frame, text="Train Models", command=start_training).pack(side="left", padx=10)
+        train_button = ttk.Button(button_frame, text="Train Models", command=start_training)
+        train_button.pack(side="left", padx=10)
         ttk.Button(button_frame, text="Cancel", command=config_window.destroy).pack(side="left", padx=10)
 
     def predict_viscosity(self, model_info, inputs):
@@ -4903,165 +3869,40 @@ class ViscosityCalculator:
             return np.exp(combined_prediction)
         else:
             return combined_prediction
-        
-    def load_standard_models(self):
-        """Load standard viscosity models from disk with format verification."""
-        import pickle
-        import os
-        
-        model_path = 'models/viscosity_models.pkl'
-        if os.path.exists(model_path):
-            try:
-                with open(model_path, 'rb') as f:
-                    models = pickle.load(f)
-                
-                    # Quick structure check on first model
-                    if models:
-                        sample_key = next(iter(models))
-                        sample_model = models[sample_key]
-                    
-                        # Check if this uses the new structure
-                        if (isinstance(sample_model, dict) and 
-                            'baseline_model' in sample_model and 
-                            'residual_model' in sample_model):
-                            self._viscosity_models = models
-                        else:
-                            # Old format detected
-                            print("Warning: Old model format detected. Consider retraining models.")
-                            if hasattr(self, '_viscosity_models'):
-                                # Keep current models if they exist
-                                if not self._viscosity_models:
-                                    self._viscosity_models = {}
-                            else:
-                                self._viscosity_models = {}
-                    else:
-                        if hasattr(self, '_viscosity_models') and self._viscosity_models:
-                            # Keep existing models
-                            pass
-                        else:
-                            self._viscosity_models = {}
-                    
-            except Exception as e:
-                print(f"Error loading standard models: {e}")
-                self._viscosity_models = {}
-        else:
-            if hasattr(self, '_viscosity_models') and self._viscosity_models:
-                # Keep existing models
-                pass
-            else:
-                self._viscosity_models = {}
-        
-    def load_enhanced_models(self):
-        """Load enhanced viscosity models with chemistry from disk with format verification."""
+       
+    def load_consolidated_models(self):
+        """
+        Load consolidated viscosity models from disk.
+        This replaces all previous model loading functions.
+        """
         import pickle
         import os
     
-        model_path = 'models/viscosity_models_potency.pkl'
-        if os.path.exists(model_path):
-            try:
-                with open(model_path, 'rb') as f:
-                    models = pickle.load(f)
-                
-                    # Quick structure check on first model
-                    if models:
-                        sample_key = next(iter(models))
-                        sample_model = models[sample_key]
-                    
-                        # Check if this uses the new structure
-                        if (isinstance(sample_model, dict) and 
-                            'baseline_model' in sample_model and 
-                            'residual_model' in sample_model):
-                            self._enhanced_viscosity_models = models
-                        else:
-                            # Old format detected
-                            print("Warning: Old enhanced model format detected. Consider retraining models.")
-                            if hasattr(self, '_enhanced_viscosity_models'):
-                                # Keep current models if they exist
-                                if not self._enhanced_viscosity_models:
-                                    self._enhanced_viscosity_models = {}
-                            else:
-                                self._enhanced_viscosity_models = {}
-                    else:
-                        if hasattr(self, '_enhanced_viscosity_models') and self._enhanced_viscosity_models:
-                            # Keep existing models
-                            pass
-                        else:
-                            self._enhanced_viscosity_models = {}
-                    
-            except Exception as e:
-                print(f"Error loading enhanced models: {e}")
-                self._enhanced_viscosity_models = {}
-        else:
-            if hasattr(self, '_enhanced_viscosity_models') and self._enhanced_viscosity_models:
-                # Keep existing models
-                pass
-            else:
-                self._enhanced_viscosity_models = {}
-
-    def load_combined_models(self):
-        """Load combined viscosity models (terpene + potency) from disk with format verification."""
-        import pickle
-        import os
+        model_path = 'models/viscosity_models_consolidated.pkl'
     
-        model_path = 'models/viscosity_models_combined.pkl'
         if os.path.exists(model_path):
             try:
                 with open(model_path, 'rb') as f:
                     models = pickle.load(f)
-                
-                    # Quick structure check on first model
-                    if models:
-                        sample_key = next(iter(models))
-                        sample_model = models[sample_key]
-                    
-                        # Check if this uses the new structure
-                        if (isinstance(sample_model, dict) and 
-                            'baseline_model' in sample_model and 
-                            'residual_model' in sample_model):
-                            self._combined_viscosity_models = models
-                        else:
-                            # Old format detected
-                            print("Warning: Old combined model format detected. Consider retraining models.")
-                            if hasattr(self, '_combined_viscosity_models'):
-                                # Keep current models if they exist
-                                if not self._combined_viscosity_models:
-                                    self._combined_viscosity_models = {}
-                            else:
-                                self._combined_viscosity_models = {}
-                    else:
-                        if hasattr(self, '_combined_viscosity_models') and self._combined_viscosity_models:
-                            # Keep existing models
-                            pass
-                        else:
-                            self._combined_viscosity_models = {}
-                    
+                    self.consolidated_models = models
+                    print(f"Loaded {len(models)} consolidated models from {model_path}")
             except Exception as e:
-                print(f"Error loading combined models: {e}")
-                self._combined_viscosity_models = {}
+                print(f"Error loading consolidated models: {e}")
+                self.consolidated_models = {}
         else:
-            if hasattr(self, '_combined_viscosity_models') and self._combined_viscosity_models:
-                # Keep existing models
-                pass
-            else:
-                self._combined_viscosity_models = {}
+            print(f"No consolidated model file found at {model_path}")
+            self.consolidated_models = {}
 
     def calculate_terpene_percentage(self):
         """
         Calculate the terpene percentage needed to achieve target viscosity
-        using the best available model (combined, potency, or terpene).
+        using consolidated models.
         """
         try:
-
-
-            # First load all models if not loaded
-            if not hasattr(self, 'viscosity_models') or not self.viscosity_models:
-                self.load_standard_models()
-            if not hasattr(self, 'enhanced_viscosity_models') or not self.enhanced_viscosity_models:
-                self.load_enhanced_models()
-            if not hasattr(self, 'combined_viscosity_models') or not self.combined_viscosity_models:
-                self.load_combined_models()
-
-
+            # Load models if not already loaded
+            if not hasattr(self, 'consolidated_models') or not self.consolidated_models:
+                self.load_consolidated_models()
+        
             # Extract input values
             media = self.media_var.get()
             terpene = self.terpene_var.get() or "Raw"
@@ -5070,18 +3911,6 @@ class ViscosityCalculator:
         
             # Get potency values (if available)
             potency = self._total_potency_var.get()
-            # Add constraint check and warning
-            if potency > 0:
-                theoretical_max_terpene = 100 * (1 - potency/100)
-                # Warn if optimization finds a value beyond physical possibility
-                if exact_value > theoretical_max_terpene:
-                    messagebox.showinfo(
-                        "Physical Constraint Notice",
-                        f"The calculated terpene percentage ({exact_value:.1f}%) exceeds the "
-                        f"theoretical maximum ({theoretical_max_terpene:.1f}%) for a formulation "
-                        f"with {potency:.1f}% potency.\n\n"
-                        f"Consider either reducing potency or accepting a higher viscosity."
-                    )
             d9_thc = self._d9_thc_var.get()
             d8_thc = self._d8_thc_var.get()
         
@@ -5089,102 +3918,20 @@ class ViscosityCalculator:
             if potency == 0 and (d9_thc > 0 or d8_thc > 0):
                 potency = d9_thc + d8_thc
         
-            # Determine which model to use based on available data
-            have_potency = potency > 0
-            have_terpene = True  # We're trying to calculate terpene %, so we assume we'll add it
+            # Look for consolidated model
+            model_key = f"{media}_consolidated"
         
-            # Find the best model in priority order:
-            # 1. Combined model (if both potency and terpene are available)
-            # 2. Potency-only model (if only potency is available)
-            # 3. Terpene-only model (fallback)
+            if model_key not in self.consolidated_models:
+                raise ValueError(f"No consolidated model found for {media}. Please train models first.")
         
-            specific_key = f"{media}_{terpene}"
-            general_key = f"{media}_general"
-        
-            model_info = None
-            model_type = "unknown"
-        
-            # Check combined models first if both features are available
-            if have_potency and have_terpene and hasattr(self, 'combined_viscosity_models') and self.combined_viscosity_models:
-                combined_models = self.combined_viscosity_models
-            
-                # Try specific model first, then general
-                if specific_key in combined_models:
-                    model_info = combined_models[specific_key]
-                    model_type = "combined"
-                elif general_key in combined_models:
-                    model_info = combined_models[general_key]
-                    model_type = "combined"
-        
-            # Check potency models if no combined model was found
-            if model_info is None and have_potency and hasattr(self, 'enhanced_viscosity_models') and self.enhanced_viscosity_models:
-                potency_models = self.enhanced_viscosity_models
-            
-                # Try specific model first, then general
-                if specific_key in potency_models:
-                    model_info = potency_models[specific_key]
-                    model_type = "potency"
-                elif general_key in potency_models:
-                    model_info = potency_models[general_key]
-                    model_type = "potency"
-        
-            # Finally, check terpene models as a fallback
-            if model_info is None and hasattr(self, 'viscosity_models') and self.viscosity_models:
-                terpene_models = self.viscosity_models
-            
-                # Try specific model first, then general
-                if specific_key in terpene_models:
-                    model_info = terpene_models[specific_key]
-                    model_type = "terpene"
-                elif general_key in terpene_models:
-                    model_info = terpene_models[general_key]
-                    model_type = "terpene"
-        
-            # If no model found, raise error
-            if model_info is None:
-                raise ValueError(f"No suitable model found for {media}/{terpene}. Please train models first.")
-            
-            # Get the metadata
-            metadata = model_info.get('metadata', {})
+            model_info = self.consolidated_models[model_key]
         
             # Use optimization to find optimal terpene percentage
             from scipy.optimize import minimize_scalar
         
             def objective(terpene_pct):
-                # Prepare inputs for prediction
-                inputs = {
-                    'temperature': 25.0,  # Fixed reference temperature
-                    'is_raw': 0,
-                    'terpene': terpene
-                }
-            
-                # Set feature values based on model type
-                if model_type == "combined":
-                    # For combined models, set both features
-                    inputs['total_potency'] = potency
-                    inputs['terpene_pct'] = terpene_pct/100.0  # Convert to decimal
-                elif model_type == "potency":
-                    # For potency models, set only potency
-                    inputs['total_potency'] = potency
-                else:
-                    # For terpene models, set only terpene_pct
-                    inputs['terpene_pct'] = terpene_pct/100.0  # Convert to decimal
-            
-                # Add terpene one-hot encoding if needed for general models
-                if model_key.endswith('_general'):
-                    # Get all terpene features from the model
-                    terpene_features = [f for f in model_info['residual_features'] 
-                                       if f.startswith('terpene_') and f != 'terpene_pct']
+                return abs(self.predict_model_viscosity(model_info, terpene_pct, 25.0, potency, terpene) - target_viscosity)
         
-                    # Add one-hot encoding for each terpene feature
-                    for feature in terpene_features:
-                        feature_terpene = feature.replace('terpene_', '')
-                        inputs[feature] = 1 if feature_terpene == terpene else 0
-    
-                # Get predicted viscosity
-                predicted_viscosity = self.predict_model_viscosity(model_info, inputs)
-                return abs(predicted_viscosity - target_viscosity)
-
             # Find optimal terpene percentage (bounded between 0.1% and 15%)
             result = minimize_scalar(objective, bounds=(0.1, 15.0), method='bounded')
             exact_value = result.x
@@ -5200,39 +3947,42 @@ class ViscosityCalculator:
             self.start_percent_var.set(f"{start_percent:.1f}%")
             self.start_mass_var.set(f"{start_mass:.2f}g")
         
-            # Show confirmation with model type information
-            if specific_key in globals()[f"{model_type}_models"]:
-                model_key = specific_key
-            else:
-                model_key = general_key
-            
-            model_type_display = {
-                "combined": "combined (potency + terpene)",
-                "potency": "potency-based",
-                "terpene": "terpene-based"
-            }.get(model_type, model_type)
+            # Add constraint check and warning
+            if potency > 0:
+                theoretical_max_terpene = 100 * (1 - potency/100)
+                # Warn if optimization finds a value beyond physical possibility
+                if exact_value > theoretical_max_terpene:
+                    messagebox.showinfo(
+                        "Physical Constraint Notice",
+                        f"The calculated terpene percentage ({exact_value:.1f}%) exceeds the "
+                        f"theoretical maximum ({theoretical_max_terpene:.1f}%) for a formulation "
+                        f"with {potency:.1f}% potency.\n\n"
+                        f"Consider either reducing potency or accepting a higher viscosity."
+                    )
         
+            # Show completion message
             messagebox.showinfo(
                 "Calculation Complete", 
-                f"Calculation performed using {model_type_display} model: {model_key}\n\n"
+                f"Calculation performed using consolidated model for {media}\n\n"
                 f"For {exact_value:.1f}% terpenes, estimated viscosity: {target_viscosity:.1f}"
             )
-        
+    
         except Exception as e:
             import traceback
             traceback_str = traceback.format_exc()
             print(f"Error during calculation: {e}\n{traceback_str}")
             messagebox.showerror("Calculation Error", f"An error occurred: {str(e)}")
 
-    def predict_model_viscosity(self, model_obj, terpene_pct, temp, pot=None):
+    def predict_model_viscosity(self, model_obj, terpene_pct, temp, pot=None, terpene_name=None):
         """
-        Helper method to prepare inputs and call predict_viscosity with enhanced potency handling.
+        Streamlined prediction function that works exclusively with consolidated models.
     
         Args:
-            model_obj: The viscosity model object
+            model_obj: The consolidated viscosity model object
             terpene_pct: Terpene percentage (0-100)
             temp: Temperature in Celsius
             pot: Potency percentage (0-100), optional
+            terpene_name: Name of terpene being used, required for one-hot encoding
     
         Returns:
             float: Predicted viscosity
@@ -5245,79 +3995,65 @@ class ViscosityCalculator:
             # Extract model components
             baseline_model = model_obj['baseline_model']
             residual_model = model_obj['residual_model']
-            baseline_features = model_obj.get('baseline_features', ['inverse_temp'])
-            residual_features = model_obj.get('residual_features', [])
-        
-            # Get metadata 
-            metadata = model_obj.get('metadata', {})
-            feature_type = metadata.get('feature_type', 'terpene')
+            baseline_features = model_obj['baseline_features']
+            residual_features = model_obj['residual_features']
         
             # Calculate temperature in Kelvin and inverse temperature
             temp_kelvin = temp + 273.15
             inverse_temp = 1 / temp_kelvin
         
-            # Debug information to help troubleshoot
-            debug_info = {}
-            # Prepare baseline input for temperature effect
+            # Prepare baseline input (temperature effect)
             baseline_df = pd.DataFrame({baseline_features[0]: [inverse_temp]})
         
             # Get baseline prediction (temperature effect only)
             log_visc_baseline = baseline_model.predict(baseline_df)[0]
-            debug_info['log_visc_baseline'] = log_visc_baseline
         
             # Prepare residual feature inputs
             residual_inputs = {}
         
             # Handle terpene percentage - ensure decimal format (0-1)
             terp_decimal = terpene_pct / 100.0 if terpene_pct > 1.0 else terpene_pct
-            if 'terpene_pct' in residual_features:
-                residual_inputs['terpene_pct'] = terp_decimal
-                debug_info['terpene_pct'] = terp_decimal
+            residual_inputs['terpene_pct'] = terp_decimal
         
             # Handle potency - ensure decimal format (0-1)
-            if pot is not None and 'total_potency' in residual_features:
+            if pot is not None:
                 # Convert from percentage (0-100) to decimal (0-1) if needed
                 pot_decimal = pot / 100.0 if pot > 1.0 else pot
                 residual_inputs['total_potency'] = pot_decimal
-                debug_info['total_potency'] = pot_decimal
-            elif 'total_potency' in residual_features:
+            else:
                 # If potency not provided but required, estimate from terpene
-                est_potency = max(0.7, min(0.99, 1.0 - terp_decimal))  # Capped at reasonable range
+                est_potency = max(0.7, min(0.99, 1.0 - terp_decimal))
                 residual_inputs['total_potency'] = est_potency
-                debug_info['total_potency'] = est_potency
         
             # Add is_raw flag
-            if 'is_raw' in residual_features:
-                residual_inputs['is_raw'] = 0  # Assume not raw
+            residual_inputs['is_raw'] = 1 if terpene_name and terpene_name.lower() == 'raw' else 0
         
-            # Handle model_feature (special case)
-            if 'model_feature' in residual_features:
-                # Use whichever feature is primary for this model
-                if 'total_potency' in residual_inputs and feature_type in ['potency', 'combined']:
-                    residual_inputs['model_feature'] = residual_inputs['total_potency']
-                    debug_info['model_feature'] = residual_inputs['model_feature']
-                elif 'terpene_pct' in residual_inputs:
-                    residual_inputs['model_feature'] = residual_inputs['terpene_pct']
-                    debug_info['model_feature'] = residual_inputs['model_feature']
-                
-            # Always calculate potency-terpene ratio, even if not explicitly in features
-            # This ensures continuity in predictions and fills important derived values
-            if 'total_potency' in residual_inputs and 'terpene_pct' in residual_inputs:
-                # Use a less extreme denominator to avoid huge ratio jumps
-                ratio = residual_inputs['total_potency'] / max(0.05, residual_inputs['terpene_pct'])
-                residual_inputs['potency_terpene_ratio'] = ratio
-                debug_info['potency_terpene_ratio'] = ratio
-            
-                # Also add squared terms for better polynomial approximation
-                residual_inputs['potency_squared'] = residual_inputs['total_potency'] ** 2
-                residual_inputs['terpene_squared'] = residual_inputs['terpene_pct'] ** 2
-                debug_info['polynomial_terms_added'] = True
+            # Handle physical constraint features
+            # Theoretical maximum terpene percentage
+            residual_inputs['theoretical_max_terpene'] = 1.0 - residual_inputs['total_potency']
         
-            # Handle one-hot encoded terpene features
-            for feature in residual_features:
-                if feature.startswith('terpene_') and feature != 'terpene_pct':
-                    # All features default to 0
-                    residual_inputs[feature] = 0
+            # Terpene headroom
+            residual_inputs['terpene_headroom'] = residual_inputs['theoretical_max_terpene'] - residual_inputs['terpene_pct']
+        
+            # Ratio as proportion of theoretical maximum
+            max_terp = max(0.01, residual_inputs['theoretical_max_terpene'])  # Avoid division by zero
+            residual_inputs['terpene_max_ratio'] = residual_inputs['terpene_pct'] / max_terp
+        
+            # Handle potency-terpene ratio
+            residual_inputs['potency_terpene_ratio'] = residual_inputs['total_potency'] / max(0.05, residual_inputs['terpene_pct'])
+        
+            # Handle one-hot encoding of terpenes
+            terpene_features = [f for f in residual_features if f.startswith('terpene_')]
+        
+            # Initialize all terpene columns to 0
+            for feature in terpene_features:
+                residual_inputs[feature] = 0
+        
+            # Set the specific terpene to 1 if provided
+            if terpene_name and not residual_inputs['is_raw']:
+                terpene_col = f"terpene_{terpene_name}"
+                if terpene_col in terpene_features:
+                    residual_inputs[terpene_col] = 1
         
             # Convert to DataFrame with all required features
             residual_df = pd.DataFrame([residual_inputs])
@@ -5329,10 +4065,6 @@ class ViscosityCalculator:
         
             # Ensure features are in the right order
             residual_df = residual_df[residual_features]
-
-            # Add verbose debug for feature sets
-            debug_info['features_provided'] = list(residual_inputs.keys())
-            debug_info['features_required'] = residual_features
         
             # Handle NaN values if present
             if residual_df.isna().any().any():
@@ -5344,101 +4076,27 @@ class ViscosityCalculator:
         
             # Get residual prediction
             log_visc_residual = residual_model.predict(residual_df)[0]
-            debug_info['log_visc_residual'] = log_visc_residual
         
             # Combine predictions and convert back from log scale
             log_visc_total = log_visc_baseline + log_visc_residual
             viscosity = np.exp(log_visc_total)
-            debug_info['final_viscosity'] = viscosity
         
             return viscosity
-        
+    
         except Exception as e:
             import traceback
             print(f"Error in predict_model_viscosity: {str(e)}")
             print(traceback.format_exc())
             return float('nan')
 
-    def analyze_potency_sensitivity(self, model_key, model):
-        """
-        Analyze a model's sensitivity to potency changes
-    
-        Args:
-            model_key: Key identifying the model
-            model: The model object to analyze
-        
-        Returns:
-            dict: Analysis results
-        """
-        import numpy as np
-        import pandas as pd
-    
-        # Extract residual model and features
-        residual_model = model['residual_model']
-        residual_features = model['residual_features']
-    
-        # Check if 'total_potency' is in features
-        if 'total_potency' not in residual_features:
-            return {"result": "No potency feature in this model"}
-    
-        # Get feature importance if available
-        if hasattr(residual_model, 'feature_importances_'):
-            feature_importances = residual_model.feature_importances_
-            feature_dict = dict(zip(residual_features, feature_importances))
-        
-            potency_importance = feature_dict.get('total_potency', 0)
-        
-            if potency_importance < 0.01:
-                return {
-                    "result": f"Very low potency importance: {potency_importance:.4f}",
-                    "suggestion": "Model doesn't use potency for predictions"
-                }
-    
-        # Test with range of potency values at fixed temp and terpene
-        test_temp = 25.0
-        test_terpene = 5.0  # Use a standard value
-    
-        test_potencies = np.linspace(0.7, 0.95, 6)  # Test more values
-        predictions = []
-    
-        for pot in test_potencies:
-            pred = self.predict_model_viscosity(model, test_terpene, test_temp, pot)
-            predictions.append(pred)
-    
-        # Check for variation in predictions
-        min_pred = min(predictions)
-        max_pred = max(predictions)
-    
-        if min_pred == max_pred:
-            return {
-                "result": "No variation in predictions across potency values",
-                "suggestion": "Model doesn't respond to potency changes"
-            }
-    
-        variation_pct = (max_pred - min_pred) / min_pred * 100
-    
-        if variation_pct < 5:
-            result = {
-                "result": f"Low variation ({variation_pct:.1f}%) in predictions across potency values",
-                "predictions": dict(zip([f"{p*100:.1f}%" for p in test_potencies], predictions)),
-                "suggestion": "Retrain model with more diverse potency data"
-            }
-        else:
-            result = {
-                "result": f"Good variation ({variation_pct:.1f}%) in predictions across potency values",
-                "predictions": dict(zip([f"{p*100:.1f}%" for p in test_potencies], predictions))
-            }
-    
-        return result
-
     def diagnose_models(self):
         """Diagnose issues with feature importance in models"""
         print("\nModel Feature Importance Analysis")
         print("=================================")
     
-        if hasattr(self, 'combined_viscosity_models') and self.combined_viscosity_models:
-            models = self.combined_viscosity_models
-            print(f"Analyzing {len(models)} combined models:")
+        if hasattr(self, 'consolidated_models') and self.consolidated_models:
+            models = self.consolidated_models
+            print(f"Analyzing {len(models)} consolidated models:")
         
             for model_key, model in models.items():
                 print(f"\nModel: {model_key}")
@@ -5511,19 +4169,19 @@ class ViscosityCalculator:
         # If no specific model provided, use a model from combined models
         if model is None:
             if model_key is None:
-                # Use first model in combined models
-                if hasattr(self, 'combined_viscosity_models') and self.combined_viscosity_models:
-                    model_key = next(iter(self.combined_viscosity_models))
-                    model = self.combined_viscosity_models[model_key]
+                # Use first model in consolidated models
+                if hasattr(self, 'consolidated_models') and self.consolidated_models:
+                    model_key = next(iter(self.consolidated_models))
+                    model = self.consolidated_models[model_key]
                 else:
-                    print("No combined models available for analysis")
+                    print("No consolidated models available for analysis")
                     return
             else:
                 # Try to find the specified model
-                if hasattr(self, 'combined_viscosity_models') and model_key in self.combined_viscosity_models:
-                    model = self.combined_viscosity_models[model_key]
+                if hasattr(self, 'consolidated_models') and model_key in self.consolidated_models:
+                    model = self.consolidated_models[model_key]
                 else:
-                    print(f"Model '{model_key}' not found in combined models")
+                    print(f"Model '{model_key}' not found in consolidated models")
                     return
     
         # Extract model components
@@ -5780,12 +4438,12 @@ class ViscosityCalculator:
             visc = self.predict_model_viscosity(demo_model, terp, 25.0, 80)
             print(f"  • Terpene {terp}%: viscosity = {visc:.0f} cP")
     
-        # Store in combined models dictionary
-        if hasattr(self, 'combined_viscosity_models'):
-            self.combined_viscosity_models['Enhanced_PotencyDemo'] = demo_model
-            print("Enhanced demo model added as 'Enhanced_PotencyDemo'")
+        # Store in consolidated models dictionary
+        if hasattr(self, 'consolidated_models'):
+            self.consolidated_models[f'Enhanced_consolidated'] = demo_model
+            print("Enhanced demo model added to consolidated models")
         else:
-            self.combined_viscosity_models = {'Enhanced_PotencyDemo': demo_model}
+            self.consolidated_models = {f'Enhanced_consolidated': demo_model}
     
         return demo_model
 
@@ -5797,7 +4455,7 @@ class ViscosityCalculator:
     
         Args:
             feature_df: DataFrame of features to check and clean
-        
+    
         Returns:
             DataFrame: The cleaned feature DataFrame with NaN values handled
         """
@@ -5819,15 +4477,32 @@ class ViscosityCalculator:
             partial_nan_columns = df.columns[partial_nan_mask].tolist()
         
             if partial_nan_columns:
-                # Select only columns with some NaN values (but not all)
-                columns_to_impute = df.loc[:, partial_nan_columns]
-            
-                # Create an imputer
-                from sklearn.impute import SimpleImputer
-                imputer = SimpleImputer(strategy='mean')
-                imputed_values = imputer.fit_transform(columns_to_impute)
-            
-                # Put the imputed values back
-                df.loc[:, partial_nan_columns] = imputed_values
+                # Check for duplicate column names - this is what's causing the error
+                if len(partial_nan_columns) != len(set(partial_nan_columns)):
+                    # There are duplicates - we need to handle each column individually
+                    for col in set(partial_nan_columns):
+                        # Get all positions of this column name (might be duplicated)
+                        col_indices = [i for i, c in enumerate(df.columns) if c == col]
+                    
+                        for idx in col_indices:
+                            # Process each duplicate column separately
+                            col_series = df.iloc[:, idx]
+                            if col_series.isna().any() and not col_series.isna().all():
+                                # Replace NaN values with the mean of non-NaN values
+                                mean_value = col_series.mean()
+                                # Use iloc to avoid the duplicate column issue
+                                df.iloc[:, idx] = col_series.fillna(mean_value)
+                else:
+                    # No duplicates - original method can work
+                    # Select only columns with some NaN values (but not all)
+                    columns_to_impute = df.loc[:, partial_nan_columns]
+                
+                    # Create an imputer
+                    from sklearn.impute import SimpleImputer
+                    imputer = SimpleImputer(strategy='mean')
+                    imputed_values = imputer.fit_transform(columns_to_impute)
+                
+                    # Put the imputed values back
+                    df.loc[:, partial_nan_columns] = imputed_values
     
         return df
