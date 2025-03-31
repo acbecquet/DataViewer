@@ -3175,7 +3175,7 @@ class ViscosityCalculator:
                     combo_data = training_data[
                         (training_data['media'] == media) & 
                         (training_data['terpene'] == terpene)
-                    ]
+                    ].copy()
                 
                     if combo_data.empty:
                         return False
@@ -3272,7 +3272,7 @@ class ViscosityCalculator:
                             combo_data = training_data[
                                 (training_data['media'] == media) & 
                                 (training_data['terpene'] == terpene)
-                            ]
+                            ].copy()
                             if 'terpene_pct' in combo_data.columns and not combo_data.empty:
                                 terpene_pct = 100 * combo_data['terpene_pct'].median()
                                 if pd.isna(terpene_pct) or terpene_pct <= 0:
@@ -4343,7 +4343,7 @@ class ViscosityCalculator:
                         combo_data = combined_data[
                             (combined_data['media'] == media) & 
                             (combined_data['terpene'] == terpene)
-                        ]
+                        ].copy()
                 
                         # Skip if not enough data
                         if len(combo_data) < 5:
@@ -4451,27 +4451,7 @@ class ViscosityCalculator:
                         X_gen = encoded_data[gen_features]
                         y_gen = encoded_data['residual']
 
-                        # Check for NaN values in features
-                        if X_gen.isna().any().any():
-                            # First, save a copy of the column names
-                            original_columns = X_gen.columns.tolist()
-    
-                            # Replace completely empty columns with zeros instead of using the imputer on them
-                            for col in X_gen.columns:
-                                if X_gen[col].isna().all():
-                                    X_gen[col] = 0
-    
-                            # Now use imputer only on columns that have some values
-                            columns_with_values = [col for col in X_gen.columns if not X_gen[col].isna().all()]
-                            columns_to_impute = X_gen[columns_with_values]
-    
-                            if not columns_to_impute.empty and columns_to_impute.isna().any().any():
-                                # Create an imputer for columns with at least some non-NaN values
-                                imputer = SimpleImputer(strategy='mean')
-                                imputed_values = imputer.fit_transform(columns_to_impute)
-        
-                                # Put the imputed values back
-                                X_gen.loc[:, columns_with_values] = imputed_values
+                        X_gen = self.check_features_for_nan(X_gen)
 
                         # Now fit the model with the cleaned data
                         gen_model = build_residual_model(config)
@@ -4513,7 +4493,7 @@ class ViscosityCalculator:
                         combo_data = potency_data[
                             (potency_data['media'] == media) & 
                             (potency_data['terpene'] == terpene)
-                        ]
+                        ].copy()
                 
                         # Skip if not enough data
                         if len(combo_data) < 5:
@@ -4601,26 +4581,7 @@ class ViscosityCalculator:
 
                         # Check for NaN values in features
                         
-                        if X_gen.isna().any().any():
-                            # First, save a copy of the column names
-                            original_columns = X_gen.columns.tolist()
-    
-                            # Replace completely empty columns with zeros instead of using the imputer on them
-                            for col in X_gen.columns:
-                                if X_gen[col].isna().all():
-                                    X_gen[col] = 0
-    
-                            # Now use imputer only on columns that have some values
-                            columns_with_values = [col for col in X_gen.columns if not X_gen[col].isna().all()]
-                            columns_to_impute = X_gen[columns_with_values]
-    
-                            if not columns_to_impute.empty and columns_to_impute.isna().any().any():
-                                # Create an imputer for columns with at least some non-NaN values
-                                imputer = SimpleImputer(strategy='mean')
-                                imputed_values = imputer.fit_transform(columns_to_impute)
-        
-                                # Put the imputed values back
-                                X_gen.loc[:, columns_with_values] = imputed_values
+                        X_gen = self.check_features_for_nan(X_gen)
 
                         # Now fit the model with the cleaned data
                         gen_model = build_residual_model(config)
@@ -4662,7 +4623,7 @@ class ViscosityCalculator:
                         combo_data = terpene_data[
                             (terpene_data['media'] == media) & 
                             (terpene_data['terpene'] == terpene)
-                        ]
+                        ].copy()
                 
                         # Skip if not enough data
                         if len(combo_data) < 5:
@@ -4748,27 +4709,7 @@ class ViscosityCalculator:
                         X_gen = encoded_data[gen_features]
                         y_gen = encoded_data['residual']
 
-                        # Check for NaN values in features
-                        if X_gen.isna().any().any():
-                            # First, save a copy of the column names
-                            original_columns = X_gen.columns.tolist()
-    
-                            # Replace completely empty columns with zeros instead of using the imputer on them
-                            for col in X_gen.columns:
-                                if X_gen[col].isna().all():
-                                    X_gen[col] = 0
-    
-                            # Now use imputer only on columns that have some values
-                            columns_with_values = [col for col in X_gen.columns if not X_gen[col].isna().all()]
-                            columns_to_impute = X_gen[columns_with_values]
-    
-                            if not columns_to_impute.empty and columns_to_impute.isna().any().any():
-                                # Create an imputer for columns with at least some non-NaN values
-                                imputer = SimpleImputer(strategy='mean')
-                                imputed_values = imputer.fit_transform(columns_to_impute)
-        
-                                # Put the imputed values back
-                                X_gen.loc[:, columns_with_values] = imputed_values
+                        X_gen = self.check_features_for_nan(X_gen)
 
                         # Now fit the model with the cleaned data
                         gen_model = build_residual_model(config)
@@ -5847,3 +5788,46 @@ class ViscosityCalculator:
             self.combined_viscosity_models = {'Enhanced_PotencyDemo': demo_model}
     
         return demo_model
+
+    def check_features_for_nan(self, feature_df):
+        """
+        Check a feature DataFrame for NaN values and handle them appropriately:
+        - Replace completely empty columns with zeros
+        - Impute partially empty columns with mean values
+    
+        Args:
+            feature_df: DataFrame of features to check and clean
+        
+        Returns:
+            DataFrame: The cleaned feature DataFrame with NaN values handled
+        """
+        # Make a copy to avoid modifying the original unexpectedly
+        df = feature_df.copy()
+    
+        # Check if there are any NaN values at all
+        if df.isna().any().any():
+            # Find columns that are completely NaN (all values are NaN)
+            all_nan_mask = df.isna().all()
+            all_nan_columns = df.columns[all_nan_mask].tolist()
+        
+            # Fill completely empty columns with zeros
+            for col in all_nan_columns:
+                df.loc[:, col] = 0
+        
+            # Find columns with at least one non-NaN value but some NaN values
+            partial_nan_mask = df.isna().any() & ~all_nan_mask
+            partial_nan_columns = df.columns[partial_nan_mask].tolist()
+        
+            if partial_nan_columns:
+                # Select only columns with some NaN values (but not all)
+                columns_to_impute = df.loc[:, partial_nan_columns]
+            
+                # Create an imputer
+                from sklearn.impute import SimpleImputer
+                imputer = SimpleImputer(strategy='mean')
+                imputed_values = imputer.fit_transform(columns_to_impute)
+            
+                # Put the imputed values back
+                df.loc[:, partial_nan_columns] = imputed_values
+    
+        return df
