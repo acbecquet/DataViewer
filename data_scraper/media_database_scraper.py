@@ -377,11 +377,45 @@ def extract_potency_blocks(df):
 
 def extract_terpene_blocks(df):
     """
-    Extract terpene data from the terpene sheet, with special focus on Total Terpene column.
+    Extract terpene data from the terpene sheet, with special focus on Total Terpene column
+    and individual terpene compounds.
     
-    Improved to better identify and extract the Total Terpene values.
+    Improved to better identify and extract the Total Terpene values and all individual terpenes.
     """
     all_terpene_data = []
+    
+    # Define the specific terpene columns to look for, matching the viscosity_calculator.py
+    target_terpenes = [
+        'alpha-Pinene', 'Camphene', 'beta-Pinene', 'beta-Myrcene', '3-Carene', 
+        'alpha-Terpinene', 'p-Cymene', 'D-Limonene', 'Ocimene 1', 'Ocimene 2',
+        'gamma-Terpinene', 'Terpinolene', 'Linalool', 'Isopulegol', 'Geraniol',
+        'Caryophyllene', 'alpha-Humulene', 'Nerolidol 1', 'Nerolidol 2', 
+        'Guaiol', 'alpha-Bisabolol'
+    ]
+    
+    # Create fuzzy matching patterns for terpene identification
+    terpene_patterns = {
+        'alpha-Pinene': ['alpha-pinene', 'a-pinene', 'alpha pinene', 'a pinene'],
+        'beta-Pinene': ['beta-pinene', 'b-pinene', 'beta pinene', 'b pinene'],
+        'beta-Myrcene': ['beta-myrcene', 'b-myrcene', 'myrcene', 'beta myrcene'],
+        '3-Carene': ['3-carene', '3 carene', 'carene'],
+        'alpha-Terpinene': ['alpha-terpinene', 'a-terpinene', 'alpha terpinene'],
+        'p-Cymene': ['p-cymene', 'p cymene', 'cymene'],
+        'D-Limonene': ['d-limonene', 'd limonene', 'limonene'],
+        'Ocimene 1': ['ocimene 1', 'ocimene1', '1-ocimene'],
+        'Ocimene 2': ['ocimene 2', 'ocimene2', '2-ocimene'],
+        'gamma-Terpinene': ['gamma-terpinene', 'g-terpinene', 'gamma terpinene'],
+        'Terpinolene': ['terpinolene'],
+        'Linalool': ['linalool'],
+        'Isopulegol': ['isopulegol'],
+        'Geraniol': ['geraniol'],
+        'Caryophyllene': ['caryophyllene', 'b-caryophyllene', 'beta-caryophyllene'],
+        'alpha-Humulene': ['alpha-humulene', 'a-humulene', 'humulene'],
+        'Nerolidol 1': ['nerolidol 1', 'nerolidol1', '1-nerolidol'],
+        'Nerolidol 2': ['nerolidol 2', 'nerolidol2', '2-nerolidol'],
+        'Guaiol': ['guaiol'],
+        'alpha-Bisabolol': ['alpha-bisabolol', 'a-bisabolol', 'bisabolol']
+    }
     
     # Find media type header rows
     media_type_rows = []
@@ -464,23 +498,53 @@ def extract_terpene_blocks(df):
         
         # Get all column headers from the header row and surrounding rows
         headers = []
+        terpene_columns = {}  # Map column indices to standardized terpene names
+        
+        # First, collect all headers from the main header row
         for col in range(df.shape[1]):
+            if col >= len(df.iloc[header_row]):
+                headers.append(f"Column_{col}")
+                continue
+                
             val = df.iloc[header_row, col]
             if pd.notna(val) and str(val).strip():
-                headers.append(str(val).strip())
+                header_text = str(val).strip()
+                headers.append(header_text)
+                
+                # Check if this header matches any of our target terpenes
+                header_lower = header_text.lower()
+                for terpene, patterns in terpene_patterns.items():
+                    if any(pattern in header_lower for pattern in patterns):
+                        terpene_columns[col] = terpene
+                        print(f"  Found terpene column '{terpene}' at index {col}")
+                        break
             else:
                 # Check a few rows above for column headers
+                header_found = False
                 for i in range(max(0, header_row-3), header_row):
-                    if i < len(df):
-                        above_val = df.iloc[i, col] if col < len(df.iloc[i]) else None
+                    if i < len(df) and col < len(df.iloc[i]):
+                        above_val = df.iloc[i, col]
                         if pd.notna(above_val) and str(above_val).strip():
-                            headers.append(str(above_val).strip())
+                            header_text = str(above_val).strip()
+                            headers.append(header_text)
+                            
+                            # Check for terpene column
+                            header_lower = header_text.lower()
+                            for terpene, patterns in terpene_patterns.items():
+                                if any(pattern in header_lower for pattern in patterns):
+                                    terpene_columns[col] = terpene
+                                    print(f"  Found terpene column '{terpene}' at index {col} from above row")
+                                    break
+                            
+                            header_found = True
                             break
-                else:
+                
+                if not header_found:
                     headers.append(f"Column_{col}")
         
         # Debug
         print(f"Block {block_idx+1} ({media_type}) headers: {headers}")
+        print(f"Found {len(terpene_columns)} terpene columns")
         
         # Find the 'Total Terpene' column
         total_terpene_col = -1
@@ -515,7 +579,7 @@ def extract_terpene_blocks(df):
             row = df.iloc[row_idx]
             
             # Skip rows with missing brand or strain
-            if pd.isna(row[name_col]) or pd.isna(row[strain_col]):
+            if name_col >= len(row) or strain_col >= len(row) or pd.isna(row[name_col]) or pd.isna(row[strain_col]):
                 continue
             
             # Get brand and strain
@@ -548,8 +612,19 @@ def extract_terpene_blocks(df):
                         # Skip values that can't be converted to float
                         pass
             
+            # Add specific terpene columns that we identified
+            for col, terpene_name in terpene_columns.items():
+                if col < len(row) and pd.notna(row[col]):
+                    try:
+                        # Convert to float, removing any % signs
+                        value = float(str(row[col]).replace('%', '').strip())
+                        terpene_data[terpene_name] = value
+                    except (ValueError, TypeError):
+                        # Skip values that can't be converted to float
+                        pass
+            
             # Check if we have the total terpene value
-            if total_terpene_col >= 0 and pd.notna(row[total_terpene_col]):
+            if total_terpene_col >= 0 and total_terpene_col < len(row) and pd.notna(row[total_terpene_col]):
                 try:
                     total_terpene_value = float(str(row[total_terpene_col]).replace('%', '').strip())
                     terpene_data['Total Terpene'] = total_terpene_value
@@ -566,11 +641,18 @@ def extract_terpene_blocks(df):
         # Print out column names to verify Total Terpene was captured
         print(f"Columns in terpene data: {result_df.columns.tolist()}")
         
+        # Print counts of specific terpene columns found
+        terpene_counts = {}
+        for terpene in target_terpenes:
+            if terpene in result_df.columns:
+                count = result_df[terpene].count()
+                terpene_counts[terpene] = count
+                print(f"  - {terpene}: {count} non-null values")
+        
         return result_df
     else:
         print("No terpene data extracted")
         return pd.DataFrame()
-
 
 def merge_data(potency_df, terpene_df, viscosity_df):
     """
@@ -712,6 +794,15 @@ def format_for_training(df):
     print("\nAvailable columns in merged data:")
     for col in sorted(working_df.columns):
         print(f"  - {col}")
+    
+    # Define the specific terpene compounds we want to preserve
+    terpene_compounds = [
+        'alpha-Pinene', 'Camphene', 'beta-Pinene', 'beta-Myrcene', '3-Carene', 
+        'alpha-Terpinene', 'p-Cymene', 'D-Limonene', 'Ocimene 1', 'Ocimene 2',
+        'gamma-Terpinene', 'Terpinolene', 'Linalool', 'Isopulegol', 'Geraniol',
+        'Caryophyllene', 'alpha-Humulene', 'Nerolidol 1', 'Nerolidol 2', 
+        'Guaiol', 'alpha-Bisabolol'
+    ]
     
     # Create a new DataFrame with columns matching the expected training format
     training_df = pd.DataFrame()
@@ -889,6 +980,16 @@ def format_for_training(df):
             print(f"Using column '{found_col}' for {target_col}")
             training_df[target_col] = pd.to_numeric(working_df[found_col], errors='coerce')
     
+    # ADD THIS NEW SECTION - Copy all individual terpene compound columns
+    print("\nCopying individual terpene compound columns:")
+    terpene_columns_found = 0
+    for terpene in terpene_compounds:
+        if terpene in working_df.columns:
+            training_df[terpene] = pd.to_numeric(working_df[terpene], errors='coerce')
+            terpene_columns_found += 1
+            print(f"  - Added {terpene} to output")
+    print(f"Added {terpene_columns_found} individual terpene columns to the output data")
+    
     # Add timestamp and source
     from datetime import datetime
     training_df['timestamp'] = datetime.now().isoformat()
@@ -905,6 +1006,19 @@ def format_for_training(df):
     if len(final_data) > 0:
         print("\nSample of final data (first 3 rows):")
         print(final_data[['media', 'media_brand', 'terpene', 'temperature', 'viscosity', 'total_potency', 'terpene_pct']].head(3))
+        
+        # Add detailed statistics for individual terpene columns
+        terpene_stats = []
+        for terpene in terpene_compounds:
+            if terpene in final_data.columns:
+                non_null = final_data[terpene].count()
+                if non_null > 0:
+                    terpene_stats.append(f"  - {terpene}: {non_null} non-null values (min: {final_data[terpene].min():.4f}, max: {final_data[terpene].max():.4f})")
+        
+        if terpene_stats:
+            print("\nIndividual terpene compounds statistics:")
+            for stat in terpene_stats:
+                print(stat)
         
         # Add detailed statistics 
         print("\nStatistics for key columns:")
