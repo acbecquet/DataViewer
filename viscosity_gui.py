@@ -97,6 +97,7 @@ class ViscosityGUI:
         file_menu.add_separator()
         # In the ViscosityGUI.create_menu method, add this line after "Save" but before the separator
         file_menu.add_command(label="Manage Data", command=self.calculator.view_formulation_data)
+        file_menu.add_command(label= "Export Terpene Profiles", command = self.calculator.export_terpene_profiles)
         menubar.add_cascade(label="File", menu=file_menu)
         
         # Models menu
