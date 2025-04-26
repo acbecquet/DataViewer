@@ -389,7 +389,6 @@ class UI_Methods:
         button_frame.pack(fill='x', pady=10)
     
         ttk.Button(button_frame, text="Add Block", command=lambda: self.add_temperature_block(blocks_frame)).pack(side="left", padx=5)
-        ttk.Button(button_frame, text="Calculate Averages", command=self.calculate_viscosity_block_stats).pack(side="left", padx=5)
         ttk.Button(button_frame, text="Save Measurements", command=self.save_block_measurements).pack(side="right", padx=5)	
 
     def embed_in_frame(self, parent_frame):

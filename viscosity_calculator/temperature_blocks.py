@@ -232,100 +232,68 @@ class TemperatureBlock_Methods:
     
         # Destroy the block frame
         block_frame.destroy()
-    
-    def calculate_viscosity_block_stats(self):
-        """Calculate averages for each temperature block"""
-        
-        calculations_performed = False
-        
-        for temp, _ in self.temperature_blocks:
-            # Get the torque and viscosity values for this temperature
-            torque_values = []
-            visc_values = []
-        
-            for run in range(3):
-                # Collect viscosity values for this temperature
-                for t, visc_var in self.viscosity_vars[run]:
-                    if t == temp:
-                        try:
-                            visc_value = visc_var.get().strip()
-                            if visc_value:  # Check if not empty
-                                visc = float(visc_value.replace(',', ''))
-                                visc_values.append(visc)
-                        except ValueError:
-                            pass
-                
-                # Collect torque values for this temperature
-                for t, torque_var in self.torque_vars[run]:
-                    if t == temp:
-                        try:
-                            torque_value = torque_var.get().strip()
-                            if torque_value:  # Check if not empty
-                                torque = float(torque_value.replace(',', ''))
-                                torque_values.append(torque)
-                        except ValueError:
-                            pass
-        
-            # Calculate averages if we have values
-            if torque_values:
-                avg_torque = sum(torque_values) / len(torque_values)
-                # Find the average torque variable for this temperature
-                for t, avg_var in self.avg_torque_vars:
-                    if t == temp:
-                        avg_var.set(f"{avg_torque:.1f}")
-                        calculations_performed = True
-                        break
-        
-            if visc_values:
-                avg_visc = sum(visc_values) / len(visc_values)
-                # Find the average viscosity variable for this temperature
-                for t, avg_var in self.avg_visc_vars:
-                    if t == temp:
-                        # Format with commas for larger numbers
-                        if avg_visc >= 1000:
-                            avg_var.set(f"{avg_visc:,.1f}")
-                        else:
-                            avg_var.set(f"{avg_visc:.1f}")
-                        calculations_performed = True
-                        break
-
-        # Show a message to confirm calculation
-        if calculations_performed:
-            messagebox.showinfo("Calculation Complete", "Averages have been calculated successfully.")
 
     def save_block_measurements(self):
         """Save the block-based viscosity measurements to the database with better error handling"""
         import datetime
         import os
         import traceback
-        
+    
         try:
             # Get the terpene value, defaulting to "Raw" if empty
             terpene_value = self.measure_terpene_var.get().strip()
             if not terpene_value:
                 terpene_value = "Raw"
-            
+        
             # Get the terpene percentage, defaulting to 0.0 if empty
             try:
                 terpene_pct = float(self.measure_terpene_pct_var.get())
             except (ValueError, tk.TclError):
                 terpene_pct = 0.0
-            terpene_brand_value = self.terpene_brand_var.get().strip()
+            
+            media_type = self.media_var.get()
 
-            if terpene_brand_value:
-                terpene_value = f"{terpene_value}_{terpene_brand_value}"
+            # Calculate decimal terpene percentage
+            terpene_decimal = terpene_pct / 100
+        
+            # Calculate total potency (as decimal)
+            total_potency = 1.0 - terpene_decimal
+
+            d8_thc_value = None
+            d9_thc_value = None
+
+            if media_type == "D8":
+                # For D8 media, set d8_thc to the calculated potency
+                d8_thc_value = total_potency
+                d9_thc_value = 0.0
+            elif media_type == "D9":
+                # For D9 media, set d9_thc to the calculated potency
+                d9_thc_value = total_potency
+                d8_thc_value = 0.0
+            else:
+                # For other media types, use the values from variables if they exist
+                d8_thc = getattr(self, '_d8_thc_var', None)
+                d8_thc_value = d8_thc.get() / 100.0 if d8_thc and hasattr(d8_thc, 'get') else None
+            
+                d9_thc = getattr(self, '_d9_thc_var', None)
+                d9_thc_value = d9_thc.get() / 100.0 if d9_thc and hasattr(d9_thc, 'get') else None
+        
+            terpene_brand_value = self.terpene_brand_var.get().strip()
 
             # Create a data structure to save
             measurements = {
                 "media": self.media_var.get(),
-                "media_brand": self.media_brand_var.get(),  # Add this line if needed
+                "media_brand": self.media_brand_var.get(),
                 "terpene": terpene_value,
-                "terpene_brand": self.terpene_brand_var.get(),  # Add this line
+                "terpene_brand": self.terpene_brand_var.get(),
                 "terpene_pct": terpene_pct,
-                "timestamp": datetime.datetime.now().isoformat(),
+                "total_potency": total_potency * 100,  # Store as percentage
+                "d9_thc": d9_thc_value * 100 if d9_thc_value else None,  # Store as percentage if available
+                "d8_thc": d8_thc_value * 100 if d8_thc_value else None,  # Store as percentage if available
+                "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "temperature_data": []
-                }
-            
+            }
+        
             # Validate we have at least one temperature block with data
             if not self.temperature_blocks:
                 messagebox.showwarning("Missing Data", "No temperature blocks found. Please add measurement blocks first.")

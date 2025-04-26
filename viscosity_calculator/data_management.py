@@ -40,8 +40,21 @@ class DataManagement_Methods:
             terpene = measurements['terpene']
             #terpene_brand = measurements.get('terpene_brand', '')
             terpene_pct = measurements['terpene_pct']
+            terpene_decimal = terpene_pct / 100 
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            # Get potency information (either from measurements or calculate)
+            total_potency = measurements.get('total_potency', 100 - terpene_pct)
+            # Ensure total_potency is in decimal format for CSV (0-1)
+            total_potency_decimal = total_potency / 100.0 if total_potency > 1.0 else total_potency
         
+            # Get cannabinoid information if available
+            d9_thc = measurements.get('d9_thc')
+            d9_thc_decimal = d9_thc / 100.0 if d9_thc and d9_thc > 1.0 else d9_thc
+        
+            d8_thc = measurements.get('d8_thc')
+            d8_thc_decimal = d8_thc / 100.0 if d8_thc and d8_thc > 1.0 else d8_thc
+
             # Create the combined terpene field
             combined_terpene = terpene
     
@@ -65,13 +78,20 @@ class DataManagement_Methods:
                                 'terpene': terpene,
                                 #'terpene_brand': terpene_brand,
                                 #'combined_terpene': combined_terpene,
-                                'terpene_pct': terpene_pct,
+                                'terpene_pct': terpene_decimal,
                                 'temperature': temperature,
                                 'speed': speed,
                                 'torque': torque,
                                 'viscosity': viscosity_float,
-                                'timestamp': timestamp
+                                'timestamp': timestamp,
+                                'total_potency': total_potency_decimal
                             }
+                            # Add cannabinoid information if available
+                            if d9_thc_decimal is not None:
+                                row['d9_thc'] = d9_thc_decimal
+                            if d8_thc_decimal is not None:
+                                row['d8_thc'] = d8_thc_decimal
+
                             rows.append(row)
                         except ValueError as e:
                             print(f"Warning: Could not convert viscosity value '{viscosity}' to float: {e}")
@@ -93,8 +113,14 @@ class DataManagement_Methods:
                             'torque': temp_block.get('average_torque', ''),
                             'viscosity': avg_viscosity_float,
                             'is_average': True,
-                            'timestamp': timestamp
+                            'timestamp': timestamp,
+                            'total_potency': total_potency_decimal
                         }
+                        # Add cannabinoid information if available
+                        if d9_thc_decimal is not None:
+                            row['d9_thc'] = d9_thc_decimal
+                        if d8_thc_decimal is not None:
+                            row['d8_thc'] = d8_thc_decimal
                         rows.append(row)
                     except ValueError as e:
                         print(f"Warning: Could not convert average viscosity value '{avg_viscosity}' to float: {e}")
@@ -366,6 +392,7 @@ class DataManagement_Methods:
             if 'total_potency' in df.columns:
                 if (df['total_potency'] > 1).any():
                     df.loc[df['total_potency'] > 1, 'total_potency'] = df.loc[df['total_potency'] > 1, 'total_potency'] / 100
+
         
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load CSV file: {str(e)}")

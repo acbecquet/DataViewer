@@ -116,5 +116,194 @@
             "final_potency": 99.0,
             "timestamp": "2025-03-28 16:45:12"
         }
+    ],
+    "D8_Raw_0.0": [
+        {
+            "media": "D8",
+            "media_brand": "",
+            "terpene": "Raw",
+            "terpene_brand": "",
+            "terpene_pct": 0.0,
+            "total_potency": 100.0,
+            "d9_thc": null,
+            "d8_thc": null,
+            "timestamp": "2025-04-25 16:48:38",
+            "temperature_data": [
+                {
+                    "temperature": 25,
+                    "speed": "0.01",
+                    "runs": [
+                        {
+                            "torque": "50",
+                            "viscosity": "120000000"
+                        },
+                        {
+                            "torque": "50",
+                            "viscosity": "120000000"
+                        },
+                        {
+                            "torque": "50",
+                            "viscosity": "120000000"
+                        }
+                    ],
+                    "average_torque": "50.0",
+                    "average_viscosity": "120,000,000.0"
+                }
+            ]
+        },
+        {
+            "media": "D8",
+            "media_brand": "",
+            "terpene": "Raw",
+            "terpene_brand": "",
+            "terpene_pct": 0.0,
+            "total_potency": 100.0,
+            "d9_thc": null,
+            "d8_thc": 100.0,
+            "timestamp": "2025-04-25 17:16:38",
+            "temperature_data": [
+                {
+                    "temperature": 25,
+                    "speed": "0.1",
+                    "runs": [
+                        {
+                            "torque": "50",
+                            "viscosity": "120000000"
+                        },
+                        {
+                            "torque": "50",
+                            "viscosity": "120000000"
+                        },
+                        {
+                            "torque": "50",
+                            "viscosity": "120000000"
+                        }
+                    ],
+                    "average_torque": "50.0",
+                    "average_viscosity": "120,000,000.0"
+                }
+            ]
+        },
+        {
+            "media": "D8",
+            "media_brand": "",
+            "terpene": "Raw",
+            "terpene_brand": "",
+            "terpene_pct": 0.0,
+            "total_potency": 100.0,
+            "d9_thc": null,
+            "d8_thc": 100.0,
+            "timestamp": "2025-04-25 17:17:09",
+            "temperature_data": [
+                {
+                    "temperature": 25,
+                    "speed": "0.1",
+                    "runs": [
+                        {
+                            "torque": "50",
+                            "viscosity": "120000000"
+                        },
+                        {
+                            "torque": "50",
+                            "viscosity": "120000000"
+                        },
+                        {
+                            "torque": "50",
+                            "viscosity": "120000000"
+                        }
+                    ],
+                    "average_torque": "50.0",
+                    "average_viscosity": "120,000,000.0"
+                },
+                {
+                    "temperature": 30,
+                    "speed": "0.5",
+                    "runs": [
+                        {
+                            "torque": "50",
+                            "viscosity": "60000000"
+                        },
+                        {
+                            "torque": "50",
+                            "viscosity": "60000000"
+                        },
+                        {
+                            "torque": "50",
+                            "viscosity": "60000000"
+                        }
+                    ],
+                    "average_torque": "50.0",
+                    "average_viscosity": "60,000,000.0"
+                }
+            ]
+        }
+    ],
+    "D8_Raw_1.0": [
+        {
+            "media": "D8",
+            "media_brand": "",
+            "terpene": "Raw",
+            "terpene_brand": "",
+            "terpene_pct": 1.0,
+            "total_potency": 0.0,
+            "d9_thc": null,
+            "d8_thc": null,
+            "timestamp": "2025-04-25 17:06:37",
+            "temperature_data": [
+                {
+                    "temperature": 25,
+                    "speed": "0.1",
+                    "runs": [
+                        {
+                            "torque": "50",
+                            "viscosity": "120000000"
+                        },
+                        {
+                            "torque": "50",
+                            "viscosity": "120000000"
+                        },
+                        {
+                            "torque": "50",
+                            "viscosity": "120000000"
+                        }
+                    ],
+                    "average_torque": "50.0",
+                    "average_viscosity": "120,000,000.0"
+                }
+            ]
+        },
+        {
+            "media": "D8",
+            "media_brand": "",
+            "terpene": "Raw",
+            "terpene_brand": "",
+            "terpene_pct": 1.0,
+            "total_potency": 99.0,
+            "d9_thc": null,
+            "d8_thc": 99.0,
+            "timestamp": "2025-04-25 17:11:56",
+            "temperature_data": [
+                {
+                    "temperature": 25,
+                    "speed": "0.1",
+                    "runs": [
+                        {
+                            "torque": "50",
+                            "viscosity": "100000000"
+                        },
+                        {
+                            "torque": "50",
+                            "viscosity": "100000000"
+                        },
+                        {
+                            "torque": "50",
+                            "viscosity": "100000000"
+                        }
+                    ],
+                    "average_torque": "50.0",
+                    "average_viscosity": "100,000,000.0"
+                }
+            ]
+        }
     ]
 }
