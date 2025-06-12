@@ -23,10 +23,13 @@ from typing import Optional
 # Third party imports
 import pandas as pd
 import psutil
+import openpyxl
 from openpyxl import Workbook, load_workbook
 import tkinter as tk
 from tkinter import filedialog, messagebox, Toplevel, Label, Button, ttk, Frame
-
+from test_selection_dialog import TestSelectionDialog
+from test_start_menu import TestStartMenu
+from header_data_dialog import HeaderDataDialog
 # Local imports
 import processing
 from utils import (
@@ -888,7 +891,7 @@ class FileManager:
                     pass
                     # Don't disrupt the user's workflow with an error message for cleanup issues
 
-    def create_new_template(self, startup_menu: tk.Toplevel) -> None:
+    def create_new_template_old(self, startup_menu: tk.Toplevel) -> None:
         """
         Handle the 'New' button click to create a new template file.
         """
@@ -919,6 +922,177 @@ class FileManager:
             messagebox.showinfo("Success", "New template created and loaded successfully.")
         except Exception as e:
             messagebox.showerror("Error", f"An error occurred while creating a new template: {e}")
+
+    def create_new_template(self, parent_window=None):
+        """Create a new file from the template."""
+        return self.create_new_file_with_tests(parent_window)
+
+
+    def create_new_file_with_tests(self, parent_window=None):
+        """
+        Create a new file with only the selected tests.
+    
+        Args:
+            parent_window (tk.Toplevel, optional): Parent window to close. Defaults to None.
+    
+        Returns:
+            str: Path to the created file or None if creation was cancelled.
+        """
+
+        # first, get the save path before showing test selection dialog
+        file_path = get_save_path(".xlsx")
+        if not file_path:
+            return None  # User cancelled
+
+        # Get template path
+        template_path = get_resource_path("resources/Standardized Test Template - LATEST VERSION - 2025 Jan.xlsx")
+    
+        # Load template to get available tests
+        wb = openpyxl.load_workbook(template_path)
+        available_tests = [sheet for sheet in wb.sheetnames if sheet != "Sheet1"]
+    
+        # Show test selection dialog
+        test_dialog = TestSelectionDialog(self.gui.root, available_tests)
+        ok_clicked, selected_tests = test_dialog.show()
+    
+        if not ok_clicked or not selected_tests:
+            return None  # User cancelled or no tests selected
+    
+        # Create a new file with selected tests
+        try:
+            # Copy template file
+            shutil.copy(template_path, file_path)
+        
+            # Open the copied file
+            new_wb = openpyxl.load_workbook(file_path)
+        
+            # Remove unselected tests
+            for sheet_name in list(new_wb.sheetnames):
+                if sheet_name not in selected_tests and sheet_name != "Sheet1":
+                    del new_wb[sheet_name]
+        
+            # Save the modified workbook
+            new_wb.save(file_path)
+        
+            # Close parent window if provided
+            if parent_window and parent_window.winfo_exists():
+                parent_window.destroy()
+        
+            # Show test start menu
+            self.show_test_start_menu(file_path)
+        
+            return file_path
+        except Exception as e:
+            messagebox.showerror("Error", f"An error occurred while creating the file: {str(e)}")
+            if os.path.exists(file_path):
+                try:
+                    os.remove(file_path)  # Clean up partial file
+                except:
+                    pass
+            return None
+
+    def show_test_start_menu(self, file_path):
+        """
+        Show the test start menu for a newly created file.
+    
+        Args:
+            file_path (str): Path to the created file.
+        """
+        # Show the test start menu
+        start_menu = TestStartMenu(self.gui.root, file_path)
+        result, selected_test = start_menu.show()
+    
+        if result == "start_test" and selected_test:
+            # Show header data dialog
+            self.show_header_data_dialog(file_path, selected_test)
+        elif result == "view_raw_file":
+            # Load the file with existing processing logic
+            self.load_file(file_path)
+
+    def show_header_data_dialog(self, file_path, selected_test):
+        """
+        Show the header data dialog for a selected test.
+    
+        Args:
+            file_path (str): Path to the file.
+            selected_test (str): Name of the selected test.
+        """
+        # Show the header data dialog
+        header_dialog = HeaderDataDialog(self.gui.root, file_path, selected_test)
+        result, header_data = header_dialog.show()
+    
+        if result:
+            # Apply header data to the file
+            self.apply_header_data_to_file(file_path, header_data)
+        
+            # Show the data collection window
+            from data_collection_window import DataCollectionWindow
+            data_collection = DataCollectionWindow(self.gui.root, file_path, selected_test, header_data)
+            data_result = data_collection.show()
+        
+            if data_result == "load_file":
+                # Load the file for viewing
+                self.load_file(file_path)
+            elif data_result == "cancel":
+                # User cancelled data collection, just load the file
+                self.load_file(file_path)
+
+    def apply_header_data_to_file(self, file_path, header_data):
+        """
+        Apply the header data to the Excel file.
+    
+        Args:
+            file_path (str): Path to the file.
+            header_data (dict): Dictionary containing header data.
+        """
+        try:
+            # Load the workbook
+            wb = openpyxl.load_workbook(file_path)
+        
+            # Get the sheet for the selected test
+            if header_data["test"] in wb.sheetnames:
+                ws = wb[header_data["test"]]
+            
+                # Common data mappings (row, column)
+                common_mappings = {
+                    "media": (2, 2),      # Cell B2
+                    "viscosity": (3, 2),  # Cell B3
+                    "voltage": (2, 6),    # Cell F2
+                    "oil_mass": (2, 8)    # Cell H2
+                }
+            
+                # Apply common data
+                for field, (row, col) in common_mappings.items():
+                    if header_data["common"][field]:
+                        ws.cell(row=row, column=col, value=header_data["common"][field])
+            
+                # Apply sample-specific data
+                num_samples = header_data["num_samples"]
+                for i in range(num_samples):
+                    # Calculate column offset (12 columns per sample)
+                    col_offset = i * 12
+                
+                    # Sample ID (row 1, column F + offset)
+                    sample_id_col = 6 + col_offset  # Column F is 6
+                    ws.cell(row=1, column=sample_id_col, value=header_data["samples"][i]["id"])
+                
+                    # Resistance (row 3, column D + offset)
+                    resistance_col = 4 + col_offset  # Column D is 4
+                    ws.cell(row=3, column=resistance_col, value=header_data["samples"][i]["resistance"])
+            
+                # Add tester name to sheet A1
+                ws.cell(row=1, column=1, value=f"Tester: {header_data['common']['tester']}")
+            
+                # Save the workbook
+                wb.save(file_path)
+            
+                print(f"Successfully applied header data to {file_path}")
+            else:
+                messagebox.showerror("Error", f"Sheet '{header_data['test']}' not found in the file.")
+        except Exception as e:
+            messagebox.showerror("Error", f"An error occurred while applying header data: {str(e)}")
+
+
 
     def start_file_loading_wrapper(self, startup_menu: tk.Toplevel) -> None:
         """Handle the 'Load' button click in the startup menu."""

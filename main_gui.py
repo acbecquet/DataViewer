@@ -429,6 +429,10 @@ class TestingGUI:
         self.root.config(menu=menubar)
 
     def show_new_template_dialog(self) -> None:
+        """Show a dialog to create a new template file with selected tests."""
+        self.file_manager.create_new_file_with_tests()
+
+    def show_new_template_dialog_old(self) -> None:
         """Show a dialog to create a new template file."""
         startup_menu = Toplevel(self.root)
         startup_menu.title("New File")
