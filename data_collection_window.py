@@ -40,10 +40,13 @@ class DataCollectionWindow:
         # Default puff interval
         self.puff_interval = 10  # Default to 10
         
+        # Tracking variables for cell editing
+        self.editing = False
+        self.current_edit_widget = None
+        
         # Set up keyboard shortcut flags
         self.hotkeys_enabled = True
         self.hotkey_bindings = {}
-        self.navigation_keys_enable = True
         
         # Create the style for ttk widgets
         self.style = ttk.Style()
@@ -111,6 +114,21 @@ class DataCollectionWindow:
         self.style.configure('SampleInfo.TLabel',
                              font=("Arial", 11),
                              background='SystemButtonFace')
+                             
+        # Style for Treeview with gridlines
+        self.style.configure('Treeview', 
+                            showlines=True,
+                            background='white',
+                            fieldbackground='white')
+        
+        # Add gridlines to the Treeview cells
+        self.style.configure('Treeview', rowheight=25)
+        self.style.map('Treeview', background=[('selected', '#CCCCCC')])
+        
+        # Configure tag for focused items
+        self.style.map('Treeview', 
+                      background=[('selected', '#CCCCCC')],
+                      foreground=[('selected', 'black')])
     
     def center_window(self):
         """Center the window on the screen."""
@@ -231,7 +249,7 @@ class DataCollectionWindow:
         # Create the treeview (table)
         columns = ("puffs", "before_weight", "after_weight", "draw_pressure", "smell", "notes")
         tree = ttk.Treeview(table_frame, columns=columns, show="headings", 
-                           selectmode="browse", height=20)
+                           selectmode="browse", height=20, style='Treeview')
         
         # Add scrollbars
         y_scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=tree.yview)
@@ -259,19 +277,13 @@ class DataCollectionWindow:
         # Add the initial row
         self.update_treeview(tree, sample_id)
         
-        # Enable in-place editing with single click
-        tree.bind("<ButtonRelease-1>", lambda event, tree=tree, sample_id=sample_id: 
-                 self.on_cell_click(event, tree, sample_id))
+        # Enable cell editing with click
+        tree.bind("<ButtonRelease-1>", lambda e: self.on_cell_click(e, tree, sample_id))
         
-        # Bind Tab key for quick navigation between cells
-        tree.bind("<Tab>", lambda event, tree=tree, sample_id=sample_id: 
-                 self.tab_to_next_cell(event, tree, sample_id))
-        # Bind left/right arrow keys for cell navigation during data entry
-        tree.bind("<Right>", lambda event, tree=tree, sample_id=sample_id: 
-                 self.move_to_next_cell(event, tree, sample_id, "right"))
-        tree.bind("<Left>", lambda event, tree=tree, sample_id=sample_id: 
-        tree.bind("<Left>", lambda event, tree=tree, sample_id=sample_id: 
-                 self.move_to_next_cell(event, tree, sample_id, "left"))
+        # Bind keyboard navigation
+        tree.bind("<Tab>", lambda e: self.handle_tab_key(e, tree, sample_id))
+        tree.bind("<Left>", lambda e: self.handle_arrow_key(e, tree, sample_id, "left"))
+        tree.bind("<Right>", lambda e: self.handle_arrow_key(e, tree, sample_id, "right"))
         
         # Store reference to the tree
         self.data[sample_id]["tree"] = tree
@@ -357,46 +369,50 @@ class DataCollectionWindow:
             ))
     
     def on_cell_click(self, event, tree, sample_id):
-        """Handle cell click for in-place editing."""
-        # Get clicked region
+        """Handle clicking on a cell to edit it."""
+        # Get the item and column clicked
         region = tree.identify("region", event.x, event.y)
         if region != "cell":
             return
             
-        # Get the item and column
         item = tree.identify("item", event.x, event.y)
         column = tree.identify("column", event.x, event.y)
         
         if not item or not column:
             return
+            
+        # Get column index (1-based)
+        col_idx = int(column[1:])
         
-        # Select the item
-        tree.selection_set(item)
-        
-        # Get the column index
-        column_idx = int(column[1:]) - 1
-        
-        # Don't allow editing the puffs column
-        if column_idx == 0:  # Puffs column
+        # Skip puffs column (not editable)
+        if col_idx == 1:
             return
             
-        # Get column name
+        # Get row index
+        row_idx = tree.index(item)
+        
+        # Get columns names for lookup
         columns = ["puffs", "before_weight", "after_weight", "draw_pressure", "smell", "notes"]
-        column_name = columns[column_idx]
+        column_name = columns[col_idx - 1]  # Convert 1-based to 0-based for array index
+        
+        # Start editing this cell
+        self.edit_cell(tree, item, column, row_idx, sample_id, column_name)
+    
+    def edit_cell(self, tree, item, column, row_idx, sample_id, column_name):
+        """Create an entry widget for editing a cell."""
+        # Cancel any existing edit
+        self.end_editing()
+        
+        # Mark that we're editing
+        self.editing = True
+        self.hotkeys_enabled = False
         
         # Get the current value
-        row_idx = tree.index(item)
-        current_value = self.data[sample_id][column_name][row_idx] if row_idx < len(self.data[sample_id][column_name]) else ""
+        current_value = ""
+        if row_idx < len(self.data[sample_id][column_name]):
+            current_value = self.data[sample_id][column_name][row_idx]
         
-        # Create entry widget for editing
-        self.edit_cell(tree, item, column, column_name, row_idx, sample_id, current_value)
-    
-    def edit_cell(self, tree, item, column, column_name, row_idx, sample_id, current_value):
-        """Create an entry widget for editing a cell."""
-        # Disable hotkeys during editing
-        self.hotkeys_enabled = False
-        self.navigation_keys_enabled = True
-        # Get the bbox of the cell
+        # Get the cell coordinates
         x, y, width, height = tree.bbox(item, column)
         
         # Create a frame for the entry
@@ -414,189 +430,248 @@ class DataCollectionWindow:
         # Select all text
         entry.select_range(0, tk.END)
         
+        # Save references
+        self.current_edit = {
+            "frame": frame,
+            "entry": entry,
+            "tree": tree,
+            "item": item,
+            "column": column,
+            "column_name": column_name,
+            "row_idx": row_idx,
+            "sample_id": sample_id
+        }
+        
         # Focus the entry
         entry.focus_set()
         
-        # Callback for when editing is done
-        def on_entry_done(event=None):
-            value = entry.get()
-            
-            # Update the data
-            if row_idx < len(self.data[sample_id][column_name]):
-                self.data[sample_id][column_name][row_idx] = value
-            
-            # Update the tree item
-            values = list(tree.item(item, "values"))
-            values[int(column[1:]) - 1] = value
-            tree.item(item, values=values)
-            
-            # Calculate TPM if both weights are present
-            if column_name in ["before_weight", "after_weight"]:
-                self.calculate_tpm(sample_id)
-                self.update_stats_panel()
-            
-            # Check if both before and after weight are filled
-            # If so, add a new row if this is the last row
-            if (row_idx == len(self.data[sample_id]["puffs"]) - 1 and
-                column_name == "after_weight" and
-                self.data[sample_id]["before_weight"][row_idx] and 
-                self.data[sample_id]["after_weight"][row_idx]):
-                
-                # Add new row with next puff interval
+        # Bind events for the entry widget
+        entry.bind("<Return>", self.finish_edit)
+        entry.bind("<Tab>", self.handle_tab_in_edit)
+        entry.bind("<Escape>", self.cancel_edit)
+        entry.bind("<FocusOut>", self.finish_edit)
+        entry.bind("<Left>", self.handle_arrow_in_edit)
+        entry.bind("<Right>", self.handle_arrow_in_edit)
+    
+    def finish_edit(self, event=None):
+        """Save the current edit and move to the next cell if needed."""
+        if not self.editing or not hasattr(self, 'current_edit'):
+            return
+        
+        value = self.current_edit["entry"].get()
+        tree = self.current_edit["tree"]
+        item = self.current_edit["item"]
+        column = self.current_edit["column"]
+        column_name = self.current_edit["column_name"]
+        row_idx = self.current_edit["row_idx"]
+        sample_id = self.current_edit["sample_id"]
+    
+        # Update data storage
+        if row_idx < len(self.data[sample_id][column_name]):
+            self.data[sample_id][column_name][row_idx] = value
+    
+        # Update the tree
+        col_idx = int(column[1:]) - 1
+        values = list(tree.item(item, "values"))
+        values[col_idx] = value
+        tree.item(item, values=values)
+    
+        # If we're in the after_weight column and we're at the last row, check if we need to add a new row
+        if column_name == "after_weight" and row_idx == len(self.data[sample_id]["puffs"]) - 1:
+            if self.data[sample_id]["before_weight"][row_idx] and self.data[sample_id]["after_weight"][row_idx]:
+                # Add a new row with the next puff interval
                 next_puff = self.data[sample_id]["puffs"][row_idx] + self.puff_interval
                 self.data[sample_id]["puffs"].append(next_puff)
-                
-                # Set the before weight of the new row to the after weight of the current row
+            
+                # Set before_weight to the previous after_weight
                 after_weight = self.data[sample_id]["after_weight"][row_idx]
-                self.data[sample_id]["before_weight"].append(after_weight)  # Auto-populate!
-                
+                self.data[sample_id]["before_weight"].append(after_weight)
+            
                 # Add empty values for other columns
                 self.data[sample_id]["after_weight"].append("")
                 self.data[sample_id]["draw_pressure"].append("")
                 self.data[sample_id]["smell"].append("")
                 self.data[sample_id]["notes"].append("")
                 self.data[sample_id]["tpm"].append(None)
-                
-                # Update the treeview
+            
+                # Update the tree without changing focus
                 self.update_treeview(tree, sample_id)
-                
-                # Select the after_weight cell of the new row
-                new_item = tree.get_children()[-1]
-                tree.selection_set(new_item)
-                tree.focus(new_item)
-                tree.see(new_item)
-                
-                # Re-enable hotkeys before simulating the click
-                self.hotkeys_enabled = True
-                
-                # Simulate clicking on the "after_weight" cell
-                col = "#3"  # after_weight column
-                tree.event_generate("<Button-1>", x=tree.bbox(new_item, col)[0] + 5, 
-                                  y=tree.bbox(new_item, col)[1] + 5)
-                
-                # Update the statistics panel
+            
+                # Make sure we re-select the current item to maintain focus
+                tree.selection_set(item)
+                tree.focus(item)
+                tree.see(item)
+            
+                # Calculate TPM and update stats
+                self.calculate_tpm(sample_id)
                 self.update_stats_panel()
-            else:
-                # Re-enable hotkeys
-                self.hotkeys_enabled = True
-            
-            # Destroy the entry widget
-            frame.destroy()
-
-            # Handle special keys for navigation if this was triggered by an arrow key
-            if event and event.keysym in ("Right", "Left"):
-                # Re-enable navigation after closing the entry
-                self.navigation_keys_enabled = True
-            
-                # Move to the next/prev cell
-                direction = "right" if event.keysym == "Right" else "left"
-                frame.destroy()  # First destroy the frame
-                self.move_to_next_cell(event, tree, sample_id, direction)
-                return
-        
-        # Handle escape key to cancel editing but restore hotkeys
-        def on_escape(event=None):
-            self.hotkeys_enabled = True
-            frame.destroy()
-        
-        # Bind events for entry completion
-        entry.bind("<Return>", on_entry_done)
-        entry.bind("<Tab>", lambda e: (on_entry_done(), self.tab_to_next_cell(e, tree, sample_id)))
-        entry.bind("<Escape>", on_escape)
-        entry.bind("<Right>", on_entry_done)
-        entry.bind("<Left>", on_entry_done)
-        
-        # For focus out, we need to re-enable hotkeys
-        entry.bind("<FocusOut>", on_entry_done)
     
-    def move_to_next_cell(self, event, tree, sample_id, direction):
-        """
-        Move to the next/previous cell in the current row.
+        # Calculate TPM if weight was changed
+        if column_name in ["before_weight", "after_weight"]:
+            self.calculate_tpm(sample_id)
+            self.update_stats_panel()
     
-        Args:
-            event: The key event
-            tree: The treeview
-            sample_id: The current sample ID
-            direction: "right" or "left"
-        """
-        # Only respond if navigation keys are enabled
-        if not self.navigation_keys_enabled:
-            return "break"
+        # Check if this was triggered by Tab or an arrow key
+        move_to_next = False
+        if event and event.keysym in ["Tab", "Right", "Left"]:
+            move_to_next = True
+    
+        # End the current edit
+        self.end_editing()
+    
+        # If triggered by navigation key, move focus
+        if move_to_next:
+            if event.keysym == "Tab":
+                self.handle_tab_key(event, tree, sample_id)
+            elif event.keysym == "Right":
+                self.handle_arrow_key(event, tree, sample_id, "right")
+            elif event.keysym == "Left":
+                self.handle_arrow_key(event, tree, sample_id, "left")
+    
+    def handle_tab_in_edit(self, event):
+        """Handle tab key pressed while editing a cell."""
+        # Save the current edit
+        self.finish_edit(event)
+        return "break"  # Stop event propagation
+    
+    def handle_arrow_in_edit(self, event):
+        """Handle arrow keys pressed while editing a cell."""
+        # Only handle left/right arrows
+        if event.keysym not in ["Left", "Right"]:
+            return
+            
+        # Check if at beginning or end of text
+        entry = self.current_edit["entry"]
+        cursor_pos = entry.index(tk.INSERT)
         
-        # Get current item and column
+        # If at beginning and pressing left, or at end and pressing right, navigate to next cell
+        if (cursor_pos == 0 and event.keysym == "Left") or \
+           (cursor_pos == len(entry.get()) and event.keysym == "Right"):
+            self.finish_edit(event)
+            return "break"  # Stop event propagation
+    
+    def cancel_edit(self, event=None):
+        """Cancel the current edit without saving."""
+        self.end_editing()
+        return "break"  # Stop event propagation
+    
+    def end_editing(self):
+        """Clean up editing widgets and state."""
+        if not self.editing:
+            return
+            
+        if hasattr(self, 'current_edit') and self.current_edit:
+            if "frame" in self.current_edit:
+                self.current_edit["frame"].destroy()
+            self.current_edit = None
+            
+        self.editing = False
+        self.hotkeys_enabled = True
+    
+    def handle_tab_key(self, event, tree, sample_id):
+        """Handle Tab key press in the treeview."""
+        if self.editing:
+            return "break"  # Already handled in edit mode
+            
+        # Get the current selection
         item = tree.focus()
         if not item:
-            return "break"
-        
-        column = tree.identify_column(tree.winfo_pointerx() - tree.winfo_rootx())
-        if not column:
-            return "break"
-        
-        # Get column index
-        col_idx = int(column[1:]) - 1
-    
-        # Calculate new column index
-        if direction == "right" and col_idx < 5:  # Not the last column
-            new_col_idx = col_idx + 1
-            new_col = f"#{new_col_idx + 1}"
-        elif direction == "left" and col_idx > 0:  # Not the first column
-            new_col_idx = col_idx - 1
-            new_col = f"#{new_col_idx + 1}"
-        else:
-            return "break"  # At edge columns, do nothing
-        
-        # Select the new cell
-        x, y, width, height = tree.bbox(item, new_col)
-        tree.event_generate("<Button-1>", x=x+5, y=y+5)
-    
-        return "break"  # Prevent default behavior
-
-    def tab_to_next_cell(self, event, tree, sample_id):
-        """Handle Tab key to move to the next editable cell."""
-        item = tree.focus()
-        if not item:
-            return "break"  # Prevent default tab behavior
-            
-        # Get current column
-        column = tree.identify_column(tree.winfo_pointerx() - tree.winfo_rootx())
-        if not column:
+            # Select the first item and the first editable column
+            if tree.get_children():
+                item = tree.get_children()[0]
+                tree.selection_set(item)
+                tree.focus(item)
+                self.edit_cell(tree, item, "#2", 0, sample_id, "before_weight")
             return "break"
             
-        # Get column index
-        col_idx = int(column[1:]) - 1
+        # Get the current column
+        column = tree.identify_column(event.x) if event else None
+        if not column:
+            # Start at the first editable column
+            column = "#2"
+            
+        # Get column index (1-based)
+        col_idx = int(column[1:])
         
-        # Move to next column or first column of next row
-        if col_idx < 5:  # Not the last column
-            # Move to next column
-            new_col_idx = col_idx + 1
-            tree.event_generate("<Right>")
-        else:
-            # Get next item (row)
+        # Get next column
+        next_col_idx = col_idx + 1
+        
+        # If at the last column, move to the first editable column of the next row
+        if next_col_idx > 6:  # We have 6 columns
+            # Get the next item
             items = tree.get_children()
-            current_idx = items.index(item)
+            idx = items.index(item)
             
-            if current_idx < len(items) - 1:
-                # Move to first editable column of next row
-                new_item = items[current_idx + 1]
-                tree.selection_set(new_item)
-                tree.focus(new_item)
-                tree.see(new_item)
+            if idx < len(items) - 1:
+                # Move to next row
+                next_item = items[idx + 1]
+                tree.selection_set(next_item)
+                tree.focus(next_item)
+                tree.see(next_item)
                 
-                # Simulate clicking on the appropriate cell (before_weight or after_weight)
-                # If before_weight is empty, focus there, otherwise focus on after_weight
-                row_idx = current_idx + 1
-                if not self.data[sample_id]["before_weight"][row_idx]:
-                    col = "#2"  # before_weight column
-                else:
-                    col = "#3"  # after_weight column
-                
-                tree.event_generate("<Button-1>", x=tree.bbox(new_item, col)[0] + 5, 
-                                   y=tree.bbox(new_item, col)[1] + 5)
+                # Edit the first editable column
+                self.edit_cell(tree, next_item, "#2", idx + 1, sample_id, "before_weight")
             else:
-                # Last row, last column - go to next tab
+                # At the last row, move to next sample
                 self.go_to_next_sample()
+        else:
+            # Skip the puffs column
+            if next_col_idx == 1:
+                next_col_idx = 2
+                
+            # Edit the next column in the same row
+            row_idx = tree.index(item)
+            self.edit_cell(tree, item, f"#{next_col_idx}", row_idx, sample_id, 
+                          ["puffs", "before_weight", "after_weight", "draw_pressure", "smell", "notes"][next_col_idx - 1])
+            
+        return "break"  # Stop event propagation
+    
+    def handle_arrow_key(self, event, tree, sample_id, direction):
+        """Handle arrow key press in the treeview."""
+        if self.editing or not self.hotkeys_enabled:
+            return "break"  # Already handled in edit mode
+            
+        # Get the current selection
+        item = tree.focus()
+        if not item:
+            return "break"
+            
+        # Get the current column
+        column = tree.identify_column(event.x) if event else None
+        if not column:
+            # Default to first editable column
+            column = "#2"
+            
+        # Get column index (1-based)
+        col_idx = int(column[1:])
         
-        return "break"  # Prevent default tab behavior
+        if direction == "right":
+            # Move to the next column
+            next_col_idx = col_idx + 1
+            if next_col_idx > 6:  # Last column
+                return "break"
+                
+            # Skip the puffs column
+            if next_col_idx == 1:
+                next_col_idx = 2
+                
+            # Edit the cell
+            row_idx = tree.index(item)
+            self.edit_cell(tree, item, f"#{next_col_idx}", row_idx, sample_id, 
+                          ["puffs", "before_weight", "after_weight", "draw_pressure", "smell", "notes"][next_col_idx - 1])
+                          
+        elif direction == "left":
+            # Move to the previous column
+            prev_col_idx = col_idx - 1
+            if prev_col_idx < 2:  # Before first editable column
+                return "break"
+                
+            # Edit the cell
+            row_idx = tree.index(item)
+            self.edit_cell(tree, item, f"#{prev_col_idx}", row_idx, sample_id, 
+                          ["puffs", "before_weight", "after_weight", "draw_pressure", "smell", "notes"][prev_col_idx - 1])
+        
+        return "break"  # Stop event propagation
     
     def update_puff_interval(self):
         """Update the puff interval for future rows."""
@@ -723,6 +798,9 @@ class DataCollectionWindow:
     def save_data(self):
         """Save the collected data to the Excel file."""
         try:
+            # End any active editing
+            self.end_editing()
+            
             # Confirm save
             if not messagebox.askyesno("Confirm Save", "Save the collected data to the file?"):
                 return
