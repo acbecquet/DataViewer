@@ -51,6 +51,13 @@ class DataCollectionWindow:
         # Create the style for ttk widgets
         self.style = ttk.Style()
         self.setup_styles()
+
+        # Click tracking variables - IMPROVED APPROACH
+        self.last_click_time = 0
+        self.last_click_xy = (0,0)
+        self.double_click_threshold = 500  # milliseconds
+        self.cell_border_frame = None # Initialize cell border frame
+        self.single_click_after_id = None
         
         # Data storage
         self.data = {}
@@ -68,14 +75,17 @@ class DataCollectionWindow:
                 "avg_tpm": 0.0         # Track average TPM
             }
             
-            # Add first row with initial puff interval
-            self.data[sample_id]["puffs"].append(self.puff_interval)
-            self.data[sample_id]["before_weight"].append("")
-            self.data[sample_id]["after_weight"].append("")
-            self.data[sample_id]["draw_pressure"].append("")
-            self.data[sample_id]["smell"].append("")
-            self.data[sample_id]["notes"].append("")
-            self.data[sample_id]["tpm"].append(None)
+            # Pre-initialize 50 rows
+            for i in range(50):
+                puff = (i + 1) * self.puff_interval
+                self.data[sample_id]["puffs"].append(puff)
+                self.data[sample_id]["before_weight"].append("")
+                self.data[sample_id]["after_weight"].append("")
+                self.data[sample_id]["draw_pressure"].append("")
+                self.data[sample_id]["smell"].append("")
+                self.data[sample_id]["notes"].append("")
+                self.data[sample_id]["tpm"].append(None)
+
         
         # Create the UI
         self.create_widgets()
@@ -95,40 +105,53 @@ class DataCollectionWindow:
         self.style.configure('TLabelframe.Label', background='SystemButtonFace')
         self.style.configure('TNotebook', background='SystemButtonFace')
         self.style.configure('TNotebook.Tab', background='SystemButtonFace')
-        
+
         # Create special styles for headers
         self.style.configure('Header.TLabel', 
                              font=("Arial", 14, "bold"), 
                              background='SystemButtonFace')
-        
+
         self.style.configure('SubHeader.TLabel', 
                              font=("Arial", 12), 
                              background='SystemButtonFace')
-        
+
         # Style for stats panel
         self.style.configure('Stats.TLabel', 
                              font=("Arial", 14, "bold"), 
                              background='SystemButtonFace')
-        
+
         # Style for sample info
         self.style.configure('SampleInfo.TLabel',
                              font=("Arial", 11),
                              background='SystemButtonFace')
-                             
-        # Style for Treeview with gridlines
+                     
+        # Style for Treeview with enhanced visual separation
         self.style.configure('Treeview', 
-                            showlines=True,
                             background='white',
-                            fieldbackground='white')
-        
+                            fieldbackground='white',
+                            borderwidth=1)
+
         # Add gridlines to the Treeview cells
-        self.style.configure('Treeview', rowheight=25)
-        self.style.map('Treeview', background=[('selected', '#CCCCCC')])
-        
-        # Configure tag for focused items
+        self.style.configure('Treeview', rowheight=30)  # Increased for better visibility
+    
+        # Configure selection colors
         self.style.map('Treeview', 
-                      background=[('selected', '#CCCCCC')],
-                      foreground=[('selected', 'black')])
+                      background=[('selected', '#3874CC')],
+                      foreground=[('selected', 'white')])
+
+        # Style headers with a distinct look
+        self.style.configure('Treeview.Heading',
+                            background='#D0D0D0',
+                            foreground='black',
+                            relief='raised',
+                            borderwidth=2,
+                            font=('Arial', 10, 'bold'))
+    
+        # Add hover effect for headers
+        self.style.map('Treeview.Heading',
+                      background=[('active', '#C0C0C0')])
+
+        print("DEBUG: Styles configured with enhanced visual separation")
     
     def center_window(self):
         """Center the window on the screen."""
@@ -228,34 +251,41 @@ class DataCollectionWindow:
         # Sample metadata display
         info_frame = ttk.Frame(parent_frame, style='TFrame')
         info_frame.pack(fill="x", pady=(0, 10))
-        
+
         # Display sample metadata without background color
         ttk.Label(info_frame, 
                  text=f"Sample ID: {self.header_data['samples'][sample_index]['id']}", 
                  style='SampleInfo.TLabel').pack(side="left", padx=(0, 20))
-                 
+         
         ttk.Label(info_frame, 
                  text=f"Resistance: {self.header_data['samples'][sample_index]['resistance']} Ω", 
                  style='SampleInfo.TLabel').pack(side="left", padx=(0, 20))
-                 
+         
         ttk.Label(info_frame, 
                  text=f"Voltage: {self.header_data['common']['voltage']} V", 
                  style='SampleInfo.TLabel').pack(side="left", padx=(0, 20))
-        
-        # Create a frame for the data table
-        table_frame = ttk.Frame(parent_frame, style='TFrame')
-        table_frame.pack(fill="both", expand=True)
-        
+
+        # Create a frame for the data table with border
+        table_container = ttk.Frame(parent_frame, style='TFrame', relief='solid', borderwidth=1)
+        table_container.pack(fill="both", expand=True)
+
+        # Create inner frame for spacing
+        table_frame = ttk.Frame(table_container, style='TFrame')
+        table_frame.pack(fill="both", expand=True, padx=1, pady=1)
+
         # Create the treeview (table)
         columns = ("puffs", "before_weight", "after_weight", "draw_pressure", "smell", "notes")
-        tree = ttk.Treeview(table_frame, columns=columns, show="headings", 
+        tree = ttk.Treeview(table_frame, columns=columns, show="tree headings", 
                            selectmode="browse", height=20, style='Treeview')
-        
+
+        # Hide the tree column
+        tree.column("#0", width=0, stretch=False)
+
         # Add scrollbars
         y_scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=tree.yview)
         y_scrollbar.pack(side="right", fill="y")
         tree.configure(yscrollcommand=y_scrollbar.set)
-        
+
         # Define column headings
         tree.heading("puffs", text="Puffs")
         tree.heading("before_weight", text="Before weight/g")
@@ -263,7 +293,7 @@ class DataCollectionWindow:
         tree.heading("draw_pressure", text="Draw Pressure (kPa)")
         tree.heading("smell", text="Smell")
         tree.heading("notes", text="Notes")
-        
+
         # Define column widths
         tree.column("puffs", width=80, anchor="center")
         tree.column("before_weight", width=120, anchor="center")
@@ -271,25 +301,64 @@ class DataCollectionWindow:
         tree.column("draw_pressure", width=120, anchor="center")
         tree.column("smell", width=80, anchor="center")
         tree.column("notes", width=150, anchor="w")
-        
+
         tree.pack(fill="both", expand=True)
-        
+
         # Add the initial row
         self.update_treeview(tree, sample_id)
-        
-        # Enable cell editing with click
-        tree.bind("<ButtonRelease-1>", lambda e: self.on_cell_click(e, tree, sample_id))
-        
+
+        tree.bind("<Button-1>", lambda e: self.on_tree_click(e, tree, sample_id))
+        tree.bind("<Double-Button-1>", lambda e: self.on_tree_double_click(e, tree, sample_id))
+
+        tree.bind("<KeyPress>", lambda e: self.start_edit_on_typing(e, tree, sample_id))
+
         # Bind keyboard navigation
         tree.bind("<Tab>", lambda e: self.handle_tab_key(e, tree, sample_id))
         tree.bind("<Left>", lambda e: self.handle_arrow_key(e, tree, sample_id, "left"))
         tree.bind("<Right>", lambda e: self.handle_arrow_key(e, tree, sample_id, "right"))
-        
+        tree.bind("<Up>", lambda e: self.handle_arrow_key(e, tree, sample_id, "up"))
+        tree.bind("<Down>", lambda e: self.handle_arrow_key(e, tree, sample_id, "down"))
+
+        print(f"DEBUG: Bound single click handler for sample {sample_id}")
+
         # Store reference to the tree
         self.data[sample_id]["tree"] = tree
-        
+
         return tree
-    
+   
+    def start_edit_on_typing(self, event, tree, sample_id):
+        """Start editing if a printable character is typed while a cell is selected."""
+        if not event.char.isprintable():
+            return  # Skip control keys
+
+        item = tree.focus()
+        column = getattr(self, 'current_column', '#2')
+
+        if not item:
+            items = tree.get_children()
+            if not items:
+                return
+            item = items[0]
+            tree.selection_set(item)
+            tree.focus(item)
+
+        row_idx = tree.index(item)
+        col_idx = int(column[1:]) - 1
+
+        if col_idx == 0:
+            return  # Don't allow editing 'puffs' column
+
+        column_name = ["puffs", "before_weight", "after_weight", "draw_pressure", "smell", "notes"][col_idx]
+
+        # Start editing with the key typed
+        self.edit_cell(tree, item, column, row_idx, sample_id, column_name)
+        if self.current_edit and self.current_edit["entry"]:
+            entry = self.current_edit["entry"]
+            entry.delete(0, tk.END)
+            entry.insert(0, event.char)
+            entry.icursor(1)
+
+
     def create_tpm_stats_panel(self):
         """Create the TPM statistics panel on the right side."""
         # Clear existing widgets
@@ -356,9 +425,16 @@ class DataCollectionWindow:
         # Clear existing items
         for item in tree.get_children():
             tree.delete(item)
-        
+    
+        # Configure tags for alternating row colors
+        tree.tag_configure('oddrow', background='#F5F5F5')
+        tree.tag_configure('evenrow', background='white')
+    
         # Add rows from data
         for i in range(len(self.data[sample_id]["puffs"])):
+            # Determine the tag for alternating colors
+            tag = 'evenrow' if i % 2 == 0 else 'oddrow'
+        
             tree.insert("", "end", values=(
                 self.data[sample_id]["puffs"][i],
                 self.data[sample_id]["before_weight"][i],
@@ -366,43 +442,73 @@ class DataCollectionWindow:
                 self.data[sample_id]["draw_pressure"][i],
                 self.data[sample_id]["smell"][i],
                 self.data[sample_id]["notes"][i]
-            ))
+            ), tags=(tag,))
     
-    def on_cell_click(self, event, tree, sample_id):
-        """Handle clicking on a cell to edit it."""
-        # Get the item and column clicked
-        region = tree.identify("region", event.x, event.y)
-        if region != "cell":
-            return
-            
+        print(f"DEBUG: Updated treeview for {sample_id} with {len(self.data[sample_id]['puffs'])} rows")
+    
+    def on_tree_click(self, event, tree, sample_id):
+        """Delay single-click action to detect double-clicks."""
+        # Cancel any previous scheduled single-click
+        if self.single_click_after_id:
+            self.window.after_cancel(self.single_click_after_id)
+            self.single_click_after_id = None
+
+        # Schedule the single-click action after 300ms
+        self.single_click_after_id = self.window.after(
+            300,
+            lambda: self._handle_single_click(event, tree, sample_id)
+        )
+
+    def on_tree_double_click(self, event, tree, sample_id):
+        """Handle double-click and cancel pending single-click."""
+        if self.single_click_after_id:
+            self.window.after_cancel(self.single_click_after_id)
+            self.single_click_after_id = None
+
         item = tree.identify("item", event.x, event.y)
         column = tree.identify("column", event.x, event.y)
-        
-        if not item or not column:
+        region = tree.identify("region", event.x, event.y)
+
+        if not item or not column or region != "cell":
             return
-            
-        # Get column index (1-based)
+
         col_idx = int(column[1:])
-        
-        # Skip puffs column (not editable)
         if col_idx == 1:
+            print("DEBUG: Double-click on puffs column — not editable")
             return
-            
-        # Get row index
+
         row_idx = tree.index(item)
-        
-        # Get columns names for lookup
-        columns = ["puffs", "before_weight", "after_weight", "draw_pressure", "smell", "notes"]
-        column_name = columns[col_idx - 1]  # Convert 1-based to 0-based for array index
-        
-        # Start editing this cell
+        column_name = ["puffs", "before_weight", "after_weight", "draw_pressure", "smell", "notes"][col_idx - 1]
+        print(f"DEBUG: Double-click - editing item: {item}, column: {column}, row_idx: {row_idx}")
         self.edit_cell(tree, item, column, row_idx, sample_id, column_name)
+
+    def _handle_single_click(self, event, tree, sample_id):
+        """Actual logic for handling a single-click."""
+        item = tree.identify("item", event.x, event.y)
+        column = tree.identify("column", event.x, event.y)
+        region = tree.identify("region", event.x, event.y)
+
+        if not item or not column or region != "cell":
+            return
+
+        self.end_editing()
+        self.current_column = column
+        self.current_item = item
+        self.highlight_cell(tree, item, column)
+        print(f"DEBUG: Single-click - item: {item}, column: {column}")
+
+
     
     def edit_cell(self, tree, item, column, row_idx, sample_id, column_name):
         """Create an entry widget for editing a cell."""
         # Cancel any existing edit
         self.end_editing()
         
+        # Remove cell border during editing
+        if hasattr(self, 'cell_border_frame') and self.cell_border_frame:
+            self.cell_border_frame.destroy()
+            self.cell_border_frame = None
+
         # Mark that we're editing
         self.editing = True
         self.hotkeys_enabled = False
@@ -446,18 +552,85 @@ class DataCollectionWindow:
         entry.focus_set()
         
         # Bind events for the entry widget
-        entry.bind("<Return>", self.finish_edit)
-        entry.bind("<Tab>", self.handle_tab_in_edit)
+        entry.bind("<Tab>", lambda e: self.move_to_next_cell_during_edit(e,tree, sample_id, direction="right"))
+        entry.bind("<Return>", lambda e: self.move_to_next_cell(tree, sample_id, direction="down"))
+
         entry.bind("<Escape>", self.cancel_edit)
         entry.bind("<FocusOut>", self.finish_edit)
         entry.bind("<Left>", self.handle_arrow_in_edit)
         entry.bind("<Right>", self.handle_arrow_in_edit)
     
+    def move_to_next_cell_during_edit(self, event, tree, sample_id, direction="right"):
+        if not self.editing or not self.current_edit:
+            return "break"
+
+        current_item = self.current_edit["item"]
+        current_column = self.current_edit["column"]
+        row_idx = self.current_edit["row_idx"]
+        col_idx = int(current_column[1:])
+
+        self.finish_edit()
+
+        items = tree.get_children()
+
+        if direction == "right":
+            if col_idx < 6:
+                # Go to next column in the same row
+                next_column = f"#{col_idx + 1}"
+                column_name = ["puffs", "before_weight", "after_weight", "draw_pressure", "smell", "notes"][col_idx]
+                self.edit_cell(tree, current_item, next_column, row_idx, sample_id, column_name)
+            elif row_idx < len(items) - 1:
+                # Wrap to next row, first editable column
+                next_item = items[row_idx + 1]
+                next_column = "#2"
+                column_name = "before_weight"
+                self.edit_cell(tree, next_item, next_column, row_idx + 1, sample_id, column_name)
+
+        return "break"
+
+
+
+    def move_to_next_cell(self, tree, sample_id, direction="right"):
+        """Handle Tab or Enter navigation during editing."""
+        self.finish_edit()
+
+        item = self.current_item
+        column = self.current_column
+        items = tree.get_children()
+
+        if not item or not column:
+            return "break"
+
+        col_idx = int(column[1:])
+        row_idx = items.index(item)
+
+        if direction == "right":
+            next_col_idx = col_idx + 1
+            if next_col_idx > 6:
+                return "break"
+            next_column = f"#{next_col_idx}"
+            column_name = ["puffs", "before_weight", "after_weight", "draw_pressure", "smell", "notes"][next_col_idx - 1]
+            self.edit_cell(tree, item, next_column, row_idx, sample_id, column_name)
+        elif direction == "down":
+            if row_idx >= len(items) - 1:
+                return "break"
+            next_item = items[row_idx + 1]
+            tree.selection_set(next_item)
+            tree.focus(next_item)
+            tree.see(next_item)
+            column_name = ["puffs", "before_weight", "after_weight", "draw_pressure", "smell", "notes"][col_idx - 1]
+            self.edit_cell(tree, next_item, f"#{col_idx}", row_idx + 1, sample_id, column_name)
+
+        return "break"
+
+
     def finish_edit(self, event=None):
         """Save the current edit and move to the next cell if needed."""
         if not self.editing or not hasattr(self, 'current_edit'):
             return
-        
+    
+        print(f"DEBUG: Finishing edit, event: {event.keysym if event else 'None'}")
+    
         value = self.current_edit["entry"].get()
         tree = self.current_edit["tree"]
         item = self.current_edit["item"]
@@ -465,73 +638,51 @@ class DataCollectionWindow:
         column_name = self.current_edit["column_name"]
         row_idx = self.current_edit["row_idx"]
         sample_id = self.current_edit["sample_id"]
-    
+
         # Update data storage
         if row_idx < len(self.data[sample_id][column_name]):
             self.data[sample_id][column_name][row_idx] = value
-    
+
         # Update the tree
         col_idx = int(column[1:]) - 1
         values = list(tree.item(item, "values"))
         values[col_idx] = value
         tree.item(item, values=values)
-    
-        # If we're in the after_weight column and we're at the last row, check if we need to add a new row
-        if column_name == "after_weight" and row_idx == len(self.data[sample_id]["puffs"]) - 1:
-            if self.data[sample_id]["before_weight"][row_idx] and self.data[sample_id]["after_weight"][row_idx]:
-                # Add a new row with the next puff interval
-                next_puff = self.data[sample_id]["puffs"][row_idx] + self.puff_interval
-                self.data[sample_id]["puffs"].append(next_puff)
-            
-                # Set before_weight to the previous after_weight
-                after_weight = self.data[sample_id]["after_weight"][row_idx]
-                self.data[sample_id]["before_weight"].append(after_weight)
-            
-                # Add empty values for other columns
-                self.data[sample_id]["after_weight"].append("")
-                self.data[sample_id]["draw_pressure"].append("")
-                self.data[sample_id]["smell"].append("")
-                self.data[sample_id]["notes"].append("")
-                self.data[sample_id]["tpm"].append(None)
-            
-                # Update the tree without changing focus
-                self.update_treeview(tree, sample_id)
-            
-                # Make sure we re-select the current item to maintain focus
-                tree.selection_set(item)
-                tree.focus(item)
-                tree.see(item)
-            
-                # Calculate TPM and update stats
-                self.calculate_tpm(sample_id)
-                self.update_stats_panel()
-    
+
         # Calculate TPM if weight was changed
         if column_name in ["before_weight", "after_weight"]:
             self.calculate_tpm(sample_id)
             self.update_stats_panel()
-    
-        # Check if this was triggered by Tab or an arrow key
-        move_to_next = False
-        if event and event.keysym in ["Tab", "Right", "Left"]:
-            move_to_next = True
-    
-        # End the current edit
+
+        # End the current edit BEFORE navigation
         self.end_editing()
     
-        # If triggered by navigation key, move focus
-        if move_to_next:
-            if event.keysym == "Tab":
-                self.handle_tab_key(event, tree, sample_id)
-            elif event.keysym == "Right":
+        # Don't handle navigation here if Tab was pressed - it will be handled by handle_tab_in_edit
+        if event and event.keysym == "Tab":
+            print("DEBUG: Tab navigation will be handled by handle_tab_in_edit")
+            return
+    
+        # Handle other navigation keys
+        if event and event.keysym in ["Right", "Left"]:
+            if event.keysym == "Right":
                 self.handle_arrow_key(event, tree, sample_id, "right")
             elif event.keysym == "Left":
                 self.handle_arrow_key(event, tree, sample_id, "left")
     
     def handle_tab_in_edit(self, event):
         """Handle tab key pressed while editing a cell."""
+        print("DEBUG: Tab pressed during edit")
+    
+        # Store the current edit info before finishing
+        current_tree = self.current_edit["tree"]
+        current_sample_id = self.current_edit["sample_id"]
+    
         # Save the current edit
         self.finish_edit(event)
+    
+        # Now handle tab navigation
+        self.handle_tab_key(event, current_tree, current_sample_id)
+    
         return "break"  # Stop event propagation
     
     def handle_arrow_in_edit(self, event):
@@ -539,16 +690,84 @@ class DataCollectionWindow:
         # Only handle left/right arrows
         if event.keysym not in ["Left", "Right"]:
             return
-            
+        
         # Check if at beginning or end of text
         entry = self.current_edit["entry"]
         cursor_pos = entry.index(tk.INSERT)
-        
+    
         # If at beginning and pressing left, or at end and pressing right, navigate to next cell
         if (cursor_pos == 0 and event.keysym == "Left") or \
            (cursor_pos == len(entry.get()) and event.keysym == "Right"):
+            print(f"DEBUG: Arrow key navigation from edit - {event.keysym}")
             self.finish_edit(event)
             return "break"  # Stop event propagation
+
+    def handle_arrow_key(self, event, tree, sample_id, direction):
+        """Handle arrow key press in the treeview."""
+        if self.editing:
+            return  # Let the entry widget handle arrow keys when editing
+        
+        # Get the current selection
+        item = tree.focus()
+        if not item:
+            return "break"
+        
+        # Get current column if stored, otherwise use first editable column
+        current_column = getattr(self, 'current_column', '#2')
+        col_idx = int(current_column[1:])
+    
+        if direction in ["left", "right"]:
+            items = tree.get_children()
+            row_idx = items.index(item)
+
+            if direction == "right":
+                if col_idx < 6:
+                    col_idx += 1
+                elif row_idx < len(items) - 1:
+                    row_idx += 1
+                    col_idx = 2
+                else:
+                    return "break"
+            elif direction == "left":
+                if col_idx > 2:
+                    col_idx -= 1
+                elif row_idx > 0:
+                    row_idx -= 1
+                    col_idx = 6
+                else:
+                    return "break"
+
+            next_item = items[row_idx]
+            next_column = f"#{col_idx}"
+            self.current_column = next_column
+            self.highlight_cell(tree, next_item, next_column)
+            print(f"DEBUG: Arrow navigation - moved to row {row_idx}, column {next_column}")
+        
+        elif direction in ["up", "down"]:
+            # Vertical navigation
+            items = tree.get_children()
+            current_idx = items.index(item)
+        
+            if direction == "down":
+                if current_idx < len(items) - 1:
+                    next_item = items[current_idx + 1]
+                    tree.selection_set(next_item)
+                    tree.focus(next_item)
+                    tree.see(next_item)
+                    self.current_column = current_column
+                    self.highlight_cell(tree, next_item, self.current_column)
+                    print(f"DEBUG: Arrow navigation - moved down to row {current_idx + 1}")
+            else:  # up
+                if current_idx > 0:
+                    prev_item = items[current_idx - 1]
+                    tree.selection_set(prev_item)
+                    tree.focus(prev_item)
+                    tree.see(prev_item)
+                    self.current_column = current_column
+                    self.highlight_cell(tree, prev_item, self.current_column)
+                    print(f"DEBUG: Arrow navigation - moved up to row {current_idx - 1}")
+    
+        return "break"  # Stop event propagation
     
     def cancel_edit(self, event=None):
         """Cancel the current edit without saving."""
@@ -559,14 +778,19 @@ class DataCollectionWindow:
         """Clean up editing widgets and state."""
         if not self.editing:
             return
-            
+    
         if hasattr(self, 'current_edit') and self.current_edit:
             if "frame" in self.current_edit:
                 self.current_edit["frame"].destroy()
             self.current_edit = None
-            
+    
         self.editing = False
         self.hotkeys_enabled = True
+    
+        # Also remove the cell border frame if it exists
+        if hasattr(self, 'cell_border_frame') and self.cell_border_frame is not None:
+            self.cell_border_frame.destroy()
+            self.cell_border_frame = None
     
     def handle_tab_key(self, event, tree, sample_id):
         """Handle Tab key press in the treeview."""
@@ -620,57 +844,9 @@ class DataCollectionWindow:
                 next_col_idx = 2
                 
             # Edit the next column in the same row
-            row_idx = tree.index(item)
-            self.edit_cell(tree, item, f"#{next_col_idx}", row_idx, sample_id, 
-                          ["puffs", "before_weight", "after_weight", "draw_pressure", "smell", "notes"][next_col_idx - 1])
+            self.current_column = f"#{next_col_idx}"
+            self.highlight_cell(tree, item, self.current_column)
             
-        return "break"  # Stop event propagation
-    
-    def handle_arrow_key(self, event, tree, sample_id, direction):
-        """Handle arrow key press in the treeview."""
-        if self.editing or not self.hotkeys_enabled:
-            return "break"  # Already handled in edit mode
-            
-        # Get the current selection
-        item = tree.focus()
-        if not item:
-            return "break"
-            
-        # Get the current column
-        column = tree.identify_column(event.x) if event else None
-        if not column:
-            # Default to first editable column
-            column = "#2"
-            
-        # Get column index (1-based)
-        col_idx = int(column[1:])
-        
-        if direction == "right":
-            # Move to the next column
-            next_col_idx = col_idx + 1
-            if next_col_idx > 6:  # Last column
-                return "break"
-                
-            # Skip the puffs column
-            if next_col_idx == 1:
-                next_col_idx = 2
-                
-            # Edit the cell
-            row_idx = tree.index(item)
-            self.edit_cell(tree, item, f"#{next_col_idx}", row_idx, sample_id, 
-                          ["puffs", "before_weight", "after_weight", "draw_pressure", "smell", "notes"][next_col_idx - 1])
-                          
-        elif direction == "left":
-            # Move to the previous column
-            prev_col_idx = col_idx - 1
-            if prev_col_idx < 2:  # Before first editable column
-                return "break"
-                
-            # Edit the cell
-            row_idx = tree.index(item)
-            self.edit_cell(tree, item, f"#{prev_col_idx}", row_idx, sample_id, 
-                          ["puffs", "before_weight", "after_weight", "draw_pressure", "smell", "notes"][prev_col_idx - 1])
-        
         return "break"  # Stop event propagation
     
     def update_puff_interval(self):
@@ -788,12 +964,6 @@ class DataCollectionWindow:
         binding_id = self.window.bind("<Return>", lambda e: self.go_to_next_sample() if self.hotkeys_enabled else None)
         self.hotkey_bindings["<Return>"] = binding_id
         
-        # Bind number keys to select tabs
-        for i in range(1, 10):  # Bind keys 1-9
-            if i <= self.num_samples:
-                binding_id = self.window.bind(str(i), 
-                                             lambda e, tab=i-1: self.notebook.select(tab) if self.hotkeys_enabled else None)
-                self.hotkey_bindings[str(i)] = binding_id
     
     def save_data(self):
         """Save the collected data to the Excel file."""
@@ -904,3 +1074,76 @@ class DataCollectionWindow:
         """
         self.window.wait_window()
         return self.result
+
+
+    def highlight_cell(self, tree, item, column):
+        """Highlight a specific cell instead of the entire row."""
+        # Remove any existing cell highlights
+        self.clear_cell_highlights(tree)
+    
+        # Create a unique tag for this cell
+        cell_tag = f"selected_cell_{item}_{column}"
+    
+        # Get all existing tags for this item
+        existing_tags = list(tree.item(item, 'tags'))
+    
+        # Add our cell selection tag
+        if cell_tag not in existing_tags:
+            existing_tags.append(cell_tag)
+    
+        # Apply the tags
+        tree.item(item, tags=existing_tags)
+    
+        # Configure the cell highlight
+        # We'll use a custom approach to highlight individual cells
+        col_idx = int(column[1:]) - 1
+    
+        # Store current selection info
+        self.selected_cell = {
+            'tree': tree,
+            'item': item,
+            'column': column,
+            'col_idx': col_idx
+        }
+    
+        # Use selection to track the row but we'll add visual indicator for the cell
+        tree.selection_set(item)
+        tree.focus(item)
+    
+        # Draw a border around the selected cell
+        self.draw_cell_border(tree, item, column)
+
+    def clear_cell_highlights(self, tree):
+        """Clear all cell highlight tags."""
+        for item in tree.get_children():
+            tags = list(tree.item(item, 'tags'))
+            # Remove any cell selection tags
+            tags = [tag for tag in tags if not tag.startswith('selected_cell_')]
+            tree.item(item, tags=tags)
+    
+        # Remove any existing cell border
+        if hasattr(self, 'cell_border_frame') and self.cell_border_frame is not None:
+            self.cell_border_frame.destroy()
+            self.cell_border_frame = None
+
+    def draw_cell_border(self, tree, item, column):
+        """Draw a transparent border around a cell without obscuring its content."""
+        # Remove old border
+        if self.cell_border_frame:
+            self.cell_border_frame.destroy()
+            self.cell_border_frame = None
+
+        bbox = tree.bbox(item, column)
+        if not bbox:
+            return
+
+        x, y, width, height = bbox
+
+        # Draw an invisible frame with just border
+        self.cell_border_frame = tk.Frame(
+            tree, bg="", highlightbackground="blue",
+            highlightthickness=2, bd=0
+        )
+        self.cell_border_frame.place(x=x - 1, y=y - 1, width=width + 2, height=height + 2)
+        self.cell_border_frame.lift()  # Ensure it's above background but doesn't obscure text
+

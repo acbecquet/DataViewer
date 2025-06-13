@@ -46,6 +46,7 @@ class TestingGUI:
         # Bind the window close event
         self.root.protocol("WM_DELETE_WINDOW", self.on_app_close)
 
+
     # Initialization and Configuration
     def initialize_variables(self) -> None:
         """Initialize variables used throughout the GUI."""
@@ -1041,3 +1042,6 @@ class TestingGUI:
         else:
             # If no sheets available, just clear the display
             self.clear_dynamic_frame()
+
+
+
