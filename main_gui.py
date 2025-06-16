@@ -575,15 +575,13 @@ class TestingGUI:
         # Set the geometry dynamically with the fixed width
         self.root.geometry(f"{fixed_width}x{final_height}+{current_x}+{current_y}")
 
+
     def update_displayed_sheet(self, sheet_name: str) -> None:
         """
         Update the displayed sheet and dynamically manage the plot options and plot type dropdown.
-        Clears the plot area if the sheet is empty.
+        Enhanced to handle empty sheets for data collection.
         """
-        #print(f"DEBUG: [update_displayed_sheet] START | Current frame heights - "
-        #  f"top: {self.top_frame.winfo_height()}, "
-        #  f"display: {self.display_frame.winfo_height()}, "
-        #  f"bottom: {self.bottom_frame.winfo_height()}")
+        print(f"DEBUG: [update_displayed_sheet] START for sheet: {sheet_name}")
 
         # Ensure bottom_frame maintains its fixed height
         if hasattr(self, 'bottom_frame') and self.bottom_frame.winfo_exists():
@@ -592,13 +590,8 @@ class TestingGUI:
             self.bottom_frame.grid_propagate(False)
 
         if not sheet_name or sheet_name not in self.filtered_sheets:
+            print(f"DEBUG: Sheet {sheet_name} not found in filtered_sheets")
             return
-
-        #print(f"DEBUG: Attempting to update displayed sheet: {sheet_name}")
-        #if not hasattr(self, 'display_frame') or self.display_frame is None:
-            #print("ERROR: display_frame is missing! This may cause issues.")
-        #else:
-            #print("DEBUG: Existing display_frame widgets:", self.display_frame.winfo_children())
 
         sheet_info = self.filtered_sheets.get(sheet_name)
         if not sheet_info:
@@ -606,75 +599,140 @@ class TestingGUI:
             return
 
         data = sheet_info["data"]
-        is_empty = sheet_info["is_empty"]
+        is_empty = sheet_info.get("is_empty", False)
         is_plotting_sheet = plotting_sheet_test(sheet_name, data)
+        
+        print(f"DEBUG: Sheet {sheet_name} - is_empty: {is_empty}, is_plotting_sheet: {is_plotting_sheet}, data_shape: {data.shape}")
 
-        # Instead of destroying static frames, clear and rebuild only the dynamic content.
+        # Clear and rebuild only the dynamic content
         self.clear_dynamic_frame()
         self.setup_dynamic_frames(is_plotting_sheet)
 
-        #print("DEBUG: Creating ImageLoader...")
-
-        # Clear existing ImageLoader properly
+        # Handle ImageLoader setup
+        print("DEBUG: Setting up ImageLoader...")
         if hasattr(self, 'image_loader'):
             for widget in self.image_frame.winfo_children():
                 widget.destroy()
             del self.image_loader
 
-        # initialize a fresh one
+        # Initialize a fresh ImageLoader
         self.image_loader = ImageLoader(self.image_frame, is_plotting_sheet, on_images_selected=lambda paths: self.store_images(sheet_name, paths), main_gui = self)
-
         self.image_loader.frame.config(height=150)
 
+        # Restore images if they exist
         current_file = self.current_file
         if current_file in self.sheet_images and sheet_name in self.sheet_images[current_file]:
             self.image_loader.load_images_from_list(self.sheet_images[current_file][sheet_name])
             for img_path in self.sheet_images[current_file][sheet_name]:
                 if img_path in self.image_crop_states:
                     self.image_loader.image_crop_states[img_path] = self.image_crop_states[img_path]
+            print(f"DEBUG: Restored images and crop states for sheet: {sheet_name}")
 
-            #print(f"DEBUG: Restored images and crop states for sheet: {sheet_name}")
-
-        # **Force the frame to refresh**
         self.image_loader.display_images()
-        self.image_frame.update_idletasks()  # Ensure UI updates immediately
+        self.image_frame.update_idletasks()
 
-
-        if is_empty:
-            #print("DEBUG: Sheet is empty. Displaying message.")
-            empty_label = tk.Label(
-                self.display_frame,
-                text="This sheet is empty.",
-                font=("Arial", 14),
-                fg="red"
-            )
-            empty_label.pack(anchor="center", pady=20)
+        # Check if sheet is completely empty (for data collection, we want to handle this gracefully)
+        if is_empty or data.empty:
+            print(f"DEBUG: Sheet {sheet_name} is empty - checking if this is for data collection")
+            
+            # For data collection, we still want to show the interface
+            # Instead of showing an error, create a minimal structure
+            if is_plotting_sheet:
+                print("DEBUG: Creating minimal structure for empty plotting sheet")
+                # Create minimal data for display
+                minimal_data = pd.DataFrame([{
+                    "Sample Name": "No data - ready for collection",
+                    "Media": "",
+                    "Viscosity": "",
+                    "Voltage, Resistance, Power": "",
+                    "Average TPM": "No data",
+                    "Standard Deviation": "No data",
+                    "Initial Oil Mass": "",
+                    "Usage Efficiency": "",
+                    "Burn?": "",
+                    "Clog?": "",
+                    "Leak?": ""
+                }])
+                
+                # Display the minimal table
+                self.display_table(self.table_frame, minimal_data, sheet_name, is_plotting_sheet)
+                
+                # Create empty plot area with message
+                if hasattr(self, 'plot_frame') and self.plot_frame:
+                    for widget in self.plot_frame.winfo_children():
+                        widget.destroy()
+                    
+                    empty_plot_label = tk.Label(
+                        self.plot_frame,
+                        text="No data to plot yet.\nUse 'Collect Data' to add measurements.",
+                        font=("Arial", 12),
+                        fg="gray",
+                        justify="center"
+                    )
+                    empty_plot_label.pack(expand=True)
+                    
+                print("DEBUG: Minimal plotting sheet structure created")
+            else:
+                # For non-plotting sheets, show a simple message
+                print("DEBUG: Creating minimal structure for empty non-plotting sheet")
+                minimal_data = pd.DataFrame([{
+                    "Status": "No data - ready for collection",
+                    "Instructions": "Use data collection tools to add information"
+                }])
+                self.display_table(self.table_frame, minimal_data, sheet_name, is_plotting_sheet)
+                
+            print("DEBUG: Empty sheet handled for data collection")
+            self.root.update_idletasks()
             return
 
+        # Process the sheet data
         try:
-            #print(f"DEBUG: Retrieving processing function for {sheet_name}...")
+            print(f"DEBUG: Processing sheet data for {sheet_name}...")
             process_function = processing.get_processing_function(sheet_name)
             processed_data, _, full_sample_data = process_function(data)
+            print(f"DEBUG: Processing complete - processed_data: {processed_data.shape}, full_sample_data: {full_sample_data.shape}")
+            
         except Exception as e:
+            print(f"ERROR: Processing function failed for {sheet_name}: {e}")
             messagebox.showerror("Processing Error", f"Error processing sheet '{sheet_name}': {e}")
-            #print(f"ERROR: Processing function failed for {sheet_name}: {e}")
             return
 
-        #print(f"DEBUG: Displaying table for {sheet_name}...")
-        self.display_table(self.table_frame, processed_data, sheet_name, is_plotting_sheet)
-        #print(f"DEBUG: Sheet name: {sheet_name}, is_plotting_sheet: {is_plotting_sheet}")
+        # Display the table
+        print(f"DEBUG: Displaying table for {sheet_name}...")
+        try:
+            self.display_table(self.table_frame, processed_data, sheet_name, is_plotting_sheet)
+            print("DEBUG: Table displayed successfully")
+        except Exception as e:
+            print(f"ERROR: Failed to display table: {e}")
 
+        # Display plot if it's a plotting sheet
         if is_plotting_sheet:
-            #print(f"DEBUG: Displaying plot for sheet: {sheet_name}")
-            self.display_plot(full_sample_data)
+            print(f"DEBUG: Displaying plot for sheet: {sheet_name}")
+            try:
+                if not full_sample_data.empty:
+                    self.display_plot(full_sample_data)
+                    print("DEBUG: Plot displayed successfully")
+                else:
+                    print("DEBUG: Full sample data is empty, showing empty plot message")
+                    if hasattr(self, 'plot_frame') and self.plot_frame:
+                        for widget in self.plot_frame.winfo_children():
+                            widget.destroy()
+                        
+                        empty_plot_label = tk.Label(
+                            self.plot_frame,
+                            text="No data to plot yet.\nUse 'Collect Data' to add measurements.",
+                            font=("Arial", 12),
+                            fg="gray",
+                            justify="center"
+                        )
+                        empty_plot_label.pack(expand=True)
+            except Exception as e:
+                print(f"ERROR: Failed to display plot: {e}")
 
-        #print("DEBUG: Successfully updated displayed sheet.")
+        print("DEBUG: Successfully updated displayed sheet.")
         self.root.update_idletasks()
         
-        #print(f"DEBUG: [update_displayed_sheet] END | Current frame heights - "
-              #f"top: {self.top_frame.winfo_height()}, "
-              #f"display: {self.display_frame.winfo_height()}, "
-              #f"bottom: {self.bottom_frame.winfo_height()}\n")
+        print(f"DEBUG: [update_displayed_sheet] END for sheet: {sheet_name}")
 
     def load_images(self, is_plotting_sheet):
         """Load and display images in the dynamic image_frame."""
@@ -860,103 +918,109 @@ class TestingGUI:
         self.plot_frame.update_idletasks()
 
     def display_table(self, frame, data, sheet_name, is_plotting_sheet=False):
-        #print(f"DEBUG: Displaying table for sheet: {sheet_name} (is_plotting_sheet={is_plotting_sheet})")
-        #print(f"DEBUG: Checking if frame exists before using it... Frame={frame}")
+            """Display table with enhanced handling for empty/minimal data."""
+            print(f"DEBUG: display_table called for sheet: {sheet_name}, data_shape: {data.shape}, is_plotting_sheet: {is_plotting_sheet}")
 
-        if not frame or not frame.winfo_exists():
-            print(f"ERROR: Frame {frame} does not exist! Aborting display_table.")
-            return
+            if not frame or not frame.winfo_exists():
+                print(f"ERROR: Frame {frame} does not exist! Aborting display_table.")
+                return
 
-        for widget in frame.winfo_children():
-            widget.destroy()
+            for widget in frame.winfo_children():
+                widget.destroy()
 
-        #print("DEBUG: Cleared existing table widgets.")
+            print("DEBUG: Cleared existing table widgets.")
 
-        # Deduplicate columns
-        data = clean_columns(data)
-        data.columns = data.columns.map(str)  # Ensure column headers are strings
+            # Handle completely empty data
+            if data.empty:
+                print("DEBUG: Data is completely empty, creating placeholder")
+                # Create a placeholder message instead of showing a warning
+                placeholder_label = tk.Label(
+                    frame,
+                    text=f"Sheet '{sheet_name}' is ready for data collection.\nUse the data collection tools to add measurements.",
+                    font=("Arial", 12),
+                    fg="gray",
+                    justify="center"
+                )
+                placeholder_label.pack(expand=True, pady=50)
+                return
 
-        if data.empty:
-            print("DEBUG: Data is empty. Displaying warning.")
-            messagebox.showwarning("Warning", f"Sheet '{sheet_name}' contains no data to display.")
-            return
+            # Deduplicate columns and clean data
+            data = clean_columns(data)
+            data.columns = data.columns.map(str)  # Ensure column headers are strings
+        
+            # Handle data with "No data" entries
+            data = data.astype(str)
+            data = data.replace([np.nan, pd.NA], '', regex=True)
 
-        data = data.astype(str)
-        data = data.replace([np.nan, pd.NA], '', regex=True)
+            print("DEBUG: Data processed successfully.")
 
-        #print("DEBUG: Data processed successfully.")
+            table_frame = ttk.Frame(frame, padding=(2, 1))
+            self.table_frame.pack_propagate(False)
+            table_frame.pack(fill='both', expand=True)
 
-        table_frame = ttk.Frame(frame, padding=(2, 1))
-        self.table_frame.pack_propagate(False)
-        table_frame.pack(fill='both', expand=True)
+            print("DEBUG: Table frame created and packed.")
 
-        #print("DEBUG: Table frame created and packed.")
+            # Calculate table dimensions
+            table_frame.update_idletasks()
+            available_width = table_frame.winfo_width()
+            num_columns = len(data.columns)
+            calculated_cellwidth = max(120, available_width // num_columns)
 
-        # Force the frame to update its geometry
-        table_frame.update_idletasks()
-        available_width = table_frame.winfo_width()
-        num_columns = len(data.columns)
+            # Create scrollbars
+            v_scrollbar = ttk.Scrollbar(table_frame, orient='vertical')
+            h_scrollbar = ttk.Scrollbar(table_frame, orient='horizontal')
 
-        # Calculate a new cell width based on available width (if table would be too narrow, use the default)
-        calculated_cellwidth = max(120, available_width // num_columns)
+            # Create table model
+            model = TableModel()
+            table_data_dict = data.to_dict(orient='index')
+            model.importDict(table_data_dict)
 
-        v_scrollbar = ttk.Scrollbar(table_frame, orient='vertical')
-        h_scrollbar = ttk.Scrollbar(table_frame, orient='horizontal')
+            default_cellwidth = 110
+            default_rowheight = 25
 
-        model = TableModel()
-        table_data_dict = data.to_dict(orient='index')
-        model.importDict(table_data_dict)
+            if is_plotting_sheet:
+                print("DEBUG: Adjusting row height for plotting sheet.")
+                font_height = 16
+                char_per_line = 12
 
-        default_cellwidth = 110
-        default_rowheight = 25
+                # Calculate optimal row height
+                row_heights = []
+                for _, row in data.iterrows():
+                    max_lines = 1
+                    for cell in row:
+                        if cell:
+                            cell_length = len(str(cell))
+                            lines = (cell_length // char_per_line) + 1
+                            max_lines = max(max_lines, lines)
+                    row_heights.append(max_lines * font_height)
 
-        if is_plotting_sheet:
-            #print("DEBUG: Adjusting row height for plotting sheet.")
-            font_height = 16  # Taller rows to accommodate larger content
-            char_per_line = 12  # Fewer characters per line for wider spacing
+                max_row_height = int(max(row_heights)) if row_heights else default_rowheight
+                default_rowheight = max_row_height
 
-            # Calculate optimal row height
-            row_heights = []
-            for _, row in data.iterrows():
-                max_lines = 1  # Default minimum height for single-line cells
-                for cell in row:
-                    if cell:
-                        # Calculate lines needed for this cell
-                        cell_length = len(cell)
-                        lines = (cell_length // char_per_line) + 1
-                        max_lines = max(max_lines, lines)
-                row_heights.append(max_lines * font_height)
+            print(f"DEBUG: Final row height: {default_rowheight}")
 
-            # Use the maximum row height across all rows
-            max_row_height = int(max(row_heights))
-            default_rowheight = max_row_height
+            # Create table canvas
+            table_canvas = TableCanvas(
+                table_frame, 
+                model=model, 
+                cellwidth=calculated_cellwidth, 
+                cellbackgr='#4CC9F0',
+                thefont=('Arial', 10), 
+                rowheight=default_rowheight, 
+                rowselectedcolor='#FFFFFF',
+                editable=False, 
+                yscrollcommand=v_scrollbar.set, 
+                xscrollcommand=h_scrollbar.set, 
+                showGrid=True
+            )
 
-        #print(f"DEBUG: Final row height: {default_rowheight}")
+            table_canvas.grid(row=0, column=0, sticky='nsew')
+            v_scrollbar.grid(row=0, column=1, sticky='ns')
+            h_scrollbar.grid(row=1, column=0, sticky='ew')
 
-        table_canvas = TableCanvas(table_frame, model=model, cellwidth=calculated_cellwidth, cellbackgr='#4CC9F0',
-                                   thefont=('Arial', 10), rowheight=default_rowheight, rowselectedcolor='#FFFFFF',
-                                   editable=False, yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set, showGrid=True)
+            table_canvas.show()
 
-        table_canvas.grid(row=0, column=0, sticky='nsew')
-        v_scrollbar.grid(row=0, column=1, sticky='ns')
-        h_scrollbar.grid(row=1, column=0, sticky='ew')
-
-        table_canvas.show()
-
-        #print("DEBUG: Table displayed successfully.")
-
-        # Add the "View Raw Data" button below the table
-        #button_frame = ttk.Frame(frame)
-        #button_frame.pack(fill='x', pady=(10,10))
-
-        #print("DEBUG: Button frame created.")
-
-        #view_raw_button = ttk.Button(button_frame, text="View Raw Data", command=lambda: self.file_manager.open_raw_data_in_excel(sheet_name))
-        #view_raw_button.pack(anchor='center')
-
-        #print("DEBUG: View Raw Data button added.")
-
-        #print("DEBUG: Load Images button added.")
+            print("DEBUG: Table displayed successfully.")
 
     def update_plot_dropdown(self):
         """Update the plot type dropdown with only the valid options and manage visibility."""

@@ -52,16 +52,38 @@ class FileManager:
     def __init__(self, gui):
         self.gui = gui
         self.root = gui.root
-        
-
         self.db_manager = DatabaseManager()
         
-    def load_excel_file(self, file_path, legacy_mode: str = None) -> None:
+        # Add cache to prevent redundant operations
+        self.loaded_files_cache = {}  # Cache for loaded file data
+        self.stored_files_cache = set()  # Track files already stored in database
+        
+    def load_excel_file(self, file_path, legacy_mode: str = None, skip_database_storage: bool = False) -> None:
         """
         Load the selected Excel file and process its sheets.
-        For legacy files (non-standard), convert the file to the proper format,
-        move the new formatted file into a folder called 'legacy data', and load that copy.
+        Enhanced with caching and optional database storage skip.
+        
+        Args:
+            file_path (str): Path to the Excel file
+            legacy_mode (str, optional): Legacy processing mode
+            skip_database_storage (bool): If True, skip storing in database
         """
+        print(f"DEBUG: load_excel_file called for {file_path}, skip_db_storage={skip_database_storage}")
+        
+        # Check cache first
+        cache_key = f"{file_path}_{legacy_mode}"
+        if cache_key in self.loaded_files_cache:
+            print("DEBUG: Using cached file data instead of reprocessing")
+            cached_data = self.loaded_files_cache[cache_key]
+            self.gui.filtered_sheets = cached_data['filtered_sheets']
+            self.gui.sheets = cached_data.get('sheets', {})
+            self.gui.full_sample_data = cached_data.get('full_sample_data', pd.DataFrame())
+            
+            # Set the selected sheet without triggering full UI update
+            if cached_data['filtered_sheets']:
+                first_sheet = list(cached_data['filtered_sheets'].keys())[0]
+                self.gui.selected_sheet.set(first_sheet)
+            return
        
         try:
             # Ensure the file is a valid Excel file.
@@ -69,7 +91,7 @@ class FileManager:
                 raise ValueError(f"Invalid Excel file selected: {file_path}")
 
             if not is_standard_file(file_path):
-                # Legacy file: convert to proper format.
+                # Legacy file processing
                 legacy_dir = os.path.join(os.path.abspath("."), "legacy data")
                 if not os.path.exists(legacy_dir):
                     os.makedirs(legacy_dir)
@@ -77,13 +99,11 @@ class FileManager:
                 legacy_wb = load_workbook(file_path)
                 legacy_sheetnames = legacy_wb.sheetnames
 
-                # Load the default template to get its sheet names.
                 template_path_default = os.path.join(os.path.abspath("."), "resources", 
                                          "Standardized Test Template - LATEST VERSION - 2025 Jan.xlsx")
                 wb_template = load_workbook(template_path_default)
                 template_sheet_names = wb_template.sheetnames
 
-                # If legacy_mode is not explicitly provided, choose based on heuristic.
                 if legacy_mode is None:
                     if len(legacy_sheetnames) == 1 and legacy_sheetnames[0] not in template_sheet_names:
                         legacy_mode = "file"
@@ -94,7 +114,6 @@ class FileManager:
                 full_sample_data = pd.DataFrame()
 
                 if legacy_mode == "file":
-
                     converted = processing.convert_legacy_file_using_template(file_path)
                     key = f"Legacy_{os.path.basename(file_path)}"
                     final_sheets = {key: {"data": converted, "is_empty": converted.empty}}
@@ -106,9 +125,7 @@ class FileManager:
                     self.gui.selected_sheet.set(default_key)
 
                 elif legacy_mode == "standards":
-
                     print("Legacy Standard File. Processing")
-                    
                     converted_dict = processing.convert_legacy_standards_using_template(file_path)
                     
                     self.gui.sheets = converted_dict
@@ -119,19 +136,15 @@ class FileManager:
                     self.gui.full_sample_data = pd.concat([sheet_info["data"] for sheet_info in self.gui.filtered_sheets.values()], axis=1)
                     first_sheet = list(self.gui.filtered_sheets.keys())[0]
                     self.gui.selected_sheet.set(first_sheet)
-                    self.gui.update_displayed_sheet(first_sheet)
-
-                                # Debugging: Print the first 20 rows and 15 columns for 'Intense Test' in legacy file
-                    if "Intense Test" in self.gui.filtered_sheets:
-                        intense_test_df = self.gui.filtered_sheets["Intense Test"]["data"]
-                        #print("\n--- Legacy Standard File: 'Intense Test' ---")
-                        #print(intense_test_df.iloc[:20, :15])
                 else:
                     raise ValueError(f"Unknown legacy mode: {legacy_mode}")
 
-                self._store_file_in_database(file_path)
+                # Store in database only if not skipping and not already stored
+                if not skip_database_storage and file_path not in self.stored_files_cache:
+                    self._store_file_in_database(file_path)
+                    self.stored_files_cache.add(file_path)
             else:
-                # Standard file processing.
+                # Standard file processing
                 print("Standard File. Processing")
                 self.gui.sheets = load_excel_file(file_path)
                 self.gui.filtered_sheets = {
@@ -141,14 +154,19 @@ class FileManager:
                 self.gui.full_sample_data = pd.concat([sheet_info["data"] for sheet_info in self.gui.filtered_sheets.values()],axis=1)
                 first_sheet = list(self.gui.filtered_sheets.keys())[0]
                 self.gui.selected_sheet.set(first_sheet)
-                self.gui.update_displayed_sheet(first_sheet)
-                # Debugging: Print the first 20 rows and 15 columns for 'Intense Test' in normal file
-                            # Debugging: Print the first 20 rows and 15 columns for 'Intense Test' in normal file
-                if "Intense Test" in self.gui.filtered_sheets:
-                    intense_test_df = self.gui.filtered_sheets["Intense Test"]["data"]
-                    #print("\n--- Normal Standard File: 'Intense Test' ---")
-                    #print(intense_test_df.iloc[:20, :15])
-                self._store_file_in_database(file_path)
+                
+                # Store in database only if not skipping and not already stored
+                if not skip_database_storage and file_path not in self.stored_files_cache:
+                    self._store_file_in_database(file_path)
+                    self.stored_files_cache.add(file_path)
+
+            # Cache the processed data
+            self.loaded_files_cache[cache_key] = {
+                'filtered_sheets': copy.deepcopy(self.gui.filtered_sheets),
+                'sheets': copy.deepcopy(getattr(self.gui, 'sheets', {})),
+                'full_sample_data': self.gui.full_sample_data.copy() if hasattr(self.gui, 'full_sample_data') else pd.DataFrame()
+            }
+            print(f"DEBUG: Cached processed data for {file_path}")
 
         except Exception as e:
             messagebox.showerror("Error", f"Error occurred while loading file: {e}")
@@ -196,19 +214,22 @@ class FileManager:
             messagebox.showerror("Loading Error", f"Failed to load files: {str(e)}")
         finally:
             self.gui.progress_dialog.hide_progress_bar()
-            self.root.update_idletasks()  # Ensure GUI refreshes
+            self.root.update_idletasks()
 
     def _store_file_in_database(self, original_file_path):
         """
         Store the loaded file in the database.
-
-        Steps:
-        1. Create a temporary VAP3 file
-        2. Store the VAP3 file in the database with proper filename
-        3. Store sheet metadata
-        4. Store associated images
+        Enhanced with duplicate checking.
         """
+        print(f"DEBUG: Checking if file {original_file_path} needs database storage")
+        
+        # Check if already stored
+        if original_file_path in self.stored_files_cache:
+            print("DEBUG: File already stored in database, skipping")
+            return
+            
         try:
+            print("DEBUG: Storing new file in database...")
             # Show progress dialog
             self.gui.progress_dialog.show_progress_bar("Storing file in database...")
             self.gui.root.update_idletasks()
@@ -248,13 +269,9 @@ class FileManager:
             if not success:
                 raise Exception("Failed to create temporary VAP3 file")
     
-            # Print debug information
-            print(f"Original path: {original_file_path}")
-            print(f"Extracted display filename: {display_filename}")
-    
             # Store meta_data about the original file
             meta_data = {
-                'display_filename': display_filename,  # Include the display filename
+                'display_filename': display_filename,
                 'original_filename': os.path.basename(original_file_path),
                 'original_path': original_file_path,
                 'creation_date': time.strftime('%Y-%m-%d %H:%M:%S'),
@@ -297,6 +314,9 @@ class FileManager:
             self.gui.root.update_idletasks()
     
             print(f"File successfully stored in database with ID: {file_id} and name: {display_filename}")
+            
+            # Mark as stored in cache
+            self.stored_files_cache.add(original_file_path)
     
         except Exception as e:
             print(f"Error storing file in database: {e}")
@@ -306,12 +326,7 @@ class FileManager:
             self.gui.progress_dialog.hide_progress_bar()
     
     def load_from_database(self, file_id=None):
-        """
-        Load a file from the database.
-        
-        Args:
-            file_id: The ID of the file to load. If None, shows a dialog to select from available files.
-        """
+        """Load a file from the database."""
         try:
             # Show progress dialog
             self.gui.progress_dialog.show_progress_bar("Loading from database...")
@@ -392,10 +407,6 @@ class FileManager:
                 temp_file.write(file_data['file_content'])
             
             # Load the VAP3 file using the existing method
-            from vap_file_manager import VapFileManager
-            vap_manager = VapFileManager()
-            
-            # Load the VAP3 file
             self.load_vap3_file(temp_vap3_path)
             
             # Clean up the temporary file
@@ -422,9 +433,7 @@ class FileManager:
             self.gui.progress_dialog.hide_progress_bar()
 
     def show_database_browser(self):
-        """
-        Show a dialog to browse files stored in the database.
-        """
+        """Show a dialog to browse files stored in the database."""
         # Create a dialog to browse the database
         dialog = Toplevel(self.gui.root)
         dialog.title("Database Browser")
@@ -600,17 +609,7 @@ class FileManager:
             messagebox.showerror("Error", f"Failed to reload the Excel file: {e}")
 
     def open_raw_data_in_excel(self, sheet_name=None) -> None:
-        """
-        Opens an Excel file for a specific sheet, allowing edits, and then
-        updates the application when Excel closes.
-    
-        This improved version forces Excel to open in a new instance and has robust
-        file tracking, preventing errors when other Excel files are already open.
-    
-        Args:
-            sheet_name (str, optional): Name of the sheet to open. If None,
-                                        uses the currently selected sheet.
-        """
+        """Opens an Excel file for a specific sheet, allowing edits, and then updates the application when Excel closes."""
         try:
             # Validate the current state
             if not hasattr(self.gui, 'filtered_sheets') or not self.gui.filtered_sheets:
@@ -628,28 +627,25 @@ class FileManager:
             # Get the sheet data
             sheet_data = self.gui.filtered_sheets[sheet_name]['data']
         
-            # Create a temporary Excel file in a reliable location, with a simple filename
+            # Create a temporary Excel file
             import tempfile
             import uuid
             from openpyxl import Workbook
         
-            # Generate a unique identifier that's short but still unique
+            # Generate a unique identifier
             unique_id = str(uuid.uuid4()).split('-')[0]
         
             # Ensure the sheet name only contains valid characters
             safe_sheet_name = "".join(c for c in sheet_name if c.isalnum() or c == ' ')
-            safe_sheet_name = safe_sheet_name.replace(' ', '_')[:15]  # Keep it reasonably short
+            safe_sheet_name = safe_sheet_name.replace(' ', '_')[:15]
         
-            # Create a temporary file in the user's temp directory
+            # Create a temporary file
             temp_dir = os.path.abspath(tempfile.gettempdir())
             temp_file = os.path.join(temp_dir, f"dataviewer_{safe_sheet_name}_{unique_id}.xlsx")
-        
-            #print(f"Creating temporary file at: {temp_file}")
         
             # Create a new workbook with just this sheet
             wb = Workbook()
             ws = wb.active
-            # Ensure sheet name is valid for Excel (31 chars max, no special chars)
             ws.title = safe_sheet_name[:31]
         
             # Write the headers
@@ -664,144 +660,88 @@ class FileManager:
             # Save the workbook
             wb.save(temp_file)
         
-            # Make sure the file exists before proceeding
             if not os.path.exists(temp_file):
                 raise FileNotFoundError(f"Failed to create temporary file at {temp_file}")
         
             # Record the file modification time before opening
             original_mod_time = os.path.getmtime(temp_file)
         
-            # Create a small status bar notification
+            # Create status notification
             status_text = f"Opening {sheet_name} in Excel. Changes will be imported when Excel closes."
             status_label = ttk.Label(self.gui.root, text=status_text, relief="sunken", anchor="w")
             status_label.pack(side="bottom", fill="x")
             self.gui.root.update_idletasks()
         
-            # Use a class to hold shared state that can be modified in the thread
+            # File monitor state
             class FileMonitorState:
                 def __init__(self, initial_mod_time):
                     self.last_mod_time = initial_mod_time
                     self.has_changed = False
         
-            # Create a state object with the initial modification time
             monitor_state = FileMonitorState(original_mod_time)
         
-            # ----- THE KEY DIFFERENCE: FORCE A NEW EXCEL INSTANCE -----
-            # Windows Registry by default opens Excel files in the same instance
-            # We need to bypass this by using the /x switch to start a new instance
+            # Force a new Excel instance
             import subprocess
-        
-            # The command to force a new Excel instance 
             cmd = f'start /wait "" "excel.exe" /x "{os.path.abspath(temp_file)}"'
         
-            # Execute the command which opens Excel in a new instance
-            # Note: we use subprocess.call with shell=True to properly handle the start command
             try:
                 subprocess.Popen(cmd, shell=True)
-                #print(f"Launched Excel with command: {cmd}")
             except Exception as e:
                 print(f"Error launching Excel with command: {e}")
-                # Fall back to the standard method as a last resort
                 os.startfile(os.path.abspath(temp_file))
-                #print("Fell back to os.startfile method")
             
-            # Wait a moment for Excel to start up
             time.sleep(2.0)
         
-            # Start a background thread to monitor the file
-            import threading
-        
+            # Monitor file in background thread
             def monitor_file_lock():
-                """Monitor the Excel file until it's no longer locked, then process any changes."""
                 file_open = True
-            
-                #print(f"Starting file lock monitoring for {temp_file}")
-            
                 while file_open:
-                    # Check if the file is still locked by Excel
                     file_locked = False
                     try:
-                        # Try to open the file for exclusive access - if it fails, Excel still has it open
                         with open(temp_file, 'r+b') as test_lock:
-                            # Successfully opened file - not locked
                             pass
                     except PermissionError:
-                        # File is still locked (open in Excel)
                         file_locked = True
-                        #print("File is locked - Excel is still using it")
                     except FileNotFoundError:
-                        # File was deleted or moved
-                        #print(f"File not found during monitoring: {temp_file}")
                         file_locked = False
                         file_open = False
-                    except Exception as e:
-                        # Some other error - assume file is not locked
-                        #print(f"Error checking file lock: {e}")
+                    except Exception:
                         file_locked = False
                 
-                    # Update file_open status based on lock check
                     file_open = file_locked
                 
-                    # If file exists, check if it has been modified 
                     if os.path.exists(temp_file):
                         try:
                             current_mod_time = os.path.getmtime(temp_file)
                             if current_mod_time > monitor_state.last_mod_time:
-                                #print(f"File modification detected. Old time: {monitor_state.last_mod_time}, New time: {current_mod_time}")
                                 monitor_state.has_changed = True
                                 monitor_state.last_mod_time = current_mod_time
-                        except Exception as e:
-                            #print(f"Error checking file modification time: {e}")
+                        except Exception:
                             pass
-                    else:
-                        #print(f"Warning: File no longer exists at {temp_file}")
-                        pass
-                    # If the file is no longer open, process any changes
+                            
                     if not file_open:
-                        #print("File is no longer locked - processing changes")
-                        # Use a delay before processing to make sure Excel fully releases the file
                         self.gui.root.after(500, lambda: self._process_excel_changes(temp_file, sheet_name, monitor_state.has_changed, status_label))
                         break
                 
-                    # Sleep briefly to reduce CPU usage
                     time.sleep(1.0)
         
-            # Start the monitoring thread
+            # Start monitoring thread
             monitor_thread = threading.Thread(target=monitor_file_lock, daemon=True)
             self.gui.threads.append(monitor_thread)
             monitor_thread.start()
         
         except Exception as e:
             messagebox.showerror("Error", f"Failed to open Excel: {e}")
-            import traceback
             traceback.print_exc()
-            # Clean up any UI changes if there was an error
-            for widget in self.gui.root.winfo_children():
-                if isinstance(widget, ttk.Label) and "Opening" in widget.cget("text"):
-                    widget.destroy()
 
     def _process_excel_changes(self, temp_file, sheet_name, file_changed, status_label=None):
-        """
-        Process changes made in Excel after it closes.
-    
-        Args:
-            temp_file (str): Path to the temporary Excel file
-            sheet_name (str): The sheet name that was edited
-            file_changed (bool): Whether the file was modified
-            status_label (ttk.Label, optional): Status label to update and remove
-        """
+        """Process changes made in Excel after it closes."""
         try:
-            # Remove the status label if it exists
             if status_label and status_label.winfo_exists():
                 status_label.destroy()
         
-            #print(f"Processing Excel changes for {sheet_name}. File changed: {file_changed}")
-            #print(f"File path: {temp_file}")
-            #print(f"File exists: {os.path.exists(temp_file)}")
-        
             if file_changed and os.path.exists(temp_file):
                 try:
-                    # Read the modified data with a retry mechanism
                     max_retries = 3
                     retry_count = 0
                     read_success = False
@@ -809,14 +749,11 @@ class FileManager:
                 
                     while not read_success and retry_count < max_retries:
                         try:
-                            #print(f"Attempting to read Excel file, attempt {retry_count + 1}")
                             modified_data = pd.read_excel(temp_file)
                             read_success = True
-                            #print("Successfully read modified Excel data")
-                        except Exception as read_error:
+                        except Exception:
                             retry_count += 1
-                            #print(f"Error reading Excel file (attempt {retry_count}): {read_error}")
-                            time.sleep(1.0)  # Wait before retrying
+                            time.sleep(1.0)
                 
                     if not read_success:
                         raise Exception(f"Failed to read Excel file after {max_retries} attempts")
@@ -824,13 +761,10 @@ class FileManager:
                     # Update the filtered sheets with new data
                     self.gui.filtered_sheets[sheet_name]['data'] = modified_data
                 
-                    # If we're using a VAP3 file, update it
+                    # If using VAP3 file, update it
                     if hasattr(self.gui, 'file_path') and self.gui.file_path.endswith('.vap3'):
                         from vap_file_manager import VapFileManager
-                    
                         vap_manager = VapFileManager()
-                        #print("Updating VAP3 file with modified data")
-                        # Save to the same VAP3 file
                         vap_manager.save_to_vap3(
                             self.gui.file_path,
                             self.gui.filtered_sheets,
@@ -842,7 +776,7 @@ class FileManager:
                     # Refresh the GUI display
                     self.gui.update_displayed_sheet(sheet_name)
                 
-                    # Show a temporary success message in the status bar
+                    # Show success message
                     success_label = ttk.Label(
                         self.gui.root, 
                         text="Changes from Excel have been imported successfully.",
@@ -850,22 +784,14 @@ class FileManager:
                         anchor="w"
                     )
                     success_label.pack(side="bottom", fill="x")
-                
-                    # Auto-remove the success message after 3 seconds
                     self.gui.root.after(3000, lambda: success_label.destroy() if success_label.winfo_exists() else None)
-                    #print("Excel changes successfully processed and imported")
                 
                 except Exception as e:
-                    #print(f"Error processing Excel changes: {e}")
-                    import traceback
                     traceback.print_exc()
                     messagebox.showerror("Error", f"Failed to read modified Excel file: {e}")
             elif file_changed and not os.path.exists(temp_file):
-                #print("File was modified but no longer exists")
                 messagebox.showinfo("Information", "Excel file was modified but appears to have been moved or renamed. Changes could not be imported.")
             else:
-                # File was closed without changes
-                #print("Excel file was closed without changes")
                 info_label = ttk.Label(
                     self.gui.root, 
                     text="Excel file was closed without changes.",
@@ -876,73 +802,25 @@ class FileManager:
                 self.gui.root.after(3000, lambda: info_label.destroy() if info_label.winfo_exists() else None)
             
         except Exception as e:
-            #print(f"Exception in _process_excel_changes: {e}")
-            import traceback
             traceback.print_exc()
             messagebox.showerror("Error", f"Failed to process Excel changes: {e}")
         finally:
-            # Always try to clean up the temp file
             if os.path.exists(temp_file):
                 try:
                     os.remove(temp_file)
-                    #print(f"Temporary file removed: {temp_file}")
-                except Exception as cleanup_error:
-                    #print(f"Warning: Failed to remove temporary file: {cleanup_error}")
+                except Exception:
                     pass
-                    # Don't disrupt the user's workflow with an error message for cleanup issues
-
-    def create_new_template_old(self, startup_menu: tk.Toplevel) -> None:
-        """
-        Handle the 'New' button click to create a new template file.
-        """
-        try:
-            startup_menu.destroy()
-            template_path = get_resource_path("resources/Standardized Test Template - LATEST VERSION - 2025 Jan.xlsx")
-            if not os.path.exists(template_path):
-                messagebox.showerror("Error", "Template file not found. Please check the resources folder.")
-                return
-            new_file_path = filedialog.asksaveasfilename(
-                title="Save New Test File As",
-                defaultextension=".xlsx",
-                filetypes=[("Excel files", "*.xlsx")]
-            )
-            if not new_file_path:
-                return
-            shutil.copy(template_path, new_file_path)
-            self.gui.file_path = new_file_path
-            self.load_excel_file(new_file_path)
-            self.gui.clear_dynamic_frame()
-            self.gui.all_filtered_sheets.append({
-                "file_name": os.path.basename(new_file_path),
-                "file_path": new_file_path,
-                "filtered_sheets": copy.deepcopy(self.gui.filtered_sheets)
-            })
-            self.set_active_file(os.path.basename(new_file_path))
-            self.update_ui_for_current_file()
-            messagebox.showinfo("Success", "New template created and loaded successfully.")
-        except Exception as e:
-            messagebox.showerror("Error", f"An error occurred while creating a new template: {e}")
 
     def create_new_template(self, parent_window=None):
         """Create a new file from the template."""
         return self.create_new_file_with_tests(parent_window)
 
-
     def create_new_file_with_tests(self, parent_window=None):
-        """
-        Create a new file with only the selected tests.
-    
-        Args:
-            parent_window (tk.Toplevel, optional): Parent window to close. Defaults to None.
-    
-        Returns:
-            str: Path to the created file or None if creation was cancelled.
-        """
-
-        # first, get the save path before showing test selection dialog
+        """Create a new file with only the selected tests."""
+        # Get save path before showing test selection dialog
         file_path = get_save_path(".xlsx")
         if not file_path:
-            return None  # User cancelled
+            return None
 
         # Get template path
         template_path = get_resource_path("resources/Standardized Test Template - LATEST VERSION - 2025 Jan.xlsx")
@@ -956,14 +834,11 @@ class FileManager:
         ok_clicked, selected_tests = test_dialog.show()
     
         if not ok_clicked or not selected_tests:
-            return None  # User cancelled or no tests selected
+            return None
     
         # Create a new file with selected tests
         try:
-            # Copy template file
             shutil.copy(template_path, file_path)
-        
-            # Open the copied file
             new_wb = openpyxl.load_workbook(file_path)
         
             # Remove unselected tests
@@ -971,7 +846,6 @@ class FileManager:
                 if sheet_name not in selected_tests and sheet_name != "Sheet1":
                     del new_wb[sheet_name]
         
-            # Save the modified workbook
             new_wb.save(file_path)
         
             # Close parent window if provided
@@ -986,7 +860,7 @@ class FileManager:
             messagebox.showerror("Error", f"An error occurred while creating the file: {str(e)}")
             if os.path.exists(file_path):
                 try:
-                    os.remove(file_path)  # Clean up partial file
+                    os.remove(file_path)
                 except:
                     pass
             return None
@@ -994,9 +868,7 @@ class FileManager:
     def show_test_start_menu(self, file_path):
         """
         Show the test start menu for a file.
-    
-        Args:
-            file_path (str): Path to the file.
+        If file is already loaded, try to extract existing header data and skip the dialog.
         """
         print(f"DEBUG: Showing test start menu for file: {file_path}")
         
@@ -1006,8 +878,27 @@ class FileManager:
     
         if result == "start_test" and selected_test:
             print(f"DEBUG: Starting test: {selected_test}")
-            # Show header data dialog
-            self.show_header_data_dialog(file_path, selected_test)
+            
+            # Check if this file is already loaded and has header data
+            if hasattr(self.gui, 'file_path') and self.gui.file_path == file_path:
+                print("DEBUG: File is already loaded - attempting to extract existing header data")
+                
+                # Try to extract existing header data from the loaded file
+                existing_header_data = self.extract_existing_header_data(file_path, selected_test)
+                
+                if existing_header_data and self.validate_header_data(existing_header_data):
+                    print("DEBUG: Found complete header data - skipping header dialog")
+                    # Go directly to data collection with existing header data
+                    self.start_data_collection_with_header_data(file_path, selected_test, existing_header_data)
+                else:
+                    print("DEBUG: Header data incomplete or missing - showing header dialog")
+                    # Show header data dialog for missing/incomplete data
+                    self.show_header_data_dialog(file_path, selected_test)
+            else:
+                print("DEBUG: File not loaded yet - showing header dialog")
+                # Show header data dialog for new files
+                self.show_header_data_dialog(file_path, selected_test)
+                
         elif result == "view_raw_file":
             print("DEBUG: Viewing raw file requested")
             # Load the file for viewing if not already loaded
@@ -1016,14 +907,189 @@ class FileManager:
         else:
             print("DEBUG: Test start menu was cancelled or closed")
 
+    def extract_existing_header_data(self, file_path, selected_test):
+        """Extract existing header data from the Excel file."""
+        print(f"DEBUG: Extracting header data from {file_path} for test {selected_test}")
+        
+        try:
+            wb = openpyxl.load_workbook(file_path)
+            
+            if selected_test not in wb.sheetnames:
+                print(f"DEBUG: Sheet {selected_test} not found in file")
+                return None
+                
+            ws = wb[selected_test]
+            
+            # Extract tester name (often in A1 or nearby cells)
+            tester = ""
+            for row in range(1, 4):
+                for col in range(1, 6):
+                    cell_value = ws.cell(row=row, column=col).value
+                    if cell_value and "tester" in str(cell_value).lower():
+                        if ":" in str(cell_value):
+                            tester_part = str(cell_value).split(":")[-1].strip()
+                            # Only use it if there's actually a name after the colon
+                            if tester_part and tester_part.lower() != "tester":
+                                tester = tester_part
+                        else:
+                            next_cell = ws.cell(row=row, column=col+1).value
+                            if next_cell:
+                                tester = str(next_cell).strip()
+                        break
+                if tester:
+                    break
+            
+            # Extract common data from known positions
+            common_data = {
+                'tester': tester,
+                'media': str(ws.cell(row=2, column=2).value or ""),
+                'viscosity': str(ws.cell(row=3, column=2).value or ""),
+                'voltage': str(ws.cell(row=2, column=6).value or ""),
+                'oil_mass': str(ws.cell(row=2, column=8).value or "")
+            }
+            
+            # Extract sample data (check up to 10 samples)
+            samples = []
+            sample_count = 0
+            
+            for i in range(10):
+                col_offset = i * 12
+                sample_id_cell = ws.cell(row=1, column=6 + col_offset)
+                resistance_cell = ws.cell(row=3, column=4 + col_offset)
+                
+                sample_id = sample_id_cell.value
+                resistance = resistance_cell.value
+                
+                # If we find a sample ID, this is a valid sample
+                if sample_id and str(sample_id).strip():
+                    samples.append({
+                        'id': str(sample_id).strip(),
+                        'resistance': str(resistance).strip() if resistance else ""
+                    })
+                    sample_count += 1
+                    print(f"DEBUG: Found sample {sample_count}: ID='{sample_id}', Resistance='{resistance}'")
+                else:
+                    # If no sample ID, we've reached the end of samples
+                    break
+            
+            if sample_count == 0:
+                print("DEBUG: No samples found, using default single sample")
+                samples = [{'id': 'Sample 1', 'resistance': ''}]
+                sample_count = 1
+            
+            header_data = {
+                'common': common_data,
+                'samples': samples,
+                'test': selected_test,
+                'num_samples': sample_count
+            }
+            
+            print(f"DEBUG: Extracted header data: {sample_count} samples, tester='{tester}'")
+            print(f"DEBUG: Common data: {common_data}")
+            print(f"DEBUG: Samples: {samples}")
+            
+            return header_data
+            
+        except Exception as e:
+            print(f"DEBUG: Error extracting header data: {e}")
+            traceback.print_exc()
+            return None
+
+    def validate_header_data(self, header_data):
+        """Validate that header data is complete enough for data collection."""
+        print("DEBUG: Validating extracted header data")
+        
+        if not header_data:
+            print("DEBUG: Header data is None")
+            return False
+            
+        # Check for required common data
+        common_data = header_data.get('common', {})
+        tester = common_data.get('tester', '').strip()
+        if not tester:
+            print("DEBUG: Tester name is missing or empty")
+            return False
+        
+        print(f"DEBUG: Found tester: '{tester}'")
+            
+        # Check for samples
+        samples = header_data.get('samples', [])
+        if not samples:
+            print("DEBUG: No samples found")
+            return False
+            
+        # Check that at least one sample has an ID
+        has_valid_sample = False
+        for sample in samples:
+            if sample.get('id', '').strip():
+                has_valid_sample = True
+                break
+                
+        if not has_valid_sample:
+            print("DEBUG: No samples with valid IDs found")
+            return False
+            
+        print("DEBUG: Header data validation passed")
+        return True
+
+    def start_data_collection_with_header_data(self, file_path, selected_test, header_data):
+        """Start data collection directly with existing header data."""
+        print("DEBUG: Starting data collection with existing header data")
+        
+        try:
+            # Show the data collection window directly
+            from data_collection_window import DataCollectionWindow
+            data_collection = DataCollectionWindow(self.gui.root, file_path, selected_test, header_data)
+            data_result = data_collection.show()
+        
+            if data_result == "load_file":
+                print("DEBUG: Data collection completed - file should already be loaded, updating UI only")
+                self.ensure_file_is_loaded_in_ui(file_path)
+            elif data_result == "cancel":
+                print("DEBUG: Data collection was cancelled - file should already be loaded, updating UI only")
+                self.ensure_file_is_loaded_in_ui(file_path)
+                
+        except Exception as e:
+            print(f"DEBUG: Error starting data collection: {e}")
+            traceback.print_exc()
+            messagebox.showerror("Error", f"Failed to start data collection: {e}")
+
+    def ensure_file_is_loaded_in_ui(self, file_path):
+        """Ensure the file is properly loaded in the UI without redundant processing."""
+        print(f"DEBUG: Ensuring file {file_path} is loaded in UI")
+        
+        # Check if file is already in the UI state
+        file_name = os.path.basename(file_path)
+        
+        # Look for existing entry in all_filtered_sheets
+        existing_entry = None
+        for file_data in self.gui.all_filtered_sheets:
+            if file_data["file_path"] == file_path:
+                existing_entry = file_data
+                break
+        
+        if existing_entry:
+            print("DEBUG: File already in UI state, just updating active file")
+            self.set_active_file(existing_entry["file_name"])
+            self.update_ui_for_current_file()
+        else:
+            print("DEBUG: File not in UI state, adding it")
+            # Load file without database storage (skip_database_storage=True)
+            self.load_excel_file(file_path, skip_database_storage=True)
+            
+            # Add to all_filtered_sheets
+            self.gui.all_filtered_sheets.append({
+                "file_name": file_name,
+                "file_path": file_path,
+                "filtered_sheets": copy.deepcopy(self.gui.filtered_sheets)
+            })
+            
+            self.update_file_dropdown()
+            self.set_active_file(file_name)
+            self.update_ui_for_current_file()
+
     def show_header_data_dialog(self, file_path, selected_test):
-        """
-        Show the header data dialog for a selected test.
-    
-        Args:
-            file_path (str): Path to the file.
-            selected_test (str): Name of the selected test.
-        """
+        """Show the header data dialog for a selected test."""
         print(f"DEBUG: Showing header data dialog for {selected_test}")
         
         # Show the header data dialog
@@ -1053,12 +1119,11 @@ class FileManager:
     def apply_header_data_to_file(self, file_path, header_data):
         """
         Apply the header data to the Excel file.
-    
-        Args:
-            file_path (str): Path to the file.
-            header_data (dict): Dictionary containing header data.
+        Enhanced to apply headers to all sample blocks, not just the first one.
         """
         try:
+            print(f"DEBUG: Applying header data to {file_path} for {header_data['num_samples']} samples")
+            
             # Load the workbook
             wb = openpyxl.load_workbook(file_path)
         
@@ -1066,35 +1131,55 @@ class FileManager:
             if header_data["test"] in wb.sheetnames:
                 ws = wb[header_data["test"]]
             
-                # Common data mappings (row, column)
-                common_mappings = {
-                    "media": (2, 2),      # Cell B2
-                    "viscosity": (3, 2),  # Cell B3
-                    "voltage": (2, 6),    # Cell F2
-                    "oil_mass": (2, 8)    # Cell H2
-                }
-            
-                # Apply common data
-                for field, (row, col) in common_mappings.items():
-                    if header_data["common"][field]:
-                        ws.cell(row=row, column=col, value=header_data["common"][field])
-            
-                # Apply sample-specific data
+                # Apply sample-specific data first
                 num_samples = header_data["num_samples"]
                 for i in range(num_samples):
                     # Calculate column offset (12 columns per sample)
                     col_offset = i * 12
+                    
+                    print(f"DEBUG: Applying headers for sample {i+1} at column offset {col_offset}")
                 
                     # Sample ID (row 1, column F + offset)
                     sample_id_col = 6 + col_offset  # Column F is 6
                     ws.cell(row=1, column=sample_id_col, value=header_data["samples"][i]["id"])
+                    print(f"DEBUG: Set sample ID '{header_data['samples'][i]['id']}' at column {sample_id_col}")
                 
                     # Resistance (row 3, column D + offset)
                     resistance_col = 4 + col_offset  # Column D is 4
                     ws.cell(row=3, column=resistance_col, value=header_data["samples"][i]["resistance"])
+                    print(f"DEBUG: Set resistance '{header_data['samples'][i]['resistance']}' at column {resistance_col}")
+                    
+                    # Apply common data to each sample block (NEW - this was missing!)
+                    # Media (row 2, column B + offset)
+                    if header_data["common"]["media"]:
+                        media_col = 2 + col_offset
+                        ws.cell(row=2, column=media_col, value=header_data["common"]["media"])
+                        print(f"DEBUG: Set media '{header_data['common']['media']}' at column {media_col}")
+                    
+                    # Viscosity (row 3, column B + offset)
+                    if header_data["common"]["viscosity"]:
+                        viscosity_col = 2 + col_offset
+                        ws.cell(row=3, column=viscosity_col, value=header_data["common"]["viscosity"])
+                        print(f"DEBUG: Set viscosity '{header_data['common']['viscosity']}' at column {viscosity_col}")
+                    
+                    # Voltage (row 2, column F + offset) - Note: this might overlap with sample ID
+                    # We'll put voltage in a different location for each sample block
+                    if header_data["common"]["voltage"]:
+                        voltage_col = 6 + col_offset  # Same as sample ID column, but row 2
+                        # Actually, let's put voltage in row 2, column E + offset to avoid conflict
+                        voltage_col = 5 + col_offset
+                        ws.cell(row=2, column=voltage_col, value=header_data["common"]["voltage"])
+                        print(f"DEBUG: Set voltage '{header_data['common']['voltage']}' at column {voltage_col}")
+                    
+                    # Oil mass (row 2, column H + offset)
+                    if header_data["common"]["oil_mass"]:
+                        oil_mass_col = 8 + col_offset
+                        ws.cell(row=2, column=oil_mass_col, value=header_data["common"]["oil_mass"])
+                        print(f"DEBUG: Set oil mass '{header_data['common']['oil_mass']}' at column {oil_mass_col}")
             
-                # Add tester name to sheet A1
+                # Add tester name to sheet A1 (only once, not per sample)
                 ws.cell(row=1, column=1, value=f"Tester: {header_data['common']['tester']}")
+                print(f"DEBUG: Set tester name '{header_data['common']['tester']}' in cell A1")
             
                 # Save the workbook
                 wb.save(file_path)
@@ -1103,27 +1188,18 @@ class FileManager:
             else:
                 messagebox.showerror("Error", f"Sheet '{header_data['test']}' not found in the file.")
         except Exception as e:
+            print(f"DEBUG: Error applying header data: {e}")
+            traceback.print_exc()
             messagebox.showerror("Error", f"An error occurred while applying header data: {str(e)}")
-
-
 
     def start_file_loading_wrapper(self, startup_menu: tk.Toplevel) -> None:
         """Handle the 'Load' button click in the startup menu."""
         startup_menu.destroy()
         self.load_initial_file()
 
-    def save_to_new_file(self, data, original_file_path) -> None:
-        new_file_path = get_save_path
-        if not new_file_path:
-            return
-        with pd.ExcelWriter(new_file_path, engine='xlsxwriter') as writer:
-            data.to_excel(writer, index=False, sheet_name='Sheet1')
-        messagebox.showinfo("Save Successful", f"Data saved to {new_file_path}")
-
     def update_file_dropdown(self) -> None:
         """Update the file dropdown with loaded file names."""
         file_names = [file_data["file_name"] for file_data in self.gui.all_filtered_sheets]
-        #print("DEBUG: file_names = ", file_names)
         self.gui.file_dropdown["values"] = file_names
         if file_names:
             self.gui.file_dropdown_var.set(file_names[-1])
@@ -1148,18 +1224,10 @@ class FileManager:
             self.gui.file_dropdown.bind("<<ComboboxSelected>>", self.gui.on_file_selection)
         self.update_file_dropdown()
 
-# ==================== .vap3 File FUNCTIONS ====================
+    # ==================== .vap3 File FUNCTIONS ====================
 
     def save_as_vap3(self, filepath=None) -> None:
-        """
-        Save the current session to a .vap3 file.
-    
-        Args:
-            filepath: Optional file path. If not provided, a file dialog will be shown.
-    
-        Returns:
-            None
-        """
+        """Save the current session to a .vap3 file."""
         from vap_file_manager import VapFileManager
     
         if not filepath:
@@ -1170,7 +1238,7 @@ class FileManager:
             )
         
         if not filepath:
-            return  # User canceled save operation
+            return
     
         try:
             self.gui.progress_dialog.show_progress_bar("Saving VAP3 file...")
@@ -1178,7 +1246,7 @@ class FileManager:
         
             vap_manager = VapFileManager()
         
-            # Collect plot settings if needed
+            # Collect plot settings
             plot_settings = {
                 'selected_plot_type': self.gui.selected_plot_type.get() if hasattr(self.gui, 'selected_plot_type') else None
             }
@@ -1186,7 +1254,6 @@ class FileManager:
             # Get image crop states
             image_crop_states = getattr(self.gui, 'image_crop_states', {})
             if hasattr(self.gui, 'image_loader') and self.gui.image_loader:
-                # Update with any latest crop states from the image loader
                 image_crop_states.update(self.gui.image_loader.image_crop_states)
         
             success = vap_manager.save_to_vap3(
@@ -1212,15 +1279,7 @@ class FileManager:
             self.gui.progress_dialog.hide_progress_bar()
 
     def load_vap3_file(self, filepath=None) -> bool:
-        """
-        Load a .vap3 file and update the application state.
-    
-        Args:
-            filepath: Optional file path. If not provided, a file dialog will be shown.
-    
-        Returns:
-            bool: True if successful, False otherwise
-        """
+        """Load a .vap3 file and update the application state."""
         from vap_file_manager import VapFileManager
     
         if not filepath:
@@ -1230,7 +1289,7 @@ class FileManager:
             )
         
         if not filepath:
-            return False  # User canceled operation
+            return False
     
         try:
             self.gui.progress_dialog.show_progress_bar("Loading VAP3 file...")
@@ -1251,7 +1310,6 @@ class FileManager:
                 self.gui.plot_options = result['plot_options']
         
             if 'plot_settings' in result and result['plot_settings']:
-                # Apply plot settings
                 if 'selected_plot_type' in result['plot_settings'] and result['plot_settings']['selected_plot_type']:
                     self.gui.selected_plot_type.set(result['plot_settings']['selected_plot_type'])
         
@@ -1282,30 +1340,16 @@ class FileManager:
         finally:
             self.gui.progress_dialog.hide_progress_bar()
 
-
-
     def load_file(self, file_path):
-            """Load a file without showing dialogs - used for data collection flow."""
-            print(f"DEBUG: Loading file for data collection: {file_path}")
-            try:
-                # Load the file using existing logic
-                self.load_excel_file(file_path)
+        """Load a file without showing dialogs - used for data collection flow."""
+        print(f"DEBUG: Loading file for data collection: {file_path}")
+        try:
+            # Use the optimized ensure method instead of full reload
+            self.ensure_file_is_loaded_in_ui(file_path)
+            print(f"DEBUG: File loaded successfully: {file_path}")
+            return True
             
-                # Update the GUI state
-                self.gui.all_filtered_sheets.append({
-                    "file_name": os.path.basename(file_path),
-                    "file_path": file_path,
-                    "filtered_sheets": copy.deepcopy(self.gui.filtered_sheets)
-                })
-            
-                self.update_file_dropdown()
-                self.set_active_file(os.path.basename(file_path))
-                self.update_ui_for_current_file()
-            
-                print(f"DEBUG: File loaded successfully: {file_path}")
-                return True
-            
-            except Exception as e:
-                print(f"DEBUG: Error loading file: {e}")
-                messagebox.showerror("Error", f"Failed to load file: {e}")
-                return False
+        except Exception as e:
+            print(f"DEBUG: Error loading file: {e}")
+            messagebox.showerror("Error", f"Failed to load file: {e}")
+            return False

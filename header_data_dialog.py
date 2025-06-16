@@ -9,14 +9,16 @@ from tkinter import ttk, messagebox
 from utils import APP_BACKGROUND_COLOR, FONT
 
 class HeaderDataDialog:
-    def __init__(self, parent, file_path, selected_test):
+    def __init__(self, parent, file_path, selected_test, edit_mode=False, current_data=None):
         """
         Initialize the header data dialog.
-        
+    
         Args:
             parent (tk.Tk): The parent window.
             file_path (str): Path to the created file.
             selected_test (str): The selected test name.
+            edit_mode (bool): Whether this is edit mode or new entry mode.
+            current_data (dict): Existing header data if in edit mode.
         """
         self.parent = parent
         self.file_path = file_path
@@ -25,11 +27,13 @@ class HeaderDataDialog:
         self.current_data = current_data
         self.result = None
         self.header_data = {}
-        
+    
+        print(f"DEBUG: HeaderDataDialog initialized - edit_mode: {edit_mode}, has_current_data: {current_data is not None}")
+    
         # Initialize references for cleanup
         self.canvas = None
         self.mousewheel_binding_id = None
-        
+    
         self.dialog = tk.Toplevel(parent)
         title_text = f"Edit Header Data - {selected_test}" if edit_mode else f"Header Data - {selected_test}"
         self.dialog.title(title_text)
@@ -37,11 +41,11 @@ class HeaderDataDialog:
         self.dialog.grab_set()
         self.dialog.configure(bg=APP_BACKGROUND_COLOR)
         self.dialog.geometry("600x500")  # Initial size
-        
+    
         # Set up cleanup when dialog is destroyed
         self.dialog.protocol("WM_DELETE_WINDOW", self.cleanup_and_close)
 
-               # Load existing data if in edit mode
+        # Load existing data if in edit mode
         if self.edit_mode:
             if self.current_data:
                 # Use provided current data (from data collection window)
@@ -50,7 +54,7 @@ class HeaderDataDialog:
             else:
                 # Load from file (from main GUI)
                 self.load_existing_header_data()
-        
+    
         self.create_widgets()
         self.center_window()
     

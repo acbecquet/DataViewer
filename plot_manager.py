@@ -2,6 +2,7 @@
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.widgets import CheckButtons
+import tkinter as tk
 from tkinter import ttk, messagebox, Toplevel, Label, Button
 from utils import wrap_text,APP_BACKGROUND_COLOR,BUTTON_COLOR, PLOT_CHECKBOX_TITLE,FONT
 import processing
@@ -73,26 +74,100 @@ class PlotManager:
     def plot_all_samples(self, frame: ttk.Frame, full_sample_data: pd.DataFrame, num_columns_per_sample: int) -> None:
         """
         Plot the provided sample data in the given frame.
+        Enhanced to handle empty data for data collection.
         Uses processing.plot_all_samples to generate the figure (and sample names, if any),
         then embeds the figure into the frame.
         """
-        # Clear frame contents
+        print(f"DEBUG: plot_all_samples called with data shape: {full_sample_data.shape}")
+        
         # Clear frame contents
         for widget in frame.winfo_children():
             widget.pack_forget()
-        if full_sample_data.empty or full_sample_data.isna().all().all():
-            messagebox.showwarning("Warning", "The data is empty or invalid for plotting.")
+            
+        # Check if data is empty or invalid
+        if full_sample_data.empty:
+            print("DEBUG: Data is completely empty - showing placeholder for data collection")
+            self.show_empty_plot_placeholder(frame, "No data loaded yet.\nUse 'Collect Data' to add measurements.")
             return
-        # Generate figure (and optionally sample names) via processing module.
-        result = processing.plot_all_samples(full_sample_data, num_columns_per_sample, self.selected_plot_type.get())
-        if isinstance(result, tuple):
-            fig, sample_names = result
-        else:
-            fig, sample_names = result, None
-        # Embed the figure
-        self.canvas = self.embed_plot_in_frame(fig, frame)
-        # Add checkboxes using the (optional) sample names
-        self.add_checkboxes(sample_names=sample_names)
+            
+        # Check if data contains only NaN values
+        if full_sample_data.isna().all().all():
+            print("DEBUG: Data contains only NaN values - showing placeholder for data collection")
+            self.show_empty_plot_placeholder(frame, "No measurement data available yet.\nUse 'Collect Data' to add measurements.")
+            return
+            
+        # Check if there's any numeric data for plotting
+        numeric_data = full_sample_data.apply(pd.to_numeric, errors='coerce')
+        if numeric_data.isna().all().all():
+            print("DEBUG: No numeric data available for plotting - showing placeholder")
+            self.show_empty_plot_placeholder(frame, "No numeric data available for plotting.\nUse 'Collect Data' to add measurement values.")
+            return
+            
+        print("DEBUG: Data appears valid for plotting, proceeding with plot generation")
+        
+        try:
+            # Generate figure (and optionally sample names) via processing module.
+            result = processing.plot_all_samples(full_sample_data, num_columns_per_sample, self.selected_plot_type.get())
+            if isinstance(result, tuple):
+                fig, sample_names = result
+            else:
+                fig, sample_names = result, None
+                
+            print("DEBUG: Plot generated successfully, embedding in frame")
+            
+            # Embed the figure
+            self.canvas = self.embed_plot_in_frame(fig, frame)
+            
+            # Add checkboxes using the (optional) sample names
+            self.add_checkboxes(sample_names=sample_names)
+            
+            print("DEBUG: Plot embedded and checkboxes added successfully")
+            
+        except Exception as e:
+            print(f"ERROR: Failed to generate or embed plot: {e}")
+            # Show error message instead of plot
+            self.show_empty_plot_placeholder(frame, f"Error generating plot: {str(e)}\nTry using 'Collect Data' to add valid measurements.")
+
+    def show_empty_plot_placeholder(self, frame: ttk.Frame, message: str) -> None:
+        """
+        Show a placeholder message in the plot frame when no data is available.
+        
+        Args:
+            frame (ttk.Frame): The frame to display the placeholder in
+            message (str): The message to display
+        """
+        print(f"DEBUG: Showing empty plot placeholder with message: {message}")
+        
+        # Clear any existing widgets
+        for widget in frame.winfo_children():
+            widget.destroy()
+            
+        # Create a frame for the placeholder content
+        placeholder_frame = ttk.Frame(frame)
+        placeholder_frame.pack(fill="both", expand=True)
+        
+        # Add the placeholder message
+        placeholder_label = tk.Label(
+            placeholder_frame,
+            text=message,
+            font=("Arial", 12),
+            fg="gray",
+            justify="center",
+            wraplength=300  # Wrap text for better readability
+        )
+        placeholder_label.pack(expand=True)
+        
+        # Add a small instruction
+        instruction_label = tk.Label(
+            placeholder_frame,
+            text="Data collection will enable real-time plotting.",
+            font=("Arial", 10),
+            fg="lightgray",
+            justify="center"
+        )
+        instruction_label.pack(pady=(10, 0))
+        
+        print("DEBUG: Empty plot placeholder displayed successfully")
 
     def update_plot(self, full_sample_data, num_columns_per_sample, frame=None):
         """

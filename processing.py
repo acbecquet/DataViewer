@@ -127,6 +127,7 @@ def plot_all_samples(full_sample_data: pd.DataFrame, num_columns_per_sample: int
 
     return fig, sample_names
 
+
 def plot_tpm_bar_chart(ax, full_sample_data, num_samples, num_columns_per_sample):
     """
     Generate a bar chart of the average TPM for each sample with wrapped sample names.
@@ -247,9 +248,11 @@ def process_sheet(data, headers_row=3, data_start_row=4):
     processed_data = pd.DataFrame(table_data.values, columns=headers)
     return processed_data, table_data
 
+
 def process_plot_sheet(data, headers_row=3, data_start_row=4, num_columns_per_sample=12, custom_extracted_data_fn=None):
     """
     Generic function to process sheets with plotting data.
+    Modified to handle empty/minimal sheets for data collection.
 
     Args:
         data (pd.DataFrame): Input data from the sheet.
@@ -264,12 +267,23 @@ def process_plot_sheet(data, headers_row=3, data_start_row=4, num_columns_per_sa
             sample_arrays (dict): Extracted sample arrays for plotting.
             full_sample_data (pd.DataFrame): Concatenated data for all samples.
     """
-    if not validate_sheet_data(data, required_rows=data_start_row + 1):
-        return pd.DataFrame(), {}, pd.DataFrame()
+    print(f"DEBUG: process_plot_sheet called with data shape: {data.shape}")
+    
+    # For data collection, allow minimal data (less strict validation)
+    min_required_rows = max(headers_row + 1, 3)  # At least header row + 1
+    if data.shape[0] < min_required_rows:
+        print(f"DEBUG: Data has {data.shape[0]} rows, minimum required is {min_required_rows}")
+        # Create empty structure for data collection
+        return create_empty_plot_structure(data, headers_row, num_columns_per_sample)
+    
+    if not validate_sheet_data(data, required_rows=min_required_rows):
+        print("DEBUG: Sheet validation failed, creating empty structure")
+        return create_empty_plot_structure(data, headers_row, num_columns_per_sample)
 
     try:
         # Clean up the data
         data = remove_empty_columns(data).replace(0, np.nan)
+        print(f"DEBUG: Data after cleaning: {data.shape}")
 
         samples = []
         full_sample_data = []
@@ -277,6 +291,11 @@ def process_plot_sheet(data, headers_row=3, data_start_row=4, num_columns_per_sa
 
         # Calculate the number of samples
         num_samples = data.shape[1] // num_columns_per_sample
+        print(f"DEBUG: Calculated {num_samples} samples")
+
+        if num_samples == 0:
+            print("DEBUG: No samples detected, creating empty structure")
+            return create_empty_plot_structure(data, headers_row, num_columns_per_sample)
 
         for i in range(num_samples):
             start_col = i * num_columns_per_sample
@@ -284,10 +303,10 @@ def process_plot_sheet(data, headers_row=3, data_start_row=4, num_columns_per_sa
             sample_data = data.iloc[:, start_col:end_col]
 
             if sample_data.empty:
-                #print(f"Sample {i+1} is empty. Skipping.")
+                print(f"DEBUG: Sample {i+1} is empty. Skipping.")
                 continue
 
-            # Extract plotting data
+            # Extract plotting data with error handling
             try:
                 sample_arrays[f"Sample_{i+1}_Puffs"] = sample_data.iloc[3:, 0].to_numpy()
                 sample_arrays[f"Sample_{i+1}_TPM"] = sample_data.iloc[3:, 8].to_numpy()
@@ -295,46 +314,86 @@ def process_plot_sheet(data, headers_row=3, data_start_row=4, num_columns_per_sa
                 if custom_extracted_data_fn:
                     extracted_data = custom_extracted_data_fn(sample_data)
                 else:
+                    # Handle potentially empty TPM data
                     tpm_data = pd.to_numeric(sample_data.iloc[3:, 8], errors='coerce').dropna()
-                    avg_tpm = round_values(tpm_data.mean()) if not tpm_data.empty else None
-                    std_tpm = round_values(tpm_data.std()) if not tpm_data.empty else None
+                    avg_tpm = round_values(tpm_data.mean()) if not tpm_data.empty else "No data"
+                    std_tpm = round_values(tpm_data.std()) if not tpm_data.empty else "No data"
 
+                    # Safe extraction with fallbacks
+                    sample_name = sample_data.columns[5] if len(sample_data.columns) > 5 else f"Sample {i+1}"
+                    media = sample_data.iloc[0, 1] if sample_data.shape[0] > 0 and sample_data.shape[1] > 1 else ""
+                    viscosity = sample_data.iloc[1, 1] if sample_data.shape[0] > 1 and sample_data.shape[1] > 1 else ""
+                    
                     extracted_data = {
-                        "Sample Name": sample_data.columns[5],
-                        "Media": sample_data.iloc[0, 1],
-                        "Viscosity": sample_data.iloc[1, 1],
-                        "Voltage, Resistance, Power": f"{sample_data.iloc[1, 5]} V, "
-                                                       f"{round_values(sample_data.iloc[0, 3])} ohm, "
-                                                       f"{round_values(sample_data.iloc[0, 5])} W",
+                        "Sample Name": sample_name,
+                        "Media": media,
+                        "Viscosity": viscosity,
+                        "Voltage, Resistance, Power": f"{sample_data.iloc[1, 5] if sample_data.shape[0] > 1 and sample_data.shape[1] > 5 else ''} V, "
+                                                       f"{round_values(sample_data.iloc[0, 3]) if sample_data.shape[0] > 0 and sample_data.shape[1] > 3 else ''} ohm, "
+                                                       f"{round_values(sample_data.iloc[0, 5]) if sample_data.shape[0] > 0 and sample_data.shape[1] > 5 else ''} W",
                         "Average TPM": avg_tpm,
                         "Standard Deviation": std_tpm,
-                        "Initial Oil Mass": round_values(sample_data.iloc[1,7]),
-                        "Usage Efficiency": round_values(sample_data.iloc[1,8]),
-                        "Burn?": sample_data.columns[10],
-                        "Clog?": sample_data.iloc[0, 10],
-                        "Leak?": sample_data.iloc[1, 10]
+                        "Initial Oil Mass": round_values(sample_data.iloc[1,7]) if sample_data.shape[0] > 1 and sample_data.shape[1] > 7 else "",
+                        "Usage Efficiency": round_values(sample_data.iloc[1,8]) if sample_data.shape[0] > 1 and sample_data.shape[1] > 8 else "",
+                        "Burn?": sample_data.columns[10] if len(sample_data.columns) > 10 else "",
+                        "Clog?": sample_data.iloc[0, 10] if sample_data.shape[0] > 0 and sample_data.shape[1] > 10 else "",
+                        "Leak?": sample_data.iloc[1, 10] if sample_data.shape[0] > 1 and sample_data.shape[1] > 10 else ""
                     }
 
                 samples.append(extracted_data)
                 full_sample_data.append(sample_data)
+                print(f"DEBUG: Successfully processed sample {i+1}")
+                
             except IndexError as e:
-                #print(f"Index error for sample {i+1}: {e}. Skipping.")
+                print(f"DEBUG: Index error for sample {i+1}: {e}. Creating placeholder.")
+                # Create placeholder data for data collection
+                placeholder_data = {
+                    "Sample Name": f"Sample {i+1}",
+                    "Media": "",
+                    "Viscosity": "",
+                    "Voltage, Resistance, Power": "",
+                    "Average TPM": "No data",
+                    "Standard Deviation": "No data",
+                    "Initial Oil Mass": "",
+                    "Usage Efficiency": "",
+                    "Burn?": "",
+                    "Clog?": "",
+                    "Leak?": ""
+                }
+                samples.append(placeholder_data)
+                full_sample_data.append(sample_data)
                 continue
 
-        if not samples:
-            #print("No valid samples found.")
-            return pd.DataFrame(), {}, pd.DataFrame()
+        # Create processed data and full sample data
+        if samples:
+            processed_data = pd.DataFrame(samples)
+            full_sample_data_df = pd.concat(full_sample_data, axis=1) if full_sample_data else pd.DataFrame()
+        else:
+            print("DEBUG: No valid samples found, creating minimal structure")
+            # Create minimal structure for data collection
+            processed_data = pd.DataFrame([{
+                "Sample Name": "Sample 1",
+                "Media": "",
+                "Viscosity": "",
+                "Voltage, Resistance, Power": "",
+                "Average TPM": "No data",
+                "Standard Deviation": "No data",
+                "Initial Oil Mass": "",
+                "Usage Efficiency": "",
+                "Burn?": "",
+                "Clog?": "",
+                "Leak?": ""
+            }])
+            full_sample_data_df = data  # Use original data
 
-        # Concatenate all sample data
-        full_sample_data_df = pd.concat(full_sample_data, axis=1)
-
-        # Create a processed data DataFrame
-        processed_data = pd.DataFrame(samples)
-
+        print(f"DEBUG: Final processed_data shape: {processed_data.shape}")
+        print(f"DEBUG: Final full_sample_data shape: {full_sample_data_df.shape}")
         return processed_data, sample_arrays, full_sample_data_df
+        
     except Exception as e:
-        #print(f"Error processing plot sheet: {e}")
-        return pd.DataFrame(), {}, pd.DataFrame()
+        print(f"DEBUG: Error processing plot sheet: {e}")
+        # Return empty structure instead of failing completely
+        return create_empty_plot_structure(data, headers_row, num_columns_per_sample)
 
 def no_efficiency_extracted_data(sample_data):
     """
@@ -404,6 +463,52 @@ def process_generic_sheet(data, headers_row=3, data_start_row=4):
     except Exception as e:
         #print(f"Error processing generic sheet: {e}")
         return pd.DataFrame(), {}, pd.DataFrame()
+
+
+def create_empty_plot_structure(data, headers_row=3, num_columns_per_sample=12):
+    """
+    Create an empty structure for data collection when sheet has minimal data.
+    
+    Args:
+        data (pd.DataFrame): Original data
+        headers_row (int): Row index for headers
+        num_columns_per_sample (int): Number of columns per sample
+        
+    Returns:
+        tuple: (processed_data, sample_arrays, full_sample_data)
+    """
+    print("DEBUG: Creating empty plot structure for data collection")
+    
+    # Create minimal processed data structure
+    processed_data = pd.DataFrame([{
+        "Sample Name": "Sample 1",
+        "Media": "",
+        "Viscosity": "",
+        "Voltage, Resistance, Power": "",
+        "Average TPM": "No data",
+        "Standard Deviation": "No data",
+        "Initial Oil Mass": "",
+        "Usage Efficiency": "",
+        "Burn?": "",
+        "Clog?": "",
+        "Leak?": ""
+    }])
+    
+    # Empty sample arrays
+    sample_arrays = {}
+    
+    # Use original data or create minimal structure
+    if data.empty:
+        # Create a minimal data structure
+        full_sample_data = pd.DataFrame(
+            index=range(10),  # 10 rows for basic structure
+            columns=range(num_columns_per_sample)  # Standard column count
+        )
+    else:
+        full_sample_data = data
+    
+    print(f"DEBUG: Created empty structure - processed: {processed_data.shape}, full: {full_sample_data.shape}")
+    return processed_data, sample_arrays, full_sample_data
 
 # ==================== SHEET PROCESSING DISPATCHER ====================
 
