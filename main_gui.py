@@ -6,6 +6,7 @@ This module instantiates the high-level TestingGUI class which delegates file I/
 plotting, trend analysis, report generation, and progress dialog management
 to separate modules for better modularity and scalability.
 """
+import copy
 import queue
 import os
 import threading
@@ -396,6 +397,8 @@ class TestingGUI:
         viewmenu.add_command(label="View Raw Data", 
                              command=lambda: self.file_manager.open_raw_data_in_excel(self.selected_sheet.get()))
         viewmenu.add_command(label="Trend Analysis", command=self.open_trend_analysis_window)
+        viewmenu.add_separator()
+        viewmenu.add_command(label="Collect Data", command=self.open_data_collection)
         menubar.add_cascade(label="View", menu=viewmenu)
 
         # Database menu
@@ -710,6 +713,129 @@ class TestingGUI:
         #print(f"DEBUG: Stored image paths: {self.sheet_images[self.current_file][sheet_name]}")
         #print(f"DEBUG: Stored crop states: {self.image_crop_states}")
 
+    def open_data_collection(self):
+        """Open data collection interface, handling both loaded and unloaded file states."""
+        print("DEBUG: Data collection requested")
+        
+        # Check if we have a file loaded
+        if not hasattr(self, 'filtered_sheets') or not self.filtered_sheets or not hasattr(self, 'file_path') or not self.file_path:
+            print("DEBUG: No file loaded - showing data collection startup dialog")
+            self.show_data_collection_startup_dialog()
+        else:
+            print(f"DEBUG: File already loaded ({self.file_path}) - opening test start menu")
+            self.file_manager.show_test_start_menu(self.file_path)
+
+    def show_data_collection_startup_dialog(self):
+        """Show a startup dialog for data collection when no file is loaded."""
+        print("DEBUG: Creating data collection startup dialog")
+        
+        startup_dialog = tk.Toplevel(self.root)
+        startup_dialog.title("Data Collection")
+        startup_dialog.geometry("350x200")
+        startup_dialog.transient(self.root)
+        startup_dialog.grab_set()
+        startup_dialog.configure(bg=APP_BACKGROUND_COLOR)
+
+        # Header label
+        header_label = ttk.Label(
+            startup_dialog, 
+            text="Start Data Collection", 
+            font=("Arial", 16, "bold"),
+            foreground="white",
+            background=APP_BACKGROUND_COLOR
+        )
+        header_label.pack(pady=(20, 10))
+
+        # Instruction label
+        instruction_label = ttk.Label(
+            startup_dialog,
+            text="Choose an option to begin collecting data:",
+            font=FONT,
+            foreground="white",
+            background=APP_BACKGROUND_COLOR
+        )
+        instruction_label.pack(pady=(0, 20))
+
+        # Button frame
+        button_frame = ttk.Frame(startup_dialog)
+        button_frame.pack(pady=10)
+
+        # New File Button
+        new_button = ttk.Button(
+            button_frame,
+            text="Create New File",
+            command=lambda: self.handle_data_collection_new(startup_dialog),
+            width=15
+        )
+        new_button.pack(side="left", padx=10)
+
+        # Load File Button  
+        load_button = ttk.Button(
+            button_frame,
+            text="Load Existing File",
+            command=lambda: self.handle_data_collection_load(startup_dialog),
+            width=15
+        )
+        load_button.pack(side="left", padx=10)
+
+        # Cancel button
+        cancel_button = ttk.Button(
+            button_frame,
+            text="Cancel",
+            command=startup_dialog.destroy,
+            width=10
+        )
+        cancel_button.pack(pady=(20, 0))
+
+        self.center_window(startup_dialog)
+        print("DEBUG: Data collection startup dialog created and displayed")
+
+    def handle_data_collection_new(self, dialog):
+        """Handle 'Create New File' from data collection dialog."""
+        print("DEBUG: Create New File selected from data collection dialog")
+        dialog.destroy()
+        
+        # Use the existing new file creation logic
+        file_path = self.file_manager.create_new_file_with_tests()
+        if file_path:
+            print(f"DEBUG: New file created at {file_path} - will proceed to test start menu")
+            # The create_new_file_with_tests method already handles showing the test start menu
+        else:
+            print("DEBUG: New file creation was cancelled")
+
+    def handle_data_collection_load(self, dialog):
+        """Handle 'Load Existing File' from data collection dialog."""
+        print("DEBUG: Load Existing File selected from data collection dialog")
+        dialog.destroy()
+        
+        # Show file selection dialog
+        file_path = self.file_manager.ask_open_file()
+        if file_path:
+            print(f"DEBUG: File selected for loading: {file_path}")
+            try:
+                # Load the file
+                self.file_manager.load_excel_file(file_path)
+                
+                # Update the UI state
+                self.all_filtered_sheets.append({
+                    "file_name": os.path.basename(file_path),
+                    "file_path": file_path,
+                    "filtered_sheets": copy.deepcopy(self.filtered_sheets)
+                })
+                
+                self.file_manager.update_file_dropdown()
+                self.file_manager.set_active_file(os.path.basename(file_path))
+                self.file_manager.update_ui_for_current_file()
+                
+                print(f"DEBUG: File loaded successfully - opening test start menu")
+                # Show the test start menu for the loaded file
+                self.file_manager.show_test_start_menu(file_path)
+                
+            except Exception as e:
+                print(f"DEBUG: Error loading file: {e}")
+                messagebox.showerror("Error", f"Failed to load file: {e}")
+        else:
+            print("DEBUG: No file selected for loading")
 
     def display_plot(self, full_sample_data):
         """

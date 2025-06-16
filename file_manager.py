@@ -993,21 +993,28 @@ class FileManager:
 
     def show_test_start_menu(self, file_path):
         """
-        Show the test start menu for a newly created file.
+        Show the test start menu for a file.
     
         Args:
-            file_path (str): Path to the created file.
+            file_path (str): Path to the file.
         """
+        print(f"DEBUG: Showing test start menu for file: {file_path}")
+        
         # Show the test start menu
         start_menu = TestStartMenu(self.gui.root, file_path)
         result, selected_test = start_menu.show()
     
         if result == "start_test" and selected_test:
+            print(f"DEBUG: Starting test: {selected_test}")
             # Show header data dialog
             self.show_header_data_dialog(file_path, selected_test)
         elif result == "view_raw_file":
-            # Load the file with existing processing logic
-            self.load_file(file_path)
+            print("DEBUG: Viewing raw file requested")
+            # Load the file for viewing if not already loaded
+            if not hasattr(self.gui, 'file_path') or self.gui.file_path != file_path:
+                self.load_file(file_path)
+        else:
+            print("DEBUG: Test start menu was cancelled or closed")
 
     def show_header_data_dialog(self, file_path, selected_test):
         """
@@ -1017,14 +1024,18 @@ class FileManager:
             file_path (str): Path to the file.
             selected_test (str): Name of the selected test.
         """
+        print(f"DEBUG: Showing header data dialog for {selected_test}")
+        
         # Show the header data dialog
         header_dialog = HeaderDataDialog(self.gui.root, file_path, selected_test)
         result, header_data = header_dialog.show()
     
         if result:
+            print("DEBUG: Header data dialog completed successfully")
             # Apply header data to the file
             self.apply_header_data_to_file(file_path, header_data)
         
+            print("DEBUG: Proceeding to data collection window")
             # Show the data collection window
             from data_collection_window import DataCollectionWindow
             data_collection = DataCollectionWindow(self.gui.root, file_path, selected_test, header_data)
@@ -1036,6 +1047,8 @@ class FileManager:
             elif data_result == "cancel":
                 # User cancelled data collection, just load the file
                 self.load_file(file_path)
+        else:
+            print("DEBUG: Header data dialog was cancelled")
 
     def apply_header_data_to_file(self, file_path, header_data):
         """
@@ -1268,3 +1281,31 @@ class FileManager:
             return False
         finally:
             self.gui.progress_dialog.hide_progress_bar()
+
+
+
+    def load_file(self, file_path):
+            """Load a file without showing dialogs - used for data collection flow."""
+            print(f"DEBUG: Loading file for data collection: {file_path}")
+            try:
+                # Load the file using existing logic
+                self.load_excel_file(file_path)
+            
+                # Update the GUI state
+                self.gui.all_filtered_sheets.append({
+                    "file_name": os.path.basename(file_path),
+                    "file_path": file_path,
+                    "filtered_sheets": copy.deepcopy(self.gui.filtered_sheets)
+                })
+            
+                self.update_file_dropdown()
+                self.set_active_file(os.path.basename(file_path))
+                self.update_ui_for_current_file()
+            
+                print(f"DEBUG: File loaded successfully: {file_path}")
+                return True
+            
+            except Exception as e:
+                print(f"DEBUG: Error loading file: {e}")
+                messagebox.showerror("Error", f"Failed to load file: {e}")
+                return False

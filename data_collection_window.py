@@ -136,6 +136,7 @@ class DataCollectionWindow:
         
         # Edit menu  
         edit_menu = tk.Menu(menubar, tearoff=0)
+        edit_menu.add_command(label="Edit Headers", command = self.edit_headers)
         edit_menu.add_command(label="Clear Current Sample", command=self.clear_current_sample)
         edit_menu.add_command(label="Clear All Data", command=self.clear_all_data)
         edit_menu.add_separator()
@@ -470,6 +471,219 @@ class DataCollectionWindow:
         except Exception as e:
             messagebox.showerror("Export Error", f"Failed to export CSV files: {e}")
     
+    def edit_headers(self):
+        """Open header editing dialog from within data collection."""
+        print("DEBUG: Edit Headers requested from data collection window")
+        
+        # Show the header data dialog in edit mode
+        from header_data_dialog import HeaderDataDialog
+        header_dialog = HeaderDataDialog(
+            self.window, 
+            self.file_path, 
+            self.test_name, 
+            edit_mode=True,
+            current_data=self.header_data
+        )
+        result, new_header_data = header_dialog.show()
+        
+        if result:
+            print("DEBUG: Header data updated successfully")
+            # Update our internal header data
+            old_header_data = self.header_data.copy()
+            self.header_data = new_header_data
+            
+            # Check if number of samples changed
+            old_num_samples = old_header_data.get("num_samples", 0)
+            new_num_samples = new_header_data.get("num_samples", 0)
+            
+            if old_num_samples != new_num_samples:
+                print(f"DEBUG: Number of samples changed from {old_num_samples} to {new_num_samples}")
+                # Handle sample count change
+                self.handle_sample_count_change(old_num_samples, new_num_samples)
+            
+            # Update the header display in all tabs
+            self.update_header_display()
+            
+            # Apply changes to the Excel file
+            self.apply_header_changes_to_file()
+            
+            # Mark as having unsaved changes
+            self.mark_unsaved_changes()
+            
+            # Show success message
+            self.show_temp_status_message("Headers updated successfully", 3000)
+        else:
+            print("DEBUG: Header editing was cancelled")
+
+    def handle_sample_count_change(self, old_count, new_count):
+        """Handle changes in the number of samples."""
+        print(f"DEBUG: Handling sample count change: {old_count} -> {new_count}")
+        
+        if new_count > old_count:
+            # Add new samples
+            for i in range(old_count, new_count):
+                sample_id = f"Sample {i+1}"
+                self.data[sample_id] = {
+                    "puffs": [],
+                    "before_weight": [],
+                    "after_weight": [],
+                    "draw_pressure": [],
+                    "smell": [],
+                    "notes": [],
+                    "tpm": [],
+                    "current_row_index": 0,
+                    "avg_tpm": 0.0
+                }
+                
+                # Pre-initialize 50 rows for new sample
+                for j in range(50):
+                    puff = (j + 1) * self.puff_interval
+                    self.data[sample_id]["puffs"].append(puff)
+                    self.data[sample_id]["before_weight"].append("")
+                    self.data[sample_id]["after_weight"].append("")
+                    self.data[sample_id]["draw_pressure"].append("")
+                    self.data[sample_id]["smell"].append("")
+                    self.data[sample_id]["notes"].append("")
+                    self.data[sample_id]["tpm"].append(None)
+            
+            print(f"DEBUG: Added {new_count - old_count} new samples")
+            
+        elif new_count < old_count:
+            # Remove excess samples
+            for i in range(new_count, old_count):
+                sample_id = f"Sample {i+1}"
+                if sample_id in self.data:
+                    del self.data[sample_id]
+            
+            print(f"DEBUG: Removed {old_count - new_count} samples")
+        
+        # Update the number of samples
+        self.num_samples = new_count
+        
+        # Recreate the UI to reflect the new sample count
+        self.recreate_sample_tabs()
+
+    def recreate_sample_tabs(self):
+        """Recreate all sample tabs when sample count changes."""
+        print("DEBUG: Recreating sample tabs")
+        
+        # Clear existing tabs
+        for tab in self.notebook.tabs():
+            self.notebook.forget(tab)
+        
+        # Clear the lists
+        self.sample_frames.clear()
+        self.sample_trees.clear()
+        
+        # Recreate tabs for the new number of samples
+        for i in range(self.num_samples):
+            sample_id = f"Sample {i+1}"
+            sample_frame = ttk.Frame(self.notebook, padding=10, style='TFrame')
+            
+            # Get sample name safely
+            sample_name = "New Sample"
+            if i < len(self.header_data.get('samples', [])):
+                sample_name = self.header_data['samples'][i].get('id', f"Sample {i+1}")
+            
+            self.notebook.add(sample_frame, text=f"Sample {i+1} - {sample_name}")
+            self.sample_frames.append(sample_frame)
+            
+            # Create the sample tab content
+            tree = self.create_sample_tab(sample_frame, sample_id, i)
+            self.sample_trees.append(tree)
+        
+        # Recreate the TPM stats panel
+        self.create_tpm_stats_panel()
+        
+        print(f"DEBUG: Recreated {self.num_samples} sample tabs")
+
+    def update_header_display(self):
+        """Update the header information displayed in the UI."""
+        print("DEBUG: Updating header display")
+        
+        # Update the header labels (if they exist)
+        try:
+            # Update any header text that shows tester name, etc.
+            for widget in self.window.winfo_children():
+                if hasattr(widget, 'winfo_children'):
+                    self.update_header_labels_recursive(widget)
+            
+            # Update notebook tab labels
+            for i in range(min(self.num_samples, len(self.sample_frames))):
+                if i < len(self.header_data.get('samples', [])):
+                    sample_name = self.header_data['samples'][i].get('id', f"Sample {i+1}")
+                    self.notebook.tab(i, text=f"Sample {i+1} - {sample_name}")
+            
+            print("DEBUG: Header display updated")
+            
+        except Exception as e:
+            print(f"DEBUG: Error updating header display: {e}")
+
+    def update_header_labels_recursive(self, widget):
+        """Recursively update header labels in the widget tree."""
+        try:
+            if isinstance(widget, ttk.Label):
+                text = widget.cget('text')
+                if 'Tester:' in text:
+                    new_text = f"Tester: {self.header_data['common']['tester']}"
+                    widget.config(text=new_text)
+            
+            # Recurse through children
+            for child in widget.winfo_children():
+                self.update_header_labels_recursive(child)
+                
+        except Exception as e:
+            print(f"DEBUG: Error updating label: {e}")
+
+    def apply_header_changes_to_file(self):
+        """Apply header changes to the Excel file."""
+        print("DEBUG: Applying header changes to Excel file")
+        try:
+            import openpyxl
+            wb = openpyxl.load_workbook(self.file_path)
+            
+            if self.test_name not in wb.sheetnames:
+                print(f"DEBUG: Sheet {self.test_name} not found")
+                return
+                
+            ws = wb[self.test_name]
+            
+            # Apply common data
+            common_data = self.header_data.get('common', {})
+            ws.cell(row=2, column=2, value=common_data.get('media', ''))
+            ws.cell(row=3, column=2, value=common_data.get('viscosity', ''))
+            ws.cell(row=2, column=6, value=common_data.get('voltage', ''))
+            ws.cell(row=2, column=8, value=common_data.get('oil_mass', ''))
+            
+            # Apply sample-specific data
+            for i, sample_data in enumerate(self.header_data.get('samples', [])):
+                col_offset = i * 12
+                ws.cell(row=1, column=6 + col_offset, value=sample_data.get('id', ''))
+                ws.cell(row=3, column=4 + col_offset, value=sample_data.get('resistance', ''))
+            
+            # Save the workbook
+            wb.save(self.file_path)
+            print("DEBUG: Header changes applied to Excel file")
+            
+        except Exception as e:
+            print(f"DEBUG: Error applying header changes to file: {e}")
+
+    def show_temp_status_message(self, message, duration_ms):
+        """Show a temporary status message."""
+        # Create a temporary label
+        temp_label = ttk.Label(
+            self.window,
+            text=message,
+            font=("Arial", 10),
+            foreground="green",
+            background="SystemButtonFace"
+        )
+        temp_label.pack(side="bottom", fill="x")
+        
+        # Remove it after the specified duration
+        self.window.after(duration_ms, lambda: temp_label.destroy() if temp_label.winfo_exists() else None)
+
+
     def clear_current_sample(self):
         """Clear data for the currently selected sample."""
         current_tab = self.notebook.index(self.notebook.select())

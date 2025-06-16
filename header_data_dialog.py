@@ -21,6 +21,8 @@ class HeaderDataDialog:
         self.parent = parent
         self.file_path = file_path
         self.selected_test = selected_test
+        self.edit_mode = edit_mode
+        self.current_data = current_data
         self.result = None
         self.header_data = {}
         
@@ -29,7 +31,8 @@ class HeaderDataDialog:
         self.mousewheel_binding_id = None
         
         self.dialog = tk.Toplevel(parent)
-        self.dialog.title(f"Header Data - {selected_test}")
+        title_text = f"Edit Header Data - {selected_test}" if edit_mode else f"Header Data - {selected_test}"
+        self.dialog.title(title_text)
         self.dialog.transient(parent)
         self.dialog.grab_set()
         self.dialog.configure(bg=APP_BACKGROUND_COLOR)
@@ -37,6 +40,16 @@ class HeaderDataDialog:
         
         # Set up cleanup when dialog is destroyed
         self.dialog.protocol("WM_DELETE_WINDOW", self.cleanup_and_close)
+
+               # Load existing data if in edit mode
+        if self.edit_mode:
+            if self.current_data:
+                # Use provided current data (from data collection window)
+                self.existing_data = self.current_data
+                print("DEBUG: Using provided current data for header editing")
+            else:
+                # Load from file (from main GUI)
+                self.load_existing_header_data()
         
         self.create_widgets()
         self.center_window()
@@ -210,16 +223,105 @@ class HeaderDataDialog:
         self.resistance_vars = []
         self.update_sample_fields()
         
+        # Populate existing data if in edit mode - ADD THIS
+        if self.edit_mode and hasattr(self, 'existing_data'):
+            # Use after_idle to ensure all widgets are created first
+            self.dialog.after_idle(self.populate_existing_data)
+        
         # Buttons
         button_frame = ttk.Frame(self.form_frame)
         button_frame.grid(row=8, column=0, columnspan=4, sticky="ew", pady=(20, 0))
         
         ttk.Button(button_frame, text="Cancel", command=self.on_cancel).pack(side="right")
         
-        ttk.Button(button_frame, text="Continue", command=self.on_continue).pack(side="right", padx=(0, 5))
+        button_text = "Update" if self.edit_mode else "Continue"
+        ttk.Button(button_frame, text=button_text, command=self.on_continue).pack(side="right", padx=(0, 5))
         
         print("DEBUG: All widgets created successfully")
     
+    def populate_existing_data(self):
+        """Populate form fields with existing data."""
+        if not hasattr(self, 'existing_data') or not self.existing_data:
+            return
+            
+        print("DEBUG: Populating form with existing data")
+        
+        # Handle both file format and current_data format
+        if 'common' in self.existing_data:
+            # Data collection format
+            common_data = self.existing_data.get('common', {})
+            self.tester_var.set(common_data.get('tester', ''))
+            self.media_var.set(common_data.get('media', ''))
+            self.viscosity_var.set(str(common_data.get('viscosity', '')))
+            self.voltage_var.set(str(common_data.get('voltage', '')))
+            self.oil_mass_var.set(str(common_data.get('oil_mass', '')))
+            
+            samples_data = self.existing_data.get('samples', [])
+        else:
+            # File format
+            self.tester_var.set(self.existing_data.get('tester', ''))
+            self.media_var.set(self.existing_data.get('media', ''))
+            self.viscosity_var.set(str(self.existing_data.get('viscosity', '')))
+            self.voltage_var.set(str(self.existing_data.get('voltage', '')))
+            self.oil_mass_var.set(str(self.existing_data.get('oil_mass', '')))
+            
+            samples_data = self.existing_data.get('samples', [])
+        
+        # Set number of samples and populate sample data
+        num_existing_samples = len(samples_data)
+        if num_existing_samples > 0:
+            self.num_samples_var.set(num_existing_samples)
+            self.update_sample_fields()
+            
+            # Populate sample-specific data
+            for i, sample_data in enumerate(samples_data):
+                if i < len(self.sample_id_vars):
+                    self.sample_id_vars[i].set(sample_data.get('id', ''))
+                    self.resistance_vars[i].set(sample_data.get('resistance', ''))
+        
+        print("DEBUG: Form populated with existing data")
+
+    def load_existing_header_data(self):
+        """Load existing header data from the Excel file."""
+        print(f"DEBUG: Loading existing header data from {self.file_path}")
+        try:
+            import openpyxl
+            wb = openpyxl.load_workbook(self.file_path)
+            
+            if self.selected_test not in wb.sheetnames:
+                print(f"DEBUG: Sheet {self.selected_test} not found in file")
+                return
+                
+            ws = wb[self.selected_test]
+            
+            # Load existing data from known positions
+            self.existing_data = {
+                'tester': ws.cell(row=1, column=1).value or "",
+                'media': ws.cell(row=2, column=2).value or "",
+                'viscosity': ws.cell(row=3, column=2).value or "",
+                'voltage': ws.cell(row=2, column=6).value or "",
+                'oil_mass': ws.cell(row=2, column=8).value or "",
+                'samples': []
+            }
+            
+            # Load sample data (assuming max 10 samples)
+            for i in range(10):
+                col_offset = i * 12
+                sample_id = ws.cell(row=1, column=6 + col_offset).value
+                resistance = ws.cell(row=3, column=4 + col_offset).value
+                
+                if sample_id:  # Only add if sample ID exists
+                    self.existing_data['samples'].append({
+                        'id': str(sample_id),
+                        'resistance': str(resistance) if resistance else ""
+                    })
+            
+            print(f"DEBUG: Loaded existing data: {len(self.existing_data['samples'])} samples")
+            
+        except Exception as e:
+            print(f"DEBUG: Error loading existing header data: {e}")
+            self.existing_data = None
+
     def cleanup_mousewheel_binding(self):
         """Clean up mousewheel event bindings."""
         try:
