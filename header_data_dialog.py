@@ -24,12 +24,19 @@ class HeaderDataDialog:
         self.result = None
         self.header_data = {}
         
+        # Initialize references for cleanup
+        self.canvas = None
+        self.mousewheel_binding_id = None
+        
         self.dialog = tk.Toplevel(parent)
         self.dialog.title(f"Header Data - {selected_test}")
         self.dialog.transient(parent)
         self.dialog.grab_set()
         self.dialog.configure(bg=APP_BACKGROUND_COLOR)
         self.dialog.geometry("600x500")  # Initial size
+        
+        # Set up cleanup when dialog is destroyed
+        self.dialog.protocol("WM_DELETE_WINDOW", self.cleanup_and_close)
         
         self.create_widgets()
         self.center_window()
@@ -45,38 +52,56 @@ class HeaderDataDialog:
     
     def create_widgets(self):
         """Create the dialog widgets."""
+        print("DEBUG: Creating widgets for HeaderDataDialog")
+        
         # Main container with scrolling capability
         main_container = ttk.Frame(self.dialog)
         main_container.pack(fill="both", expand=True)
         
         # Create a canvas with scrollbar
-        canvas = tk.Canvas(main_container, bg=APP_BACKGROUND_COLOR)
-        scrollbar = ttk.Scrollbar(main_container, orient="vertical", command=canvas.yview)
+        self.canvas = tk.Canvas(main_container, bg=APP_BACKGROUND_COLOR)
+        scrollbar = ttk.Scrollbar(main_container, orient="vertical", command=self.canvas.yview)
         
         # Pack scrollbar and canvas
         scrollbar.pack(side="right", fill="y")
-        canvas.pack(side="left", fill="both", expand=True)
-        canvas.configure(yscrollcommand=scrollbar.set)
+        self.canvas.pack(side="left", fill="both", expand=True)
+        self.canvas.configure(yscrollcommand=scrollbar.set)
         
         # Frame to hold the form
-        self.form_frame = ttk.Frame(canvas, padding=20)
+        self.form_frame = ttk.Frame(self.canvas, padding=20)
         
         # Add the form frame to the canvas
-        canvas_frame = canvas.create_window((0, 0), window=self.form_frame, anchor="nw")
+        canvas_frame = self.canvas.create_window((0, 0), window=self.form_frame, anchor="nw")
         
         # Configure canvas scrolling
         def configure_canvas(event):
-            canvas.configure(scrollregion=canvas.bbox("all"))
-            canvas.itemconfig(canvas_frame, width=event.width)
+            self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+            self.canvas.itemconfig(canvas_frame, width=event.width)
         
         self.form_frame.bind("<Configure>", configure_canvas)
-        canvas.bind("<Configure>", lambda e: canvas.itemconfig(canvas_frame, width=e.width))
+        self.canvas.bind("<Configure>", lambda e: self.canvas.itemconfig(canvas_frame, width=e.width))
         
-        # Add mouse wheel scrolling
+        # Add mouse wheel scrolling with proper error handling
         def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+            # Check if canvas still exists and is valid
+            if self.canvas and self.canvas.winfo_exists():
+                try:
+                    self.canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+                except tk.TclError as e:
+                    print(f"DEBUG: Canvas scrolling error (canvas may be destroyed): {e}")
+                    # Unbind the event if canvas is invalid
+                    self.cleanup_mousewheel_binding()
+            else:
+                print("DEBUG: Canvas no longer exists, cleaning up mousewheel binding")
+                self.cleanup_mousewheel_binding()
         
-        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        # Use bind instead of bind_all to limit scope to this canvas
+        self.canvas.bind("<MouseWheel>", _on_mousewheel)
+        
+        # Also bind to the dialog to capture mousewheel when over the dialog
+        self.dialog.bind("<MouseWheel>", _on_mousewheel)
+        
+        print("DEBUG: Canvas and mousewheel binding created successfully")
         
         # Header
         header_label = ttk.Label(
@@ -192,9 +217,35 @@ class HeaderDataDialog:
         ttk.Button(button_frame, text="Cancel", command=self.on_cancel).pack(side="right")
         
         ttk.Button(button_frame, text="Continue", command=self.on_continue).pack(side="right", padx=(0, 5))
+        
+        print("DEBUG: All widgets created successfully")
+    
+    def cleanup_mousewheel_binding(self):
+        """Clean up mousewheel event bindings."""
+        try:
+            if self.canvas and self.canvas.winfo_exists():
+                self.canvas.unbind("<MouseWheel>")
+                print("DEBUG: Canvas mousewheel binding cleaned up")
+        except tk.TclError:
+            print("DEBUG: Canvas already destroyed, binding cleanup not needed")
+        
+        try:
+            if self.dialog and self.dialog.winfo_exists():
+                self.dialog.unbind("<MouseWheel>")
+                print("DEBUG: Dialog mousewheel binding cleaned up")
+        except tk.TclError:
+            print("DEBUG: Dialog already destroyed, binding cleanup not needed")
+    
+    def cleanup_and_close(self):
+        """Clean up resources and close the dialog when window is closed."""
+        print("DEBUG: Window close button clicked - cleaning up HeaderDataDialog resources")
+        self.cleanup_mousewheel_binding()
+        self.on_cancel()
     
     def update_sample_fields(self):
         """Update the sample-specific fields based on the number of samples."""
+        print(f"DEBUG: Updating sample fields for {self.num_samples_var.get()} samples")
+        
         # Clear existing widgets
         for widget in self.samples_frame.winfo_children():
             widget.destroy()
@@ -246,9 +297,13 @@ class HeaderDataDialog:
         # Configure grid
         self.samples_frame.columnconfigure(1, weight=1)
         self.samples_frame.columnconfigure(3, weight=1)
+        
+        print(f"DEBUG: Sample fields updated successfully for {num_samples} samples")
     
     def validate_data(self):
         """Validate the header data."""
+        print("DEBUG: Validating header data")
+        
         # Check for empty required fields
         if not self.tester_var.get().strip():
             messagebox.showerror("Validation Error", "Tester name is required.")
@@ -280,11 +335,14 @@ class HeaderDataDialog:
             except ValueError:
                 messagebox.showerror("Validation Error", f"Resistance for Sample {i+1} must be a numeric value.")
                 return False
-                
+        
+        print("DEBUG: Header data validation successful")
         return True
     
     def collect_header_data(self):
         """Collect header data from form fields."""
+        print("DEBUG: Collecting header data from form")
+        
         num_samples = self.num_samples_var.get()
         
         # Common data
@@ -305,22 +363,30 @@ class HeaderDataDialog:
             }
             samples.append(sample)
         
-        return {
+        header_data = {
             "common": common_data,
             "samples": samples,
             "test": self.selected_test,
             "num_samples": num_samples
         }
+        
+        print(f"DEBUG: Collected header data for {num_samples} samples")
+        return header_data
     
     def on_continue(self):
         """Handle Continue button click."""
+        print("DEBUG: Continue button clicked")
+        
         if self.validate_data():
             self.header_data = self.collect_header_data()
             self.result = True
+            self.cleanup_mousewheel_binding()
             self.dialog.destroy()
+            print("DEBUG: Header data collection completed successfully")
     
     def on_cancel(self):
         """Handle Cancel button click."""
+        print("DEBUG: Dialog cancelled - setting result to False")
         self.result = False
         self.dialog.destroy()
     
@@ -332,5 +398,11 @@ class HeaderDataDialog:
             tuple: (result, header_data) where result is True if Continue was clicked,
                    and header_data is a dictionary of header data.
         """
+        print("DEBUG: Showing HeaderDataDialog")
         self.dialog.wait_window()
+        print(f"DEBUG: HeaderDataDialog closed with result: {self.result}")
+        if self.result:
+            print("DEBUG: Dialog succeeded - continuing to data collection window")
+        else:
+            print("DEBUG: Dialog was cancelled - not proceeding to data collection")
         return self.result, self.header_data

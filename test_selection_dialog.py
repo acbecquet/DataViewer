@@ -22,6 +22,10 @@ class TestSelectionDialog:
         self.selected_tests = []
         self.result = None
         
+        # Initialize references for cleanup
+        self.canvas = None
+        self.mousewheel_binding_id = None
+        
         self.dialog = tk.Toplevel(parent)
         self.dialog.title("Select Tests")
         self.dialog.transient(parent)
@@ -31,6 +35,9 @@ class TestSelectionDialog:
         self.dialog.geometry("500x400")
         # Prevent resizing smaller than needed to show buttons
         self.dialog.minsize(500, 400)
+        
+        # Set up cleanup when dialog is destroyed
+        self.dialog.protocol("WM_DELETE_WINDOW", self.cleanup_and_close)
         
         self.create_widgets()
         self.center_window()
@@ -46,6 +53,8 @@ class TestSelectionDialog:
     
     def create_widgets(self):
         """Create the dialog widgets."""
+        print("DEBUG: Creating widgets for TestSelectionDialog")
+        
         # Use grid layout for better control
         self.dialog.grid_columnconfigure(0, weight=1)  # Tests column expands
         self.dialog.grid_columnconfigure(1, weight=0)  # Buttons column fixed width
@@ -117,31 +126,74 @@ class TestSelectionDialog:
         cancel_btn = ttk.Button(button_frame, text="Cancel", command=self.on_cancel)
         cancel_btn.pack(side="top", fill="x", pady=5)
         
-        # Bind mouse wheel events for scrolling
-        self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+        # Add mouse wheel scrolling with proper error handling
+        def _on_mousewheel(event):
+            # Check if canvas still exists and is valid
+            if self.canvas and self.canvas.winfo_exists():
+                try:
+                    self.canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+                except tk.TclError as e:
+                    print(f"DEBUG: Canvas scrolling error (canvas may be destroyed): {e}")
+                    # Unbind the event if canvas is invalid
+                    self.cleanup_mousewheel_binding()
+            else:
+                print("DEBUG: Canvas no longer exists, cleaning up mousewheel binding")
+                self.cleanup_mousewheel_binding()
+        
+        # Use bind instead of bind_all to limit scope to this canvas
+        self.canvas.bind("<MouseWheel>", _on_mousewheel)
+        
+        # Also bind to the dialog to capture mousewheel when over the dialog
+        self.dialog.bind("<MouseWheel>", _on_mousewheel)
+        
+        print("DEBUG: TestSelectionDialog widgets created successfully")
     
-    def _on_mousewheel(self, event):
-        """Handle mouse wheel scrolling."""
-        self.canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+    def cleanup_mousewheel_binding(self):
+        """Clean up mousewheel event bindings."""
+        try:
+            if self.canvas and self.canvas.winfo_exists():
+                self.canvas.unbind("<MouseWheel>")
+                print("DEBUG: Canvas mousewheel binding cleaned up")
+        except tk.TclError:
+            print("DEBUG: Canvas already destroyed, binding cleanup not needed")
+        
+        try:
+            if self.dialog and self.dialog.winfo_exists():
+                self.dialog.unbind("<MouseWheel>")
+                print("DEBUG: Dialog mousewheel binding cleaned up")
+        except tk.TclError:
+            print("DEBUG: Dialog already destroyed, binding cleanup not needed")
+    
+    def cleanup_and_close(self):
+        """Clean up resources and close the dialog when window is closed."""
+        print("DEBUG: Window close button clicked - cleaning up TestSelectionDialog resources")
+        self.cleanup_mousewheel_binding()
+        self.on_cancel()
     
     def select_all(self):
         """Select all tests."""
+        print("DEBUG: Select All clicked")
         for var in self.test_vars.values():
             var.set(True)
     
     def deselect_all(self):
         """Deselect all tests."""
+        print("DEBUG: Deselect All clicked")
         for var in self.test_vars.values():
             var.set(False)
     
     def on_ok(self):
         """Handle OK button click."""
+        print("DEBUG: OK button clicked")
         self.selected_tests = [test for test, var in self.test_vars.items() if var.get()]
+        print(f"DEBUG: Selected {len(self.selected_tests)} tests: {self.selected_tests}")
         self.result = True
+        self.cleanup_mousewheel_binding()
         self.dialog.destroy()
     
     def on_cancel(self):
         """Handle Cancel button click."""
+        print("DEBUG: TestSelectionDialog cancelled")
         self.result = False
         self.dialog.destroy()
     
@@ -153,10 +205,21 @@ class TestSelectionDialog:
             tuple: (result, selected_tests) where result is True if OK was clicked,
                    and selected_tests is the list of selected test names.
         """
-        # Unbind the mousewheel event when dialog closes
-        self.dialog.protocol("WM_DELETE_WINDOW", 
-                            lambda: (self.canvas.unbind_all("<MouseWheel>"), 
-                                     self.on_cancel()))
+        print("DEBUG: Showing TestSelectionDialog")
+        
+        # Set up proper cleanup for when dialog closes
+        def cleanup_on_close():
+            self.cleanup_mousewheel_binding()
+            self.on_cancel()
+        
+        self.dialog.protocol("WM_DELETE_WINDOW", cleanup_on_close)
         
         self.dialog.wait_window()
+        
+        print(f"DEBUG: TestSelectionDialog closed with result: {self.result}")
+        if self.result:
+            print("DEBUG: Dialog succeeded - proceeding with selected tests")
+        else:
+            print("DEBUG: Dialog was cancelled")
+            
         return self.result, self.selected_tests
