@@ -1,4 +1,4 @@
-"""
+﻿"""
 File Management Module for DataViewer Application
 
 This module handles all file-related operations including:
@@ -77,7 +77,9 @@ class FileManager:
             cached_data = self.loaded_files_cache[cache_key]
             self.gui.filtered_sheets = cached_data['filtered_sheets']
             self.gui.sheets = cached_data.get('sheets', {})
-            self.gui.full_sample_data = cached_data.get('full_sample_data', pd.DataFrame())
+            # Fix: Make sure full_sample_data exists
+            if hasattr(self.gui, 'full_sample_data'):
+                self.gui.full_sample_data = cached_data.get('full_sample_data', pd.DataFrame())
             
             # Set the selected sheet without triggering full UI update
             if cached_data['filtered_sheets']:
@@ -90,30 +92,42 @@ class FileManager:
             if not is_valid_excel_file(os.path.basename(file_path)):
                 raise ValueError(f"Invalid Excel file selected: {file_path}")
 
+            print(f"DEBUG: Checking if file is standard format: {file_path}")
             if not is_standard_file(file_path):
+                print("DEBUG: File is legacy format, processing accordingly")
                 # Legacy file processing
                 legacy_dir = os.path.join(os.path.abspath("."), "legacy data")
                 if not os.path.exists(legacy_dir):
                     os.makedirs(legacy_dir)
+                    print(f"DEBUG: Created legacy data directory: {legacy_dir}")
                 
                 legacy_wb = load_workbook(file_path)
                 legacy_sheetnames = legacy_wb.sheetnames
+                print(f"DEBUG: Legacy file sheets: {legacy_sheetnames}")
 
                 template_path_default = os.path.join(os.path.abspath("."), "resources", 
                                          "Standardized Test Template - LATEST VERSION - 2025 Jan.xlsx")
+                                         
+                if not os.path.exists(template_path_default):
+                    raise FileNotFoundError(f"Template file not found: {template_path_default}")
+                    
                 wb_template = load_workbook(template_path_default)
                 template_sheet_names = wb_template.sheetnames
+                print(f"DEBUG: Template sheets: {template_sheet_names}")
 
                 if legacy_mode is None:
                     if len(legacy_sheetnames) == 1 and legacy_sheetnames[0] not in template_sheet_names:
                         legacy_mode = "file"
+                        print("DEBUG: Auto-detected legacy mode: file")
                     else:
                         legacy_mode = "standards"
+                        print("DEBUG: Auto-detected legacy mode: standards")
 
                 final_sheets = {}
                 full_sample_data = pd.DataFrame()
 
                 if legacy_mode == "file":
+                    print("DEBUG: Processing as legacy file")
                     converted = processing.convert_legacy_file_using_template(file_path)
                     key = f"Legacy_{os.path.basename(file_path)}"
                     final_sheets = {key: {"data": converted, "is_empty": converted.empty}}
@@ -123,9 +137,10 @@ class FileManager:
                     self.gui.full_sample_data = full_sample_data
                     default_key = list(final_sheets.keys())[0]
                     self.gui.selected_sheet.set(default_key)
+                    print(f"DEBUG: Legacy file processed, key: {default_key}")
 
                 elif legacy_mode == "standards":
-                    print("Legacy Standard File. Processing")
+                    print("DEBUG: Processing as legacy standards file")
                     converted_dict = processing.convert_legacy_standards_using_template(file_path)
                     
                     self.gui.sheets = converted_dict
@@ -133,43 +148,72 @@ class FileManager:
                         name: {"data": data, "is_empty": data.empty}
                         for name, data in self.gui.sheets.items()
                     }
-                    self.gui.full_sample_data = pd.concat([sheet_info["data"] for sheet_info in self.gui.filtered_sheets.values()], axis=1)
+                    # Fix: Safely concatenate sheets
+                    sheet_data_list = []
+                    for sheet_info in self.gui.filtered_sheets.values():
+                        if not sheet_info["data"].empty:
+                            sheet_data_list.append(sheet_info["data"])
+                    
+                    if sheet_data_list:
+                        self.gui.full_sample_data = pd.concat(sheet_data_list, axis=1)
+                    else:
+                        self.gui.full_sample_data = pd.DataFrame()
+                        
                     first_sheet = list(self.gui.filtered_sheets.keys())[0]
                     self.gui.selected_sheet.set(first_sheet)
+                    print(f"DEBUG: Legacy standards processed, first sheet: {first_sheet}")
                 else:
                     raise ValueError(f"Unknown legacy mode: {legacy_mode}")
 
                 # Store in database only if not skipping and not already stored
                 if not skip_database_storage and file_path not in self.stored_files_cache:
+                    print("DEBUG: Storing legacy file in database")
                     self._store_file_in_database(file_path)
                     self.stored_files_cache.add(file_path)
             else:
                 # Standard file processing
-                print("Standard File. Processing")
+                print("DEBUG: Processing as standard file")
                 self.gui.sheets = load_excel_file(file_path)
                 self.gui.filtered_sheets = {
                     name: {"data": data, "is_empty": data.empty}
                     for name, data in self.gui.sheets.items()
                 }
-                self.gui.full_sample_data = pd.concat([sheet_info["data"] for sheet_info in self.gui.filtered_sheets.values()],axis=1)
+                
+                # Fix: Safely concatenate sheets and handle empty sheets
+                sheet_data_list = []
+                for sheet_info in self.gui.filtered_sheets.values():
+                    if not sheet_info["data"].empty:
+                        sheet_data_list.append(sheet_info["data"])
+                
+                if sheet_data_list:
+                    self.gui.full_sample_data = pd.concat(sheet_data_list, axis=1)
+                else:
+                    self.gui.full_sample_data = pd.DataFrame()
+                    
                 first_sheet = list(self.gui.filtered_sheets.keys())[0]
                 self.gui.selected_sheet.set(first_sheet)
+                print(f"DEBUG: Standard file processed, first sheet: {first_sheet}")
                 
                 # Store in database only if not skipping and not already stored
                 if not skip_database_storage and file_path not in self.stored_files_cache:
+                    print("DEBUG: Storing standard file in database")
                     self._store_file_in_database(file_path)
                     self.stored_files_cache.add(file_path)
 
             # Cache the processed data
-            self.loaded_files_cache[cache_key] = {
+            cache_data = {
                 'filtered_sheets': copy.deepcopy(self.gui.filtered_sheets),
                 'sheets': copy.deepcopy(getattr(self.gui, 'sheets', {})),
-                'full_sample_data': self.gui.full_sample_data.copy() if hasattr(self.gui, 'full_sample_data') else pd.DataFrame()
+                'full_sample_data': self.gui.full_sample_data.copy() if hasattr(self.gui, 'full_sample_data') and not self.gui.full_sample_data.empty else pd.DataFrame()
             }
+            self.loaded_files_cache[cache_key] = cache_data
             print(f"DEBUG: Cached processed data for {file_path}")
 
         except Exception as e:
-            messagebox.showerror("Error", f"Error occurred while loading file: {e}")
+            error_msg = f"Error occurred while loading file: {e}"
+            print(f"ERROR: {error_msg}")
+            traceback.print_exc()
+            messagebox.showerror("Error", error_msg)    
 
     def load_initial_file(self) -> None:
         """Handle file loading directly on the main thread."""
@@ -219,7 +263,7 @@ class FileManager:
     def _store_file_in_database(self, original_file_path):
         """
         Store the loaded file in the database.
-        Enhanced with duplicate checking.
+        Enhanced with duplicate checking and better error handling.
         """
         print(f"DEBUG: Checking if file {original_file_path} needs database storage")
         
@@ -237,89 +281,105 @@ class FileManager:
             # Create a temporary VAP3 file
             with tempfile.NamedTemporaryFile(suffix='.vap3', delete=False) as temp_file:
                 temp_vap3_path = temp_file.name
+                print(f"DEBUG: Created temporary VAP3 file: {temp_vap3_path}")
     
             # Save current state as VAP3
             from vap_file_manager import VapFileManager
             vap_manager = VapFileManager()
     
-            # Collect plot settings
-            plot_settings = {
-                'selected_plot_type': self.gui.selected_plot_type.get() if hasattr(self.gui, 'selected_plot_type') else None
-            }
+            # Collect plot settings safely
+            plot_settings = {}
+            if hasattr(self.gui, 'selected_plot_type'):
+                plot_settings['selected_plot_type'] = self.gui.selected_plot_type.get()
+            
+            print(f"DEBUG: Plot settings: {plot_settings}")
     
-            # Get image crop states
+            # Get image crop states safely
             image_crop_states = getattr(self.gui, 'image_crop_states', {})
             if hasattr(self.gui, 'image_loader') and self.gui.image_loader:
-                image_crop_states.update(self.gui.image_loader.image_crop_states)
+                image_crop_states.update(getattr(self.gui.image_loader, 'image_crop_states', {}))
+            
+            print(f"DEBUG: Image crop states: {len(image_crop_states)} items")
     
             # Extract just the filename (without path or extension) from the original file
             original_filename_base = os.path.splitext(os.path.basename(original_file_path))[0]
             display_filename = original_filename_base + '.vap3'
+            
+            print(f"DEBUG: Display filename: {display_filename}")
     
             # Save to temporary VAP3 file
             success = vap_manager.save_to_vap3(
                 temp_vap3_path,
                 self.gui.filtered_sheets,
-                self.gui.sheet_images,
-                self.gui.plot_options,
+                getattr(self.gui, 'sheet_images', {}),
+                getattr(self.gui, 'plot_options', []),
                 image_crop_states,
                 plot_settings
             )
     
             if not success:
                 raise Exception("Failed to create temporary VAP3 file")
+            
+            print("DEBUG: VAP3 file created successfully")
     
-            # Store meta_data about the original file
+            # Store metadata about the original file
             meta_data = {
                 'display_filename': display_filename,
                 'original_filename': os.path.basename(original_file_path),
                 'original_path': original_file_path,
                 'creation_date': time.strftime('%Y-%m-%d %H:%M:%S'),
                 'sheet_count': len(self.gui.filtered_sheets),
-                'plot_options': self.gui.plot_options,
+                'plot_options': getattr(self.gui, 'plot_options', []),
                 'plot_settings': plot_settings
             }
+            
+            print(f"DEBUG: Metadata: {meta_data}")
     
             # Store the VAP3 file in the database with the proper display filename
             file_id = self.db_manager.store_vap3_file(temp_vap3_path, meta_data)
+            print(f"DEBUG: File stored with ID: {file_id}")
     
-            # Store sheet meta_data
+            # Store sheet metadata
             for sheet_name, sheet_info in self.gui.filtered_sheets.items():
                 is_plotting = processing.plotting_sheet_test(sheet_name, sheet_info["data"])
                 is_empty = sheet_info.get("is_empty", False)
         
-                self.db_manager.store_sheet_info(
+                sheet_id = self.db_manager.store_sheet_info(
                     file_id, 
                     sheet_name, 
                     is_plotting, 
                     is_empty
                 )
+                print(f"DEBUG: Stored sheet '{sheet_name}' with ID: {sheet_id}")
     
             # Store associated images
-            if hasattr(self.gui, 'sheet_images') and self.gui.current_file in self.gui.sheet_images:
+            if hasattr(self.gui, 'sheet_images') and hasattr(self.gui, 'current_file') and self.gui.current_file in self.gui.sheet_images:
                 for sheet_name, images in self.gui.sheet_images[self.gui.current_file].items():
                     for img_path in images:
                         if os.path.exists(img_path):
                             crop_enabled = image_crop_states.get(img_path, False)
-                            self.db_manager.store_image(file_id, img_path, sheet_name, crop_enabled)
+                            img_id = self.db_manager.store_image(file_id, img_path, sheet_name, crop_enabled)
+                            print(f"DEBUG: Stored image '{img_path}' with ID: {img_id}")
     
             # Clean up the temporary file
             try:
                 os.unlink(temp_vap3_path)
-            except:
-                pass
+                print(f"DEBUG: Cleaned up temporary file: {temp_vap3_path}")
+            except Exception as cleanup_error:
+                print(f"WARNING: Failed to clean up temporary file: {cleanup_error}")
     
             # Update progress
             self.gui.progress_dialog.update_progress_bar(100)
             self.gui.root.update_idletasks()
     
-            print(f"File successfully stored in database with ID: {file_id} and name: {display_filename}")
+            print(f"SUCCESS: File successfully stored in database with ID: {file_id} and name: {display_filename}")
             
             # Mark as stored in cache
             self.stored_files_cache.add(original_file_path)
     
         except Exception as e:
-            print(f"Error storing file in database: {e}")
+            error_msg = f"Error storing file in database: {e}"
+            print(f"ERROR: {error_msg}")
             traceback.print_exc()
         finally:
             # Hide progress dialog
@@ -908,57 +968,59 @@ class FileManager:
             print("DEBUG: Test start menu was cancelled or closed")
 
     def extract_existing_header_data(self, file_path, selected_test):
-        """Extract existing header data from the Excel file."""
+        """Extract existing header data from the Excel file with corrected positioning."""
         print(f"DEBUG: Extracting header data from {file_path} for test {selected_test}")
         
         try:
             wb = openpyxl.load_workbook(file_path)
             
             if selected_test not in wb.sheetnames:
-                print(f"DEBUG: Sheet {selected_test} not found in file")
+                print(f"DEBUG: Sheet {selected_test} not found in file. Available sheets: {wb.sheetnames}")
                 return None
                 
             ws = wb[selected_test]
+            print(f"DEBUG: Successfully opened sheet '{selected_test}'")
             
-            # Extract tester name (often in A1 or nearby cells)
+            # Extract tester name from corrected position: row 3, column 4
+            tester_cell = ws.cell(row=3, column=4)
             tester = ""
-            for row in range(1, 4):
-                for col in range(1, 6):
-                    cell_value = ws.cell(row=row, column=col).value
-                    if cell_value and "tester" in str(cell_value).lower():
-                        if ":" in str(cell_value):
-                            tester_part = str(cell_value).split(":")[-1].strip()
-                            # Only use it if there's actually a name after the colon
-                            if tester_part and tester_part.lower() != "tester":
-                                tester = tester_part
-                        else:
-                            next_cell = ws.cell(row=row, column=col+1).value
-                            if next_cell:
-                                tester = str(next_cell).strip()
-                        break
-                if tester:
-                    break
+            if tester_cell.value:
+                tester_value = str(tester_cell.value)
+                # Remove any label prefix if present
+                if "tester:" in tester_value.lower():
+                    tester = tester_value.split(":", 1)[1].strip() if ":" in tester_value else ""
+                else:
+                    tester = tester_value.strip()
             
-            # Extract common data from known positions
+            print(f"DEBUG: Extracted tester: '{tester}' from cell D3: '{tester_cell.value}'")
+            
+            # Extract common data from corrected positions
             common_data = {
                 'tester': tester,
-                'media': str(ws.cell(row=2, column=2).value or ""),
-                'viscosity': str(ws.cell(row=3, column=2).value or ""),
-                'voltage': str(ws.cell(row=2, column=6).value or ""),
-                'oil_mass': str(ws.cell(row=2, column=8).value or "")
+                'media': str(ws.cell(row=2, column=2).value or ""),          # Row 2, Col B
+                'viscosity': str(ws.cell(row=3, column=2).value or ""),      # Row 3, Col B
+                'voltage': str(ws.cell(row=3, column=6).value or ""),        # Row 3, Col F (corrected)
+                'oil_mass': str(ws.cell(row=3, column=8).value or "")        # Row 3, Col H (corrected)
             }
             
-            # Extract sample data (check up to 10 samples)
+            print(f"DEBUG: Extracted common data with corrected positions: {common_data}")
+            
+            # Extract sample data (check up to 10 samples with 12-column blocks)
             samples = []
             sample_count = 0
             
             for i in range(10):
                 col_offset = i * 12
-                sample_id_cell = ws.cell(row=1, column=6 + col_offset)
-                resistance_cell = ws.cell(row=3, column=4 + col_offset)
+                sample_id_col = 6 + col_offset  # Column F + offset
+                resistance_col = 4 + col_offset  # Column D + offset
+                
+                sample_id_cell = ws.cell(row=1, column=sample_id_col)
+                resistance_cell = ws.cell(row=2, column=resistance_col)  # Corrected row
                 
                 sample_id = sample_id_cell.value
                 resistance = resistance_cell.value
+                
+                print(f"DEBUG: Sample {i+1} check - ID cell (row 1, col {sample_id_col}): '{sample_id}', Resistance cell (row 2, col {resistance_col}): '{resistance}'")
                 
                 # If we find a sample ID, this is a valid sample
                 if sample_id and str(sample_id).strip():
@@ -967,9 +1029,10 @@ class FileManager:
                         'resistance': str(resistance).strip() if resistance else ""
                     })
                     sample_count += 1
-                    print(f"DEBUG: Found sample {sample_count}: ID='{sample_id}', Resistance='{resistance}'")
+                    print(f"DEBUG: Found valid sample {sample_count}: ID='{sample_id}', Resistance='{resistance}'")
                 else:
                     # If no sample ID, we've reached the end of samples
+                    print(f"DEBUG: No more samples found after checking {i+1} positions")
                     break
             
             if sample_count == 0:
@@ -984,14 +1047,14 @@ class FileManager:
                 'num_samples': sample_count
             }
             
-            print(f"DEBUG: Extracted header data: {sample_count} samples, tester='{tester}'")
-            print(f"DEBUG: Common data: {common_data}")
+            print(f"DEBUG: Final extracted header data with corrected positions: {sample_count} samples")
             print(f"DEBUG: Samples: {samples}")
+            print(f"DEBUG: Common: {common_data}")
             
             return header_data
             
         except Exception as e:
-            print(f"DEBUG: Error extracting header data: {e}")
+            print(f"ERROR: Exception extracting header data: {e}")
             traceback.print_exc()
             return None
 
@@ -1058,6 +1121,11 @@ class FileManager:
         """Ensure the file is properly loaded in the UI without redundant processing."""
         print(f"DEBUG: Ensuring file {file_path} is loaded in UI")
         
+        # Validate file path
+        if not file_path or not os.path.exists(file_path):
+            print(f"ERROR: Invalid file path: {file_path}")
+            return False
+        
         # Check if file is already in the UI state
         file_name = os.path.basename(file_path)
         
@@ -1070,23 +1138,36 @@ class FileManager:
         
         if existing_entry:
             print("DEBUG: File already in UI state, just updating active file")
-            self.set_active_file(existing_entry["file_name"])
-            self.update_ui_for_current_file()
+            try:
+                self.set_active_file(existing_entry["file_name"])
+                self.update_ui_for_current_file()
+                return True
+            except Exception as e:
+                print(f"ERROR: Failed to set active file: {e}")
+                return False
         else:
             print("DEBUG: File not in UI state, adding it")
-            # Load file without database storage (skip_database_storage=True)
-            self.load_excel_file(file_path, skip_database_storage=True)
-            
-            # Add to all_filtered_sheets
-            self.gui.all_filtered_sheets.append({
-                "file_name": file_name,
-                "file_path": file_path,
-                "filtered_sheets": copy.deepcopy(self.gui.filtered_sheets)
-            })
-            
-            self.update_file_dropdown()
-            self.set_active_file(file_name)
-            self.update_ui_for_current_file()
+            try:
+                # Load file without database storage (skip_database_storage=True)
+                self.load_excel_file(file_path, skip_database_storage=True)
+                
+                # Add to all_filtered_sheets
+                self.gui.all_filtered_sheets.append({
+                    "file_name": file_name,
+                    "file_path": file_path,
+                    "filtered_sheets": copy.deepcopy(self.gui.filtered_sheets)
+                })
+                
+                self.update_file_dropdown()
+                self.set_active_file(file_name)
+                self.update_ui_for_current_file()
+                print(f"DEBUG: Successfully added file {file_name} to UI")
+                return True
+                
+            except Exception as e:
+                print(f"ERROR: Failed to load file into UI: {e}")
+                traceback.print_exc()
+                return False
 
     def show_header_data_dialog(self, file_path, selected_test):
         """Show the header data dialog for a selected test."""
@@ -1119,7 +1200,7 @@ class FileManager:
     def apply_header_data_to_file(self, file_path, header_data):
         """
         Apply the header data to the Excel file.
-        Enhanced to apply headers to all sample blocks, not just the first one.
+        Enhanced to correctly apply headers to all sample blocks with proper column mapping.
         """
         try:
             print(f"DEBUG: Applying header data to {file_path} for {header_data['num_samples']} samples")
@@ -1130,67 +1211,152 @@ class FileManager:
             # Get the sheet for the selected test
             if header_data["test"] in wb.sheetnames:
                 ws = wb[header_data["test"]]
+                
+                print(f"DEBUG: Successfully opened sheet '{header_data['test']}'")
             
-                # Apply sample-specific data first
+                # Apply sample-specific data for each sample block
                 num_samples = header_data["num_samples"]
                 for i in range(num_samples):
                     # Calculate column offset (12 columns per sample)
+                    # Sample blocks start at column 1, so offsets are 0, 12, 24, 36, etc.
                     col_offset = i * 12
                     
-                    print(f"DEBUG: Applying headers for sample {i+1} at column offset {col_offset}")
+                    print(f"DEBUG: Processing sample {i+1} with column offset {col_offset}")
                 
-                    # Sample ID (row 1, column F + offset)
-                    sample_id_col = 6 + col_offset  # Column F is 6
-                    ws.cell(row=1, column=sample_id_col, value=header_data["samples"][i]["id"])
-                    print(f"DEBUG: Set sample ID '{header_data['samples'][i]['id']}' at column {sample_id_col}")
+                    # Get sample data
+                    sample_data = header_data["samples"][i]
+                    sample_id = sample_data["id"]
+                    sample_resistance = sample_data["resistance"]
+                    
+                    print(f"DEBUG: Sample {i+1}: ID='{sample_id}', Resistance='{sample_resistance}'")
+                    
+                    # Apply sample-specific headers according to template structure:
+                    # Row 1: Sample ID goes in column F (6) + offset
+                    sample_id_col = 6 + col_offset
+                    ws.cell(row=1, column=sample_id_col, value=sample_id)
+                    print(f"DEBUG: Set sample ID '{sample_id}' at row 1, column {sample_id_col}")
+                    
+                    # Row 3: Resistance goes in column D (4) + offset  
+                    resistance_col = 4 + col_offset
+                    if sample_resistance:  # Only set if not empty
+                        try:
+                            # Try to convert to float for numeric storage
+                            resistance_value = float(sample_resistance)
+                            ws.cell(row=2, column=resistance_col, value=resistance_value)
+                        except ValueError:
+                            # If not numeric, store as string
+                            ws.cell(row=2, column=resistance_col, value=sample_resistance)
+                    print(f"DEBUG: Set resistance '{sample_resistance}' at row 2, column {resistance_col}")
                 
-                    # Resistance (row 3, column D + offset)
-                    resistance_col = 4 + col_offset  # Column D is 4
-                    ws.cell(row=3, column=resistance_col, value=header_data["samples"][i]["resistance"])
-                    print(f"DEBUG: Set resistance '{header_data['samples'][i]['resistance']}' at column {resistance_col}")
-                    
-                    # Apply common data to each sample block (NEW - this was missing!)
-                    # Media (row 2, column B + offset)
-                    if header_data["common"]["media"]:
-                        media_col = 2 + col_offset
-                        ws.cell(row=2, column=media_col, value=header_data["common"]["media"])
-                        print(f"DEBUG: Set media '{header_data['common']['media']}' at column {media_col}")
-                    
-                    # Viscosity (row 3, column B + offset)
-                    if header_data["common"]["viscosity"]:
-                        viscosity_col = 2 + col_offset
-                        ws.cell(row=3, column=viscosity_col, value=header_data["common"]["viscosity"])
-                        print(f"DEBUG: Set viscosity '{header_data['common']['viscosity']}' at column {viscosity_col}")
-                    
-                    # Voltage (row 2, column F + offset) - Note: this might overlap with sample ID
-                    # We'll put voltage in a different location for each sample block
-                    if header_data["common"]["voltage"]:
-                        voltage_col = 6 + col_offset  # Same as sample ID column, but row 2
-                        # Actually, let's put voltage in row 2, column E + offset to avoid conflict
-                        voltage_col = 5 + col_offset
-                        ws.cell(row=2, column=voltage_col, value=header_data["common"]["voltage"])
-                        print(f"DEBUG: Set voltage '{header_data['common']['voltage']}' at column {voltage_col}")
-                    
-                    # Oil mass (row 2, column H + offset)
-                    if header_data["common"]["oil_mass"]:
-                        oil_mass_col = 8 + col_offset
-                        ws.cell(row=2, column=oil_mass_col, value=header_data["common"]["oil_mass"])
-                        print(f"DEBUG: Set oil mass '{header_data['common']['oil_mass']}' at column {oil_mass_col}")
+                # Apply common data to the first sample block only (to avoid duplication)
+                # These are shared across all samples according to the template structure
+                common_data = header_data["common"]
+                
+                # Row 2, Column B (2): Media
+                if common_data["media"]:
+                    ws.cell(row=2, column=2, value=common_data["media"])
+                    print(f"DEBUG: Set media '{common_data['media']}' at row 2, column 2")
+                
+                # Row 3, Column B (2): Viscosity 
+                if common_data["viscosity"]:
+                    try:
+                        viscosity_value = float(common_data["viscosity"])
+                        ws.cell(row=3, column=2, value=viscosity_value)
+                    except ValueError:
+                        ws.cell(row=3, column=2, value=common_data["viscosity"])
+                    print(f"DEBUG: Set viscosity '{common_data['viscosity']}' at row 3, column 2")
+                
+                # Row 2, Column F (6): Voltage (in first sample block)
+                if common_data["voltage"]:
+                    try:
+                        voltage_value = float(common_data["voltage"])
+                        ws.cell(row=3, column=6, value=voltage_value)
+                    except ValueError:
+                        ws.cell(row=3, column=6, value=common_data["voltage"])
+                    print(f"DEBUG: Set voltage '{common_data['voltage']}' at row 2, column 6")
+                
+                # Row 2, Column H (8): Oil mass (in first sample block)
+                if common_data["oil_mass"]:
+                    try:
+                        oil_mass_value = float(common_data["oil_mass"])
+                        ws.cell(row=3, column=8, value=oil_mass_value)
+                    except ValueError:
+                        ws.cell(row=3, column=8, value=common_data["oil_mass"])
+                    print(f"DEBUG: Set oil mass '{common_data['oil_mass']}' at row 2, column 8")
             
-                # Add tester name to sheet A1 (only once, not per sample)
-                ws.cell(row=1, column=1, value=f"Tester: {header_data['common']['tester']}")
-                print(f"DEBUG: Set tester name '{header_data['common']['tester']}' in cell A1")
+                # Row 2, Column H (8): Puffing regime (CORRECTED - moved to where oil mass was)
+                # Note: We don't have puffing regime in our current form, but adding placeholder
+                puffing_regime = "Standard - 60mL/3s/30s"  # Default value or could be added to form later
+                ws.cell(row=2, column=8, value=puffing_regime)
+                print(f"DEBUG: Set puffing regime '{puffing_regime}' at row 2, column 8")
+
+                # Row 1, Column A (1): Tester name (only once, not per sample)
+                tester_text = f"Tester: {common_data['tester']}"
+                ws.cell(row=3, column=4, value=tester_text)
+                print(f"DEBUG: Set tester '{tester_text}' at row 1, column 1")
+                
+                # Add some header labels for better visibility (optional but helpful)
+                # These help identify what each field is for
+                for i in range(num_samples):
+                    col_offset = i * 12
+                    
+                    # Add "Sample ID:" label above the actual sample ID
+                    ws.cell(row=0, column=6 + col_offset, value="Sample ID:")
+                    
+                    # Add "Resistance (Ω):" label
+                    ws.cell(row=2, column=4 + col_offset, value="Resistance (Ω):")
+                    
+                    print(f"DEBUG: Added descriptive labels for sample {i+1}")
             
                 # Save the workbook
                 wb.save(file_path)
+                print(f"DEBUG: Successfully saved workbook to {file_path}")
             
-                print(f"Successfully applied header data to {file_path}")
+                print(f"SUCCESS: Applied header data for {num_samples} samples to {file_path}")
+                
+                # Verify the data was written correctly by reading it back
+                print("DEBUG: Verifying written data...")
+                verification_wb = openpyxl.load_workbook(file_path)
+                verification_ws = verification_wb[header_data["test"]]
+                
+                for i in range(num_samples):
+                    col_offset = i * 12
+                    sample_id_cell = verification_ws.cell(row=1, column=6 + col_offset)
+                    resistance_cell = verification_ws.cell(row=3, column=4 + col_offset)
+                    
+                    print(f"DEBUG: Verification - Sample {i+1}: ID='{sample_id_cell.value}', Resistance='{resistance_cell.value}'")
+                
+                # Verify common data
+                media_cell = verification_ws.cell(row=2, column=2)
+                viscosity_cell = verification_ws.cell(row=3, column=2)
+                voltage_cell = verification_ws.cell(row=3, column=6)  # Corrected row
+                oil_mass_cell = verification_ws.cell(row=3, column=8)  # Corrected row
+                puffing_regime_cell = verification_ws.cell(row=2, column=8)  # Corrected position
+                tester_cell = verification_ws.cell(row=3, column=4)  # Corrected position
+                
+                print(f"DEBUG: Verification - Common data:")
+                print(f"  Media (row 2, col 2): '{media_cell.value}'")
+                print(f"  Viscosity (row 3, col 2): '{viscosity_cell.value}'")
+                print(f"  Voltage (row 3, col 6): '{voltage_cell.value}'")
+                print(f"  Oil mass (row 3, col 8): '{oil_mass_cell.value}'")
+                print(f"  Puffing regime (row 2, col 8): '{puffing_regime_cell.value}'")
+                print(f"  Tester (row 3, col 4): '{tester_cell.value}'")
+
+                verification_wb.close()
+                print("DEBUG: Verification complete")
+                
             else:
-                messagebox.showerror("Error", f"Sheet '{header_data['test']}' not found in the file.")
+                error_msg = f"Sheet '{header_data['test']}' not found in the file. Available sheets: {wb.sheetnames}"
+                print(f"ERROR: {error_msg}")
+                messagebox.showerror("Error", error_msg)
+                
         except Exception as e:
-            print(f"DEBUG: Error applying header data: {e}")
+            error_msg = f"Error applying header data: {str(e)}"
+            print(f"ERROR: {error_msg}")
+            print("DEBUG: Full traceback:")
             traceback.print_exc()
-            messagebox.showerror("Error", f"An error occurred while applying header data: {str(e)}")
+            messagebox.showerror("Error", error_msg)
+
 
     def start_file_loading_wrapper(self, startup_menu: tk.Toplevel) -> None:
         """Handle the 'Load' button click in the startup menu."""

@@ -1175,6 +1175,33 @@ Developed by Charlie Becquet
             # Only mark as changed if value actually changed
             if old_value != value:
                 self.mark_unsaved_changes()
+                print(f"DEBUG: Updated {column_name} at row {row_idx} from '{old_value}' to '{value}'")
+
+                # AUTO-WEIGHT PROGRESSION: If after_weight was changed, update next row's before_weight
+                if column_name == "after_weight" and value.strip():
+                    try:
+                        # Convert to float to validate it's a number
+                        after_weight_value = float(value.strip())
+                        
+                        # Check if there's a next row
+                        next_row_idx = row_idx + 1
+                        if next_row_idx < len(self.data[sample_id]["before_weight"]):
+                            # Set the next row's before_weight to this row's after_weight
+                            self.data[sample_id]["before_weight"][next_row_idx] = value.strip()
+                            print(f"DEBUG: Auto-progression: Set before_weight at row {next_row_idx} to '{value.strip()}'")
+                            
+                            # Update the tree display for the next row
+                            next_item = tree.get_children()[next_row_idx] if next_row_idx < len(tree.get_children()) else None
+                            if next_item:
+                                next_values = list(tree.item(next_item, "values"))
+                                next_values[1] = value.strip()  # before_weight is column index 1
+                                tree.item(next_item, values=next_values)
+                                print(f"DEBUG: Updated tree display for next row's before_weight")
+                        else:
+                            print(f"DEBUG: No next row available for auto-progression")
+                            
+                    except ValueError:
+                        print(f"DEBUG: Cannot auto-progress - after_weight '{value}' is not a valid number")
 
         # Update the tree
         col_idx = int(column[1:]) - 1
@@ -1186,6 +1213,7 @@ Developed by Charlie Becquet
         if column_name in ["before_weight", "after_weight"]:
             self.calculate_tpm(sample_id)
             self.update_stats_panel()
+            print(f"DEBUG: Recalculated TPM after weight change")
 
         # End the current edit BEFORE navigation
         self.end_editing()
@@ -1201,41 +1229,119 @@ Developed by Charlie Becquet
                 self.handle_arrow_key(event, tree, sample_id, "right")
             elif event.keysym == "Left":
                 self.handle_arrow_key(event, tree, sample_id, "left")
+                
+        print(f"DEBUG: Edit finished successfully for {column_name} at row {row_idx}")
     
     def calculate_tpm(self, sample_id):
         """Calculate TPM for all rows with before and after weights."""
+        print(f"DEBUG: Calculating TPM for {sample_id}")
+        
+        calculated_count = 0
         for i in range(len(self.data[sample_id]["puffs"])):
             try:
                 before_weight_str = self.data[sample_id]["before_weight"][i]
                 after_weight_str = self.data[sample_id]["after_weight"][i]
                 
-                # Skip if either weight is missing
+                # Skip if either weight is missing or empty
                 if not before_weight_str or not after_weight_str:
                     continue
                     
+                # Convert to float
                 before_weight = float(before_weight_str)
                 after_weight = float(after_weight_str)
                 
+                # Validate that before_weight > after_weight (material was consumed)
+                if before_weight <= after_weight:
+                    print(f"DEBUG: Row {i}: Invalid weights - before ({before_weight}) <= after ({after_weight})")
+                    continue
+                
                 puff_interval = self.data[sample_id]["puffs"][i]
                 
-                # Calculate TPM
+                # Calculate puffs in this interval
                 if i > 0:
                     prev_puff = self.data[sample_id]["puffs"][i - 1]
                     puffs_in_interval = puff_interval - prev_puff
                 else:
                     puffs_in_interval = puff_interval
                 
-                if puffs_in_interval > 0 and before_weight > after_weight:
-                    tpm = (before_weight - after_weight) / puffs_in_interval
+                # Calculate TPM (Total Particulate Matter per puff)
+                if puffs_in_interval > 0:
+                    weight_consumed = before_weight - after_weight  # in grams
+                    tpm = (weight_consumed * 1000) / puffs_in_interval  # Convert to mg per puff
                     
                     # Ensure tpm list is long enough
                     while len(self.data[sample_id]["tpm"]) <= i:
                         self.data[sample_id]["tpm"].append(None)
                         
                     self.data[sample_id]["tpm"][i] = round(tpm, 6)
+                    calculated_count += 1
+                    
+                    print(f"DEBUG: Row {i}: TPM = {tpm:.6f} mg/puff (weight consumed: {weight_consumed:.6f}g over {puffs_in_interval} puffs)")
+                else:
+                    print(f"DEBUG: Row {i}: Invalid puff interval: {puffs_in_interval}")
                     
             except (ValueError, TypeError, ZeroDivisionError) as e:
-                print(f"Error calculating TPM: {e}")
+                print(f"DEBUG: Error calculating TPM for row {i}: {e}")
+                # Ensure tpm list is long enough even for failed calculations
+                while len(self.data[sample_id]["tpm"]) <= i:
+                    self.data[sample_id]["tpm"].append(None)
+                
+        print(f"DEBUG: TPM calculation complete for {sample_id}: {calculated_count} values calculated")
+        
+        # Update average TPM for the sample
+        valid_tpm_values = [v for v in self.data[sample_id]["tpm"] if v is not None]
+        if valid_tpm_values:
+            self.data[sample_id]["avg_tpm"] = sum(valid_tpm_values) / len(valid_tpm_values)
+            print(f"DEBUG: Average TPM for {sample_id}: {self.data[sample_id]['avg_tpm']:.6f} mg/puff")
+        else:
+            self.data[sample_id]["avg_tpm"] = 0.0
+            print(f"DEBUG: No valid TPM values for {sample_id}")
+
+    def validate_weight_entry(self, sample_id, row_idx, column_name, value):
+        """
+        Validate weight entries to ensure data consistency.
+        Returns True if valid, False otherwise.
+        """
+        try:
+            if not value or not value.strip():
+                return True  # Empty values are allowed
+                
+            weight_value = float(value.strip())
+            
+            # Check for reasonable weight values (between 0.001g and 100g)
+            if weight_value < 0.001 or weight_value > 100:
+                print(f"WARNING: Weight value {weight_value}g seems unreasonable for row {row_idx}")
+                return False
+                
+            # If this is an after_weight, check that it's less than before_weight
+            if column_name == "after_weight":
+                before_weight_str = self.data[sample_id]["before_weight"][row_idx]
+                if before_weight_str and before_weight_str.strip():
+                    try:
+                        before_weight = float(before_weight_str.strip())
+                        if weight_value >= before_weight:
+                            print(f"WARNING: After weight ({weight_value}g) should be less than before weight ({before_weight}g)")
+                            return False
+                    except ValueError:
+                        pass
+                        
+            # If this is a before_weight, check that it's greater than after_weight
+            elif column_name == "before_weight":
+                after_weight_str = self.data[sample_id]["after_weight"][row_idx]
+                if after_weight_str and after_weight_str.strip():
+                    try:
+                        after_weight = float(after_weight_str.strip())
+                        if weight_value <= after_weight:
+                            print(f"WARNING: Before weight ({weight_value}g) should be greater than after weight ({after_weight}g)")
+                            return False
+                    except ValueError:
+                        pass
+                        
+            return True
+            
+        except ValueError:
+            print(f"ERROR: Invalid weight value '{value}' - must be a number")
+            return False
     
     # Add remaining methods from your original implementation
     # (All the editing, navigation, and UI interaction methods)

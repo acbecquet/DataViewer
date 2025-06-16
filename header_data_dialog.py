@@ -205,17 +205,34 @@ class HeaderDataDialog:
             row=6, column=1, sticky="ew", padx=(10, 0), pady=5
         )
         
+        # Puffing Regime (NEW FIELD)
+        ttk.Label(
+            self.form_frame, 
+            text="Puffing Regime:", 
+            foreground="white",
+            background=APP_BACKGROUND_COLOR
+        ).grid(row=7, column=0, sticky="w", pady=5)
+        
+        self.puffing_regime_var = tk.StringVar(value="Standard")  # Default value
+        puffing_regime_combo = ttk.Combobox(
+            self.form_frame,
+            textvariable=self.puffing_regime_var,
+            values=["Standard", "Intense", "Rapid", "Long Puff", "Custom"],
+            width=27
+        )
+        puffing_regime_combo.grid(row=7, column=1, sticky="ew", padx=(10, 0), pady=5)
+        
         # Initial Oil Mass
         ttk.Label(
             self.form_frame, 
             text="Initial Oil Mass (g):", 
             foreground="white",
             background=APP_BACKGROUND_COLOR
-        ).grid(row=7, column=0, sticky="w", pady=5)
+        ).grid(row=8, column=0, sticky="w", pady=5)
         
         self.oil_mass_var = tk.StringVar()
         ttk.Entry(self.form_frame, textvariable=self.oil_mass_var, width=30).grid(
-            row=7, column=1, sticky="ew", padx=(10, 0), pady=5
+            row=8, column=1, sticky="ew", padx=(10, 0), pady=5
         )
         
         # Configure grid
@@ -234,7 +251,7 @@ class HeaderDataDialog:
         
         # Buttons
         button_frame = ttk.Frame(self.form_frame)
-        button_frame.grid(row=8, column=0, columnspan=4, sticky="ew", pady=(20, 0))
+        button_frame.grid(row=9, column=0, columnspan=4, sticky="ew", pady=(20, 0))
         
         ttk.Button(button_frame, text="Cancel", command=self.on_cancel).pack(side="right")
         
@@ -258,6 +275,7 @@ class HeaderDataDialog:
             self.media_var.set(common_data.get('media', ''))
             self.viscosity_var.set(str(common_data.get('viscosity', '')))
             self.voltage_var.set(str(common_data.get('voltage', '')))
+            self.puffing_regime_var.set(common_data.get('puffing_regime', 'Standard'))  # NEW
             self.oil_mass_var.set(str(common_data.get('oil_mass', '')))
             
             samples_data = self.existing_data.get('samples', [])
@@ -267,6 +285,7 @@ class HeaderDataDialog:
             self.media_var.set(self.existing_data.get('media', ''))
             self.viscosity_var.set(str(self.existing_data.get('viscosity', '')))
             self.voltage_var.set(str(self.existing_data.get('voltage', '')))
+            self.puffing_regime_var.set(self.existing_data.get('puffing_regime', 'Standard'))  # NEW
             self.oil_mass_var.set(str(self.existing_data.get('oil_mass', '')))
             
             samples_data = self.existing_data.get('samples', [])
@@ -451,12 +470,13 @@ class HeaderDataDialog:
         
         num_samples = self.num_samples_var.get()
         
-        # Common data
+        # Common data (including new puffing_regime field)
         common_data = {
             "tester": self.tester_var.get().strip(),
             "media": self.media_var.get().strip(),
             "viscosity": self.viscosity_var.get().strip(),
             "voltage": self.voltage_var.get().strip(),
+            "puffing_regime": self.puffing_regime_var.get().strip(),  # NEW
             "oil_mass": self.oil_mass_var.get().strip()
         }
         
@@ -476,7 +496,7 @@ class HeaderDataDialog:
             "num_samples": num_samples
         }
         
-        print(f"DEBUG: Collected header data for {num_samples} samples")
+        print(f"DEBUG: Collected header data for {num_samples} samples with puffing regime: {common_data['puffing_regime']}")
         return header_data
     
     def on_continue(self):
