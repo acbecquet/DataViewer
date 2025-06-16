@@ -1204,39 +1204,46 @@ class FileManager:
         """
         try:
             print(f"DEBUG: Applying header data to {file_path} for {header_data['num_samples']} samples")
-            
+        
             # Load the workbook
             wb = openpyxl.load_workbook(file_path)
-        
+
             # Get the sheet for the selected test
             if header_data["test"] in wb.sheetnames:
                 ws = wb[header_data["test"]]
-                
-                print(f"DEBUG: Successfully opened sheet '{header_data['test']}'")
             
+                print(f"DEBUG: Successfully opened sheet '{header_data['test']}'")
+
+                # Set the test name at row 1, column 1 (this should be done once)
+                ws.cell(row=1, column=1, value=header_data["test"])
+                print(f"DEBUG: Set test name '{header_data['test']}' at row 1, column 1")
+
+                # Get common data once
+                common_data = header_data["common"]
+
                 # Apply sample-specific data for each sample block
                 num_samples = header_data["num_samples"]
                 for i in range(num_samples):
                     # Calculate column offset (12 columns per sample)
                     # Sample blocks start at column 1, so offsets are 0, 12, 24, 36, etc.
                     col_offset = i * 12
-                    
-                    print(f"DEBUG: Processing sample {i+1} with column offset {col_offset}")
                 
+                    print(f"DEBUG: Processing sample {i+1} with column offset {col_offset}")
+            
                     # Get sample data
                     sample_data = header_data["samples"][i]
                     sample_id = sample_data["id"]
                     sample_resistance = sample_data["resistance"]
-                    
+                
                     print(f"DEBUG: Sample {i+1}: ID='{sample_id}', Resistance='{sample_resistance}'")
-                    
+                
                     # Apply sample-specific headers according to template structure:
                     # Row 1: Sample ID goes in column F (6) + offset
                     sample_id_col = 6 + col_offset
                     ws.cell(row=1, column=sample_id_col, value=sample_id)
                     print(f"DEBUG: Set sample ID '{sample_id}' at row 1, column {sample_id_col}")
-                    
-                    # Row 3: Resistance goes in column D (4) + offset  
+                
+                    # Row 2: Resistance goes in column D (4) + offset  
                     resistance_col = 4 + col_offset
                     if sample_resistance:  # Only set if not empty
                         try:
@@ -1247,116 +1254,102 @@ class FileManager:
                             # If not numeric, store as string
                             ws.cell(row=2, column=resistance_col, value=sample_resistance)
                     print(f"DEBUG: Set resistance '{sample_resistance}' at row 2, column {resistance_col}")
-                
-                # Apply common data to the first sample block only (to avoid duplication)
-                # These are shared across all samples according to the template structure
-                common_data = header_data["common"]
-                
-                # Row 2, Column B (2): Media
-                if common_data["media"]:
-                    ws.cell(row=2, column=2, value=common_data["media"])
-                    print(f"DEBUG: Set media '{common_data['media']}' at row 2, column 2")
-                
-                # Row 3, Column B (2): Viscosity 
-                if common_data["viscosity"]:
-                    try:
-                        viscosity_value = float(common_data["viscosity"])
-                        ws.cell(row=3, column=2, value=viscosity_value)
-                    except ValueError:
-                        ws.cell(row=3, column=2, value=common_data["viscosity"])
-                    print(f"DEBUG: Set viscosity '{common_data['viscosity']}' at row 3, column 2")
-                
-                # Row 2, Column F (6): Voltage (in first sample block)
-                if common_data["voltage"]:
-                    try:
-                        voltage_value = float(common_data["voltage"])
-                        ws.cell(row=3, column=6, value=voltage_value)
-                    except ValueError:
-                        ws.cell(row=3, column=6, value=common_data["voltage"])
-                    print(f"DEBUG: Set voltage '{common_data['voltage']}' at row 2, column 6")
-                
-                # Row 2, Column H (8): Oil mass (in first sample block)
-                if common_data["oil_mass"]:
-                    try:
-                        oil_mass_value = float(common_data["oil_mass"])
-                        ws.cell(row=3, column=8, value=oil_mass_value)
-                    except ValueError:
-                        ws.cell(row=3, column=8, value=common_data["oil_mass"])
-                    print(f"DEBUG: Set oil mass '{common_data['oil_mass']}' at row 2, column 8")
-            
-                # Row 2, Column H (8): Puffing regime (CORRECTED - moved to where oil mass was)
-                # Note: We don't have puffing regime in our current form, but adding placeholder
-                puffing_regime = "Standard - 60mL/3s/30s"  # Default value or could be added to form later
-                ws.cell(row=2, column=8, value=puffing_regime)
-                print(f"DEBUG: Set puffing regime '{puffing_regime}' at row 2, column 8")
 
-                # Row 1, Column A (1): Tester name (only once, not per sample)
-                tester_text = f"Tester: {common_data['tester']}"
-                ws.cell(row=3, column=4, value=tester_text)
-                print(f"DEBUG: Set tester '{tester_text}' at row 1, column 1")
+                    # FIXED: Set tester for each sample at row 3, column D (4) + offset (just name, no "Tester:" prefix)
+                    tester_col = 4 + col_offset
+                    tester_name = header_data['common']['tester']  # Just the name
+                    ws.cell(row=3, column=tester_col, value=tester_name)
+                    print(f"DEBUG: Set tester '{tester_name}' at row 3, column {tester_col} for sample {i+1}")
+
+                    # FIXED: Apply common data to EACH sample block (not just the first one)
+                    # Row 2, Column B (2) + offset: Media
+                    if common_data["media"]:
+                        media_col = 2 + col_offset
+                        ws.cell(row=2, column=media_col, value=common_data["media"])
+                        print(f"DEBUG: Set media '{common_data['media']}' at row 2, column {media_col} for sample {i+1}")
                 
-                # Add some header labels for better visibility (optional but helpful)
-                # These help identify what each field is for
-                for i in range(num_samples):
-                    col_offset = i * 12
-                    
-                    # Add "Sample ID:" label above the actual sample ID
-                    ws.cell(row=0, column=6 + col_offset, value="Sample ID:")
-                    
-                    # Add "Resistance (Ω):" label
-                    ws.cell(row=2, column=4 + col_offset, value="Resistance (Ω):")
-                    
-                    print(f"DEBUG: Added descriptive labels for sample {i+1}")
+                    # Row 3, Column B (2) + offset: Viscosity 
+                    if common_data["viscosity"]:
+                        viscosity_col = 2 + col_offset
+                        try:
+                            viscosity_value = float(common_data["viscosity"])
+                            ws.cell(row=3, column=viscosity_col, value=viscosity_value)
+                        except ValueError:
+                            ws.cell(row=3, column=viscosity_col, value=common_data["viscosity"])
+                        print(f"DEBUG: Set viscosity '{common_data['viscosity']}' at row 3, column {viscosity_col} for sample {i+1}")
+                
+                    # Row 3, Column F (6) + offset: Voltage
+                    if common_data["voltage"]:
+                        voltage_col = 6 + col_offset
+                        try:
+                            voltage_value = float(common_data["voltage"])
+                            ws.cell(row=3, column=voltage_col, value=voltage_value)
+                        except ValueError:
+                            ws.cell(row=3, column=voltage_col, value=common_data["voltage"])
+                        print(f"DEBUG: Set voltage '{common_data['voltage']}' at row 3, column {voltage_col} for sample {i+1}")
+                
+                    # Row 3, Column H (8) + offset: Oil mass
+                    if common_data["oil_mass"]:
+                        oil_mass_col = 8 + col_offset
+                        try:
+                            oil_mass_value = float(common_data["oil_mass"])
+                            ws.cell(row=3, column=oil_mass_col, value=oil_mass_value)
+                        except ValueError:
+                            ws.cell(row=3, column=oil_mass_col, value=common_data["oil_mass"])
+                        print(f"DEBUG: Set oil mass '{common_data['oil_mass']}' at row 3, column {oil_mass_col} for sample {i+1}")
             
+                    # Row 2, Column G (7) + offset: Puffing regime
+                    puffing_regime = header_data['common'].get('puffing_regime', "Standard - 60mL/3s/30s")
+                    puffing_regime_col = 7 + col_offset
+                    ws.cell(row=2, column=puffing_regime_col, value=puffing_regime)
+                    print(f"DEBUG: Set puffing regime '{puffing_regime}' at row 2, column {puffing_regime_col} for sample {i+1}")
+        
                 # Save the workbook
                 wb.save(file_path)
                 print(f"DEBUG: Successfully saved workbook to {file_path}")
-            
+        
                 print(f"SUCCESS: Applied header data for {num_samples} samples to {file_path}")
-                
+            
                 # Verify the data was written correctly by reading it back
                 print("DEBUG: Verifying written data...")
                 verification_wb = openpyxl.load_workbook(file_path)
                 verification_ws = verification_wb[header_data["test"]]
-                
+            
+                # Verify test name at row 1, column 1
+                test_name_cell = verification_ws.cell(row=1, column=1)
+                print(f"DEBUG: Verification - Test name at row 1, col 1: '{test_name_cell.value}'")
+            
                 for i in range(num_samples):
                     col_offset = i * 12
                     sample_id_cell = verification_ws.cell(row=1, column=6 + col_offset)
-                    resistance_cell = verification_ws.cell(row=3, column=4 + col_offset)
-                    
-                    print(f"DEBUG: Verification - Sample {i+1}: ID='{sample_id_cell.value}', Resistance='{resistance_cell.value}'")
+                    resistance_cell = verification_ws.cell(row=2, column=4 + col_offset)
+                    tester_cell = verification_ws.cell(row=3, column=4 + col_offset)
+                    media_cell = verification_ws.cell(row=2, column=2 + col_offset)
+                    viscosity_cell = verification_ws.cell(row=3, column=2 + col_offset)
+                    voltage_cell = verification_ws.cell(row=3, column=6 + col_offset)
+                    oil_mass_cell = verification_ws.cell(row=3, column=8 + col_offset)
+                    puffing_regime_cell = verification_ws.cell(row=2, column=7 + col_offset)
                 
-                # Verify common data
-                media_cell = verification_ws.cell(row=2, column=2)
-                viscosity_cell = verification_ws.cell(row=3, column=2)
-                voltage_cell = verification_ws.cell(row=3, column=6)  # Corrected row
-                oil_mass_cell = verification_ws.cell(row=3, column=8)  # Corrected row
-                puffing_regime_cell = verification_ws.cell(row=2, column=8)  # Corrected position
-                tester_cell = verification_ws.cell(row=3, column=4)  # Corrected position
-                
-                print(f"DEBUG: Verification - Common data:")
-                print(f"  Media (row 2, col 2): '{media_cell.value}'")
-                print(f"  Viscosity (row 3, col 2): '{viscosity_cell.value}'")
-                print(f"  Voltage (row 3, col 6): '{voltage_cell.value}'")
-                print(f"  Oil mass (row 3, col 8): '{oil_mass_cell.value}'")
-                print(f"  Puffing regime (row 2, col 8): '{puffing_regime_cell.value}'")
-                print(f"  Tester (row 3, col 4): '{tester_cell.value}'")
+                    print(f"DEBUG: Verification - Sample {i+1}:")
+                    print(f"  ID='{sample_id_cell.value}', Resistance='{resistance_cell.value}', Tester='{tester_cell.value}'")
+                    print(f"  Media='{media_cell.value}', Viscosity='{viscosity_cell.value}'")
+                    print(f"  Voltage='{voltage_cell.value}', Oil mass='{oil_mass_cell.value}'")
+                    print(f"  Puffing regime='{puffing_regime_cell.value}'")
 
                 verification_wb.close()
                 print("DEBUG: Verification complete")
-                
+            
             else:
                 error_msg = f"Sheet '{header_data['test']}' not found in the file. Available sheets: {wb.sheetnames}"
                 print(f"ERROR: {error_msg}")
                 messagebox.showerror("Error", error_msg)
-                
+            
         except Exception as e:
             error_msg = f"Error applying header data: {str(e)}"
             print(f"ERROR: {error_msg}")
             print("DEBUG: Full traceback:")
             traceback.print_exc()
             messagebox.showerror("Error", error_msg)
-
 
     def start_file_loading_wrapper(self, startup_menu: tk.Toplevel) -> None:
         """Handle the 'Load' button click in the startup menu."""

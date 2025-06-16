@@ -1156,9 +1156,9 @@ Developed by Charlie Becquet
         """Save the current edit and move to the next cell if needed."""
         if not self.editing or not hasattr(self, 'current_edit'):
             return
-    
+
         print(f"DEBUG: Finishing edit, event: {event.keysym if event else 'None'}")
-    
+
         value = self.current_edit["entry"].get()
         tree = self.current_edit["tree"]
         item = self.current_edit["item"]
@@ -1171,7 +1171,7 @@ Developed by Charlie Becquet
         if row_idx < len(self.data[sample_id][column_name]):
             old_value = self.data[sample_id][column_name][row_idx]
             self.data[sample_id][column_name][row_idx] = value
-            
+        
             # Only mark as changed if value actually changed
             if old_value != value:
                 self.mark_unsaved_changes()
@@ -1182,14 +1182,14 @@ Developed by Charlie Becquet
                     try:
                         # Convert to float to validate it's a number
                         after_weight_value = float(value.strip())
-                        
+                    
                         # Check if there's a next row
                         next_row_idx = row_idx + 1
                         if next_row_idx < len(self.data[sample_id]["before_weight"]):
                             # Set the next row's before_weight to this row's after_weight
                             self.data[sample_id]["before_weight"][next_row_idx] = value.strip()
                             print(f"DEBUG: Auto-progression: Set before_weight at row {next_row_idx} to '{value.strip()}'")
-                            
+                        
                             # Update the tree display for the next row
                             next_item = tree.get_children()[next_row_idx] if next_row_idx < len(tree.get_children()) else None
                             if next_item:
@@ -1199,7 +1199,7 @@ Developed by Charlie Becquet
                                 print(f"DEBUG: Updated tree display for next row's before_weight")
                         else:
                             print(f"DEBUG: No next row available for auto-progression")
-                            
+                        
                     except ValueError:
                         print(f"DEBUG: Cannot auto-progress - after_weight '{value}' is not a valid number")
 
@@ -1209,27 +1209,27 @@ Developed by Charlie Becquet
         values[col_idx] = value
         tree.item(item, values=values)
 
-        # Calculate TPM if weight was changed
-        if column_name in ["before_weight", "after_weight"]:
+        # ENHANCED: Calculate TPM if weight OR puffs was changed
+        if column_name in ["before_weight", "after_weight", "puffs"]:
             self.calculate_tpm(sample_id)
             self.update_stats_panel()
-            print(f"DEBUG: Recalculated TPM after weight change")
+            print(f"DEBUG: Recalculated TPM after {column_name} change")
 
         # End the current edit BEFORE navigation
         self.end_editing()
-    
+
         # Don't handle navigation here if Tab was pressed - it will be handled by handle_tab_in_edit
         if event and event.keysym == "Tab":
             print("DEBUG: Tab navigation will be handled by handle_tab_in_edit")
             return
-    
+
         # Handle other navigation keys
         if event and event.keysym in ["Right", "Left"]:
             if event.keysym == "Right":
                 self.handle_arrow_key(event, tree, sample_id, "right")
             elif event.keysym == "Left":
                 self.handle_arrow_key(event, tree, sample_id, "left")
-                
+            
         print(f"DEBUG: Edit finished successfully for {column_name} at row {row_idx}")
     
     def calculate_tpm(self, sample_id):
@@ -1455,8 +1455,8 @@ Developed by Charlie Becquet
         row_idx = tree.index(item)
         col_idx = int(column[1:]) - 1
 
-        if col_idx == 0:
-            return  # Don't allow editing 'puffs' column
+        # REMOVED: if col_idx == 0: return  # Don't allow editing 'puffs' column
+        # Now puffs column (col_idx == 0) is editable
 
         column_name = ["puffs", "before_weight", "after_weight", "draw_pressure", "smell", "notes"][col_idx]
 
@@ -1774,57 +1774,53 @@ Developed by Charlie Becquet
         """Handle Tab key press in the treeview."""
         if self.editing:
             return "break"  # Already handled in edit mode
-            
+        
         # Get the current selection
         item = tree.focus()
         if not item:
-            # Select the first item and the first editable column
+            # Select the first item and the first column (puffs - now editable)
             if tree.get_children():
                 item = tree.get_children()[0]
                 tree.selection_set(item)
                 tree.focus(item)
-                self.edit_cell(tree, item, "#2", 0, sample_id, "before_weight")
+                self.edit_cell(tree, item, "#1", 0, sample_id, "puffs")  # Start with puffs column
             return "break"
-            
+        
         # Get the current column
         column = tree.identify_column(event.x) if event else None
         if not column:
-            # Start at the first editable column
-            column = "#2"
-            
+            # Start at the first column (puffs)
+            column = "#1"
+        
         # Get column index (1-based)
         col_idx = int(column[1:])
-        
+    
         # Get next column
         next_col_idx = col_idx + 1
-        
-        # If at the last column, move to the first editable column of the next row
+    
+        # If at the last column, move to the first column of the next row
         if next_col_idx > 6:  # We have 6 columns
             # Get the next item
             items = tree.get_children()
             idx = items.index(item)
-            
+        
             if idx < len(items) - 1:
                 # Move to next row
                 next_item = items[idx + 1]
                 tree.selection_set(next_item)
                 tree.focus(next_item)
                 tree.see(next_item)
-                
-                # Edit the first editable column
-                self.edit_cell(tree, next_item, "#2", idx + 1, sample_id, "before_weight")
+            
+                # Edit the first column (puffs - now editable)
+                self.edit_cell(tree, next_item, "#1", idx + 1, sample_id, "puffs")
             else:
                 # At the last row, move to next sample
                 self.go_to_next_sample()
         else:
-            # Skip the puffs column
-            if next_col_idx == 1:
-                next_col_idx = 2
-                
             # Edit the next column in the same row
             self.current_column = f"#{next_col_idx}"
             self.highlight_cell(tree, item, self.current_column)
-            
+        
         return "break"  # Stop event propagation
 
     def handle_arrow_key(self, event, tree, sample_id, direction):
