@@ -1255,13 +1255,13 @@ class FileManager:
                             ws.cell(row=2, column=resistance_col, value=sample_resistance)
                     print(f"DEBUG: Set resistance '{sample_resistance}' at row 2, column {resistance_col}")
 
-                    # FIXED: Set tester for each sample at row 3, column D (4) + offset (just name, no "Tester:" prefix)
+                    # Set tester for each sample at row 3, column D (4) + offset (just name, no "Tester:" prefix)
                     tester_col = 4 + col_offset
                     tester_name = header_data['common']['tester']  # Just the name
                     ws.cell(row=3, column=tester_col, value=tester_name)
                     print(f"DEBUG: Set tester '{tester_name}' at row 3, column {tester_col} for sample {i+1}")
 
-                    # FIXED: Apply common data to EACH sample block (not just the first one)
+                    # Apply common data to EACH sample block (not just the first one)
                     # Row 2, Column B (2) + offset: Media
                     if common_data["media"]:
                         media_col = 2 + col_offset
@@ -1303,6 +1303,19 @@ class FileManager:
                     puffing_regime_col = 7 + col_offset
                     ws.cell(row=2, column=puffing_regime_col, value=puffing_regime)
                     print(f"DEBUG: Set puffing regime '{puffing_regime}' at row 2, column {puffing_regime_col} for sample {i+1}")
+
+                # NEW: Delete extra columns after the last sample to clean up data visualization
+                last_sample_column = num_samples * 12  # 12 columns per sample
+                max_column = ws.max_column
+            
+                if max_column > last_sample_column:
+                    print(f"DEBUG: Deleting extra columns {last_sample_column + 1} to {max_column}")
+                    # Delete columns from (last_sample_column + 1) to max_column
+                    for col in range(max_column, last_sample_column, -1):  # Delete from right to left
+                        ws.delete_cols(col)
+                    print(f"DEBUG: Deleted {max_column - last_sample_column} extra columns")
+                else:
+                    print(f"DEBUG: No extra columns to delete. Last sample column: {last_sample_column}, Max column: {max_column}")
         
                 # Save the workbook
                 wb.save(file_path)
@@ -1318,6 +1331,10 @@ class FileManager:
                 # Verify test name at row 1, column 1
                 test_name_cell = verification_ws.cell(row=1, column=1)
                 print(f"DEBUG: Verification - Test name at row 1, col 1: '{test_name_cell.value}'")
+            
+                # Verify column count
+                final_max_column = verification_ws.max_column
+                print(f"DEBUG: Verification - Final max column: {final_max_column} (expected: {last_sample_column})")
             
                 for i in range(num_samples):
                     col_offset = i * 12
