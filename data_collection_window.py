@@ -1313,32 +1313,33 @@ Developed by Charlie Becquet
     def refresh_main_gui_after_save(self):
         """Refresh the main GUI to show updated data after saving."""
         print("DEBUG: Refreshing main GUI after data collection save")
-    
+
         try:
             # Check if we have a valid parent (main GUI)
             if not hasattr(self, 'parent') or not self.parent:
                 print("DEBUG: No parent GUI reference, skipping refresh")
                 return
-            
+        
             # Get the current sheet name for later restoration
             current_sheet = getattr(self.parent, 'selected_sheet', None)
             current_sheet_name = current_sheet.get() if current_sheet else None
-        
+    
             print(f"DEBUG: Current sheet before refresh: {current_sheet_name}")
-        
+    
             # Reload the file data in the main GUI
             if hasattr(self.parent, 'file_manager') and self.parent.file_manager:
                 print("DEBUG: Reloading file data through file manager")
-            
+        
                 # Use the file manager to reload the current file
                 if hasattr(self.parent, 'file_path') and self.parent.file_path:
-                    # Skip database storage since we're just refreshing
+                    # FIXED: Add force_reload=True to bypass cache and reload updated data
                     self.parent.file_manager.load_excel_file(
                         self.parent.file_path, 
-                        skip_database_storage=True
+                        skip_database_storage=True,
+                        force_reload=True  # <-- This forces reload from disk
                     )
-                    print("DEBUG: File data reloaded successfully")
-                
+                    print("DEBUG: File data reloaded successfully with force_reload=True")
+            
                     # Update the filtered sheets in the current file entry
                     if hasattr(self.parent, 'all_filtered_sheets') and hasattr(self.parent, 'current_file'):
                         for file_data in self.parent.all_filtered_sheets:
@@ -1346,12 +1347,12 @@ Developed by Charlie Becquet
                                 file_data["filtered_sheets"] = copy.deepcopy(self.parent.filtered_sheets)
                                 print(f"DEBUG: Updated filtered_sheets for {self.parent.current_file}")
                                 break
-        
+    
             # Update the sheet dropdown (in case new sheets were added)
             if hasattr(self.parent, 'populate_or_update_sheet_dropdown'):
                 self.parent.populate_or_update_sheet_dropdown()
                 print("DEBUG: Updated sheet dropdown")
-        
+    
             # Restore the current sheet selection if it still exists
             if current_sheet_name and hasattr(self.parent, 'filtered_sheets'):
                 if current_sheet_name in self.parent.filtered_sheets:
@@ -1366,19 +1367,19 @@ Developed by Charlie Becquet
                         if current_sheet:
                             current_sheet.set(first_sheet)
                         current_sheet_name = first_sheet
-        
+    
             # Update the displayed sheet to show the new data
             if current_sheet_name and hasattr(self.parent, 'update_displayed_sheet'):
                 print(f"DEBUG: Updating displayed sheet: {current_sheet_name}")
                 self.parent.update_displayed_sheet(current_sheet_name)
                 print("DEBUG: Main GUI display updated successfully")
-        
+    
             # Force GUI to update
             if hasattr(self.parent, 'root'):
                 self.parent.root.update_idletasks()
-            
-            print("DEBUG: Main GUI refresh completed successfully")
         
+            print("DEBUG: Main GUI refresh completed successfully")
+    
         except Exception as e:
             print(f"ERROR: Failed to refresh main GUI: {e}")
             import traceback

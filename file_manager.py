@@ -58,21 +58,22 @@ class FileManager:
         self.loaded_files_cache = {}  # Cache for loaded file data
         self.stored_files_cache = set()  # Track files already stored in database
         
-    def load_excel_file(self, file_path, legacy_mode: str = None, skip_database_storage: bool = False) -> None:
+    def load_excel_file(self, file_path, legacy_mode: str = None, skip_database_storage: bool = False, force_reload: bool = False) -> None:
         """
         Load the selected Excel file and process its sheets.
         Enhanced with caching and optional database storage skip.
-        
+
         Args:
             file_path (str): Path to the Excel file
             legacy_mode (str, optional): Legacy processing mode
             skip_database_storage (bool): If True, skip storing in database
+            force_reload (bool): If True, bypass cache and reload from file
         """
-        print(f"DEBUG: load_excel_file called for {file_path}, skip_db_storage={skip_database_storage}")
-        
-        # Check cache first
+        print(f"DEBUG: load_excel_file called for {file_path}, skip_db_storage={skip_database_storage}, force_reload={force_reload}")
+
+        # Check cache first (unless force_reload is True)
         cache_key = f"{file_path}_{legacy_mode}"
-        if cache_key in self.loaded_files_cache:
+        if not force_reload and cache_key in self.loaded_files_cache:
             print("DEBUG: Using cached file data instead of reprocessing")
             cached_data = self.loaded_files_cache[cache_key]
             self.gui.filtered_sheets = cached_data['filtered_sheets']
@@ -80,19 +81,26 @@ class FileManager:
             # Fix: Make sure full_sample_data exists
             if hasattr(self.gui, 'full_sample_data'):
                 self.gui.full_sample_data = cached_data.get('full_sample_data', pd.DataFrame())
-            
+    
             # Set the selected sheet without triggering full UI update
             if cached_data['filtered_sheets']:
                 first_sheet = list(cached_data['filtered_sheets'].keys())[0]
                 self.gui.selected_sheet.set(first_sheet)
             return
-       
+
+        # Clear cache entry if force_reload is True
+        if force_reload and cache_key in self.loaded_files_cache:
+            print(f"DEBUG: Force reload requested - clearing cache entry for {file_path}")
+            del self.loaded_files_cache[cache_key]
+
         try:
             # Ensure the file is a valid Excel file.
             if not is_valid_excel_file(os.path.basename(file_path)):
                 raise ValueError(f"Invalid Excel file selected: {file_path}")
 
+            print(f"DEBUG: {'Force reloading' if force_reload else 'Loading'} file from disk: {file_path}")
             print(f"DEBUG: Checking if file is standard format: {file_path}")
+        
             if not is_standard_file(file_path):
                 print("DEBUG: File is legacy format, processing accordingly")
                 # Legacy file processing
@@ -100,17 +108,17 @@ class FileManager:
                 if not os.path.exists(legacy_dir):
                     os.makedirs(legacy_dir)
                     print(f"DEBUG: Created legacy data directory: {legacy_dir}")
-                
+            
                 legacy_wb = load_workbook(file_path)
                 legacy_sheetnames = legacy_wb.sheetnames
                 print(f"DEBUG: Legacy file sheets: {legacy_sheetnames}")
 
                 template_path_default = os.path.join(os.path.abspath("."), "resources", 
                                          "Standardized Test Template - LATEST VERSION - 2025 Jan.xlsx")
-                                         
+                                     
                 if not os.path.exists(template_path_default):
                     raise FileNotFoundError(f"Template file not found: {template_path_default}")
-                    
+                
                 wb_template = load_workbook(template_path_default)
                 template_sheet_names = wb_template.sheetnames
                 print(f"DEBUG: Template sheets: {template_sheet_names}")
@@ -142,7 +150,7 @@ class FileManager:
                 elif legacy_mode == "standards":
                     print("DEBUG: Processing as legacy standards file")
                     converted_dict = processing.convert_legacy_standards_using_template(file_path)
-                    
+                
                     self.gui.sheets = converted_dict
                     self.gui.filtered_sheets = {
                         name: {"data": data, "is_empty": data.empty}
@@ -153,12 +161,12 @@ class FileManager:
                     for sheet_info in self.gui.filtered_sheets.values():
                         if not sheet_info["data"].empty:
                             sheet_data_list.append(sheet_info["data"])
-                    
+                
                     if sheet_data_list:
                         self.gui.full_sample_data = pd.concat(sheet_data_list, axis=1)
                     else:
                         self.gui.full_sample_data = pd.DataFrame()
-                        
+                    
                     first_sheet = list(self.gui.filtered_sheets.keys())[0]
                     self.gui.selected_sheet.set(first_sheet)
                     print(f"DEBUG: Legacy standards processed, first sheet: {first_sheet}")
@@ -178,22 +186,22 @@ class FileManager:
                     name: {"data": data, "is_empty": data.empty}
                     for name, data in self.gui.sheets.items()
                 }
-                
+            
                 # Fix: Safely concatenate sheets and handle empty sheets
                 sheet_data_list = []
                 for sheet_info in self.gui.filtered_sheets.values():
                     if not sheet_info["data"].empty:
                         sheet_data_list.append(sheet_info["data"])
-                
+            
                 if sheet_data_list:
                     self.gui.full_sample_data = pd.concat(sheet_data_list, axis=1)
                 else:
                     self.gui.full_sample_data = pd.DataFrame()
-                    
+                
                 first_sheet = list(self.gui.filtered_sheets.keys())[0]
                 self.gui.selected_sheet.set(first_sheet)
                 print(f"DEBUG: Standard file processed, first sheet: {first_sheet}")
-                
+            
                 # Store in database only if not skipping and not already stored
                 if not skip_database_storage and file_path not in self.stored_files_cache:
                     print("DEBUG: Storing standard file in database")
@@ -213,7 +221,7 @@ class FileManager:
             error_msg = f"Error occurred while loading file: {e}"
             print(f"ERROR: {error_msg}")
             traceback.print_exc()
-            messagebox.showerror("Error", error_msg)    
+            messagebox.showerror("Error", error_msg)
 
     def load_initial_file(self) -> None:
         """Handle file loading directly on the main thread."""
