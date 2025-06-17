@@ -1013,23 +1013,33 @@ class FileManager:
             
             print(f"DEBUG: Extracted common data with corrected positions: {common_data}")
             
-            # Extract sample data (check up to 10 samples with 12-column blocks)
+            # Extract sample data (check up to 10 samples with 12-column blocks, or 8-column if user test simulation)
+            # Determine columns per sample based on test type
+
+            if selected_test in ["User Test Simulation", "User Simulation Test"]:
+                columns_per_sample = 8
+                print(f"DEBUG: Using 8-column layout for {selected_test}")
+            else:
+                columns_per_sample = 12
+                print(f"DEBUG: Using 12-column layout for {selected_test}")
+
+            # Extract sample data (check up to 10 samples)
             samples = []
             sample_count = 0
-            
+
             for i in range(10):
-                col_offset = i * 12
-                sample_id_col = 6 + col_offset  # Column F + offset
-                resistance_col = 4 + col_offset  # Column D + offset
-                
+                col_offset = i * columns_per_sample
+                sample_id_col = 6 + col_offset  # Column F + offset (relative to sample block)
+                resistance_col = 4 + col_offset  # Column D + offset (relative to sample block)
+    
                 sample_id_cell = ws.cell(row=1, column=sample_id_col)
-                resistance_cell = ws.cell(row=2, column=resistance_col)  # Corrected row
-                
+                resistance_cell = ws.cell(row=2, column=resistance_col)
+    
                 sample_id = sample_id_cell.value
                 resistance = resistance_cell.value
-                
+    
                 print(f"DEBUG: Sample {i+1} check - ID cell (row 1, col {sample_id_col}): '{sample_id}', Resistance cell (row 2, col {resistance_col}): '{resistance}'")
-                
+    
                 # If we find a sample ID, this is a valid sample
                 if sample_id and str(sample_id).strip():
                     samples.append({

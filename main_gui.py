@@ -1125,12 +1125,17 @@ class TestingGUI:
             logging.basicConfig(filename='report_generation.log', level=logging.DEBUG)
             logging.info("Starting full report generation")
 
-             # Add this before generating the report
+            # Add this before generating the report
             logging.info(f"Sheets: {list(self.filtered_sheets.keys())}")
             for sheet_name, sheet_info in self.filtered_sheets.items():
                 logging.info(f"Sheet {sheet_name} - empty: {sheet_info.get('is_empty', 'unknown')}")
                 if 'data' in sheet_info:
                     logging.info(f"  Data shape: {sheet_info['data'].shape}")
+                    print(f"DEBUG: Full report - {sheet_name} data shape: {sheet_info['data'].shape}")
+                    if sheet_name == "User Test Simulation":
+                        print(f"DEBUG: User Test Simulation data preview:")
+                        print(f"DEBUG: Columns: {sheet_info['data'].columns.tolist()}")
+                        print(f"DEBUG: First 5 rows:\n{sheet_info['data'].head()}")
 
             # Generate report (blocks UI, but ensures dialog stays visible)
             self.report_generator.generate_full_report(
@@ -1143,6 +1148,8 @@ class TestingGUI:
             import traceback
             error_details = traceback.format_exc()
             logging.error(f"Report generation error: {str(e)}\n{error_details}")
+            print(f"DEBUG: Report generation error: {str(e)}")
+            print(f"DEBUG: Full traceback:\n{error_details}")
             messagebox.showerror("Error", f"An error occurred: {e}")
 
         finally:
@@ -1158,11 +1165,28 @@ class TestingGUI:
 
     def generate_test_report(self):
         selected_sheet = self.selected_sheet.get()
+        print(f"DEBUG: Generating test report for sheet: {selected_sheet}")
+    
         # Show the progress dialog
         self.progress_dialog.show_progress_bar("Generating test report...")
         try:
+            # Add debugging for User Test Simulation
+            if selected_sheet == "User Test Simulation":
+                sheet_info = self.filtered_sheets.get(selected_sheet, {})
+                if 'data' in sheet_info:
+                    print(f"DEBUG: Test report User Test Simulation data shape: {sheet_info['data'].shape}")
+                    print(f"DEBUG: Columns: {sheet_info['data'].columns.tolist()}")
+                    print(f"DEBUG: First 5 rows:\n{sheet_info['data'].head()}")
+        
             # Pass the currently selected sheet, the full sheets dictionary, and the plot options.
             self.report_generator.generate_test_report(selected_sheet, self.filtered_sheets, self.plot_options)
+            print(f"DEBUG: Test report generation completed successfully for {selected_sheet}")
+        except Exception as e:
+            import traceback
+            error_details = traceback.format_exc()
+            print(f"DEBUG: Test report generation error: {str(e)}")
+            print(f"DEBUG: Full traceback:\n{error_details}")
+            raise
         finally:
             self.progress_dialog.hide_progress_bar()
 

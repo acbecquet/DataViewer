@@ -29,7 +29,7 @@ class ReportGenerator:
         """
         Generate a full report (Excel and PowerPoint) for all sheets.
         This function assumes that progress reporting is handled externally.
-        
+    
         Args:
             filtered_sheets (dict): A dict mapping sheet names to sheet info.
             plot_options (list): The list of plot options.
@@ -48,73 +48,66 @@ class ReportGenerator:
                 for sheet_name, sheet_info in filtered_sheets.items():
                     try:
                         if not isinstance(sheet_info, dict) or "data" not in sheet_info:
-                            print(f"Skipping sheet '{sheet_name}': No valid 'data' key found.")
+                            print(f"DEBUG: Skipping sheet '{sheet_name}': No valid 'data' key found.")
                             continue
 
                         data = sheet_info["data"]  #  Extract the actual DataFrame
-                        print(f"Processing sheet: {sheet_name}")
-                        
+                        print(f"DEBUG: Processing sheet: {sheet_name}")
+                        print(f"DEBUG: Sheet data shape: {data.shape}")
+                    
+                        # Special handling for User Test Simulation
+                        if sheet_name == "User Test Simulation":
+                            print(f"DEBUG: Processing User Test Simulation with 8-column format")
+                            print(f"DEBUG: Data columns: {data.columns.tolist()}")
+                            print(f"DEBUG: Data preview:\n{data.head()}")
+                    
                         is_plotting = plotting_sheet_test(sheet_name, data)
+                        print(f"DEBUG: Sheet {sheet_name} is_plotting: {is_plotting}")
+                    
                         process_function = processing.get_processing_function(sheet_name)
+                        print(f"DEBUG: Using processing function: {process_function.__name__}")
+                    
                         if is_plotting:
                             processed_data, _, full_sample_data = process_function(data)
+                            print(f"DEBUG: Processed data shape: {processed_data.shape}")
+                            print(f"DEBUG: Full sample data shape: {full_sample_data.shape}")
                             valid_plot_options = processing.get_valid_plot_options(plot_options, full_sample_data)
+                            print(f"DEBUG: Valid plot options: {valid_plot_options}")
                         else:
                             data = data.astype(str).replace([pd.NA], '')
                             processed_data, _, full_sample_data = process_function(data)
                             valid_plot_options = []
 
                         if processed_data.empty or full_sample_data.empty:
-                            print(f"Skipping sheet '{sheet_name}' due to empty processed data.")
+                            print(f"DEBUG: Skipping sheet '{sheet_name}' due to empty processed data.")
                             continue
 
                         self.write_excel_report(writer, sheet_name, processed_data, full_sample_data,
-                                                valid_plot_options, images_to_delete)
-
-                        if is_plotting and valid_plot_options:
-                            numeric_data = full_sample_data.apply(pd.to_numeric, errors='coerce')
-                            for plot_option in valid_plot_options:
-                                plot_image_path = f"{sheet_name}_{plot_option}_plot.png"
-                                try:
-                                    processing.plot_all_samples(numeric_data, 12, plot_option)
-                                    plt.savefig(plot_image_path)
-                                    plt.close()
-                                    if plot_image_path not in images_to_delete:
-                                        images_to_delete.append(plot_image_path)
-                                except Exception as plot_error:
-                                    print(f"Failed to generate plot {plot_option} for {sheet_name}: {plot_error}")
-
+                                                  valid_plot_options, images_to_delete)
+                        processed_count += 1
+                    
                     except Exception as e:
-                        print(f"Error processing sheet '{sheet_name}': {e}")
+                        print(f"DEBUG: Error processing sheet '{sheet_name}': {e}")
+                        import traceback
+                        traceback.print_exc()
                         continue
 
-                    # Phase 1 - excel - 60%
-                    processed_count += 1
-                    progress = int((processed_count / total_sheets) * 60)
-                    self.gui.progress_dialog.update_progress_bar(progress)
-                    self.gui.root.update_idletasks()
-                    
-            
-            # PowerPoint phase (remaining 40% of progress)
             try:
-                total_slides = len(filtered_sheets)  # Adjust this based on actual slide count
-                current_slide = 0
-            
                 def update_ppt_prog():
-                    nonlocal current_slide
-                    base_progress = 60  # Excel phase complete
-                    ppt_progress = int((current_slide / total_slides) * 40)
-                    self.gui.progress_dialog.update_progress_bar(base_progress + ppt_progress)
-                    self.gui.root.update_idletasks()
+                    def callback(percent):
+                        total_percent = 50 + (percent * 0.5)  # PPT is second half
+                        self.gui.progress_dialog.update_progress_bar(total_percent)
+                        self.gui.root.update_idletasks()
+                    return callback
 
                 self.write_powerpoint_report(ppt_save_path, images_to_delete, plot_options, progress_callback=update_ppt_prog())
-            
+        
                 # Final progress update
                 self.gui.progress_dialog.update_progress_bar(100)
                 self.gui.root.update_idletasks()
 
             except Exception as e:
-                print(f"Error writing PowerPoint report: {e}")
+                print(f"DEBUG: Error writing PowerPoint report: {e}")
                 raise
 
         except Exception as e:
@@ -125,14 +118,11 @@ class ReportGenerator:
             raise
         finally:
             self.cleanup_images(images_to_delete)
-            # Only leave this if you need to ensure cleanup - remove progress update here
-            # self.gui.root.update_idletasks()
-            
 
     def generate_test_report(self, selected_sheet: str, sheets: dict, plot_options: list) -> None:
         """
         Generate an Excel and PowerPoint report for only the specified sheet.
-        
+    
         Args:
             selected_sheet (str): The name of the sheet for the test report.
             sheets (dict): A dict mapping sheet names to raw sheet data.
@@ -150,19 +140,33 @@ class ReportGenerator:
 
             sheet_info = sheets.get(selected_sheet, {})
             data = sheet_info.get("data", pd.DataFrame())  # Ensure it's a DataFrame
+        
+            print(f"DEBUG: Test report for {selected_sheet}")
+            print(f"DEBUG: Data shape: {data.shape}")
 
             if data is None or data.empty:
                 messagebox.showwarning("Warning", f"Sheet '{selected_sheet}' is empty.")
                 return
 
+            # Special handling for User Test Simulation
+            if selected_sheet == "User Test Simulation":
+                print(f"DEBUG: Test report processing User Test Simulation with 8-column format")
+                print(f"DEBUG: Data columns: {data.columns.tolist()}")
+
             process_function = processing.get_processing_function(selected_sheet)
+            print(f"DEBUG: Using processing function: {process_function.__name__}")
+        
             processed_data, _, full_sample_data = process_function(data)
+            print(f"DEBUG: Test report processed data shape: {processed_data.shape}")
+            print(f"DEBUG: Test report full sample data shape: {full_sample_data.shape}")
+        
             if processed_data.empty or full_sample_data.empty:
                 messagebox.showwarning("Warning", f"Sheet '{selected_sheet}' did not yield valid processed data.")
                 return
 
             with pd.ExcelWriter(save_path, engine='xlsxwriter') as writer:
                 valid_plot_options = processing.get_valid_plot_options(plot_options, full_sample_data)
+                print(f"DEBUG: Test report valid plot options: {valid_plot_options}")
                 self.write_excel_report(writer, selected_sheet, processed_data, full_sample_data,
                                           valid_plot_options, images_to_delete)
 
@@ -173,6 +177,9 @@ class ReportGenerator:
             self.cleanup_images(images_to_delete)
             messagebox.showinfo("Success", f"Test report saved successfully to:\nExcel: {save_path}\nPowerPoint: {ppt_save_path}")
         except Exception as e:
+            print(f"DEBUG: Test report generation error: {e}")
+            import traceback
+            traceback.print_exc()
             messagebox.showerror("Error", f"An error occurred while generating the test report: {e}")
 
     def add_plots_to_slide(self, slide, sheet_name: str, full_sample_data: pd.DataFrame, valid_plot_options: list, images_to_delete: list) -> None:

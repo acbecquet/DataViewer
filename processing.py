@@ -232,7 +232,7 @@ def plot_user_test_simulation_bar_chart(ax1, ax2, full_sample_data, num_samples,
         # Phase 1: First 5 data points
         phase1_tpm = tpm_data.iloc[:5] if len(tpm_data) >= 5 else tpm_data
         # Phase 2: From 9th data point onwards (index 8+)
-        phase2_tpm = tpm_data.iloc[8:] if len(tmp_data) > 8 else pd.Series(dtype=float)
+        phase2_tpm = tpm_data.iloc[8:] if len(tpm_data) > 8 else pd.Series(dtype=float)
         
         phase1_avg = phase1_tpm.mean() if not phase1_tpm.empty else 0
         phase2_avg = phase2_tpm.mean() if not phase2_tpm.empty else 0

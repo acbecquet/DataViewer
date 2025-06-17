@@ -130,6 +130,22 @@ class DataCollectionWindow:
         self.header_data = header_data
         self.num_samples = header_data["num_samples"]
         self.result = None
+
+        print(f"DEBUG: DataCollectionWindow.__init__")
+        print(f"DEBUG: test_name = '{test_name}'")
+        print(f"DEBUG: num_samples = {self.num_samples}")
+        print(f"DEBUG: header_data keys: {list(header_data.keys())}")
+        print(f"DEBUG: header_data['samples'] length: {len(header_data.get('samples', []))}")
+    
+        # Validate num_samples
+        if self.num_samples <= 0:
+            print(f"DEBUG: Invalid num_samples ({self.num_samples}), using length of samples list")
+            self.num_samples = len(header_data.get('samples', []))
+            if self.num_samples <= 0:
+                print(f"DEBUG: Still invalid, defaulting to 1 sample")
+                self.num_samples = 1
+    
+        print(f"DEBUG: Final num_samples = {self.num_samples}")
         
         # Auto-save settings
         self.auto_save_interval = 5 * 60 * 1000  # 5 minutes in milliseconds
@@ -183,7 +199,10 @@ class DataCollectionWindow:
                 "current_row_index": 0, # Track the current editable row
                 "avg_tpm": 0.0         # Track average TPM
             }
-            
+            # Add chronography for User Test Simulation
+            if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+                self.data[sample_id]["chronography"] = []
+                print(f"DEBUG: Added chronography data structure for {sample_id}")
             # Pre-initialize 50 rows
             for j in range(50):
                 puff = (j + 1) * self.puff_interval
@@ -194,6 +213,10 @@ class DataCollectionWindow:
                 self.data[sample_id]["smell"].append("")
                 self.data[sample_id]["notes"].append("")
                 self.data[sample_id]["tpm"].append(None)
+
+                # Add chronography initialization for User Test Simulation
+                if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+                    self.data[sample_id]["chronography"].append("")
 
         # Create the menu bar first
         self.create_menu_bar()
@@ -682,7 +705,7 @@ class DataCollectionWindow:
     def handle_sample_count_change(self, old_count, new_count):
         """Handle changes in the number of samples."""
         print(f"DEBUG: Handling sample count change: {old_count} -> {new_count}")
-        
+    
         if new_count > old_count:
             # Add new samples
             for i in range(old_count, new_count):
@@ -698,7 +721,11 @@ class DataCollectionWindow:
                     "current_row_index": 0,
                     "avg_tpm": 0.0
                 }
-                
+            
+                # Add chronography for User Test Simulation
+                if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+                    self.data[sample_id]["chronography"] = []
+            
                 # Pre-initialize 50 rows for new sample
                 for j in range(50):
                     puff = (j + 1) * self.puff_interval
@@ -709,21 +736,25 @@ class DataCollectionWindow:
                     self.data[sample_id]["smell"].append("")
                     self.data[sample_id]["notes"].append("")
                     self.data[sample_id]["tpm"].append(None)
-            
+                
+                    # Add chronography initialization for User Test Simulation
+                    if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+                        self.data[sample_id]["chronography"].append("")
+        
             print(f"DEBUG: Added {new_count - old_count} new samples")
-            
+        
         elif new_count < old_count:
             # Remove excess samples
             for i in range(new_count, old_count):
                 sample_id = f"Sample {i+1}"
                 if sample_id in self.data:
                     del self.data[sample_id]
-            
-            print(f"DEBUG: Removed {old_count - new_count} samples")
         
+            print(f"DEBUG: Removed {old_count - new_count} samples")
+    
         # Update the number of samples
         self.num_samples = new_count
-        
+    
         # Recreate the UI to reflect the new sample count
         self.recreate_sample_tabs()
 
@@ -852,23 +883,29 @@ class DataCollectionWindow:
         """Clear data for the currently selected sample."""
         current_tab = self.notebook.index(self.notebook.select())
         sample_id = f"Sample {current_tab + 1}"
-        
+    
         if messagebox.askyesno("Confirm Clear", 
                              f"Are you sure you want to clear all data for {sample_id}?"):
             # Clear all data except puffs
-            for key in ["before_weight", "after_weight", "draw_pressure", "smell", "notes", "tpm"]:
+            clear_keys = ["before_weight", "after_weight", "draw_pressure", "smell", "notes", "tpm"]
+        
+            # Add chronography for User Test Simulation
+            if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+                clear_keys.append("chronography")
+        
+            for key in clear_keys:
                 for i in range(len(self.data[sample_id][key])):
                     if key == "tpm":
                         self.data[sample_id][key][i] = None
                     else:
                         self.data[sample_id][key][i] = ""
-            
+        
             # Update the display
             tree = self.sample_trees[current_tab]
             self.update_treeview(tree, sample_id)
             self.update_stats_panel()
             self.mark_unsaved_changes()
-            
+        
             print(f"DEBUG: Cleared data for {sample_id}")
     
     def clear_all_data(self):
@@ -877,17 +914,23 @@ class DataCollectionWindow:
                              "Are you sure you want to clear ALL data for ALL samples?"):
             for i in range(self.num_samples):
                 sample_id = f"Sample {i + 1}"
-                for key in ["before_weight", "after_weight", "draw_pressure", "smell", "notes", "tpm"]:
+                clear_keys = ["before_weight", "after_weight", "draw_pressure", "smell", "notes", "tpm"]
+            
+                # Add chronography for User Test Simulation
+                if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+                    clear_keys.append("chronography")
+            
+                for key in clear_keys:
                     for j in range(len(self.data[sample_id][key])):
                         if key == "tpm":
                             self.data[sample_id][key][j] = None
                         else:
                             self.data[sample_id][key][j] = ""
-                
+            
                 # Update the display for this sample
                 tree = self.sample_trees[i]
                 self.update_treeview(tree, sample_id)
-            
+        
             self.update_stats_panel()
             self.mark_unsaved_changes()
             print("DEBUG: Cleared all data for all samples")
@@ -895,7 +938,7 @@ class DataCollectionWindow:
     def add_row(self):
         """Add a new row to all samples."""
         new_puff = max([max(self.data[f"Sample {i+1}"]["puffs"]) for i in range(self.num_samples)]) + self.puff_interval
-        
+    
         for i in range(self.num_samples):
             sample_id = f"Sample {i + 1}"
             self.data[sample_id]["puffs"].append(new_puff)
@@ -905,11 +948,15 @@ class DataCollectionWindow:
             self.data[sample_id]["smell"].append("")
             self.data[sample_id]["notes"].append("")
             self.data[sample_id]["tpm"].append(None)
-            
+        
+            # Add chronography for User Test Simulation
+            if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+                self.data[sample_id]["chronography"].append("")
+        
             # Update treeview
             tree = self.sample_trees[i]
             self.update_treeview(tree, sample_id)
-        
+    
         self.mark_unsaved_changes()
         print(f"DEBUG: Added new row with puff count {new_puff}")
     
@@ -1110,39 +1157,47 @@ Developed by Charlie Becquet
     def _save_to_excel(self):
         """Save data to the Excel file."""
         print(f"DEBUG: _save_to_excel() starting - file: {self.file_path}")
-    
+
         # Load the workbook
         wb = openpyxl.load_workbook(self.file_path)
         print(f"DEBUG: Loaded workbook, sheets: {wb.sheetnames}")
-    
+
         # Get the sheet for this test
         if self.test_name not in wb.sheetnames:
             raise Exception(f"Sheet '{self.test_name}' not found in the file.")
-        
+    
         ws = wb[self.test_name]
         print(f"DEBUG: Opened sheet '{self.test_name}'")
-    
+
         # Define green fill for TPM cells
         green_fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
-    
+
+        # Determine column layout based on test type
+        if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+            columns_per_sample = 8  # Including chronography
+            print(f"DEBUG: Using User Test Simulation format with 8 columns per sample")
+        else:
+            columns_per_sample = 12  # Standard format
+            print(f"DEBUG: Using standard format with 12 columns per sample")
+
         # Track how much data we're actually writing
         total_data_written = 0
-    
+
         # For each sample, write the data
         for sample_idx in range(self.num_samples):
             sample_id = f"Sample {sample_idx+1}"
-        
-            # Calculate column offset (12 columns per sample)
-            col_offset = sample_idx * 12
-        
+    
+            # Calculate column offset based on test type
+            col_offset = sample_idx * columns_per_sample
+    
             print(f"DEBUG: Writing data for {sample_id} at column offset {col_offset}")
-        
+    
             sample_data_written = 0
-        
-            # Write the puffs data starting at row 5
+    
+            # Write the data starting at row 5
             for i, puff in enumerate(self.data[sample_id]["puffs"]):
                 row = i + 5  # Row 5 is the first data row
-            
+        
                 # Only write if we have actual data (not just empty rows)
                 has_data = (
                     self.data[sample_id]["before_weight"][i] or
@@ -1153,71 +1208,128 @@ Developed by Charlie Becquet
                     self.data[sample_id]["tpm"][i] is not None
                 )
             
+                # For User Test Simulation, also check chronography
+                if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+                    has_data = has_data or (i < len(self.data[sample_id]["chronography"]) and self.data[sample_id]["chronography"][i])
+        
                 if not has_data:
                     continue  # Skip empty rows
+            
+                if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+                    # User Test Simulation column layout (8 columns)
+                    # Chronography column (A + offset)
+                    if i < len(self.data[sample_id]["chronography"]) and self.data[sample_id]["chronography"][i]:
+                        ws.cell(row=row, column=1 + col_offset, value=str(self.data[sample_id]["chronography"][i]))
                 
-                # Puffs column (A + offset)
-                ws.cell(row=row, column=1 + col_offset, value=puff)
-            
-                # Before weight column (B + offset)
-                if self.data[sample_id]["before_weight"][i]:
-                    try:
-                        ws.cell(row=row, column=2 + col_offset, value=float(self.data[sample_id]["before_weight"][i]))
-                    except:
-                        ws.cell(row=row, column=2 + col_offset, value=self.data[sample_id]["before_weight"][i])
-            
-                # After weight column (C + offset)
-                if self.data[sample_id]["after_weight"][i]:
-                    try:
-                        ws.cell(row=row, column=3 + col_offset, value=float(self.data[sample_id]["after_weight"][i]))
-                    except:
-                        ws.cell(row=row, column=3 + col_offset, value=self.data[sample_id]["after_weight"][i])
-            
-                # Draw pressure column (D + offset)
-                if self.data[sample_id]["draw_pressure"][i]:
-                    try:
-                        ws.cell(row=row, column=4 + col_offset, value=float(self.data[sample_id]["draw_pressure"][i]))
-                    except:
-                        ws.cell(row=row, column=4 + col_offset, value=self.data[sample_id]["draw_pressure"][i])
-            
-                # Smell column (F + offset)
-                if self.data[sample_id]["smell"][i]:
-                    try:
-                        ws.cell(row=row, column=6 + col_offset, value=float(self.data[sample_id]["smell"][i]))
-                    except:
-                        ws.cell(row=row, column=6 + col_offset, value=self.data[sample_id]["smell"][i])
-            
-                # Notes column (H + offset)
-                if self.data[sample_id]["notes"][i]:
-                    ws.cell(row=row, column=8 + col_offset, value=str(self.data[sample_id]["notes"][i]))
-            
-                # TPM column (I + offset) - if calculated
-                if i < len(self.data[sample_id]["tpm"]) and self.data[sample_id]["tpm"][i] is not None:
-                    tpm_cell = ws.cell(row=row, column=9 + col_offset, value=float(self.data[sample_id]["tpm"][i]))
-                    tpm_cell.fill = green_fill
-            
+                    # Puffs column (B + offset) 
+                    ws.cell(row=row, column=2 + col_offset, value=puff)
+                
+                    # Before weight column (C + offset)
+                    if self.data[sample_id]["before_weight"][i]:
+                        try:
+                            ws.cell(row=row, column=3 + col_offset, value=float(self.data[sample_id]["before_weight"][i]))
+                        except:
+                            ws.cell(row=row, column=3 + col_offset, value=self.data[sample_id]["before_weight"][i])
+                
+                    # After weight column (D + offset)
+                    if self.data[sample_id]["after_weight"][i]:
+                        try:
+                            ws.cell(row=row, column=4 + col_offset, value=float(self.data[sample_id]["after_weight"][i]))
+                        except:
+                            ws.cell(row=row, column=4 + col_offset, value=self.data[sample_id]["after_weight"][i])
+                
+                    # Draw pressure column (E + offset)
+                    if self.data[sample_id]["draw_pressure"][i]:
+                        try:
+                            ws.cell(row=row, column=5 + col_offset, value=float(self.data[sample_id]["draw_pressure"][i]))
+                        except:
+                            ws.cell(row=row, column=5 + col_offset, value=self.data[sample_id]["draw_pressure"][i])
+                
+                    # Skip resistance column (F + offset) - not used in User Test Simulation
+                
+                    # Smell column (G + offset)
+                    if self.data[sample_id]["smell"][i]:
+                        try:
+                            ws.cell(row=row, column=7 + col_offset, value=float(self.data[sample_id]["smell"][i]))
+                        except:
+                            ws.cell(row=row, column=7 + col_offset, value=self.data[sample_id]["smell"][i])
+                
+                    # Notes column (H + offset)
+                    if self.data[sample_id]["notes"][i]:
+                        ws.cell(row=row, column=8 + col_offset, value=str(self.data[sample_id]["notes"][i]))
+                    
+                    print(f"DEBUG: Saved User Test Simulation row {i} for {sample_id}")
+                
+                else:
+                    # Standard column layout (12 columns)
+                    # Puffs column (A + offset)
+                    ws.cell(row=row, column=1 + col_offset, value=puff)
+        
+                    # Before weight column (B + offset)
+                    if self.data[sample_id]["before_weight"][i]:
+                        try:
+                            ws.cell(row=row, column=2 + col_offset, value=float(self.data[sample_id]["before_weight"][i]))
+                        except:
+                            ws.cell(row=row, column=2 + col_offset, value=self.data[sample_id]["before_weight"][i])
+        
+                    # After weight column (C + offset)
+                    if self.data[sample_id]["after_weight"][i]:
+                        try:
+                            ws.cell(row=row, column=3 + col_offset, value=float(self.data[sample_id]["after_weight"][i]))
+                        except:
+                            ws.cell(row=row, column=3 + col_offset, value=self.data[sample_id]["after_weight"][i])
+        
+                    # Draw pressure column (D + offset)
+                    if self.data[sample_id]["draw_pressure"][i]:
+                        try:
+                            ws.cell(row=row, column=4 + col_offset, value=float(self.data[sample_id]["draw_pressure"][i]))
+                        except:
+                            ws.cell(row=row, column=4 + col_offset, value=self.data[sample_id]["draw_pressure"][i])
+        
+                    # Smell column (F + offset)
+                    if self.data[sample_id]["smell"][i]:
+                        try:
+                            ws.cell(row=row, column=6 + col_offset, value=float(self.data[sample_id]["smell"][i]))
+                        except:
+                            ws.cell(row=row, column=6 + col_offset, value=self.data[sample_id]["smell"][i])
+        
+                    # Notes column (H + offset)
+                    if self.data[sample_id]["notes"][i]:
+                        ws.cell(row=row, column=8 + col_offset, value=str(self.data[sample_id]["notes"][i]))
+        
+                    # TPM column (I + offset) - if calculated
+                    if i < len(self.data[sample_id]["tpm"]) and self.data[sample_id]["tpm"][i] is not None:
+                        tpm_cell = ws.cell(row=row, column=9 + col_offset, value=float(self.data[sample_id]["tpm"][i]))
+                        tpm_cell.fill = green_fill
+        
                 sample_data_written += 1
-            
+        
             total_data_written += sample_data_written
             print(f"DEBUG: Wrote {sample_data_written} data rows for {sample_id}")
-    
+
         # Save the workbook
         print(f"DEBUG: Saving workbook with {total_data_written} total data rows written...")
 
         print("DEBUG: About to save Excel file - verifying data to be saved:")
         for sample_idx in range(min(2, self.num_samples)):  # Check first 2 samples
             sample_id = f"Sample {sample_idx+1}"
-            col_offset = sample_idx * 12
-            
+            col_offset = sample_idx * columns_per_sample
+        
             print(f"DEBUG: Sample {sample_idx+1} data preview:")
             for i in range(min(3, len(self.data[sample_id]["puffs"]))):  # First 3 rows
                 row = i + 5
-                puff_val = ws.cell(row=row, column=1 + col_offset).value
-                before_val = ws.cell(row=row, column=2 + col_offset).value
-                after_val = ws.cell(row=row, column=3 + col_offset).value
-                tpm_val = ws.cell(row=row, column=9 + col_offset).value
-                print(f"DEBUG:   Row {i}: Puff={puff_val}, Before={before_val}, After={after_val}, TPM={tpm_val}")
-
+                if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+                    chrono_val = ws.cell(row=row, column=1 + col_offset).value
+                    puff_val = ws.cell(row=row, column=2 + col_offset).value
+                    before_val = ws.cell(row=row, column=3 + col_offset).value
+                    after_val = ws.cell(row=row, column=4 + col_offset).value
+                    print(f"DEBUG:   Row {i}: Chrono={chrono_val}, Puff={puff_val}, Before={before_val}, After={after_val}")
+                else:
+                    puff_val = ws.cell(row=row, column=1 + col_offset).value
+                    before_val = ws.cell(row=row, column=2 + col_offset).value
+                    after_val = ws.cell(row=row, column=3 + col_offset).value
+                    tpm_val = ws.cell(row=row, column=9 + col_offset).value
+                    print(f"DEBUG:   Row {i}: Puff={puff_val}, Before={before_val}, After={after_val}, TPM={tpm_val}")
 
         wb.save(self.file_path)
         print(f"DEBUG: Excel file saved successfully to {self.file_path}")
@@ -1263,110 +1375,154 @@ Developed by Charlie Becquet
     # These remain the same as in your current implementation
     
     def create_sample_tab(self, parent_frame, sample_id, sample_index):
-        """Create a tab for a single sample with fast data entry."""
-        # Sample metadata display
-        info_frame = ttk.Frame(parent_frame, style='TFrame')
-        info_frame.pack(fill="x", pady=(0, 10))
+        """Create a tab for a single sample with data entry controls."""
+        print(f"DEBUG: Creating sample tab for {sample_id}")
+        print(f"DEBUG: Test name: '{self.test_name}'")
 
-        # Display sample metadata without background color
-        ttk.Label(info_frame, 
-                 text=f"Sample ID: {self.header_data['samples'][sample_index]['id']}", 
-                 style='SampleInfo.TLabel').pack(side="left", padx=(0, 20))
-         
-        ttk.Label(info_frame, 
-                 text=f"Resistance: {self.header_data['samples'][sample_index]['resistance']} Ω", 
-                 style='SampleInfo.TLabel').pack(side="left", padx=(0, 20))
-         
-        ttk.Label(info_frame, 
-                 text=f"Voltage: {self.header_data['common']['voltage']} V", 
-                 style='SampleInfo.TLabel').pack(side="left", padx=(0, 20))
+        # Create main container
+        main_container = ttk.Frame(parent_frame)
+        main_container.pack(fill="both", expand=True)
 
-        # Create a frame for the data table with border
-        table_container = ttk.Frame(parent_frame, style='TFrame', relief='solid', borderwidth=1)
-        table_container.pack(fill="both", expand=True)
+        # Create scrollable frame
+        canvas = tk.Canvas(main_container, bg='white')
+        scrollbar = ttk.Scrollbar(main_container, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
 
-        # Create inner frame for spacing
-        table_frame = ttk.Frame(table_container, style='TFrame')
-        table_frame.pack(fill="both", expand=True, padx=1, pady=1)
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
 
-        # Create the treeview (table)
-        columns = ("puffs", "before_weight", "after_weight", "draw_pressure", "smell", "notes")
-        tree = ttk.Treeview(table_frame, columns=columns, show="tree headings", 
-                           selectmode="browse", height=20, style='Treeview')
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
 
-        # Hide the tree column
-        tree.column("#0", width=0, stretch=False)
+        # Pack scrollbar and canvas
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
 
-        # Add scrollbars
-        y_scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=tree.yview)
-        y_scrollbar.pack(side="right", fill="y")
-        tree.configure(yscrollcommand=y_scrollbar.set)
+        # Determine columns based on test type
+        if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+            print(f"DEBUG: Setting up User Test Simulation columns with chronography")
+            # User Test Simulation: 8 columns including chronography
+            columns = ["Chronography", "Puffs", "Before Weight", "After Weight", "Draw Pressure", "Resistance", "Smell", "Notes"]
+            column_widths = [100, 80, 100, 100, 100, 100, 80, 150]
+            self.tree_columns = len(columns)
+    
+            # Ensure chronography data exists
+            if "chronography" not in self.data[sample_id]:
+                print(f"DEBUG: Creating chronography data structure for {sample_id}")
+                self.data[sample_id]["chronography"] = []
+                # Pre-initialize chronography data to match existing data length
+                existing_length = len(self.data[sample_id]["puffs"])
+                for j in range(existing_length):
+                    self.data[sample_id]["chronography"].append("")
+                
+            print(f"DEBUG: User Test Simulation columns: {columns}")
+        else:
+            # Standard tests: 12 columns without chronography  
+            columns = ["Puffs", "Before Weight", "After Weight", "Draw Pressure", "Resistance", "Smell", "Power", "Notes", "TPM", "C9", "C10", "C11"]
+            column_widths = [80, 100, 100, 100, 100, 80, 80, 150, 80, 80, 80, 80]
+            self.tree_columns = len(columns)
+            print(f"DEBUG: Standard test columns: {columns}")
 
-        # Define column headings
-        tree.heading("puffs", text="Puffs")
-        tree.heading("before_weight", text="Before weight/g")
-        tree.heading("after_weight", text="After weight/g")
-        tree.heading("draw_pressure", text="Draw Pressure (kPa)")
-        tree.heading("smell", text="Smell")
-        tree.heading("notes", text="Notes")
+        # Create treeview with determined columns
+        tree = ttk.Treeview(scrollable_frame, columns=columns, show="headings", height=15)
 
-        # Define column widths
-        tree.column("puffs", width=80, anchor="center")
-        tree.column("before_weight", width=120, anchor="center")
-        tree.column("after_weight", width=120, anchor="center")
-        tree.column("draw_pressure", width=120, anchor="center")
-        tree.column("smell", width=80, anchor="center")
-        tree.column("notes", width=150, anchor="w")
+        # Configure columns
+        for i, (col, width) in enumerate(zip(columns, column_widths)):
+            tree.heading(col, text=col)
+            tree.column(col, width=width, minwidth=50)
+            print(f"DEBUG: Configured column {i}: {col} with width {width}")
 
-        tree.pack(fill="both", expand=True)
+        # Create tree scrollbars
+        tree_v_scrollbar = ttk.Scrollbar(scrollable_frame, orient="vertical", command=tree.yview)
+        tree_h_scrollbar = ttk.Scrollbar(scrollable_frame, orient="horizontal", command=tree.xview)
+        tree.configure(yscrollcommand=tree_v_scrollbar.set, xscrollcommand=tree_h_scrollbar.set)
 
-        # Add the initial row
+        # Grid the treeview and scrollbars
+        tree.grid(row=0, column=0, sticky="nsew", padx=(0, 0), pady=(0, 0))
+        tree_v_scrollbar.grid(row=0, column=1, sticky="ns")
+        tree_h_scrollbar.grid(row=1, column=0, sticky="ew")
+
+        # Configure grid weights
+        scrollable_frame.grid_columnconfigure(0, weight=1)
+        scrollable_frame.grid_rowconfigure(0, weight=1)
+
+        # Populate treeview with initial data
         self.update_treeview(tree, sample_id)
 
-        tree.bind("<Button-1>", lambda e: self.on_tree_click(e, tree, sample_id))
-        tree.bind("<Double-Button-1>", lambda e: self.on_tree_double_click(e, tree, sample_id))
+        # Bind events for editing
+        tree.bind("<Button-1>", lambda event: self.on_tree_click(event, tree, sample_id))
+        tree.bind("<Double-1>", lambda event: self.on_tree_double_click(event, tree, sample_id))
+        tree.bind("<KeyPress>", lambda event: self.on_tree_key_press(event, tree, sample_id))
 
-        tree.bind("<KeyPress>", lambda e: self.start_edit_on_typing(e, tree, sample_id))
+        # Mouse wheel scrolling for canvas
+        def on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
 
-        # Bind keyboard navigation
-        tree.bind("<Tab>", lambda e: self.handle_tab_key(e, tree, sample_id))
-        tree.bind("<Left>", lambda e: self.handle_arrow_key(e, tree, sample_id, "left"))
-        tree.bind("<Right>", lambda e: self.handle_arrow_key(e, tree, sample_id, "right"))
-        tree.bind("<Up>", lambda e: self.handle_arrow_key(e, tree, sample_id, "up"))
-        tree.bind("<Down>", lambda e: self.handle_arrow_key(e, tree, sample_id, "down"))
+        canvas.bind("<MouseWheel>", on_mousewheel)
 
-        print(f"DEBUG: Bound single click handler for sample {sample_id}")
-
-        # Store reference to the tree
-        self.data[sample_id]["tree"] = tree
-
+        print(f"DEBUG: Sample tab created for {sample_id} with {len(columns)} columns")
         return tree
+
+    def on_tree_key_press(self, event, tree, sample_id):
+        """Handle key press events in the treeview."""
+        if event.keysym == "Tab":
+            return self.handle_tab_key(event, tree, sample_id)
+        elif event.keysym in ["Up", "Down", "Left", "Right"]:
+            return self.handle_arrow_key(event, tree, sample_id, event.keysym.lower())
+        elif event.char.isprintable():
+            return self.start_edit_on_typing(event, tree, sample_id)
     
+        return None
+
     def update_treeview(self, tree, sample_id):
-        """Update the treeview with current data."""
+        """Update the treeview with current data for the specified sample."""
+        print(f"DEBUG: Updating treeview for {sample_id}")
+    
         # Clear existing items
         for item in tree.get_children():
             tree.delete(item)
-
-        # Configure tags for alternating row colors
-        tree.tag_configure('oddrow', background='#F5F5F5')
-        tree.tag_configure('evenrow', background='white')
-
-        # Add rows from data
-        for i in range(len(self.data[sample_id]["puffs"])):
-            tag = 'evenrow' if i % 2 == 0 else 'oddrow'
+    
+        # Get data length
+        data_length = len(self.data[sample_id]["puffs"])
+        print(f"DEBUG: Data length for {sample_id}: {data_length}")
+    
+        # Insert data rows
+        for i in range(data_length):
+            if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+                # User Test Simulation format with chronography
+                values = [
+                    self.data[sample_id]["chronography"][i] if i < len(self.data[sample_id]["chronography"]) else "",
+                    self.data[sample_id]["puffs"][i] if i < len(self.data[sample_id]["puffs"]) else "",
+                    self.data[sample_id]["before_weight"][i] if i < len(self.data[sample_id]["before_weight"]) else "",
+                    self.data[sample_id]["after_weight"][i] if i < len(self.data[sample_id]["after_weight"]) else "",
+                    self.data[sample_id]["draw_pressure"][i] if i < len(self.data[sample_id]["draw_pressure"]) else "",
+                    "",  # Resistance - not used in User Test Simulation
+                    self.data[sample_id]["smell"][i] if i < len(self.data[sample_id]["smell"]) else "",
+                    self.data[sample_id]["notes"][i] if i < len(self.data[sample_id]["notes"]) else ""
+                ]
+                print(f"DEBUG: Row {i} values for User Test Simulation: {values}")
+            else:
+                # Standard format without chronography
+                values = [
+                    self.data[sample_id]["puffs"][i] if i < len(self.data[sample_id]["puffs"]) else "",
+                    self.data[sample_id]["before_weight"][i] if i < len(self.data[sample_id]["before_weight"]) else "",
+                    self.data[sample_id]["after_weight"][i] if i < len(self.data[sample_id]["after_weight"]) else "",
+                    self.data[sample_id]["draw_pressure"][i] if i < len(self.data[sample_id]["draw_pressure"]) else "",
+                    "",  # Resistance
+                    self.data[sample_id]["smell"][i] if i < len(self.data[sample_id]["smell"]) else "",
+                    "",  # Power
+                    self.data[sample_id]["notes"][i] if i < len(self.data[sample_id]["notes"]) else "",
+                    "",  # TPM
+                    "",  # C9
+                    "",  # C10
+                    ""   # C11
+                ]
         
-            # Convert values to strings for display
-            values = (
-                str(self.data[sample_id]["puffs"][i]) if self.data[sample_id]["puffs"][i] != "" else "",
-                str(self.data[sample_id]["before_weight"][i]) if self.data[sample_id]["before_weight"][i] != "" else "",
-                str(self.data[sample_id]["after_weight"][i]) if self.data[sample_id]["after_weight"][i] != "" else "",
-                str(self.data[sample_id]["draw_pressure"][i]) if self.data[sample_id]["draw_pressure"][i] != "" else "",
-                str(self.data[sample_id]["smell"][i]) if self.data[sample_id]["smell"][i] != "" else "",
-                str(self.data[sample_id]["notes"][i]) if self.data[sample_id]["notes"][i] != "" else ""
-            )
-        
-            tree.insert("", "end", values=values, tags=(tag,))
+            tree.insert("", "end", values=values)
+    
+        print(f"DEBUG: Treeview updated for {sample_id} with {data_length} rows")
     
     def finish_edit(self, event=None):
         """Save the current edit and move to the next cell if needed."""
@@ -1397,6 +1553,9 @@ Developed by Charlie Becquet
                     value = "" 
                 else:
                     value = 0
+        elif column_name == "chronography":
+            # Keep chronography as string
+            value = str(value) if value else ""
 
         # Update data storage
         if row_idx < len(self.data[sample_id][column_name]):
@@ -1418,7 +1577,9 @@ Developed by Charlie Becquet
                             next_item = tree.get_children()[next_row_idx] if next_row_idx < len(tree.get_children()) else None
                             if next_item:
                                 next_values = list(tree.item(next_item, "values"))
-                                next_values[1] = str(after_weight_value)
+                                # Adjust column index based on test type
+                                weight_col_idx = 2 if self.test_name == "User Test Simulation" else 1
+                                next_values[weight_col_idx] = str(after_weight_value)
                                 tree.item(next_item, values=next_values)
                     except (ValueError, TypeError):
                         pass
@@ -1436,7 +1597,9 @@ Developed by Charlie Becquet
                             if subsequent_row_idx < len(tree.get_children()):
                                 subsequent_item = tree.get_children()[subsequent_row_idx]
                                 subsequent_values = list(tree.item(subsequent_item, "values"))
-                                subsequent_values[0] = str(expected_puff)
+                                # Adjust column index based on test type
+                                puff_col_idx = 1 if self.test_name == "User Test Simulation" else 0
+                                subsequent_values[puff_col_idx] = str(expected_puff)
                                 tree.item(subsequent_item, values=subsequent_values)
                     except (ValueError, TypeError):
                         pass
@@ -1649,126 +1812,198 @@ Developed by Charlie Becquet
     def load_existing_data_from_file(self):
         """Load existing data from the Excel file into the data collection interface."""
         print(f"DEBUG: Loading existing data from file: {self.file_path}")
-    
+
         try:
-            # Load the workbook
-            wb = openpyxl.load_workbook(self.file_path)
-        
+            # Load the workbook and calculate formulas
+            wb = openpyxl.load_workbook(self.file_path, data_only=True)  # data_only=True evaluates formulas
+
             # Check if the test sheet exists
             if self.test_name not in wb.sheetnames:
                 print(f"DEBUG: Sheet '{self.test_name}' not found in file")
                 return
-            
+    
             ws = wb[self.test_name]
             print(f"DEBUG: Successfully opened sheet '{self.test_name}'")
-        
+    
+            # Determine column layout based on test type
+            if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+                columns_per_sample = 8  # Including chronography
+                print(f"DEBUG: Loading User Test Simulation format with 8 columns per sample")
+            else:
+                columns_per_sample = 12  # Standard format
+                print(f"DEBUG: Loading standard format with 12 columns per sample")
+
             # Load data for each sample
             loaded_data_count = 0
             for sample_idx in range(self.num_samples):
                 sample_id = f"Sample {sample_idx + 1}"
-                col_offset = sample_idx * 12  # 12 columns per sample
-            
+                col_offset = sample_idx * columns_per_sample
+    
                 print(f"DEBUG: Loading data for {sample_id} with column offset {col_offset}")
-            
+    
                 # Read data starting from row 5 (Excel row 5 = index 4)
                 row_count = 0
                 sample_had_data = False
-            
-                for row_idx in range(4, ws.max_row + 1):  # Start from row 5 (index 4)
+    
+                for row_idx in range(4, min(ws.max_row + 1, 100)):  # Limit to 100 rows max
                     excel_row = row_idx + 1  # Convert to 1-based Excel row
                     data_row_idx = row_idx - 4  # Convert to 0-based data index
-                
+        
                     # Make sure our data lists are long enough
                     while len(self.data[sample_id]["puffs"]) <= data_row_idx:
                         # Extend all lists if needed
                         for key in ["puffs", "before_weight", "after_weight", "draw_pressure", "smell", "notes", "tpm"]:
                             self.data[sample_id][key].append("" if key != "tpm" else None)
+                        # Also extend chronography for User Test Simulation
+                        if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+                            if "chronography" not in self.data[sample_id]:
+                                self.data[sample_id]["chronography"] = []
+                            self.data[sample_id]["chronography"].append("")
+        
+                    # Read each column for this row based on test type
+                    if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+                        # User Test Simulation layout (8 columns)
+                        chrono_cell = ws.cell(row=excel_row, column=1 + col_offset)  # Chronography
+                        puffs_cell = ws.cell(row=excel_row, column=2 + col_offset)   # Puffs
+                        before_weight_cell = ws.cell(row=excel_row, column=3 + col_offset)  # Before weight
+                        after_weight_cell = ws.cell(row=excel_row, column=4 + col_offset)   # After weight
+                        draw_pressure_cell = ws.cell(row=excel_row, column=5 + col_offset)  # Draw pressure
+                        # Skip resistance column (6)
+                        smell_cell = ws.cell(row=excel_row, column=7 + col_offset)   # Smell
+                        notes_cell = ws.cell(row=excel_row, column=8 + col_offset)   # Notes
+                        tpm_cell = None  # TPM not stored in User Test Simulation format
+                    else:
+                        # Standard layout (12 columns)
+                        puffs_cell = ws.cell(row=excel_row, column=1 + col_offset)
+                        before_weight_cell = ws.cell(row=excel_row, column=2 + col_offset)
+                        after_weight_cell = ws.cell(row=excel_row, column=3 + col_offset)
+                        draw_pressure_cell = ws.cell(row=excel_row, column=4 + col_offset)
+                        smell_cell = ws.cell(row=excel_row, column=6 + col_offset)  # Column F
+                        notes_cell = ws.cell(row=excel_row, column=8 + col_offset)  # Column H
+                        tpm_cell = ws.cell(row=excel_row, column=9 + col_offset)    # Column I
+        
+                    # Check if this row has meaningful numeric data (skip text like "Day 1", "Day 2", etc.)
+                    has_meaningful_data = False
                 
-                    # Read each column for this row
-                    puffs_cell = ws.cell(row=excel_row, column=1 + col_offset)
-                    before_weight_cell = ws.cell(row=excel_row, column=2 + col_offset)
-                    after_weight_cell = ws.cell(row=excel_row, column=3 + col_offset)
-                    draw_pressure_cell = ws.cell(row=excel_row, column=4 + col_offset)
-                    smell_cell = ws.cell(row=excel_row, column=6 + col_offset)  # Column F
-                    notes_cell = ws.cell(row=excel_row, column=8 + col_offset)  # Column H
-                    tpm_cell = ws.cell(row=excel_row, column=9 + col_offset)    # Column I
+                    # Check puffs - should be numeric
+                    if puffs_cell.value is not None:
+                        if isinstance(puffs_cell.value, (int, float)):
+                            has_meaningful_data = True
+                        elif isinstance(puffs_cell.value, str) and puffs_cell.value.replace('.', '').replace('-', '').isdigit():
+                            has_meaningful_data = True
                 
-                    # Check if this row has any data (if puffs is empty, assume row is empty)
-                    if puffs_cell.value is None or puffs_cell.value == "":
-                        # No more data for this sample
-                        print(f"DEBUG: {sample_id} - Found end of data at row {data_row_idx}")
-                        break
+                    # Check weights - should be numeric
+                    if not has_meaningful_data:
+                        for cell in [before_weight_cell, after_weight_cell, draw_pressure_cell]:
+                            if cell.value is not None and isinstance(cell.value, (int, float)) and cell.value != 0:
+                                has_meaningful_data = True
+                                break
                 
+                    # If no meaningful numeric data, skip this row
+                    if not has_meaningful_data:
+                        print(f"DEBUG: Skipping row {excel_row} - no meaningful numeric data. Puffs: {puffs_cell.value}")
+                        continue
+        
                     # Load the data with proper type conversion
                     try:
-                        # Puffs - convert to int
-                        puffs_value = int(puffs_cell.value) if puffs_cell.value is not None else ""
-                        self.data[sample_id]["puffs"][data_row_idx] = puffs_value
-                    
+                        # Chronography (User Test Simulation only)
+                        if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+                            chrono_value = str(chrono_cell.value) if chrono_cell.value is not None else ""
+                            if "chronography" not in self.data[sample_id]:
+                                self.data[sample_id]["chronography"] = [""] * len(self.data[sample_id]["puffs"])
+                            # Ensure chronography list is long enough
+                            while len(self.data[sample_id]["chronography"]) <= data_row_idx:
+                                self.data[sample_id]["chronography"].append("")
+                            self.data[sample_id]["chronography"][data_row_idx] = chrono_value
+                
+                        # Puffs - convert to int (skip if it's text like "Day 1")
+                        if isinstance(puffs_cell.value, (int, float)):
+                            puffs_value = int(puffs_cell.value)
+                            self.data[sample_id]["puffs"][data_row_idx] = puffs_value
+                        elif isinstance(puffs_cell.value, str) and puffs_cell.value.replace('.', '').replace('-', '').isdigit():
+                            puffs_value = int(float(puffs_cell.value))
+                            self.data[sample_id]["puffs"][data_row_idx] = puffs_value
+                        else:
+                            print(f"DEBUG: Skipping non-numeric puffs value: {puffs_cell.value}")
+                            continue
+            
                         # Before weight - convert to float or empty string
-                        before_weight_value = float(before_weight_cell.value) if before_weight_cell.value is not None else ""
+                        before_weight_value = ""
+                        if before_weight_cell.value is not None and isinstance(before_weight_cell.value, (int, float)):
+                            before_weight_value = float(before_weight_cell.value)
                         self.data[sample_id]["before_weight"][data_row_idx] = before_weight_value
-                    
+            
                         # After weight - convert to float or empty string
-                        after_weight_value = float(after_weight_cell.value) if after_weight_cell.value is not None else ""
+                        after_weight_value = ""
+                        if after_weight_cell.value is not None and isinstance(after_weight_cell.value, (int, float)):
+                            after_weight_value = float(after_weight_cell.value)
                         self.data[sample_id]["after_weight"][data_row_idx] = after_weight_value
-                    
+            
                         # Draw pressure - convert to float or empty string
-                        draw_pressure_value = float(draw_pressure_cell.value) if draw_pressure_cell.value is not None else ""
+                        draw_pressure_value = ""
+                        if draw_pressure_cell.value is not None and isinstance(draw_pressure_cell.value, (int, float)):
+                            draw_pressure_value = float(draw_pressure_cell.value)
                         self.data[sample_id]["draw_pressure"][data_row_idx] = draw_pressure_value
-                    
+            
                         # Smell - convert to float or empty string
-                        smell_value = float(smell_cell.value) if smell_cell.value is not None else ""
+                        smell_value = ""
+                        if smell_cell.value is not None and isinstance(smell_cell.value, (int, float)):
+                            smell_value = float(smell_cell.value)
                         self.data[sample_id]["smell"][data_row_idx] = smell_value
-                    
+            
                         # Notes - keep as string
                         notes_value = str(notes_cell.value) if notes_cell.value is not None else ""
                         self.data[sample_id]["notes"][data_row_idx] = notes_value
-                    
-                        # TPM - convert to float or None
-                        tpm_value = float(tpm_cell.value) if tpm_cell.value is not None else None
-                        self.data[sample_id]["tpm"][data_row_idx] = tpm_value
-                    
+            
+                        # TPM - convert to float or None (not used in User Test Simulation)
+                        if tmp_cell is not None and tmp_cell.value is not None and isinstance(tpm_cell.value, (int, float)):
+                            tpm_value = float(tpm_cell.value)
+                            self.data[sample_id]["tpm"][data_row_idx] = tmp_value
+                        else:
+                            self.data[sample_id]["tpm"][data_row_idx] = None
+            
                         sample_had_data = True
                         row_count += 1
-                    
-                        print(f"DEBUG: {sample_id} Row {data_row_idx}: puffs={puffs_value}, before={before_weight_value}, after={after_weight_value}, tpm={tpm_value}")
-                    
+            
+                        if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+                            print(f"DEBUG: {sample_id} Row {data_row_idx}: chrono={chrono_value}, puffs={puffs_value}, before={before_weight_value}, after={after_weight_value}")
+                        else:
+                            print(f"DEBUG: {sample_id} Row {data_row_idx}: puffs={puffs_value}, before={before_weight_value}, after={after_weight_value}")
+            
                     except (ValueError, TypeError) as e:
                         print(f"DEBUG: Error converting data for {sample_id} row {data_row_idx}: {e}")
                         # Keep default values if conversion fails
                         continue
-            
+    
                 if sample_had_data:
                     loaded_data_count += 1
                     print(f"DEBUG: {sample_id} - Loaded {row_count} rows of existing data")
                 else:
                     print(f"DEBUG: {sample_id} - No existing data found")
-        
+
             print(f"DEBUG: Successfully loaded existing data for {loaded_data_count} samples")
-        
+
             # Update all treeviews to show the loaded data
             for i, sample_tree in enumerate(self.sample_trees):
                 sample_id = f"Sample {i + 1}"
                 self.update_treeview(sample_tree, sample_id)
                 print(f"DEBUG: Updated treeview for {sample_id}")
-        
+
             # Recalculate TPM values for all samples
             for i in range(self.num_samples):
                 sample_id = f"Sample {i + 1}"
                 self.calculate_tpm(sample_id)
-        
+
             # Update the stats panel
             self.update_stats_panel()
-        
+
             print("DEBUG: Existing data loading completed successfully")
-        
+
         except Exception as e:
             print(f"ERROR: Failed to load existing data from file: {e}")
             import traceback
             traceback.print_exc()
             # Don't show error to user - just continue with empty data
-            # messagebox.showerror("Load Error", f"Failed to load existing data: {e}")
     
     def setup_event_handlers(self):
         """Set up event handlers for the window."""
@@ -1878,10 +2113,19 @@ Developed by Charlie Becquet
         row_idx = tree.index(item)
         col_idx = int(column[1:]) - 1
 
-        # REMOVED: if col_idx == 0: return  # Don't allow editing 'puffs' column
-        # Now puffs column (col_idx == 0) is editable
-
-        column_name = ["puffs", "before_weight", "after_weight", "draw_pressure", "smell", "notes"][col_idx]
+        # Determine column name based on test type and column index
+        if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+            column_names = ["chronography", "puffs", "before_weight", "after_weight", "draw_pressure", "resistance", "smell", "notes"]
+            if col_idx >= len(column_names):
+                return
+            column_name = column_names[col_idx]
+            print(f"DEBUG: User Test Simulation - editing column {col_idx}: {column_name}")
+        else:
+            column_names = ["puffs", "before_weight", "after_weight", "draw_pressure", "resistance", "smell", "power", "notes"]
+            if col_idx >= len(column_names):
+                return
+            column_name = column_names[col_idx]
+            print(f"DEBUG: Standard test - editing column {col_idx}: {column_name}")
 
         # Start editing with the key typed
         self.edit_cell(tree, item, column, row_idx, sample_id, column_name)
