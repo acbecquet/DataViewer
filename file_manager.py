@@ -1110,7 +1110,7 @@ class FileManager:
         try:
             # Show the data collection window directly
             from data_collection_window import DataCollectionWindow
-            data_collection = DataCollectionWindow(self.gui.root, file_path, selected_test, header_data)
+            data_collection = DataCollectionWindow(self.gui, file_path, selected_test, header_data)
             data_result = data_collection.show()
         
             if data_result == "load_file":
@@ -1193,7 +1193,7 @@ class FileManager:
             print("DEBUG: Proceeding to data collection window")
             # Show the data collection window
             from data_collection_window import DataCollectionWindow
-            data_collection = DataCollectionWindow(self.gui.root, file_path, selected_test, header_data)
+            data_collection = DataCollectionWindow(self.gui, file_path, selected_test, header_data)
             data_result = data_collection.show()
         
             if data_result == "load_file":

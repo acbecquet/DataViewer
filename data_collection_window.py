@@ -28,6 +28,7 @@ class DataCollectionWindow:
             header_data (dict): Dictionary containing header data.
         """
         self.parent = parent
+        self.root = parent.root
         self.file_path = file_path
         self.test_name = test_name
         self.header_data = header_data
@@ -41,7 +42,7 @@ class DataCollectionWindow:
         self.last_save_time = None
         
         # Create the window
-        self.window = tk.Toplevel(parent)
+        self.window = tk.Toplevel(self.root)
         self.window.title(f"Data Collection - {test_name}")
         self.window.geometry("1100x600")  # Wider window to accommodate TPM panel
         self.window.minsize(1000, 500)
@@ -385,7 +386,6 @@ class DataCollectionWindow:
     # Menu action methods
     def quick_save(self):
         """Quick save without closing the window."""
-        print("DEBUG: Quick save initiated")
         try:
             self.save_data_internal(show_confirmation=False)
             self.update_save_status(False)
@@ -906,113 +906,160 @@ Developed by Charlie Becquet
     def save_data_internal(self, show_confirmation=True, auto_save=False):
         """
         Internal save method that handles both Excel and VAP3 files.
-        
+    
         Args:
             show_confirmation (bool): Whether to show confirmation dialog
             auto_save (bool): Whether this is an auto-save operation
         """
         # End any active editing
         self.end_editing()
-        
+    
         # Confirm save if not auto-save
         if show_confirmation and not auto_save:
             if not messagebox.askyesno("Confirm Save", "Save the collected data to the file?"):
                 return
-        
+    
         print(f"DEBUG: Starting save operation (auto_save: {auto_save})")
-        
+    
         # Ensure TPM values are calculated for all samples
         for i in range(self.num_samples):
             sample_id = f"Sample {i+1}"
             self.calculate_tpm(sample_id)
-        
+    
         # Save to Excel file
         self._save_to_excel()
-        
+    
         # Update application state if this is the main file
         self._update_application_state()
-        
+    
         # Refresh the main GUI to show updated data (but not during auto-save to avoid disruption)
         if not auto_save:
-            print("DEBUG: Refreshing main GUI after save")
+            print("DEBUG: About to call refresh_main_gui_after_save()")
             self.refresh_main_gui_after_save()
-        
+            print("DEBUG: refresh_main_gui_after_save() call completed")
+        else:
+            print("DEBUG: Skipping GUI refresh for auto-save")
+    
         # Mark as saved
         self.has_unsaved_changes = False
-        
+    
         if not auto_save:
             print("DEBUG: Save operation completed successfully")
     
     def _save_to_excel(self):
         """Save data to the Excel file."""
-        print(f"DEBUG: Saving to Excel file: {self.file_path}")
-        
+        print(f"DEBUG: _save_to_excel() starting - file: {self.file_path}")
+    
         # Load the workbook
         wb = openpyxl.load_workbook(self.file_path)
-        
+        print(f"DEBUG: Loaded workbook, sheets: {wb.sheetnames}")
+    
         # Get the sheet for this test
         if self.test_name not in wb.sheetnames:
             raise Exception(f"Sheet '{self.test_name}' not found in the file.")
-            
-        ws = wb[self.test_name]
         
+        ws = wb[self.test_name]
+        print(f"DEBUG: Opened sheet '{self.test_name}'")
+    
         # Define green fill for TPM cells
         green_fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
-        
+    
+        # Track how much data we're actually writing
+        total_data_written = 0
+    
         # For each sample, write the data
         for sample_idx in range(self.num_samples):
             sample_id = f"Sample {sample_idx+1}"
-            
+        
             # Calculate column offset (12 columns per sample)
             col_offset = sample_idx * 12
-            
+        
+            print(f"DEBUG: Writing data for {sample_id} at column offset {col_offset}")
+        
+            sample_data_written = 0
+        
             # Write the puffs data starting at row 5
             for i, puff in enumerate(self.data[sample_id]["puffs"]):
                 row = i + 5  # Row 5 is the first data row
+            
+                # Only write if we have actual data (not just empty rows)
+                has_data = (
+                    self.data[sample_id]["before_weight"][i] or
+                    self.data[sample_id]["after_weight"][i] or
+                    self.data[sample_id]["draw_pressure"][i] or
+                    self.data[sample_id]["smell"][i] or
+                    self.data[sample_id]["notes"][i] or
+                    self.data[sample_id]["tpm"][i] is not None
+                )
+            
+                if not has_data:
+                    continue  # Skip empty rows
                 
                 # Puffs column (A + offset)
                 ws.cell(row=row, column=1 + col_offset, value=puff)
-                
+            
                 # Before weight column (B + offset)
                 if self.data[sample_id]["before_weight"][i]:
                     try:
                         ws.cell(row=row, column=2 + col_offset, value=float(self.data[sample_id]["before_weight"][i]))
                     except:
                         ws.cell(row=row, column=2 + col_offset, value=self.data[sample_id]["before_weight"][i])
-                
+            
                 # After weight column (C + offset)
                 if self.data[sample_id]["after_weight"][i]:
                     try:
                         ws.cell(row=row, column=3 + col_offset, value=float(self.data[sample_id]["after_weight"][i]))
                     except:
                         ws.cell(row=row, column=3 + col_offset, value=self.data[sample_id]["after_weight"][i])
-                
+            
                 # Draw pressure column (D + offset)
                 if self.data[sample_id]["draw_pressure"][i]:
                     try:
                         ws.cell(row=row, column=4 + col_offset, value=float(self.data[sample_id]["draw_pressure"][i]))
                     except:
                         ws.cell(row=row, column=4 + col_offset, value=self.data[sample_id]["draw_pressure"][i])
-                
+            
                 # Smell column (F + offset)
                 if self.data[sample_id]["smell"][i]:
                     try:
                         ws.cell(row=row, column=6 + col_offset, value=float(self.data[sample_id]["smell"][i]))
                     except:
                         ws.cell(row=row, column=6 + col_offset, value=self.data[sample_id]["smell"][i])
-                
+            
                 # Notes column (H + offset)
                 if self.data[sample_id]["notes"][i]:
                     ws.cell(row=row, column=8 + col_offset, value=str(self.data[sample_id]["notes"][i]))
-                
+            
                 # TPM column (I + offset) - if calculated
                 if i < len(self.data[sample_id]["tpm"]) and self.data[sample_id]["tpm"][i] is not None:
                     tpm_cell = ws.cell(row=row, column=9 + col_offset, value=float(self.data[sample_id]["tpm"][i]))
                     tpm_cell.fill = green_fill
-        
+            
+                sample_data_written += 1
+            
+            total_data_written += sample_data_written
+            print(f"DEBUG: Wrote {sample_data_written} data rows for {sample_id}")
+    
         # Save the workbook
+        print(f"DEBUG: Saving workbook with {total_data_written} total data rows written...")
+
+        print("DEBUG: About to save Excel file - verifying data to be saved:")
+        for sample_idx in range(min(2, self.num_samples)):  # Check first 2 samples
+            sample_id = f"Sample {sample_idx+1}"
+            col_offset = sample_idx * 12
+            
+            print(f"DEBUG: Sample {sample_idx+1} data preview:")
+            for i in range(min(3, len(self.data[sample_id]["puffs"]))):  # First 3 rows
+                row = i + 5
+                puff_val = ws.cell(row=row, column=1 + col_offset).value
+                before_val = ws.cell(row=row, column=2 + col_offset).value
+                after_val = ws.cell(row=row, column=3 + col_offset).value
+                tpm_val = ws.cell(row=row, column=9 + col_offset).value
+                print(f"DEBUG:   Row {i}: Puff={puff_val}, Before={before_val}, After={after_val}, TPM={tpm_val}")
+
+
         wb.save(self.file_path)
-        print("DEBUG: Excel file saved successfully")
+        print(f"DEBUG: Excel file saved successfully to {self.file_path}")
     
     def _update_application_state(self):
         """Update the main application's state if this is a VAP3 file."""
@@ -1139,41 +1186,31 @@ Developed by Charlie Becquet
         # Clear existing items
         for item in tree.get_children():
             tree.delete(item)
-    
+
         # Configure tags for alternating row colors
         tree.tag_configure('oddrow', background='#F5F5F5')
         tree.tag_configure('evenrow', background='white')
-    
+
         # Add rows from data
         for i in range(len(self.data[sample_id]["puffs"])):
-            # Determine the tag for alternating colors
             tag = 'evenrow' if i % 2 == 0 else 'oddrow'
-            
-            # Convert values to strings for display, handling different types
-            puffs_display = str(self.data[sample_id]["puffs"][i]) if self.data[sample_id]["puffs"][i] != "" else ""
-            before_weight_display = str(self.data[sample_id]["before_weight"][i]) if self.data[sample_id]["before_weight"][i] != "" else ""
-            after_weight_display = str(self.data[sample_id]["after_weight"][i]) if self.data[sample_id]["after_weight"][i] != "" else ""
-            draw_pressure_display = str(self.data[sample_id]["draw_pressure"][i]) if self.data[sample_id]["draw_pressure"][i] != "" else ""
-            smell_display = str(self.data[sample_id]["smell"][i]) if self.data[sample_id]["smell"][i] != "" else ""
-            notes_display = str(self.data[sample_id]["notes"][i]) if self.data[sample_id]["notes"][i] != "" else ""
         
-            tree.insert("", "end", values=(
-                puffs_display,
-                before_weight_display,
-                after_weight_display,
-                draw_pressure_display,
-                smell_display,
-                notes_display
-            ), tags=(tag,))
-    
-        print(f"DEBUG: Updated treeview for {sample_id} with {len(self.data[sample_id]['puffs'])} rows")
+            # Convert values to strings for display
+            values = (
+                str(self.data[sample_id]["puffs"][i]) if self.data[sample_id]["puffs"][i] != "" else "",
+                str(self.data[sample_id]["before_weight"][i]) if self.data[sample_id]["before_weight"][i] != "" else "",
+                str(self.data[sample_id]["after_weight"][i]) if self.data[sample_id]["after_weight"][i] != "" else "",
+                str(self.data[sample_id]["draw_pressure"][i]) if self.data[sample_id]["draw_pressure"][i] != "" else "",
+                str(self.data[sample_id]["smell"][i]) if self.data[sample_id]["smell"][i] != "" else "",
+                str(self.data[sample_id]["notes"][i]) if self.data[sample_id]["notes"][i] != "" else ""
+            )
+        
+            tree.insert("", "end", values=values, tags=(tag,))
     
     def finish_edit(self, event=None):
         """Save the current edit and move to the next cell if needed."""
         if not self.editing or not hasattr(self, 'current_edit'):
             return
-
-        print(f"DEBUG: Finishing edit, event: {event.keysym if event else 'None'}")
 
         value = self.current_edit["entry"].get()
         tree = self.current_edit["tree"]
@@ -1185,27 +1222,20 @@ Developed by Charlie Becquet
 
         # Convert value to appropriate type based on column
         if column_name in ["puffs", "before_weight", "after_weight", "draw_pressure", "smell"]:
-            # For numeric columns, convert to appropriate type
-            if value.strip():  # Only convert if not empty
+            if value.strip():
                 try:
                     if column_name == "puffs":
-                        # Puffs should be integers
-                        converted_value = int(float(value.strip()))  # Convert via float first to handle decimals
-                        print(f"DEBUG: Converted puffs value '{value}' to integer {converted_value}")
+                        converted_value = int(float(value.strip()))
                     else:
-                        # Weights, pressure, smell should be floats
                         converted_value = float(value.strip())
-                        print(f"DEBUG: Converted {column_name} value '{value}' to float {converted_value}")
                     value = converted_value
                 except ValueError:
-                    print(f"DEBUG: Could not convert '{value}' to number for {column_name}, keeping as string")
-                    # Keep as string if conversion fails
+                    pass  # Keep as string if conversion fails
             else:
-                # Empty values stay as empty strings for most columns, but numeric columns should be 0 or None
-                if column_name in ["puffs", "before_weight", "after_weight", "draw_pressure", "smell"]:
-                    value = "" if column_name in ["before_weight", "after_weight", "draw_pressure", "smell"] else 0
-        # For notes column, keep as string
-        # (no conversion needed)
+                if column_name in ["before_weight", "after_weight", "draw_pressure", "smell"]:
+                    value = "" 
+                else:
+                    value = 0
 
         # Update data storage
         if row_idx < len(self.data[sample_id][column_name]):
@@ -1215,256 +1245,199 @@ Developed by Charlie Becquet
             # Only mark as changed if value actually changed
             if old_value != value:
                 self.mark_unsaved_changes()
-                print(f"DEBUG: Updated {column_name} at row {row_idx} from '{old_value}' to '{value}' (type: {type(value)})")
 
                 # AUTO-WEIGHT PROGRESSION: If after_weight was changed, update next row's before_weight
                 if column_name == "after_weight" and value != "" and value != 0:
                     try:
-                        # Value is already converted to float above
                         after_weight_value = float(value)
-            
-                        # Check if there's a next row
                         next_row_idx = row_idx + 1
                         if next_row_idx < len(self.data[sample_id]["before_weight"]):
-                            # Set the next row's before_weight to this row's after_weight
                             self.data[sample_id]["before_weight"][next_row_idx] = after_weight_value
-                            print(f"DEBUG: Auto-progression: Set before_weight at row {next_row_idx} to {after_weight_value}")
-                
                             # Update the tree display for the next row
                             next_item = tree.get_children()[next_row_idx] if next_row_idx < len(tree.get_children()) else None
                             if next_item:
                                 next_values = list(tree.item(next_item, "values"))
-                                next_values[1] = str(after_weight_value)  # before_weight is column index 1, display as string
+                                next_values[1] = str(after_weight_value)
                                 tree.item(next_item, values=next_values)
-                                print(f"DEBUG: Updated tree display for next row's before_weight")
-                        else:
-                            print(f"DEBUG: No next row available for auto-progression")
-                
                     except (ValueError, TypeError):
-                        print(f"DEBUG: Cannot auto-progress - after_weight '{value}' is not a valid number")
+                        pass
 
                 # AUTO-PUFF PROGRESSION: If puffs was changed, update all subsequent rows
                 if column_name == "puffs" and value != "" and value != 0:
                     try:
-                        # Value is already converted to int above
                         new_puff_value = int(value)
-            
-                        print(f"DEBUG: Auto-puff progression: Starting from row {row_idx} with new puff value {new_puff_value}")
-            
-                        # Update all subsequent rows based on the puff interval
                         total_rows = len(self.data[sample_id]["puffs"])
-                        updated_rows = 0
-            
                         for subsequent_row_idx in range(row_idx + 1, total_rows):
-                            # Calculate the expected puff value for this row
                             rows_ahead = subsequent_row_idx - row_idx
                             expected_puff = new_puff_value + (rows_ahead * self.puff_interval)
-                    
-                            # Update the data with proper type (integer)
-                            old_puff_value = self.data[sample_id]["puffs"][subsequent_row_idx]
                             self.data[sample_id]["puffs"][subsequent_row_idx] = expected_puff
-                    
-                            print(f"DEBUG: Row {subsequent_row_idx}: Updated puff from {old_puff_value} to {expected_puff} (+{rows_ahead * self.puff_interval})")
-                    
-                            # Update the tree display for this row
+                            # Update the tree display
                             if subsequent_row_idx < len(tree.get_children()):
                                 subsequent_item = tree.get_children()[subsequent_row_idx]
                                 subsequent_values = list(tree.item(subsequent_item, "values"))
-                                subsequent_values[0] = str(expected_puff)  # puffs is column index 0, display as string
+                                subsequent_values[0] = str(expected_puff)
                                 tree.item(subsequent_item, values=subsequent_values)
-                                updated_rows += 1
-                        
-                        print(f"DEBUG: Auto-puff progression: Updated {updated_rows} subsequent puff values using interval {self.puff_interval}")
-            
                     except (ValueError, TypeError):
-                        print(f"DEBUG: Cannot auto-progress puffs - '{value}' is not a valid number")
+                        pass
 
         # Update the tree display
         col_idx = int(column[1:]) - 1
         values = list(tree.item(item, "values"))
-        # Convert value back to string for display
         values[col_idx] = str(value) if value != "" else ""
         tree.item(item, values=values)
 
-        # ENHANCED: Calculate TPM if weight OR puffs was changed
+        # Calculate TPM if weight OR puffs was changed
         if column_name in ["before_weight", "after_weight", "puffs"]:
-            print(f"DEBUG: Triggering TPM recalculation due to {column_name} change")
             self.calculate_tpm(sample_id)
             self.update_stats_panel()
-            print(f"DEBUG: Recalculated TPM after {column_name} change")
 
         # End the current edit BEFORE navigation
         self.end_editing()
 
-        # Don't handle navigation here if Tab was pressed - it will be handled by handle_tab_in_edit
-        if event and event.keysym == "Tab":
-            print("DEBUG: Tab navigation will be handled by handle_tab_in_edit")
-            return
-
-        # Handle other navigation keys
+        # Handle navigation keys
         if event and event.keysym in ["Right", "Left"]:
             if event.keysym == "Right":
                 self.handle_arrow_key(event, tree, sample_id, "right")
             elif event.keysym == "Left":
                 self.handle_arrow_key(event, tree, sample_id, "left")
     
-        print(f"DEBUG: Edit finished successfully for {column_name} at row {row_idx}")
-    
     def refresh_main_gui_after_save(self):
         """Refresh the main GUI to show updated data after saving."""
-        print("DEBUG: Refreshing main GUI after data collection save")
+        print("DEBUG: Starting main GUI refresh")
 
         try:
-            # Check if we have a valid parent (main GUI)
-            if not hasattr(self, 'parent') or not self.parent:
-                print("DEBUG: No parent GUI reference, skipping refresh")
-                return
+            # Use test_name as the sheet to refresh
+            current_sheet_name = self.test_name
+            print(f"DEBUG: Target sheet: {current_sheet_name}")
         
-            # Get the current sheet name for later restoration
-            current_sheet = getattr(self.parent, 'selected_sheet', None)
-            current_sheet_name = current_sheet.get() if current_sheet else None
-    
-            print(f"DEBUG: Current sheet before refresh: {current_sheet_name}")
-    
-            # Reload the file data in the main GUI
+            # Check parent and file_manager
+            print(f"DEBUG: Has parent: {hasattr(self, 'parent')}")
+            print(f"DEBUG: Parent exists: {self.parent is not None}")
+            print(f"DEBUG: Has file_manager: {hasattr(self.parent, 'file_manager')}")
+            print(f"DEBUG: File manager exists: {self.parent.file_manager is not None}")
+        
+            # Force reload the file
             if hasattr(self.parent, 'file_manager') and self.parent.file_manager:
-                print("DEBUG: Reloading file data through file manager")
-        
-                # Use the file manager to reload the current file
-                if hasattr(self.parent, 'file_path') and self.parent.file_path:
-                    # FIXED: Add force_reload=True to bypass cache and reload updated data
-                    self.parent.file_manager.load_excel_file(
-                        self.parent.file_path, 
-                        skip_database_storage=True,
-                        force_reload=True  # <-- This forces reload from disk
-                    )
-                    print("DEBUG: File data reloaded successfully with force_reload=True")
+                print(f"DEBUG: Force reloading {self.file_path}")
             
-                    # Update the filtered sheets in the current file entry
-                    if hasattr(self.parent, 'all_filtered_sheets') and hasattr(self.parent, 'current_file'):
-                        for file_data in self.parent.all_filtered_sheets:
-                            if file_data.get("file_name") == self.parent.current_file:
-                                file_data["filtered_sheets"] = copy.deepcopy(self.parent.filtered_sheets)
-                                print(f"DEBUG: Updated filtered_sheets for {self.parent.current_file}")
-                                break
-    
-            # Update the sheet dropdown (in case new sheets were added)
-            if hasattr(self.parent, 'populate_or_update_sheet_dropdown'):
-                self.parent.populate_or_update_sheet_dropdown()
-                print("DEBUG: Updated sheet dropdown")
-    
-            # Restore the current sheet selection if it still exists
-            if current_sheet_name and hasattr(self.parent, 'filtered_sheets'):
-                if current_sheet_name in self.parent.filtered_sheets:
-                    print(f"DEBUG: Restoring sheet selection to: {current_sheet_name}")
-                    if current_sheet:
-                        current_sheet.set(current_sheet_name)
-                else:
-                    # If the current sheet no longer exists, select the first available sheet
-                    if self.parent.filtered_sheets:
-                        first_sheet = list(self.parent.filtered_sheets.keys())[0]
-                        print(f"DEBUG: Current sheet not found, selecting first sheet: {first_sheet}")
-                        if current_sheet:
-                            current_sheet.set(first_sheet)
-                        current_sheet_name = first_sheet
-    
-            # Update the displayed sheet to show the new data
-            if current_sheet_name and hasattr(self.parent, 'update_displayed_sheet'):
-                print(f"DEBUG: Updating displayed sheet: {current_sheet_name}")
+                # Clear any existing cache for this file first
+                if hasattr(self.parent.file_manager, 'loaded_files_cache'):
+                    cache_key = f"{self.file_path}_None"
+                    if cache_key in self.parent.file_manager.loaded_files_cache:
+                        del self.parent.file_manager.loaded_files_cache[cache_key]
+                        print("DEBUG: Cleared file cache")
+            
+                self.parent.file_manager.load_excel_file(
+                    self.file_path, 
+                    skip_database_storage=True,
+                    force_reload=True
+                )
+                print("DEBUG: File reloaded")
+            else:
+                print("DEBUG: Cannot reload - file_manager not available")
+
+            # Update all_filtered_sheets
+            if hasattr(self.parent, 'all_filtered_sheets') and hasattr(self.parent, 'current_file'):
+                print(f"DEBUG: Updating all_filtered_sheets for {self.parent.current_file}")
+                for file_data in self.parent.all_filtered_sheets:
+                    if file_data.get("file_name") == self.parent.current_file:
+                        file_data["filtered_sheets"] = copy.deepcopy(self.parent.filtered_sheets)
+                        print("DEBUG: Updated all_filtered_sheets entry")
+                        break
+
+            # Set the sheet selection
+            if hasattr(self.parent, 'selected_sheet'):
+                if not self.parent.selected_sheet:
+                    import tkinter as tk
+                    self.parent.selected_sheet = tk.StringVar()
+                    print("DEBUG: Created selected_sheet variable")
+                self.parent.selected_sheet.set(current_sheet_name)
+                print(f"DEBUG: Set sheet to {current_sheet_name}")
+
+            # Update the display
+            if hasattr(self.parent, 'update_displayed_sheet'):
+                print("DEBUG: Calling update_displayed_sheet")
                 self.parent.update_displayed_sheet(current_sheet_name)
-                print("DEBUG: Main GUI display updated successfully")
-    
-            # Force GUI to update
+                print("DEBUG: Display updated")
+            else:
+                print("DEBUG: No update_displayed_sheet method available")
+        
+            # Force GUI update
             if hasattr(self.parent, 'root'):
                 self.parent.root.update_idletasks()
-        
-            print("DEBUG: Main GUI refresh completed successfully")
+                print("DEBUG: Forced GUI update")
     
+            print("DEBUG: Refresh complete")
+
         except Exception as e:
-            print(f"ERROR: Failed to refresh main GUI: {e}")
+            print(f"ERROR: Refresh failed: {e}")
             import traceback
             traceback.print_exc()
-            # Don't show error to user - the save was successful, refresh just failed
 
     def calculate_tpm(self, sample_id):
         """Calculate TPM for all rows with before and after weights."""
-        print(f"DEBUG: Calculating TPM for {sample_id}")
-    
         calculated_count = 0
         for i in range(len(self.data[sample_id]["puffs"])):
             try:
                 before_weight_str = self.data[sample_id]["before_weight"][i]
                 after_weight_str = self.data[sample_id]["after_weight"][i]
-            
+        
                 # Skip if either weight is missing or empty
                 if not before_weight_str or before_weight_str == "":
                     continue
                 if not after_weight_str or after_weight_str == "":
                     continue
-                
-                # Convert to float, handling both string and numeric inputs
+            
+                # Convert to float
                 try:
                     before_weight = float(before_weight_str)
                     after_weight = float(after_weight_str)
                 except (ValueError, TypeError):
-                    print(f"DEBUG: Row {i}: Cannot convert weights to numbers - before: '{before_weight_str}', after: '{after_weight_str}'")
                     continue
-            
-                # Validate that before_weight > after_weight (material was consumed)
+        
+                # Validate that before_weight > after_weight
                 if before_weight <= after_weight:
-                    print(f"DEBUG: Row {i}: Invalid weights - before ({before_weight}) <= after ({after_weight})")
                     continue
-            
-                # Get puff interval, handling both string and numeric inputs
+        
+                # Get puff interval
                 try:
                     puff_interval = int(self.data[sample_id]["puffs"][i]) if self.data[sample_id]["puffs"][i] != "" else 0
                 except (ValueError, TypeError):
-                    print(f"DEBUG: Row {i}: Cannot convert puff interval to number: '{self.data[sample_id]['puffs'][i]}'")
                     continue
-            
+        
                 # Calculate puffs in this interval
                 if i > 0:
                     try:
                         prev_puff = int(self.data[sample_id]["puffs"][i - 1]) if self.data[sample_id]["puffs"][i - 1] != "" else 0
                         puffs_in_interval = puff_interval - prev_puff
                     except (ValueError, TypeError):
-                        print(f"DEBUG: Row {i}: Cannot convert previous puff to number: '{self.data[sample_id]['puffs'][i - 1]}'")
                         continue
                 else:
                     puffs_in_interval = puff_interval
-            
-                # Calculate TPM (Total Particulate Matter per puff)
+        
+                # Calculate TPM
                 if puffs_in_interval > 0:
                     weight_consumed = before_weight - after_weight  # in grams
                     tpm = (weight_consumed * 1000) / puffs_in_interval  # Convert to mg per puff
-                
+            
                     # Ensure tpm list is long enough
                     while len(self.data[sample_id]["tpm"]) <= i:
                         self.data[sample_id]["tpm"].append(None)
-                    
+                
                     self.data[sample_id]["tpm"][i] = round(tpm, 6)
                     calculated_count += 1
-                
-                    print(f"DEBUG: Row {i}: TPM = {tpm:.6f} mg/puff (weight consumed: {weight_consumed:.6f}g over {puffs_in_interval} puffs)")
-                else:
-                    print(f"DEBUG: Row {i}: Invalid puff interval: {puffs_in_interval}")
-                
+            
             except Exception as e:
-                print(f"DEBUG: Error calculating TPM for row {i}: {e}")
                 # Ensure tpm list is long enough even for failed calculations
                 while len(self.data[sample_id]["tpm"]) <= i:
                     self.data[sample_id]["tpm"].append(None)
-            
-        print(f"DEBUG: TPM calculation complete for {sample_id}: {calculated_count} values calculated")
-    
+        
         # Update average TPM for the sample
         valid_tpm_values = [v for v in self.data[sample_id]["tpm"] if v is not None]
         if valid_tpm_values:
             self.data[sample_id]["avg_tpm"] = sum(valid_tpm_values) / len(valid_tpm_values)
-            print(f"DEBUG: Average TPM for {sample_id}: {self.data[sample_id]['avg_tpm']:.6f} mg/puff")
         else:
             self.data[sample_id]["avg_tpm"] = 0.0
-            print(f"DEBUG: No valid TPM values for {sample_id}")
 
     def validate_weight_entry(self, sample_id, row_idx, column_name, value):
         """
