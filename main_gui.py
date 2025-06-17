@@ -69,12 +69,19 @@ class TestingGUI:
         self.line_labels = []
         self.original_lines_data = []
         self.checkbox_cid = None
-        self.plot_options = ["TPM", "Draw Pressure", "Resistance", "Power Efficiency", "TPM (Bar)"]
+    
+        # Add different plot options for different tests:
+        self.standard_plot_options = ["TPM", "Draw Pressure", "Resistance", "Power Efficiency", "TPM (Bar)"]
+        self.user_test_simulation_plot_options = ["TPM", "Draw Pressure", "Power Efficiency", "TPM (Bar)"]  # No Resistance
+        self.plot_options = self.standard_plot_options  # Default to standard
+    
         self.check_buttons = None
         self.previous_window_geometry = None
+        self.is_user_test_simulation = False  
+        self.num_columns_per_sample = 12 
 
         self.crop_enable = tk.BooleanVar(value = False)
-        
+    
         # Instantiate manager classes
         self.file_manager = FileManager(self)
         self.plot_manager = PlotManager(self)
@@ -691,7 +698,18 @@ class TestingGUI:
             process_function = processing.get_processing_function(sheet_name)
             processed_data, _, full_sample_data = process_function(data)
             print(f"DEBUG: Processing complete - processed_data: {processed_data.shape}, full_sample_data: {full_sample_data.shape}")
-            
+            #SPECIAL HANDLING FOR USER TEST SIMULATION:
+            if sheet_name == "User Test Simulation":
+                print("DEBUG: Detected User Test Simulation - using 8 columns per sample")
+                self.plot_options = self.user_test_simulation_plot_options
+                # Store the fact that this is User Test Simulation for plotting
+                self.is_user_test_simulation = True
+                self.num_columns_per_sample = 8
+            else:
+                self.plot_options = self.standard_plot_options
+                self.is_user_test_simulation = False
+                self.num_columns_per_sample = 12
+
         except Exception as e:
             print(f"ERROR: Processing function failed for {sheet_name}: {e}")
             messagebox.showerror("Processing Error", f"Error processing sheet '{sheet_name}': {e}")
@@ -907,13 +925,18 @@ class TestingGUI:
         for widget in self.plot_frame.winfo_children():
             widget.destroy()
 
+        # Determine the number of columns per sample
+        num_columns = getattr(self, 'num_columns_per_sample', 12)
+    
+        print(f"DEBUG: Displaying plot with {num_columns} columns per sample")
+
         # Generate and embed the plot - force it to respect container width
-        self.plot_manager.plot_all_samples(self.plot_frame, full_sample_data, 12)
+        self.plot_manager.plot_all_samples(self.plot_frame, full_sample_data, num_columns)
 
         # Ensure plot stays within its frame
         self.plot_frame.grid_propagate(True)  # Allow the frame to resize based on content
         self.plot_manager.add_plot_dropdown(self.plot_frame)
-    
+
         # Force immediate update of the UI
         self.plot_frame.update_idletasks()
 

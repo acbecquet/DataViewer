@@ -83,9 +83,169 @@ def get_y_label_for_plot_type(plot_type):
     }
     return y_label_mapping.get(plot_type, 'TPM (mg/puff)')  # Default to TPM
 
+def plot_user_test_simulation_samples(full_sample_data: pd.DataFrame, num_columns_per_sample: int, plot_type: str) -> Tuple[plt.Figure, List[str]]:
+    """
+    Generate split plots for User Test Simulation.
+    Creates two separate plots: one for puffs 0-50 (first 5 rows) and one for remaining puffs (9th row onwards).
+    """
+    print(f"DEBUG: plot_user_test_simulation_samples called with plot_type: {plot_type}")
+    
+    num_samples = full_sample_data.shape[1] // num_columns_per_sample
+    full_sample_data = full_sample_data.replace(0, np.nan)
+    
+    # Create subplots - 1 row, 2 columns for the two phases
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
+    sample_names = []
+
+    if plot_type == "TPM (Bar)":
+        # For bar charts, we'll create separate bar charts for each phase
+        sample_names = plot_user_test_simulation_bar_chart(ax1, ax2, full_sample_data, num_samples, num_columns_per_sample)
+    else:
+        y_max = 0
+        
+        for i in range(num_samples):
+            start_col = i * num_columns_per_sample
+            sample_data = full_sample_data.iloc[:, start_col:start_col + num_columns_per_sample]
+
+            # For User Test Simulation, puffs are in column 1 instead of 0
+            x_data = sample_data.iloc[3:, 1].dropna()  # Column 1 for puffs
+            y_data = get_y_data_for_user_test_simulation_plot_type(sample_data, plot_type)
+            y_data = pd.to_numeric(y_data, errors='coerce').dropna()
+
+            common_index = x_data.index.intersection(y_data.index)
+            x_data = x_data.loc[common_index]
+            y_data = y_data.loc[common_index]
+
+            if not x_data.empty and not y_data.empty:
+                sample_name = sample_data.columns[4] if len(sample_data.columns) > 4 else f"Sample {i+1}"  # Adjusted for 8-column layout
+                sample_names.append(sample_name)
+                
+                # Split data into two phases
+                # Phase 1: Puffs 0-50 (first 5 rows of data, which is rows 3-7 in original data)
+                phase1_mask = x_data <= 50
+                phase1_x = x_data[phase1_mask]
+                phase1_y = y_data[phase1_mask]
+                
+                # Phase 2: Remaining puffs (9th row onwards, which is row 11+ in original data)
+                # Find the index where row 11 starts (8th data row)
+                data_start_index = x_data.index[0]  # First data index
+                phase2_start_index = data_start_index + 8  # 9th data row (0-indexed: 8th)
+                phase2_mask = x_data.index >= phase2_start_index
+                phase2_x = x_data[phase2_mask]
+                phase2_y = y_data[phase2_mask]
+                
+                # Plot Phase 1 (0-50 puffs)
+                if not phase1_x.empty and not phase1_y.empty:
+                    ax1.plot(phase1_x, phase1_y, marker='o', label=sample_name)
+                    y_max = max(y_max, phase1_y.max())
+                
+                # Plot Phase 2 (remaining puffs)
+                if not phase2_x.empty and not phase2_y.empty:
+                    ax2.plot(phase2_x, phase2_y, marker='o', label=sample_name)
+                    y_max = max(y_max, phase2_y.max())
+
+        # Configure Phase 1 plot
+        ax1.set_xlabel('Puffs')
+        ax1.set_ylabel(get_y_label_for_plot_type(plot_type))
+        ax1.set_title(f'{plot_type} - Phase 1 (Puffs 0-50)')
+        ax1.legend(loc='upper right')
+        ax1.set_xlim(0, 60)  # Slightly wider than 50 for better visualization
+        
+        # Configure Phase 2 plot  
+        ax2.set_xlabel('Puffs')
+        ax2.set_ylabel(get_y_label_for_plot_type(plot_type))
+        ax2.set_title(f'{plot_type} - Phase 2 (Extended Puffs)')
+        ax2.legend(loc='upper right')
+
+        # Set consistent y-axis limits
+        if y_max > 9 and y_max <= 50:
+            ax1.set_ylim(0, y_max)
+            ax2.set_ylim(0, y_max)
+        else:
+            ax1.set_ylim(0, 9)
+            ax2.set_ylim(0, 9)
+
+    plt.tight_layout()
+    return fig, sample_names
+
+def get_y_data_for_user_test_simulation_plot_type(sample_data, plot_type):
+    """
+    Extract y-data for the specified plot type for User Test Simulation.
+    Adjusted for 8-column layout instead of 12-column.
+    """
+    plot_type_mapping = {
+        "TPM": sample_data.iloc[3:, 7],  # Column 7 instead of 8 for 8-column layout
+        "Draw Pressure": sample_data.iloc[3:, 2],  # Adjusted column for draw pressure
+        "Power Efficiency": sample_data.iloc[3:, 6],  # Adjusted column for power efficiency
+        # Note: No Resistance for User Test Simulation as per requirements
+    }
+    return plot_type_mapping.get(plot_type, sample_data.iloc[3:, 7])  # Default to TPM
+
+def plot_user_test_simulation_bar_chart(ax1, ax2, full_sample_data, num_samples, num_columns_per_sample):
+    """
+    Generate split bar charts for User Test Simulation average TPM.
+    """
+    phase1_averages = []
+    phase2_averages = []
+    labels = []
+    sample_names = []
+
+    for i in range(num_samples):
+        start_col = i * num_columns_per_sample
+        end_col = start_col + num_columns_per_sample
+        sample_data = full_sample_data.iloc[:, start_col:end_col]
+
+        if pd.isna(sample_data.iloc[3, 1]):  # Check puffs column (column 1)
+            continue
+
+        tpm_data = sample_data.iloc[3:, 7].dropna()  # TPM column (column 7 for 8-column layout)
+        
+        # Split TPM data into phases
+        # Phase 1: First 5 data points
+        phase1_tpm = tpm_data.iloc[:5] if len(tpm_data) >= 5 else tpm_data
+        # Phase 2: From 9th data point onwards (index 8+)
+        phase2_tpm = tpm_data.iloc[8:] if len(tpm_data) > 8 else pd.Series(dtype=float)
+        
+        phase1_avg = phase1_tpm.mean() if not phase1_tpm.empty else 0
+        phase2_avg = phase2_tpm.mean() if not phase2_tpm.empty else 0
+        
+        phase1_averages.append(phase1_avg)
+        phase2_averages.append(phase2_avg)
+
+        sample_name = sample_data.columns[4] if len(sample_data.columns) > 4 else f"Sample {i+1}"
+        sample_names.append(sample_name)
+        wrapped_name = wrap_text(text=sample_name, max_width=10)
+        labels.append(wrapped_name)
+
+    # Create colormaps for unique colors
+    num_bars = len(phase1_averages)
+    colors = cm.get_cmap('tab10', num_bars)(np.linspace(0, 1, num_bars))
+
+    # Plot Phase 1 bar chart
+    ax1.bar(labels, phase1_averages, color=colors)
+    ax1.set_xlabel('Samples')
+    ax1.set_ylabel('Average TPM (mg/puff)')
+    ax1.set_title('Average TPM - Phase 1 (Puffs 0-50)')
+    ax1.tick_params(axis='x', labelsize=8)
+
+    # Plot Phase 2 bar chart
+    ax2.bar(labels, phase2_averages, color=colors)
+    ax2.set_xlabel('Samples')
+    ax2.set_ylabel('Average TPM (mg/puff)')
+    ax2.set_title('Average TPM - Phase 2 (Extended Puffs)')
+    ax2.tick_params(axis='x', labelsize=8)
+
+    return sample_names
+
 def plot_all_samples(full_sample_data: pd.DataFrame, num_columns_per_sample: int, plot_type: str) -> Tuple[plt.Figure, List[str]]:
     """Generate the plot for all samples and return the figure."""
+    
+    # Check if this is User Test Simulation (8 columns per sample)
+    if num_columns_per_sample == 8:
+        print("DEBUG: Detected User Test Simulation - using split plotting")
+        return plot_user_test_simulation_samples(full_sample_data, num_columns_per_sample, plot_type)
 
+    # Original logic for standard tests (12 columns per sample)
     num_samples = full_sample_data.shape[1] // num_columns_per_sample
     full_sample_data = full_sample_data.replace(0, np.nan)
     fig, ax = plt.subplots(figsize=(8, 6))
@@ -112,8 +272,6 @@ def plot_all_samples(full_sample_data: pd.DataFrame, num_columns_per_sample: int
                 ax.plot(x_data, y_data, marker='o', label=sample_name)
                 sample_names.append(sample_name)
                 y_max = max(y_max, y_data.max())
-            #else:
-                #print(f"Sample {i+1} - Missing Data for Plot")
 
         ax.set_xlabel('Puffs')
         ax.set_ylabel(get_y_label_for_plot_type(plot_type))
@@ -542,6 +700,7 @@ def get_processing_functions():
         "Device Life Test": process_device_life_test,
         "Aerosol Temperature": process_aerosol_temp_test,
         "User Test - Full Cycle": process_user_test,
+        "User Test Simulation": process_user_test_simulation,
         "Horizontal Puffing Test": process_horizontal_test,
         "Extended Test": process_extended_test,
         "Long Puff Test": process_long_puff_test,
@@ -794,6 +953,172 @@ def process_sheet1(data):
         data_start_row=4,
         num_columns_per_sample=12
     )
+
+def process_user_test_simulation(data):
+    """
+    Process data for the User Test Simulation sheet.
+    This test has unique characteristics:
+    - 8 columns per sample instead of 12
+    - Puffs column is in position 1 (second column) instead of 0
+    - Data needs to be split for plotting (0-50 puffs and remaining puffs)
+    """
+    print(f"DEBUG: process_user_test_simulation called with data shape: {data.shape}")
+    
+    # For data collection, allow minimal data (less strict validation)
+    min_required_rows = max(3 + 1, 3)  # At least header row + 1
+    if data.shape[0] < min_required_rows:
+        print(f"DEBUG: Data has {data.shape[0]} rows, minimum required is {min_required_rows}")
+        # Create empty structure for data collection
+        return create_empty_user_test_simulation_structure(data)
+    
+    if not validate_sheet_data(data, required_rows=min_required_rows):
+        print("DEBUG: Sheet validation failed, creating empty structure")
+        return create_empty_user_test_simulation_structure(data)
+
+    try:
+        # Clean up the data
+        data = remove_empty_columns(data).replace(0, np.nan)
+        print(f"DEBUG: Data after cleaning: {data.shape}")
+
+        samples = []
+        full_sample_data = []
+        sample_arrays = {}
+
+        # Calculate the number of samples (8 columns per sample instead of 12)
+        num_columns_per_sample = 8
+        num_samples = data.shape[1] // num_columns_per_sample
+        print(f"DEBUG: Calculated {num_samples} samples with {num_columns_per_sample} columns each")
+
+        if num_samples == 0:
+            print("DEBUG: No samples detected, creating empty structure")
+            return create_empty_user_test_simulation_structure(data)
+
+        for i in range(num_samples):
+            start_col = i * num_columns_per_sample
+            end_col = start_col + num_columns_per_sample
+            sample_data = data.iloc[:, start_col:end_col]
+
+            if sample_data.empty:
+                print(f"DEBUG: Sample {i+1} is empty. Skipping.")
+                continue
+
+            # Extract plotting data with error handling
+            # Note: For User Test Simulation, puffs are in column 1 instead of 0
+            try:
+                sample_arrays[f"Sample_{i+1}_Puffs"] = sample_data.iloc[3:, 1].to_numpy()  # Column 1 instead of 0
+                
+                # For User Test Simulation, TPM might be in a different column
+                # Assuming TPM is still in the last data column (column 7 for 8-column layout)
+                sample_arrays[f"Sample_{i+1}_TPM"] = sample_data.iloc[3:, 7].to_numpy()  # Column 7 instead of 8
+
+                # Handle potentially empty TPM data
+                tpm_data = pd.to_numeric(sample_data.iloc[4:, 7], errors='coerce').dropna()
+                avg_tpm = round_values(tpm_data.mean()) if not tpm_data.empty else "No data"
+                std_tpm = round_values(tpm_data.std()) if not tpm_data.empty else "No data"
+
+                # Safe extraction with fallbacks
+                sample_name = sample_data.columns[5] if len(sample_data.columns) > 5 else f"Sample {i+1}"  # Adjusted for 8-column layout
+                media = sample_data.iloc[1, 1] if sample_data.shape[0] > 1 and sample_data.shape[1] > 1 else ""
+                
+                
+                extracted_data = {
+                    "Sample Name": sample_name,
+                    "Media": media,
+                    "Voltage, Resistance, Power": f"{sample_data.iloc[1, 5] if sample_data.shape[0] > 1 and sample_data.shape[1] > 5 else ''} V, "
+                                                   f"{round_values(sample_data.iloc[0, 3]) if sample_data.shape[0] > 0 and sample_data.shape[1] > 3 else ''} ohm, "
+                                                   f"{round_values(sample_data.iloc[1, 7]) if sample_data.shape[0] > 0 and sample_data.shape[1] > 7 else ''} W",
+                    "Average TPM": avg_tpm,
+                    "Standard Deviation": std_tpm,
+                    "Initial Oil Mass": round_values(sample_data.iloc[0,7]) if sample_data.shape[0] > 1 and sample_data.shape[1] > 6 else "",
+                    "Test Type": "User Test Simulation"  # Add identifier for this test type
+                }
+
+                samples.append(extracted_data)
+                full_sample_data.append(sample_data)
+                print(f"DEBUG: Successfully processed User Test Simulation sample {i+1}")
+                
+            except IndexError as e:
+                print(f"DEBUG: Index error for sample {i+1}: {e}. Creating placeholder.")
+                # Create placeholder data for data collection
+                placeholder_data = {
+                    "Sample Name": f"Sample {i+1}",
+                    "Media": "",
+                    "Viscosity": "",
+                    "Voltage, Resistance, Power": "",
+                    "Average TPM": "No data",
+                    "Standard Deviation": "No data",
+                    "Initial Oil Mass": "",
+                    "Usage Efficiency": "",
+                    "Test Type": "User Test Simulation"
+                }
+                samples.append(placeholder_data)
+                full_sample_data.append(sample_data)
+                continue
+
+        # Create processed data and full sample data
+        if samples:
+            processed_data = pd.DataFrame(samples)
+            full_sample_data_df = pd.concat(full_sample_data, axis=1) if full_sample_data else pd.DataFrame()
+        else:
+            print("DEBUG: No valid samples found, creating minimal structure")
+            # Create minimal structure for data collection
+            processed_data = pd.DataFrame([{
+                "Sample Name": "Sample 1",
+                "Media": "",
+                "Viscosity": "",
+                "Voltage, Resistance, Power": "",
+                "Average TPM": "No data",
+                "Standard Deviation": "No data",
+                "Initial Oil Mass": "",
+                "Usage Efficiency": "",
+                "Test Type": "User Test Simulation"
+            }])
+            full_sample_data_df = data  # Use original data
+
+        print(f"DEBUG: Final User Test Simulation processed_data shape: {processed_data.shape}")
+        print(f"DEBUG: Final User Test Simulation full_sample_data shape: {full_sample_data_df.shape}")
+        return processed_data, sample_arrays, full_sample_data_df
+        
+    except Exception as e:
+        print(f"DEBUG: Error processing User Test Simulation sheet: {e}")
+        # Return empty structure instead of failing completely
+        return create_empty_user_test_simulation_structure(data)
+
+def create_empty_user_test_simulation_structure(data):
+    """
+    Create an empty structure for User Test Simulation data collection.
+    """
+    print("DEBUG: Creating empty User Test Simulation structure for data collection")
+    
+    # Create minimal processed data structure
+    processed_data = pd.DataFrame([{
+        "Sample Name": "Sample 1",
+        "Media": "",
+        "Viscosity": "",
+        "Voltage, Resistance, Power": "",
+        "Average TPM": "No data",
+        "Standard Deviation": "No data",
+        "Initial Oil Mass": "",
+        "Usage Efficiency": "",
+        "Test Type": "User Test Simulation"
+    }])
+    
+    # Empty sample arrays
+    sample_arrays = {}
+    
+    # Use original data or create minimal structure
+    num_columns_per_sample = 8  # User Test Simulation uses 8 columns
+    if data.empty:
+        # Create a minimal data structure
+        full_sample_data = pd.DataFrame(
+            index=range(10),  # 10 rows for basic structure
+            columns=range(num_columns_per_sample)  # 8 columns for User Test Simulation
+        )
+    else:
+        full_sample_data = data
+    
+    print(f"DEBUG: Created empty User Test Simulation structure - processed: {processed_data.shape}, full: {full_sample_data.shape}")
+    return processed_data, sample_arrays, full_sample_data
 
 # ==================== AGGREGATION FUNCTIONS ====================
 

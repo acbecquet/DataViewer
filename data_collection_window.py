@@ -16,6 +16,102 @@ from utils import FONT
 import threading
 import subprocess
 
+# Standard Operating Procedures for each test
+TEST_SOPS = {
+    "User Test Simulation": """
+SOP - User Test Simulation:
+
+Day 1: Collect Initial Draw Resistance, TPM for 50 puffs, then use puff per day calculator to determine number of puffs. Make sure to enter initial oil mass.
+
+Days 2-4: 10 puffs TPM after 
+
+Day 5: Extended Test, every 20 puffs until device is empty
+
+Day 6: Full Disassembly + Photos
+
+Be sure to take detailed notes while conducting this test.
+
+Key Points:
+- Split testing: Phase 1 (0-50 puffs) and Phase 2 (extended puffs)
+- 8 columns per sample instead of 12
+- Puffs recorded in second column
+- No resistance measurements during extended testing
+    """,
+    
+    "Intense Test": """
+SOP - Intense Test:
+
+Conduct intensive puffing test with high frequency puffs.
+Record TPM, draw pressure, and resistance at regular intervals.
+Monitor for device overheating or failure.
+Document any unusual observations.
+
+Key Points:
+- High frequency puffing regime
+- Monitor device temperature
+- Standard 12-column data collection
+- Record all measurements consistently
+    """,
+    
+    "Big Headspace High Temperature": """
+SOP - Big Headspace High Temperature Test:
+
+Conduct testing at elevated temperature conditions.
+Monitor device performance under high temperature stress.
+Record standard measurements: TPM, draw pressure, resistance.
+
+Key Points:
+- Elevated temperature environment
+- Standard plotting sheet format
+- Monitor for thermal effects
+- Document temperature-related observations
+    """,
+    
+    "Extended Test": """
+SOP - Extended Test:
+
+Long-duration testing to assess device lifetime and performance degradation.
+Regular measurement intervals throughout test duration.
+Monitor for performance consistency over time.
+
+Key Points:
+- Extended duration testing
+- Regular measurement intervals
+- Performance degradation monitoring
+- Comprehensive data collection
+    """,
+    
+    "Quick Screening Test": """
+SOP - Quick Screening Test:
+
+Rapid assessment of device basic performance.
+Focus on key performance indicators.
+Streamlined testing for initial evaluation.
+
+Key Points:
+- Rapid testing protocol
+- Key performance metrics only
+- Initial device assessment
+- Basic functionality verification
+    """,
+    
+    # Add more SOPs as needed for other tests
+    "default": """
+SOP - Standard Test Protocol:
+
+Follow standard testing procedures for this test type.
+Record all required measurements accurately.
+Document any observations or anomalies.
+Ensure proper test conditions throughout.
+
+Key Points:
+- Standard measurement protocol
+- Accurate data recording
+- Proper documentation
+- Consistent test conditions
+    """
+}
+
 class DataCollectionWindow:
     def __init__(self, parent, file_path, test_name, header_data):
         """
@@ -244,74 +340,77 @@ class DataCollectionWindow:
         """Create the data collection UI."""
         # Set window background to system default
         self.window.configure(background='SystemButtonFace')
-        
+    
         # Create a horizontal split layout
         main_frame = ttk.Frame(self.window, padding=10, style='TFrame')
         main_frame.pack(fill="both", expand=True)
-        
+    
         # Header with test information and save status
         header_frame = ttk.Frame(main_frame, style='TFrame')
         header_frame.pack(fill="x", pady=(0, 10))
-        
+    
         # Left side of header
         header_left = ttk.Frame(header_frame, style='TFrame')
         header_left.pack(side="left", fill="x", expand=True)
-        
+    
         # Use styled labels
         ttk.Label(header_left, text=f"Test: {self.test_name}", style='Header.TLabel').pack(side="left")
         ttk.Label(header_left, text=f"Tester: {self.header_data['common']['tester']}", style='SubHeader.TLabel').pack(side="left", padx=(20, 0))
-        
+    
         # Right side of header - save status
         header_right = ttk.Frame(header_frame, style='TFrame')
         header_right.pack(side="right")
-        
+    
         self.save_status_label = ttk.Label(header_right, text="●", style='SubHeader.TLabel', foreground="red")
         self.save_status_label.pack(side="right")
-        
+    
         self.save_status_text = ttk.Label(header_right, text="Unsaved changes", style='SubHeader.TLabel')
         self.save_status_text.pack(side="right", padx=(0, 5))
-        
+    
+        # ADD SOP SECTION HERE - before the paned window
+        self.create_sop_section(main_frame)
+    
         # Create a horizontal paned window to split the main area
         paned_window = ttk.PanedWindow(main_frame, orient="horizontal")
         paned_window.pack(fill="both", expand=True)
-        
+    
         # Left side - Data entry area
         data_frame = ttk.Frame(paned_window, style='TFrame')
         paned_window.add(data_frame, weight=3)  # 75% of the width
-        
+    
         # Right side - TPM stats panel
         self.stats_frame = ttk.Frame(paned_window, style='TFrame')
         paned_window.add(self.stats_frame, weight=1)  # 25% of the width
-        
+    
         # Setup data entry area with notebook
         self.notebook = ttk.Notebook(data_frame)
         self.notebook.pack(fill="both", expand=True)
-        
+    
         # Create a tab for each sample
         self.sample_frames = []
         self.sample_trees = []
-        
+    
         for i in range(self.num_samples):
             sample_id = f"Sample {i+1}"
             sample_frame = ttk.Frame(self.notebook, padding=10, style='TFrame')
             self.notebook.add(sample_frame, text=f"Sample {i+1} - {self.header_data['samples'][i]['id']}")
             self.sample_frames.append(sample_frame)
-            
+        
             # Create the sample tab content
             tree = self.create_sample_tab(sample_frame, sample_id, i)
             self.sample_trees.append(tree)
-        
+    
         # Create the TPM stats panel
         self.create_tpm_stats_panel()
-        
+    
         # Control buttons at the bottom
         button_frame = ttk.Frame(main_frame, style='TFrame')
         button_frame.pack(fill="x", pady=(10, 0))
-        
+    
         # Left side controls
         left_controls = ttk.Frame(button_frame, style='TFrame')
         left_controls.pack(side="left", fill="x")
-        
+    
         ttk.Label(left_controls, text="Puff Interval:", style='TLabel').pack(side="left")
         self.puff_interval_var = tk.IntVar(value=self.puff_interval)
         puff_spinbox = ttk.Spinbox(
@@ -323,24 +422,86 @@ class DataCollectionWindow:
             command=self.update_puff_interval
         )
         puff_spinbox.pack(side="left", padx=5)
-        
+    
         # Sample navigation
         nav_frame = ttk.Frame(button_frame, style='TFrame')
         nav_frame.pack(side="left", padx=20)
-        
+    
         ttk.Button(nav_frame, text="← Prev Sample", command=self.go_to_previous_sample).pack(side="left")
         ttk.Button(nav_frame, text="Next Sample →", command=self.go_to_next_sample).pack(side="left", padx=5)
-        
+    
         # Right side controls
         ttk.Button(button_frame, text="Quick Save", command=self.quick_save).pack(side="right", padx=(10, 0))
         ttk.Button(button_frame, text="Save & Exit", command=self.save_and_exit).pack(side="right")
         ttk.Button(button_frame, text="Cancel", command=self.on_cancel).pack(side="right", padx=(0, 10))
-        
+    
         # Bind notebook tab change to update stats panel
         self.notebook.bind("<<NotebookTabChanged>>", self.update_stats_panel)
-        
+    
         print("DEBUG: Main widgets created successfully")
     
+    # Add this new method to create the SOP section:
+    def create_sop_section(self, parent_frame):
+        """Create the SOP (Standard Operating Procedure) section."""
+        print(f"DEBUG: Creating SOP section for test: {self.test_name}")
+    
+        # Create a collapsible SOP frame
+        sop_frame = ttk.LabelFrame(parent_frame, text="Standard Operating Procedure (SOP)", style='TLabelframe')
+        sop_frame.pack(fill="x", pady=(0, 10))
+    
+        # Get the SOP text for the current test
+        sop_text = TEST_SOPS.get(self.test_name, TEST_SOPS["default"])
+    
+        # Create a text widget to display the SOP
+        self.sop_text_widget = tk.Text(
+            sop_frame, 
+            height=6,  # Adjust height as needed
+            wrap=tk.WORD,
+            font=("Arial", 9),
+            bg="SystemButtonFace",
+            fg="black",
+            relief="flat",
+            borderwidth=0,
+            padx=10,
+            pady=5
+        )
+        self.sop_text_widget.pack(fill="x", padx=10, pady=5)
+    
+        # Insert the SOP text
+        self.sop_text_widget.insert("1.0", sop_text.strip())
+    
+        # Make it read-only
+        self.sop_text_widget.config(state="disabled")
+    
+        # Add a toggle button to show/hide the SOP
+        toggle_frame = ttk.Frame(sop_frame, style='TFrame')
+        toggle_frame.pack(fill="x", padx=10, pady=(0, 5))
+    
+        self.sop_visible = True
+        self.toggle_sop_button = ttk.Button(
+            toggle_frame,
+            text="Hide SOP ▲",
+            command=self.toggle_sop_visibility
+        )
+        self.toggle_sop_button.pack(side="right")
+    
+        print("DEBUG: SOP section created successfully")
+
+    def toggle_sop_visibility(self):
+        """Toggle the visibility of the SOP text."""
+        if self.sop_visible:
+            # Hide the SOP
+            self.sop_text_widget.pack_forget()
+            self.toggle_sop_button.config(text="Show SOP ▼")
+            self.sop_visible = False
+            print("DEBUG: SOP section hidden")
+        else:
+            # Show the SOP
+            self.sop_text_widget.pack(fill="x", padx=10, pady=5)
+            self.toggle_sop_button.config(text="Hide SOP ▲")
+            self.sop_visible = True
+            print("DEBUG: SOP section shown")
+
     # Auto-save functionality
     def start_auto_save_timer(self):
         """Start the auto-save timer."""
