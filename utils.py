@@ -170,48 +170,51 @@ def autofit_columns_in_excel(file_path):
 
 def is_standard_file(file_path: str) -> bool:
     """
-    Determine if the file is standard by checking for the presence of
-    "sample id:" in the first four rows of the 6th column (zero-indexed column 5).
+    Determine if the file is standard by checking if it meets legacy file criteria.
+    
+    Legacy files are ONLY detected if:
+    1. The file contains exactly 1 sheet, AND
+    2. That sheet has the default name 'Sheet1'
+    
+    All other files are considered standard files.
     
     Args:
         file_path (str): Path to the Excel file.
     
     Returns:
-        bool: True if the file is standard (i.e. the cell contains "sample id:"), 
-              False if it is legacy (non-standard).
+        bool: True if the file is standard (should use standard processing), 
+              False if it is legacy (meets the specific legacy criteria).
     """
     try:
-        sheets_dict = pd.read_excel(file_path, sheet_name=None, header = None, nrows=4)
+        print(f"DEBUG: Checking file format for: {file_path}")
         
-        # Decide which sheet to use.
-        if len(sheets_dict) > 1:
-            if "Intense Test" in sheets_dict:
-                df = sheets_dict["Intense Test"]
-                print("Using sheet 'Intense Test'.")
-            else:
-                # If "Intense Test" isn't found, use the first sheet.
-                first_sheet = list(sheets_dict.keys())[0]
-                df = sheets_dict[first_sheet]
-                print(f"'Intense Test' not found. Using first sheet: '{first_sheet}'.")
+        # Load all sheet names to check structure
+        sheets_dict = pd.read_excel(file_path, sheet_name=None, header=None, nrows=1)
+        sheet_names = list(sheets_dict.keys())
+        num_sheets = len(sheet_names)
+        
+        print(f"DEBUG: File contains {num_sheets} sheet(s): {sheet_names}")
+        
+        # Check for legacy file criteria
+        # Legacy file MUST have exactly 1 sheet AND that sheet must be named 'Sheet1'
+        if num_sheets == 1 and sheet_names[0] == 'Sheet1':
+            print("DEBUG: File meets legacy criteria: 1 sheet named 'Sheet1' -> File is legacy.")
+            print(f"DEBUG: Legacy sheet name: '{sheet_names[0]}'")
+            return False  # Return False for legacy files
         else:
-            # Only one sheet exists.
-            df = list(sheets_dict.values())[0]
-            print("Only one sheet found; using it.")
-        
-        # Check that there are at least 6 columns.
-        if df.shape[1] > 5:
-            # Check each of the first four rows in the 6th column (index 5)
-            for row in range(min(4, df.shape[0])):
-                cell_val = df.iat[row, 4]
-                print(f"Row {row+1}, column 5 value: {cell_val}")
-                if isinstance(cell_val, str) and cell_val.strip().lower() == "sample id:":
-                    print("Found 'sample id:' -> File is standard.")
-                    return True
-        print("Did not find 'sample id:' in the expected location -> File is legacy.")
-        return False
+            print("DEBUG: File does not meet legacy criteria -> File is standard.")
+            if num_sheets > 1:
+                print(f"DEBUG: Multiple sheets found ({num_sheets}), treating as standard")
+            elif num_sheets == 1:
+                print(f"DEBUG: Single sheet found but name is '{sheet_names[0]}' (not 'Sheet1'), treating as standard")
+            return True   # Return True for standard files
+            
     except Exception as e:
-        print(f"Error reading file: {e}")
-        return False
+        print(f"ERROR: Exception while checking file format: {e}")
+        print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        # On error, default to treating as standard file
+        print("DEBUG: Error occurred, defaulting to standard file format")
+        return True
 
 def plotting_sheet_test(sheet_name, data):
     """

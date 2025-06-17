@@ -27,9 +27,22 @@ class PlotManager:
         self.plot_options = self.parent.plot_options
         self.check_buttons = None
 
+    @property
+    def line_labels(self):
+        """Get line labels, creating them if necessary."""
+        if not hasattr(self.parent, 'line_labels'):
+            self.parent.line_labels = []
+        return self.parent.line_labels
+
+    @line_labels.setter  
+    def line_labels(self, value):
+        """Set line labels."""
+        self.parent.line_labels = value
+
     def embed_plot_in_frame(self, fig: plt.Figure, frame: ttk.Frame) -> FigureCanvasTkAgg:
         """
         Embed a Matplotlib figure into a Tkinter frame with proper layout control.
+        Enhanced to handle User Test Simulation split plots.
         """
         # Clear existing widgets
         for widget in frame.winfo_children():
@@ -38,38 +51,99 @@ class PlotManager:
             # Create a separate frame for the dropdown - ensure it's visible
         self.dropdown_frame = ttk.Frame(frame)
         self.dropdown_frame.pack(side='bottom', fill='x', pady=10)
-    
+
         # Create a container frame for the plot
         plot_container = ttk.Frame(frame)
         plot_container.pack(fill='both', expand=True, pady=(0, 0))  
-    
+
         if self.figure:
             plt.close(self.figure)
+
+        # Check if this is a split plot and adjust margins accordingly
+        is_split_plot = hasattr(fig, 'is_split_plot') and fig.is_split_plot
     
-        # Standard right margin - don't make it too small
-        fig.subplots_adjust(right=0.82)
-    
+        if is_split_plot:
+            # For split plots, adjust margins to accommodate checkboxes for both plots
+            fig.subplots_adjust(right=0.80)
+            print("DEBUG: Split plot detected, adjusted margins")
+        else:
+            # Standard right margin - don't make it too small
+            fig.subplots_adjust(right=0.82)
+
         # Embed figure in the plot container
         self.canvas = FigureCanvasTkAgg(fig, master=plot_container)
         self.canvas.draw()
         self.canvas.get_tk_widget().pack(fill='both', expand=True)
-    
+
         # Add toolbar to the plot container
         toolbar = NavigationToolbar2Tk(self.canvas, plot_container)
         toolbar.update()
-    
+
         # Save references to the figure and its axes
         self.figure = fig
-        self.axes = fig.gca()
-        self.lines = self.axes.lines
     
+        if is_split_plot:
+            # For split plots, we have multiple axes
+            self.axes = fig.axes  # List of axes
+            self.lines = []  # Will be handled by the split plot logic
+            print(f"DEBUG: Split plot - found {len(self.axes)} axes")
+        else:
+            # Standard single plot
+            self.axes = fig.gca()
+            self.lines = self.axes.lines
+
         # Bind scroll event for zooming
         self.canvas.mpl_connect("scroll_event", lambda event: self.zoom(event))
-    
+
         # Add checkboxes for toggling plot elements
         self.add_checkboxes()
-    
+
         return self.canvas
+
+    def on_user_test_simulation_checkbox_click(self, wrapped_label):
+        """
+        Handle checkbox clicks for User Test Simulation split plots.
+        Controls both Phase 1 and Phase 2 plots simultaneously.
+        """
+        print(f"DEBUG: User Test Simulation checkbox clicked: {wrapped_label}")
+    
+        if not hasattr(self.figure, 'phase1_lines') or not hasattr(self.figure, 'phase2_lines'):
+            print("DEBUG: No phase lines found on figure")
+            return
+        
+        # Get the original label from the wrapped label
+        original_label = self.label_mapping.get(wrapped_label)
+        if original_label is None:
+            print(f"DEBUG: Could not find original label for: {wrapped_label}")
+            return
+    
+        # Find the index of the clicked sample
+        try:
+            index = self.parent.line_labels.index(original_label)
+            print(f"DEBUG: Found sample index: {index} for label: {original_label}")
+        except ValueError:
+            print(f"DEBUG: Could not find index for label: {original_label}")
+            return
+        
+        # Get the corresponding lines from both plots
+        if index < len(self.figure.phase1_lines) and index < len(self.figure.phase2_lines):
+            phase1_line = self.figure.phase1_lines[index]
+            phase2_line = self.figure.phase2_lines[index]
+        
+            # Toggle visibility for both lines
+            is_visible = phase1_line.get_visible()
+            new_visibility = not is_visible
+        
+            phase1_line.set_visible(new_visibility)
+            phase2_line.set_visible(new_visibility)
+        
+            print(f"DEBUG: Toggled sample '{original_label}' visibility to {new_visibility} in both plots")
+        
+            # Redraw the canvas
+            if self.canvas:
+                self.canvas.draw_idle()
+        else:
+            print(f"DEBUG: Index {index} out of range for phase lines")
 
     def plot_all_samples(self, frame: ttk.Frame, full_sample_data: pd.DataFrame, num_columns_per_sample: int) -> None:
         """
@@ -257,17 +331,23 @@ class PlotManager:
             # Process data for the selected plot option.
             process_function = processing.get_processing_function(current_sheet_name)
             processed_data, _, full_sample_data = process_function(sheet_data)
-            # Update the plot (assuming parent.plot_frame exists)
-            self.plot_all_samples(self.parent.plot_frame, full_sample_data, 12)
+        
+            # Use the correct number of columns per sample
+            num_columns = getattr(self.parent, 'num_columns_per_sample', 12)
+            print(f"DEBUG: update_plot_from_dropdown using {num_columns} columns per sample")
+        
+            # Update the plot
+            self.plot_all_samples(self.parent.plot_frame, full_sample_data, num_columns)
+        
             # Refresh the dropdown in case it was recreated.
             if not self.plot_dropdown or not self.plot_dropdown.winfo_exists():
                 self.add_plot_dropdown(self.parent.plot_frame)
             else:
-                self.plot_dropdown["values"] = self.plot_options
+                self.plot_dropdown["values"] = self.parent.plot_options  # Use parent's plot options
                 self.plot_dropdown.set(selected_plot)
-            # Optionally, update the displayed sheet in the parent.
-            self.parent.update_displayed_sheet(current_sheet_name)
+        
         except Exception as e:
+            print(f"ERROR: Error in update_plot_from_dropdown: {e}")
             messagebox.showerror("Error", f"An error occurred while updating the plot: {e}")
 
     def clear_plot_area(self):
@@ -314,34 +394,53 @@ class PlotManager:
     def add_checkboxes(self, sample_names=None):
         """
         Add checkboxes to toggle visibility of plot elements with properly balanced spacing.
+        Enhanced to handle User Test Simulation split plots.
         """
         self.parent.line_labels = []
         self.parent.original_lines_data = []
         self.label_mapping = {}
         wrapped_labels = []
-    
+
         if self.check_buttons:
             self.check_buttons.ax.clear()
             self.check_buttons = None
-        
+    
         is_bar_chart = self.selected_plot_type.get() == "TPM (Bar)"
     
+        # Check if this is a User Test Simulation split plot
+        is_split_plot = hasattr(self.figure, 'is_split_plot') and self.figure.is_split_plot
+        print(f"DEBUG: add_checkboxes - is_split_plot: {is_split_plot}, is_bar_chart: {is_bar_chart}")
+
         if sample_names is None:
             sample_names = self.parent.line_labels
-        
+    
+        if sample_names:
+            self.parent.line_labels = sample_names
+            print(f"DEBUG: Using provided sample_names: {sample_names}")
+    
         if is_bar_chart and sample_names:
             self.parent.line_labels = sample_names
             self.parent.original_lines_data = [(patch.get_x(), patch.get_height()) for patch in self.axes.patches]
+        elif is_split_plot and hasattr(self.figure, 'phase1_lines'):
+            # For split plots, use the sample names and store line data from both phases
+            if not self.parent.line_labels:
+                self.parent.line_labels = sample_names or [f"Sample {i+1}" for i in range(len(self.figure.phase1_lines))]
+        
+            # Store original data for both phases
+            phase1_data = [(line.get_xdata(), line.get_ydata()) for line in self.figure.phase1_lines]
+            phase2_data = [(line.get_xdata(), line.get_ydata()) for line in self.figure.phase2_lines]
+            self.parent.original_lines_data = list(zip(phase1_data, phase2_data))
+            print(f"DEBUG: Split plot - stored data for {len(self.parent.line_labels)} samples")
         else:
             if not self.parent.line_labels:
                 self.parent.line_labels = [line.get_label() for line in self.lines]
                 self.parent.original_lines_data = [(line.get_xdata(), line.get_ydata()) for line in self.lines]
-            
+        
         for label in self.parent.line_labels:
             wrapped_label = wrap_text(text=label, max_width=12)
             self.label_mapping[wrapped_label] = label
             wrapped_labels.append(wrapped_label)
-    
+
         # Adjusted positioning - increase top margin, reduce width on right
         # Format: [left, bottom, width, height]
         checkbox_ax = self.figure.add_axes([
@@ -350,18 +449,18 @@ class PlotManager:
             0.125,      # Width - reduced to remove empty space on right
             0.55        # Height - increased slightly to ensure all items fit
         ])
-    
+
         self.check_buttons = CheckButtons(checkbox_ax, wrapped_labels, [True]*len(self.parent.line_labels))
         checkbox_ax.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
         checkbox_ax.grid(False)
-    
+
         for spine in checkbox_ax.spines.values():
             spine.set_visible(False)
-        
+    
         # Make font slightly smaller to ensure all labels fit
         for label in self.check_buttons.labels:
             label.set_fontsize(7)
-    
+
         # Adjust the rectangle border to have proper margins around checkboxes
         rect = plt.Rectangle(
             (0.05, 0.02),     # Slight adjustment to left and bottom insets
@@ -374,20 +473,20 @@ class PlotManager:
             zorder=10
         )
         checkbox_ax.add_patch(rect)
-    
+
         # Adjust title position and border
         title_text = PLOT_CHECKBOX_TITLE
         title_x = 0.835 + 0.125/2  # Center in checkbox area
         title_y = 0.33 + 0.55 + 0.025  # Just above the checkbox area
-    
+
         self.figure.text(title_x, title_y, title_text, fontsize=8, ha='center', va='center', wrap=True)
-    
+
         # Adjust title border
         title_border_x = 0.825
         title_border_y = title_y - 0.03
         border_width = 0.14
         border_height = 0.065
-    
+
         self.figure.add_artist(plt.Rectangle(
             (title_border_x, title_border_y), 
             border_width, 
@@ -397,13 +496,18 @@ class PlotManager:
             lw=1, 
             zorder=2
         ))
-    
-        # Bind callbacks
-        if is_bar_chart:
+
+        # Bind callbacks based on plot type
+        if is_split_plot:
+            print("DEBUG: Using User Test Simulation checkbox callback")
+            self.checkbox_cid = self.check_buttons.on_clicked(self.on_user_test_simulation_checkbox_click)
+        elif is_bar_chart:
+            print("DEBUG: Using bar chart checkbox callback")
             self.checkbox_cid = self.check_buttons.on_clicked(self.on_bar_checkbox_click)
         else:
+            print("DEBUG: Using standard line plot checkbox callback")
             self.checkbox_cid = self.check_buttons.on_clicked(self.on_checkbox_click)
-        
+    
         if self.canvas:
             self.canvas.draw_idle()
 

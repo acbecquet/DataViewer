@@ -96,6 +96,10 @@ def plot_user_test_simulation_samples(full_sample_data: pd.DataFrame, num_column
     # Create subplots - 1 row, 2 columns for the two phases
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
     sample_names = []
+    
+    # Store line references for checkbox functionality
+    phase1_lines = []  # Lines for Phase 1 plot
+    phase2_lines = []  # Lines for Phase 2 plot
 
     if plot_type == "TPM (Bar)":
         # For bar charts, we'll create separate bar charts for each phase
@@ -117,56 +121,49 @@ def plot_user_test_simulation_samples(full_sample_data: pd.DataFrame, num_column
             y_data = y_data.loc[common_index]
 
             if not x_data.empty and not y_data.empty:
-                # SIMPLE: Find Sample ID indicator and get value to the right
-                sample_name = None
-                
-                # Search for Sample ID indicator in first 3 rows
-                for row_idx in range(min(3, sample_data.shape[0])):
-                    for col_idx in range(sample_data.shape[1]):
-                        cell_value = sample_data.iloc[row_idx, col_idx]
-                        if cell_value is not None:
-                            cell_str = str(cell_value).strip().lower()
-                            if cell_str in ['sample id:', 'sample id', 'cart #:', 'cart #', 'cart#:', 'cart#']:
-                                # Found indicator, get value from cell to the right
-                                if col_idx + 1 < sample_data.shape[1]:
-                                    value_cell = sample_data.iloc[row_idx, col_idx + 1]
-                                    if value_cell is not None:
-                                        value_str = str(value_cell).strip()
-                                        if value_str and value_str.lower() != 'nan':
-                                            sample_name = value_str
-                                            break
-                    if sample_name:
-                        break
-                
-                # Use fallback if no sample name found
-                if not sample_name:
-                    sample_name = f"Sample {i+1}"
+                # Get sample name from the extracted data
+                sample_name = f"Sample {i+1}"
+                if sample_data.shape[0] > 0 and sample_data.shape[1] > 5:
+                    sample_id_value = sample_data.iloc[0, 5]
+                    if sample_id_value and str(sample_id_value).strip() and str(sample_id_value).strip().lower() != 'nan':
+                        sample_name = str(sample_id_value).strip()
                 
                 sample_names.append(sample_name)
                 
                 # Split data into two phases
-                # Phase 1: Puffs 0-50 (first 5 rows of data, which is rows 3-7 in original data)
-                phase1_mask = x_data <= 50
+                data_start_index = 3  # Data starts at row 3
+                
+                # Phase 1: First 5 data rows (puffs 0-50)
+                phase1_end_index = data_start_index + 5  # First 5 data rows
+                phase1_mask = x_data.index < phase1_end_index
                 phase1_x = x_data[phase1_mask]
                 phase1_y = y_data[phase1_mask]
                 
-                # Phase 2: Remaining puffs (9th row onwards, which is row 11+ in original data)
-                # Find the index where row 11 starts (8th data row)
-                data_start_index = x_data.index[0]  # First data index
+                # Phase 2: From 9th data row onwards (extended puffs)
                 phase2_start_index = data_start_index + 8  # 9th data row (0-indexed: 8th)
                 phase2_mask = x_data.index >= phase2_start_index
                 phase2_x = x_data[phase2_mask]
                 phase2_y = y_data[phase2_mask]
                 
-                # Plot Phase 1 (0-50 puffs)
+                # Plot Phase 1 (0-50 puffs) and store line reference
                 if not phase1_x.empty and not phase1_y.empty:
-                    ax1.plot(phase1_x, phase1_y, marker='o', label=sample_name)
+                    line1 = ax1.plot(phase1_x, phase1_y, marker='o', label=sample_name)[0]
+                    phase1_lines.append(line1)
                     y_max = max(y_max, phase1_y.max())
+                else:
+                    # Add placeholder line for consistency
+                    line1 = ax1.plot([], [], marker='o', label=sample_name)[0]
+                    phase1_lines.append(line1)
                 
-                # Plot Phase 2 (remaining puffs)
+                # Plot Phase 2 (remaining puffs) and store line reference
                 if not phase2_x.empty and not phase2_y.empty:
-                    ax2.plot(phase2_x, phase2_y, marker='o', label=sample_name)
+                    line2 = ax2.plot(phase2_x, phase2_y, marker='o', label=sample_name)[0]
+                    phase2_lines.append(line2)
                     y_max = max(y_max, phase2_y.max())
+                else:
+                    # Add placeholder line for consistency
+                    line2 = ax2.plot([], [], marker='o', label=sample_name)[0]
+                    phase2_lines.append(line2)
 
         # Configure Phase 1 plot
         ax1.set_xlabel('Puffs')
@@ -190,6 +187,13 @@ def plot_user_test_simulation_samples(full_sample_data: pd.DataFrame, num_column
             ax2.set_ylim(0, 9)
 
     plt.tight_layout()
+    
+    # Store both sets of lines for checkbox functionality
+    # This is a special case - we need to store both phase lines
+    fig.phase1_lines = phase1_lines
+    fig.phase2_lines = phase2_lines
+    fig.is_split_plot = True
+    
     return fig, sample_names
 
 def get_y_data_for_user_test_simulation_plot_type(sample_data, plot_type):
@@ -198,9 +202,9 @@ def get_y_data_for_user_test_simulation_plot_type(sample_data, plot_type):
     Adjusted for 8-column layout instead of 12-column.
     """
     plot_type_mapping = {
-        "TPM": sample_data.iloc[3:, 7],  # Column 7 instead of 8 for 8-column layout
-        "Draw Pressure": sample_data.iloc[3:, 2],  # Adjusted column for draw pressure
-        "Power Efficiency": sample_data.iloc[3:, 6],  # Adjusted column for power efficiency
+        "TPM": sample_data.iloc[3:, 7],  # Column 7 for TPM in 8-column layout
+        "Draw Pressure": sample_data.iloc[3:, 4],  # Column 4 for draw pressure in 8-column layout
+        "Power Efficiency": sample_data.iloc[3:, 6],  # Column 6 for power efficiency in 8-column layout
         # Note: No Resistance for User Test Simulation as per requirements
     }
     return plot_type_mapping.get(plot_type, sample_data.iloc[3:, 7])  # Default to TPM
@@ -228,7 +232,7 @@ def plot_user_test_simulation_bar_chart(ax1, ax2, full_sample_data, num_samples,
         # Phase 1: First 5 data points
         phase1_tpm = tpm_data.iloc[:5] if len(tpm_data) >= 5 else tpm_data
         # Phase 2: From 9th data point onwards (index 8+)
-        phase2_tpm = tpm_data.iloc[8:] if len(tpm_data) > 8 else pd.Series(dtype=float)
+        phase2_tpm = tpm_data.iloc[8:] if len(tmp_data) > 8 else pd.Series(dtype=float)
         
         phase1_avg = phase1_tpm.mean() if not phase1_tpm.empty else 0
         phase2_avg = phase2_tpm.mean() if not phase2_tpm.empty else 0
@@ -236,7 +240,13 @@ def plot_user_test_simulation_bar_chart(ax1, ax2, full_sample_data, num_samples,
         phase1_averages.append(phase1_avg)
         phase2_averages.append(phase2_avg)
 
-        sample_name = sample_data.columns[4] if len(sample_data.columns) > 4 else f"Sample {i+1}"
+        # Get sample name
+        sample_name = f"Sample {i+1}"
+        if sample_data.shape[0] > 0 and sample_data.shape[1] > 5:
+            sample_id_value = sample_data.iloc[0, 5]
+            if sample_id_value and str(sample_id_value).strip() and str(sample_id_value).strip().lower() != 'nan':
+                sample_name = str(sample_id_value).strip()
+        
         sample_names.append(sample_name)
         wrapped_name = wrap_text(text=sample_name, max_width=10)
         labels.append(wrapped_name)
@@ -725,6 +735,7 @@ def get_processing_functions():
         "Aerosol Temperature": process_aerosol_temp_test,
         "User Test - Full Cycle": process_user_test,
         "User Test Simulation": process_user_test_simulation,
+        "User Simulation Test": process_user_test_simulation,
         "Horizontal Puffing Test": process_horizontal_test,
         "Extended Test": process_extended_test,
         "Long Puff Test": process_long_puff_test,
@@ -985,6 +996,8 @@ def process_user_test_simulation(data):
     - 8 columns per sample instead of 12
     - Puffs column is in position 1 (second column) instead of 0
     - Data needs to be split for plotting (0-50 puffs and remaining puffs)
+    - Sample ID taken from column header 5 (index 4)
+    - Extracts metadata from specific header locations
     """
     print(f"DEBUG: process_user_test_simulation called with data shape: {data.shape}")
     
@@ -1012,122 +1025,148 @@ def process_user_test_simulation(data):
         potential_samples = data.shape[1] // num_columns_per_sample
         print(f"DEBUG: Potential samples based on columns: {potential_samples}")
 
-        # Find samples that actually have MEASUREMENT data (not just headers)
-        real_samples = []
+        # Process each sample block
         for i in range(potential_samples):
             start_col = i * num_columns_per_sample
             end_col = start_col + num_columns_per_sample
             sample_data = data.iloc[:, start_col:end_col]
             
-            # Check if this sample block has real MEASUREMENT data
-            # Look specifically at puffs column (index 1) and TPM column (index 7) in data rows (3+)
+            print(f"DEBUG: Processing sample {i+1} in columns {start_col} to {end_col-1}")
+            
+            # Check if this sample block has real measurement data
+            # Look for numeric data in puffs column (index 1) starting from row 3
             has_real_data = False
             if sample_data.shape[0] > 3 and sample_data.shape[1] > 7:
                 puffs_data = pd.to_numeric(sample_data.iloc[3:, 1], errors='coerce').dropna()
-                tpm_data = pd.to_numeric(sample_data.iloc[3:, 7], errors='coerce').dropna()
                 
-                # Must have at least some numeric puffs data to be a real sample
                 if not puffs_data.empty and len(puffs_data) > 0:
                     has_real_data = True
-                    print(f"DEBUG: Block {i} has real data - puffs: {len(puffs_data)} values, TPM: {len(tpm_data)} values")
+                    print(f"DEBUG: Sample {i+1} has real measurement data - {len(puffs_data)} puff values")
                 else:
-                    print(f"DEBUG: Block {i} has no real measurement data")
+                    print(f"DEBUG: Sample {i+1} has no real measurement data")
             
-            if has_real_data:
-                # Look for actual sample ID, not instruction text
-                sample_name = None
+            if not has_real_data:
+                print(f"DEBUG: Skipping sample {i+1} - no measurement data found")
+                continue
                 
-                # Check multiple locations for sample ID
-                search_locations = [
-                    (0, 1), (0, 3), (0, 5), (0, 7),  # Row 0, various columns (after header labels)
-                    (1, 1), (1, 3), (1, 5), (1, 7),  # Row 1, various columns  
-                ]
-                
-                for row_idx, col_idx in search_locations:
-                    if sample_data.shape[0] > row_idx and sample_data.shape[1] > col_idx:
-                        cell_value = sample_data.iloc[row_idx, col_idx]
-                        if cell_value is not None:
-                            cell_str = str(cell_value).strip()
-                            # Avoid instruction text - look for shorter, sample-like names
-                            if (cell_str and cell_str.lower() != 'nan' and 
-                                len(cell_str) < 50 and  # Avoid long instruction text
-                                not cell_str.lower().startswith('day 1: collect') and
-                                not cell_str.lower().startswith('days 2') and
-                                not any(word in cell_str.lower() for word in ['collect', 'calculator', 'puffs', 'make sure'])):
-                                sample_name = cell_str
-                                print(f"DEBUG: Found potential sample name '{sample_name}' at row {row_idx}, col {col_idx}")
-                                break
-                
-                if not sample_name:
-                    sample_name = f"Sample {len(real_samples) + 1}"
-                
-                real_samples.append({
-                    'index': i,
-                    'name': sample_name,
-                    'start_col': start_col,
-                    'end_col': end_col,
-                    'data': sample_data
-                })
-                
-                print(f"DEBUG: Added real sample {len(real_samples)}: '{sample_name}' in block {i} (cols {start_col}-{end_col})")
-
-        print(f"DEBUG: Found {len(real_samples)} real samples with measurement data out of {potential_samples} potential samples")
-
-        if len(real_samples) == 0:
-            print("DEBUG: No real samples detected, creating empty structure")
-            return create_empty_user_test_simulation_structure(data)
-
-        # Process each real sample
-        for i, sample_info in enumerate(real_samples):
-            sample_data = sample_info['data']
-            sample_name = sample_info['name']
-
+            # Extract sample name from row 0, column 5 (Sample ID location)
+            sample_name = "Sample " + str(len(samples) + 1)  # Default name
+            if sample_data.shape[0] > 0 and sample_data.shape[1] > 5:
+                sample_id_value = sample_data.columns[5]  # Row 0, Column 5
+                if sample_id_value and str(sample_id_value).strip() and str(sample_id_value).strip().lower() != 'nan':
+                    sample_name = str(sample_id_value).strip()
+                    print(f"DEBUG: Extracted sample name '{sample_name}' from Sample ID location (row 0, col 5)")
+                else:
+                    print(f"DEBUG: Sample ID location empty or invalid, using default name '{sample_name}'")
+            
+            # Extract metadata from specific header locations
+            media = ""
+            voltage = ""
+            resistance = ""
+            power = ""
+            initial_oil_mass = ""
+            
             try:
-                # Extract plotting data with error handling
-                sample_arrays[f"Sample_{i+1}_Puffs"] = sample_data.iloc[3:, 1].to_numpy()  # Column 1 for puffs
-                sample_arrays[f"Sample_{i+1}_TPM"] = sample_data.iloc[3:, 7].to_numpy()   # Column 7 for TPM
-
-                # Handle potentially empty TPM data
-                tpm_data = pd.to_numeric(sample_data.iloc[3:, 7], errors='coerce').dropna()
-                avg_tpm = round_values(tpm_data.mean()) if not tpm_data.empty else "No data"
-                std_tpm = round_values(tpm_data.std()) if not tpm_data.empty else "No data"
-
-                print(f"DEBUG: Sample {i+1} TPM data: {len(tpm_data)} values, avg: {avg_tpm}")
-
-                # Extract metadata - look for values next to header labels
-                media = ""
-                voltage = ""
-                power = ""
+                # Media: Row 1, Column 1
+                if sample_data.shape[0] > 1 and sample_data.shape[1] > 1:
+                    media_val = sample_data.iloc[0, 1]
+                    if media_val and str(media_val).strip().lower() != 'nan':
+                        media = str(media_val).strip()
+                        print(f"DEBUG: Extracted media: '{media}'")
                 
-                # Look for values in the cells next to header labels
-                for row_idx in range(min(3, sample_data.shape[0])):
-                    for col_idx in range(sample_data.shape[1] - 1):  # -1 to ensure we have a next cell
-                        cell_value = sample_data.iloc[row_idx, col_idx]
-                        if cell_value is not None:
-                            cell_str = str(cell_value).strip().lower()
-                            next_cell = sample_data.iloc[row_idx, col_idx + 1]
-                            next_str = str(next_cell).strip() if next_cell is not None else ""
-                            
-                            if cell_str == "media:" and next_str and next_str.lower() != 'nan':
-                                media = next_str
-                            elif cell_str == "voltage:" and next_str and next_str.lower() != 'nan':
-                                voltage = next_str
-                            elif cell_str == "power:" and next_str and next_str.lower() != 'nan':
-                                power = next_str
-
+                # Voltage: Row 1, Column 5 
+                if sample_data.shape[0] > 1 and sample_data.shape[1] > 5:
+                    voltage_val = sample_data.iloc[0, 5]
+                    if voltage_val and str(voltage_val).strip().lower() != 'nan':
+                        voltage = str(voltage_val).strip()
+                        print(f"DEBUG: Extracted voltage: '{voltage}'")
+                
+                # Initial Oil Mass: Row 0, Column 7
+                if sample_data.shape[0] > 0 and sample_data.shape[1] > 7:
+                    oil_mass_val = sample_data.columns[7]
+                    if oil_mass_val and str(oil_mass_val).strip().lower() != 'nan':
+                        initial_oil_mass = str(oil_mass_val).strip()
+                        print(f"DEBUG: Extracted initial oil mass: '{initial_oil_mass}'")
+                
+                # Power: Row 1, Column 7
+                if sample_data.shape[0] > 1 and sample_data.shape[1] > 7:
+                    power_val = sample_data.iloc[0, 7]
+                    if power_val and str(power_val).strip().lower() != 'nan' and str(power_val).strip() != '#DIV/0!':
+                        power = str(power_val).strip()
+                        print(f"DEBUG: Extracted power: '{power}'")
+                
+                
+                # Resistance: Row 0, Column 3
+                if sample_data.shape[0] > 1 and sample_data.shape[1] > 3:
+                    resistance_val = sample_data.columns[3]
+                    if resistance_val and str(resistance_val).strip().lower() != 'nan' and str(resistance_val).strip() != '#DIV/0!':
+                        resistance = str(resistance_val).strip()
+                        print(f"DEBUG: Extracted resistance: '{resistance}'")
+                
+                
+            except Exception as e:
+                print(f"DEBUG: Error extracting metadata for sample {i+1}: {e}")
+            
+            try:
+                # Extract plotting data for User Test Simulation
+                sample_arrays[f"Sample_{len(samples)+1}_Puffs"] = sample_data.iloc[3:, 1].to_numpy()  # Column 1 for puffs
+                sample_arrays[f"Sample_{len(samples)+1}_TPM"] = sample_data.iloc[3:, 7].to_numpy()   # Column 7 for TPM
+                
+                # Calculate TPM statistics from all available data
+                tpm_data = pd.to_numeric(sample_data.iloc[3:, 7], errors='coerce')
+                valid_tpm = tpm_data.dropna()
+                
+                if len(valid_tpm) > 0:
+                    avg_tpm = round_values(valid_tpm.mean())
+                    std_tpm = round_values(valid_tpm.std()) if len(valid_tpm) > 1 else 0
+                else:
+                    avg_tpm = "No data"
+                    std_tpm = "No data"
+                
+                print(f"DEBUG: Sample '{sample_name}' TPM stats - Avg: {avg_tpm}, Std: {std_tpm}")
+                
+                # Calculate usage efficiency if we have the necessary data
+                usage_efficiency = ""
+                if initial_oil_mass and avg_tpm != "No data":
+                    try:
+                        oil_mass_num = float(initial_oil_mass)
+                        avg_tpm_num = float(avg_tpm)
+                        if oil_mass_num > 0:
+                            # Simple efficiency calculation - you may want to adjust this formula
+                            efficiency = (avg_tpm_num / oil_mass_num) * 100
+                            usage_efficiency = f"{efficiency:.2f}%"
+                            print(f"DEBUG: Calculated usage efficiency: {usage_efficiency}")
+                    except (ValueError, TypeError):
+                        print(f"DEBUG: Could not calculate usage efficiency")
+                
+                # Create voltage, resistance, power combined string
+                voltage_resistance_power = ""
+                components = []
+                if voltage:
+                    components.append(f"V: {voltage}")
+                if resistance:
+                    components.append(f"R: {resistance}")
+                if power:
+                    components.append(f"P: {power}")
+                voltage_resistance_power = ", ".join(components)
+                
+                # Create extracted data for this sample
                 extracted_data = {
                     "Sample Name": sample_name,
                     "Media": media,
-                    "Voltage, Resistance, Power": f"{voltage}, {power}",
+                    "Viscosity": "",  # Not visible in the header image
+                    "Voltage, Resistance, Power": voltage_resistance_power,
                     "Average TPM": avg_tpm,
                     "Standard Deviation": std_tpm,
-                    "Initial Oil Mass": "",
+                    "Initial Oil Mass": initial_oil_mass,
+                    "Usage Efficiency": usage_efficiency,
                     "Test Type": "User Test Simulation"
                 }
 
                 samples.append(extracted_data)
                 full_sample_data.append(sample_data)
-                print(f"DEBUG: Successfully processed User Test Simulation sample {i+1}: '{sample_name}'")
+                print(f"DEBUG: Successfully processed User Test Simulation sample {len(samples)}: '{sample_name}'")
+                print(f"DEBUG: Sample data - Media: '{media}', Voltage: '{voltage}', Power: '{power}', Oil Mass: '{initial_oil_mass}'")
                 
             except Exception as e:
                 print(f"DEBUG: Error processing sample {i+1}: {e}")
@@ -1142,10 +1181,12 @@ def process_user_test_simulation(data):
             processed_data = pd.DataFrame([{
                 "Sample Name": "Sample 1",
                 "Media": "",
+                "Viscosity": "",
                 "Voltage, Resistance, Power": "",
                 "Average TPM": "No data",
                 "Standard Deviation": "No data",
                 "Initial Oil Mass": "",
+                "Usage Efficiency": "",
                 "Test Type": "User Test Simulation"
             }])
             full_sample_data_df = data
@@ -1156,6 +1197,7 @@ def process_user_test_simulation(data):
         
     except Exception as e:
         print(f"DEBUG: Error processing User Test Simulation sheet: {e}")
+        print(f"DEBUG: Error traceback: {traceback.format_exc()}")
         return create_empty_user_test_simulation_structure(data)
 
 def create_empty_user_test_simulation_structure(data):

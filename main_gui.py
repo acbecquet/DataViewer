@@ -699,7 +699,8 @@ class TestingGUI:
             processed_data, _, full_sample_data = process_function(data)
             print(f"DEBUG: Processing complete - processed_data: {processed_data.shape}, full_sample_data: {full_sample_data.shape}")
             #SPECIAL HANDLING FOR USER TEST SIMULATION:
-            if sheet_name == "User Test Simulation":
+            #SPECIAL HANDLING FOR USER TEST SIMULATION:
+            if sheet_name in ["User Test Simulation", "User Simulation Test"]:
                 print("DEBUG: Detected User Test Simulation - using 8 columns per sample")
                 self.plot_options = self.user_test_simulation_plot_options
                 # Store the fact that this is User Test Simulation for plotting
