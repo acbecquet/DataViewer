@@ -981,86 +981,181 @@ def process_sheet1(data):
 def process_user_test_simulation(data):
     """
     Process data for the User Test Simulation sheet.
-    DEBUG VERSION - Show RAW data without any preprocessing
+    This test has unique characteristics:
+    - 8 columns per sample instead of 12
+    - Puffs column is in position 1 (second column) instead of 0
+    - Data needs to be split for plotting (0-50 puffs and remaining puffs)
     """
     print(f"DEBUG: process_user_test_simulation called with data shape: {data.shape}")
     
+    # For data collection, allow minimal data (less strict validation)
+    min_required_rows = max(3 + 1, 3)  # At least header row + 1
+    if data.shape[0] < min_required_rows:
+        print(f"DEBUG: Data has {data.shape[0]} rows, minimum required is {min_required_rows}")
+        return create_empty_user_test_simulation_structure(data)
+    
+    if not validate_sheet_data(data, required_rows=min_required_rows):
+        print("DEBUG: Sheet validation failed, creating empty structure")
+        return create_empty_user_test_simulation_structure(data)
+
     try:
-        # DON'T clean the data - show it completely raw
-        print(f"DEBUG: RAW data shape (before any cleaning): {data.shape}")
-        
-        # Show the first 10 rows and 24 columns of RAW data
-        print("DEBUG: ===== RAW DATA EXAMINATION =====")
-        for row_idx in range(min(10, data.shape[0])):
-            row_content = []
-            for col_idx in range(min(24, data.shape[1])):  # First 24 columns (3 blocks)
-                cell_value = data.iloc[row_idx, col_idx]
-                # Show EVERYTHING - even NaN and empty
-                if pd.isna(cell_value):
-                    cell_str = "NaN"
-                else:
-                    cell_str = str(cell_value).strip()
-                    if cell_str == "":
-                        cell_str = "EMPTY"
+        # Clean up the data
+        data = remove_empty_columns(data).replace(0, np.nan)
+        print(f"DEBUG: Data after cleaning: {data.shape}")
+
+        samples = []
+        full_sample_data = []
+        sample_arrays = {}
+
+        # Calculate the number of potential samples (8 columns per sample)
+        num_columns_per_sample = 8
+        potential_samples = data.shape[1] // num_columns_per_sample
+        print(f"DEBUG: Potential samples based on columns: {potential_samples}")
+
+        # Find samples that actually have MEASUREMENT data (not just headers)
+        real_samples = []
+        for i in range(potential_samples):
+            start_col = i * num_columns_per_sample
+            end_col = start_col + num_columns_per_sample
+            sample_data = data.iloc[:, start_col:end_col]
+            
+            # Check if this sample block has real MEASUREMENT data
+            # Look specifically at puffs column (index 1) and TPM column (index 7) in data rows (3+)
+            has_real_data = False
+            if sample_data.shape[0] > 3 and sample_data.shape[1] > 7:
+                puffs_data = pd.to_numeric(sample_data.iloc[3:, 1], errors='coerce').dropna()
+                tpm_data = pd.to_numeric(sample_data.iloc[3:, 7], errors='coerce').dropna()
                 
-                row_content.append(f"[{col_idx}]={cell_str}")
-            
-            print(f"DEBUG: RAW Row {row_idx}: {' | '.join(row_content[:8])} || {' | '.join(row_content[8:16])} || {' | '.join(row_content[16:24])}")
-        
-        print("DEBUG: ===== END RAW DATA =====")
-        
-        # Now let's see what remove_empty_columns does
-        print("DEBUG: Testing remove_empty_columns...")
-        data_after_remove_empty = remove_empty_columns(data)
-        print(f"DEBUG: After remove_empty_columns: {data_after_remove_empty.shape}")
-        
-        # Show first few rows after remove_empty_columns
-        print("DEBUG: ===== AFTER remove_empty_columns =====")
-        for row_idx in range(min(5, data_after_remove_empty.shape[0])):
-            row_content = []
-            for col_idx in range(min(16, data_after_remove_empty.shape[1])):
-                cell_value = data_after_remove_empty.iloc[row_idx, col_idx]
-                if pd.isna(cell_value):
-                    cell_str = "NaN"
+                # Must have at least some numeric puffs data to be a real sample
+                if not puffs_data.empty and len(puffs_data) > 0:
+                    has_real_data = True
+                    print(f"DEBUG: Block {i} has real data - puffs: {len(puffs_data)} values, TPM: {len(tpm_data)} values")
                 else:
-                    cell_str = str(cell_value).strip()
-                    if cell_str == "":
-                        cell_str = "EMPTY"
-                row_content.append(f"[{col_idx}]={cell_str}")
+                    print(f"DEBUG: Block {i} has no real measurement data")
             
-            print(f"DEBUG: After-clean Row {row_idx}: {' | '.join(row_content[:8])} || {' | '.join(row_content[8:16])}")
-        
-        print("DEBUG: ===== END AFTER CLEANING =====")
-        
-        # Look specifically for "Sample ID" or "Resistance" in the raw data
-        print("DEBUG: Searching for 'Sample ID' and 'Resistance' in RAW data...")
-        for row_idx in range(data.shape[0]):
-            for col_idx in range(min(32, data.shape[1])):  # First 32 columns
-                cell_value = data.iloc[row_idx, col_idx]
-                if cell_value is not None and not pd.isna(cell_value):
-                    cell_str = str(cell_value).strip().lower()
-                    if 'sample id' in cell_str or 'resistance' in cell_str:
-                        next_cell = data.iloc[row_idx, col_idx + 1] if col_idx + 1 < data.shape[1] else None
-                        next_str = str(next_cell).strip() if next_cell is not None and not pd.isna(next_cell) else "NaN"
-                        print(f"DEBUG: FOUND '{cell_str}' at RAW position row {row_idx}, col {col_idx} -> next cell: '{next_str}'")
-        
-        # Return empty for now to focus on the debug output
-        processed_data = pd.DataFrame([{
-            "Sample Name": "RAW DEBUG - check output above",
-            "Media": "",
-            "Voltage, Resistance, Power": "",
-            "Average TPM": "No data",
-            "Standard Deviation": "No data",
-            "Initial Oil Mass": "",
-            "Test Type": "User Test Simulation"
-        }])
-        
-        return processed_data, {}, data
+            if has_real_data:
+                # Look for actual sample ID, not instruction text
+                sample_name = None
+                
+                # Check multiple locations for sample ID
+                search_locations = [
+                    (0, 1), (0, 3), (0, 5), (0, 7),  # Row 0, various columns (after header labels)
+                    (1, 1), (1, 3), (1, 5), (1, 7),  # Row 1, various columns  
+                ]
+                
+                for row_idx, col_idx in search_locations:
+                    if sample_data.shape[0] > row_idx and sample_data.shape[1] > col_idx:
+                        cell_value = sample_data.iloc[row_idx, col_idx]
+                        if cell_value is not None:
+                            cell_str = str(cell_value).strip()
+                            # Avoid instruction text - look for shorter, sample-like names
+                            if (cell_str and cell_str.lower() != 'nan' and 
+                                len(cell_str) < 50 and  # Avoid long instruction text
+                                not cell_str.lower().startswith('day 1: collect') and
+                                not cell_str.lower().startswith('days 2') and
+                                not any(word in cell_str.lower() for word in ['collect', 'calculator', 'puffs', 'make sure'])):
+                                sample_name = cell_str
+                                print(f"DEBUG: Found potential sample name '{sample_name}' at row {row_idx}, col {col_idx}")
+                                break
+                
+                if not sample_name:
+                    sample_name = f"Sample {len(real_samples) + 1}"
+                
+                real_samples.append({
+                    'index': i,
+                    'name': sample_name,
+                    'start_col': start_col,
+                    'end_col': end_col,
+                    'data': sample_data
+                })
+                
+                print(f"DEBUG: Added real sample {len(real_samples)}: '{sample_name}' in block {i} (cols {start_col}-{end_col})")
+
+        print(f"DEBUG: Found {len(real_samples)} real samples with measurement data out of {potential_samples} potential samples")
+
+        if len(real_samples) == 0:
+            print("DEBUG: No real samples detected, creating empty structure")
+            return create_empty_user_test_simulation_structure(data)
+
+        # Process each real sample
+        for i, sample_info in enumerate(real_samples):
+            sample_data = sample_info['data']
+            sample_name = sample_info['name']
+
+            try:
+                # Extract plotting data with error handling
+                sample_arrays[f"Sample_{i+1}_Puffs"] = sample_data.iloc[3:, 1].to_numpy()  # Column 1 for puffs
+                sample_arrays[f"Sample_{i+1}_TPM"] = sample_data.iloc[3:, 7].to_numpy()   # Column 7 for TPM
+
+                # Handle potentially empty TPM data
+                tpm_data = pd.to_numeric(sample_data.iloc[3:, 7], errors='coerce').dropna()
+                avg_tpm = round_values(tpm_data.mean()) if not tpm_data.empty else "No data"
+                std_tpm = round_values(tpm_data.std()) if not tpm_data.empty else "No data"
+
+                print(f"DEBUG: Sample {i+1} TPM data: {len(tpm_data)} values, avg: {avg_tpm}")
+
+                # Extract metadata - look for values next to header labels
+                media = ""
+                voltage = ""
+                power = ""
+                
+                # Look for values in the cells next to header labels
+                for row_idx in range(min(3, sample_data.shape[0])):
+                    for col_idx in range(sample_data.shape[1] - 1):  # -1 to ensure we have a next cell
+                        cell_value = sample_data.iloc[row_idx, col_idx]
+                        if cell_value is not None:
+                            cell_str = str(cell_value).strip().lower()
+                            next_cell = sample_data.iloc[row_idx, col_idx + 1]
+                            next_str = str(next_cell).strip() if next_cell is not None else ""
+                            
+                            if cell_str == "media:" and next_str and next_str.lower() != 'nan':
+                                media = next_str
+                            elif cell_str == "voltage:" and next_str and next_str.lower() != 'nan':
+                                voltage = next_str
+                            elif cell_str == "power:" and next_str and next_str.lower() != 'nan':
+                                power = next_str
+
+                extracted_data = {
+                    "Sample Name": sample_name,
+                    "Media": media,
+                    "Voltage, Resistance, Power": f"{voltage}, {power}",
+                    "Average TPM": avg_tpm,
+                    "Standard Deviation": std_tpm,
+                    "Initial Oil Mass": "",
+                    "Test Type": "User Test Simulation"
+                }
+
+                samples.append(extracted_data)
+                full_sample_data.append(sample_data)
+                print(f"DEBUG: Successfully processed User Test Simulation sample {i+1}: '{sample_name}'")
+                
+            except Exception as e:
+                print(f"DEBUG: Error processing sample {i+1}: {e}")
+                continue
+
+        # Create processed data and full sample data  
+        if samples:
+            processed_data = pd.DataFrame(samples)
+            full_sample_data_df = pd.concat(full_sample_data, axis=1) if full_sample_data else pd.DataFrame()
+        else:
+            print("DEBUG: No valid samples processed, creating minimal structure")
+            processed_data = pd.DataFrame([{
+                "Sample Name": "Sample 1",
+                "Media": "",
+                "Voltage, Resistance, Power": "",
+                "Average TPM": "No data",
+                "Standard Deviation": "No data",
+                "Initial Oil Mass": "",
+                "Test Type": "User Test Simulation"
+            }])
+            full_sample_data_df = data
+
+        print(f"DEBUG: Final User Test Simulation processed_data shape: {processed_data.shape}")
+        print(f"DEBUG: Final User Test Simulation full_sample_data shape: {full_sample_data_df.shape}")
+        return processed_data, sample_arrays, full_sample_data_df
         
     except Exception as e:
-        print(f"DEBUG: Error processing User Test Simulation: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"DEBUG: Error processing User Test Simulation sheet: {e}")
         return create_empty_user_test_simulation_structure(data)
 
 def create_empty_user_test_simulation_structure(data):
