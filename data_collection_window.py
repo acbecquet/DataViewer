@@ -1956,9 +1956,9 @@ Developed by Charlie Becquet
                         self.data[sample_id]["notes"][data_row_idx] = notes_value
             
                         # TPM - convert to float or None (not used in User Test Simulation)
-                        if tmp_cell is not None and tmp_cell.value is not None and isinstance(tpm_cell.value, (int, float)):
+                        if tpm_cell is not None and tpm_cell.value is not None and isinstance(tpm_cell.value, (int, float)):
                             tpm_value = float(tpm_cell.value)
-                            self.data[sample_id]["tpm"][data_row_idx] = tmp_value
+                            self.data[sample_id]["tpm"][data_row_idx] = tpm_value
                         else:
                             self.data[sample_id]["tpm"][data_row_idx] = None
             
