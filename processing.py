@@ -49,6 +49,7 @@ def get_valid_plot_options(plot_options: List[str], full_sample_data: pd.DataFra
 def get_y_data_for_plot_type(sample_data, plot_type):
     """
     Extract y-data for the specified plot type.
+    Always calculates TPM and Power Efficiency on the fly for consistency.
 
     Args:
         sample_data (pd.DataFrame): DataFrame containing the sample data.
@@ -57,13 +58,82 @@ def get_y_data_for_plot_type(sample_data, plot_type):
     Returns:
         pd.Series: y-data for plotting.
     """
-    plot_type_mapping = {
-        "TPM": sample_data.iloc[3:, 8],
-        "Draw Pressure": sample_data.iloc[3:, 3],
-        "Resistance": sample_data.iloc[3:, 4],
-        "Power Efficiency": sample_data.iloc[3:, 9],
-    }
-    return plot_type_mapping.get(plot_type, sample_data.iloc[3:, 8])  # Default to TPM
+    if plot_type == "TPM":
+        print("DEBUG: Calculating TPM from weight differences with puffing intervals")
+        
+        # Get puffs, before weights, and after weights
+        puffs = pd.to_numeric(sample_data.iloc[3:, 0], errors='coerce')  # Column 0 for Extended Test
+        before_weights = pd.to_numeric(sample_data.iloc[3:, 1], errors='coerce')
+        after_weights = pd.to_numeric(sample_data.iloc[3:, 2], errors='coerce')
+        
+        # Calculate puffing intervals
+        puffing_intervals = pd.Series(index=puffs.index, dtype=float)
+        for i, idx in enumerate(puffs.index):
+            if i == 0:  # First row: current_puffs - 0
+                puffing_intervals.loc[idx] = puffs.loc[idx] if pd.notna(puffs.loc[idx]) else 0
+            else:  # Subsequent rows: current_puffs - previous_puffs
+                prev_idx = puffs.index[i-1]
+                current_puffs = puffs.loc[idx] if pd.notna(puffs.loc[idx]) else 0
+                prev_puffs = puffs.loc[prev_idx] if pd.notna(puffs.loc[prev_idx]) else 0
+                puffing_intervals.loc[idx] = current_puffs - prev_puffs
+        
+        # Calculate TPM: (before - after) / puffing_interval * 1000 (mg/puff)
+        weight_diff = (before_weights - after_weights) * 1000  # Convert g to mg
+        calculated_tpm = weight_diff / puffing_intervals
+        
+        print(f"DEBUG: Puffs: {puffs.dropna().tolist()}")
+        print(f"DEBUG: Puffing intervals: {puffing_intervals.dropna().tolist()}")
+        print(f"DEBUG: Weight differences (mg): {weight_diff.dropna().tolist()}")
+        print(f"DEBUG: Calculated TPM values (mg/puff): {calculated_tpm.dropna().tolist()}")
+        return calculated_tpm
+        
+    elif plot_type == "Power Efficiency":
+        print("DEBUG: Calculating Power Efficiency from TPM/Power")
+        
+        # Get TPM first
+        tpm_data = get_y_data_for_plot_type(sample_data, "TPM")
+        tpm_numeric = pd.to_numeric(tpm_data, errors='coerce')
+        
+        # Extract voltage and resistance from metadata
+        voltage = None
+        resistance = None
+        
+        try:
+            voltage_val = sample_data.iloc[1, 5]  # Adjust column index as needed
+            if pd.notna(voltage_val):
+                voltage = float(voltage_val)
+                print(f"DEBUG: Extracted voltage: {voltage}V")
+        except (ValueError, IndexError, TypeError):
+            print("DEBUG: Could not extract voltage")
+            
+        try:
+            resistance_val = sample_data.iloc[0, 3]  # Adjust column index as needed
+            if pd.notna(resistance_val):
+                resistance = float(resistance_val)
+                print(f"DEBUG: Extracted resistance: {resistance}Ω")
+        except (ValueError, IndexError, TypeError):
+            print("DEBUG: Could not extract resistance")
+        
+        # Calculate power and power efficiency
+        if voltage and resistance and voltage > 0 and resistance > 0:
+            power = (voltage ** 2) / resistance
+            print(f"DEBUG: Calculated power: {power:.3f}W")
+            calculated_power_eff = tpm_numeric / power
+            print(f"DEBUG: Calculated Power Efficiency values: {calculated_power_eff.dropna().tolist()}")
+            return calculated_power_eff
+        else:
+            print("DEBUG: Cannot calculate power efficiency - missing or invalid voltage/resistance")
+            return pd.Series(dtype=float)
+            
+    elif plot_type == "Draw Pressure":
+        return pd.to_numeric(sample_data.iloc[3:, 3], errors='coerce')
+        
+    elif plot_type == "Resistance":
+        return pd.to_numeric(sample_data.iloc[3:, 4], errors='coerce')
+        
+    else:
+        # Default to TPM
+        return get_y_data_for_plot_type(sample_data, "TPM")
 
 def get_y_label_for_plot_type(plot_type):
     """
@@ -199,15 +269,84 @@ def plot_user_test_simulation_samples(full_sample_data: pd.DataFrame, num_column
 def get_y_data_for_user_test_simulation_plot_type(sample_data, plot_type):
     """
     Extract y-data for the specified plot type for User Test Simulation.
+    Always calculates TPM and Power Efficiency on the fly for consistency.
     Adjusted for 8-column layout instead of 12-column.
     """
-    plot_type_mapping = {
-        "TPM": sample_data.iloc[3:, 7],  # Column 7 for TPM in 8-column layout
-        "Draw Pressure": sample_data.iloc[3:, 4],  # Column 4 for draw pressure in 8-column layout
-        "Power Efficiency": sample_data.iloc[3:, 6],  # Column 6 for power efficiency in 8-column layout
-        # Note: No Resistance for User Test Simulation as per requirements
-    }
-    return plot_type_mapping.get(plot_type, sample_data.iloc[3:, 7])  # Default to TPM
+    if plot_type == "TPM":
+        print("DEBUG: User Test Simulation - Calculating TPM from weight differences with puffing intervals")
+        
+        # For User Test Simulation: puffs in column 1, before weight in column ?, after weight in column ?
+        # You'll need to verify these column positions
+        puffs = pd.to_numeric(sample_data.iloc[3:, 1], errors='coerce')  # Column 1 for User Test Simulation
+        before_weights = pd.to_numeric(sample_data.iloc[3:, 2], errors='coerce')  # Adjust as needed
+        after_weights = pd.to_numeric(sample_data.iloc[3:, 3], errors='coerce')   # Adjust as needed
+        
+        # Calculate puffing intervals
+        puffing_intervals = pd.Series(index=puffs.index, dtype=float)
+        for i, idx in enumerate(puffs.index):
+            if i == 0:  # First row: current_puffs - 0
+                puffing_intervals.loc[idx] = puffs.loc[idx] if pd.notna(puffs.loc[idx]) else 0
+            else:  # Subsequent rows: current_puffs - previous_puffs
+                prev_idx = puffs.index[i-1]
+                current_puffs = puffs.loc[idx] if pd.notna(puffs.loc[idx]) else 0
+                prev_puffs = puffs.loc[prev_idx] if pd.notna(puffs.loc[prev_idx]) else 0
+                puffing_intervals.loc[idx] = current_puffs - prev_puffs
+        
+        # Calculate TPM: (before - after) / puffing_interval * 1000 (mg/puff)
+        weight_diff = (before_weights - after_weights) * 1000  # Convert g to mg
+        calculated_tpm = weight_diff / puffing_intervals
+        
+        print(f"DEBUG: User Test Simulation - Puffs: {puffs.dropna().tolist()}")
+        print(f"DEBUG: User Test Simulation - Puffing intervals: {puffing_intervals.dropna().tolist()}")
+        print(f"DEBUG: User Test Simulation - Weight differences (mg): {weight_diff.dropna().tolist()}")
+        print(f"DEBUG: User Test Simulation - Calculated TPM values (mg/puff): {calculated_tpm.dropna().tolist()}")
+        return calculated_tpm
+        
+    elif plot_type == "Power Efficiency":
+        print("DEBUG: User Test Simulation - Calculating Power Efficiency from TPM/Power")
+        
+        # Get TPM first
+        tpm_data = get_y_data_for_user_test_simulation_plot_type(sample_data, "TPM")
+        tpm_numeric = pd.to_numeric(tpm_data, errors='coerce')
+        
+        # Extract voltage and resistance from metadata (adjust for User Test Simulation layout)
+        voltage = None
+        resistance = None
+        
+        try:
+            voltage_val = sample_data.iloc[0, 5]  # Adjust as needed
+            if pd.notna(voltage_val):
+                voltage = float(voltage_val)
+                print(f"DEBUG: User Test Simulation - Extracted voltage: {voltage}V")
+        except (ValueError, IndexError, TypeError):
+            print("DEBUG: User Test Simulation - Could not extract voltage")
+            
+        try:
+            resistance_val = sample_data.columns[3]  # Adjust as needed
+            if pd.notna(resistance_val):
+                resistance = float(resistance_val)
+                print(f"DEBUG: User Test Simulation - Extracted resistance: {resistance}Ω")
+        except (ValueError, IndexError, TypeError):
+            print("DEBUG: User Test Simulation - Could not extract resistance")
+        
+        # Calculate power and power efficiency
+        if voltage and resistance and voltage > 0 and resistance > 0:
+            power = (voltage ** 2) / resistance
+            print(f"DEBUG: User Test Simulation - Calculated power: {power:.3f}W")
+            calculated_power_eff = tpm_numeric / power
+            print(f"DEBUG: User Test Simulation - Calculated Power Efficiency values: {calculated_power_eff.dropna().tolist()}")
+            return calculated_power_eff
+        else:
+            print("DEBUG: User Test Simulation - Cannot calculate power efficiency - missing or invalid voltage/resistance")
+            return pd.Series(dtype=float)
+            
+    elif plot_type == "Draw Pressure":
+        # For User Test Simulation, Draw Pressure is in column 4 (adjust as needed)
+        return pd.to_numeric(sample_data.iloc[3:, 4], errors='coerce')
+        
+    else:
+        # Default to TPM for any other plot type
+        return get_y_data_for_user_test_simulation_plot_type(sample_data, "TPM")
 
 def plot_user_test_simulation_bar_chart(ax1, ax2, full_sample_data, num_samples, num_columns_per_sample):
     """
@@ -273,7 +412,14 @@ def plot_user_test_simulation_bar_chart(ax1, ax2, full_sample_data, num_samples,
 
 def plot_all_samples(full_sample_data: pd.DataFrame, num_columns_per_sample: int, plot_type: str) -> Tuple[plt.Figure, List[str]]:
     """Generate the plot for all samples and return the figure."""
-    
+    # ADD THESE DEBUG LINES:
+    print(f"DEBUG: plot_all_samples - full_sample_data shape: {full_sample_data.shape}")
+    print(f"DEBUG: plot_all_samples - full_sample_data columns: {full_sample_data.columns.tolist()}")
+    print(f"DEBUG: plot_all_samples - full_sample_data contents:")
+    print(full_sample_data.to_string())
+    print(f"DEBUG: plot_all_samples - first 5 rows, first 15 columns:")
+    print(full_sample_data.iloc[:5, :15].to_string())
+    print("=" * 80)
     # Check if this is User Test Simulation (8 columns per sample)
     if num_columns_per_sample == 8:
         print("DEBUG: Detected User Test Simulation - using split plotting")
@@ -574,7 +720,7 @@ def process_plot_sheet(data, headers_row=3, data_start_row=4, num_columns_per_sa
         # Create processed data and full sample data
         if samples:
             processed_data = pd.DataFrame(samples)
-            full_sample_data_df = pd.concat(full_sample_data, axis=1) if full_sample_data else pd.DataFrame()
+            full_sample_data_df = data  # Use original data structure instead of concatenated
         else:
             print("DEBUG: No valid samples found, creating minimal structure")
             # Create minimal structure for data collection
@@ -595,11 +741,15 @@ def process_plot_sheet(data, headers_row=3, data_start_row=4, num_columns_per_sa
 
         print(f"DEBUG: Final processed_data shape: {processed_data.shape}")
         print(f"DEBUG: Final full_sample_data shape: {full_sample_data_df.shape}")
+        print(f"DEBUG: process_plot_sheet - using concatenated data: {bool(samples)}")
+        print(f"DEBUG: process_plot_sheet - samples count: {len(samples) if samples else 0}")
         return processed_data, sample_arrays, full_sample_data_df
         
     except Exception as e:
         print(f"DEBUG: Error processing plot sheet: {e}")
         # Return empty structure instead of failing completely
+        print(f"DEBUG: process_plot_sheet - using concatenated data: {bool(samples)}")
+        print(f"DEBUG: process_plot_sheet - samples count: {len(samples) if samples else 0}")
         return create_empty_plot_structure(data, headers_row, num_columns_per_sample)
 
 def no_efficiency_extracted_data(sample_data):
@@ -1208,11 +1358,15 @@ def process_user_test_simulation(data):
 
         print(f"DEBUG: Final User Test Simulation processed_data shape: {processed_data.shape}")
         print(f"DEBUG: Final User Test Simulation full_sample_data shape: {full_sample_data_df.shape}")
+        print(f"DEBUG: process_plot_sheet - using concatenated data: {bool(samples)}")
+        print(f"DEBUG: process_plot_sheet - samples count: {len(samples) if samples else 0}")
         return processed_data, sample_arrays, full_sample_data_df
         
     except Exception as e:
         print(f"DEBUG: Error processing User Test Simulation sheet: {e}")
         print(f"DEBUG: Error traceback: {traceback.format_exc()}")
+        print(f"DEBUG: process_plot_sheet - using concatenated data: {bool(samples)}")
+        print(f"DEBUG: process_plot_sheet - samples count: {len(samples) if samples else 0}")
         return create_empty_user_test_simulation_structure(data)
 
 def create_empty_user_test_simulation_structure(data):

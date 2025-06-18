@@ -9,6 +9,7 @@ import re
 import sys
 import tempfile
 import pandas as pd
+import openpyxl
 from tkinter import filedialog, messagebox, Toplevel, Label, Button
 from typing import Optional
 from openpyxl import load_workbook
@@ -390,7 +391,7 @@ def load_excel_file(file_path):
         dict: Dictionary of sheet names and DataFrames.
     """
     try:
-        sheets = pd.read_excel(file_path, sheet_name=None, engine='openpyxl')
+        sheets = pd.read_excel(file_path, sheet_name = None, engine='openpyxl')
         return sheets
     except Exception as e:
         raise ValueError(f"Error loading Excel file {file_path}: {e}")
