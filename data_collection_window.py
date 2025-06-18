@@ -179,6 +179,10 @@ class DataCollectionWindow:
         self.window.geometry("1375x750")
         self.window.minsize(1250, 625)
     
+        # Keep window manageable but capture focus
+        self.window.focus_set()           # Give focus to this window
+        self.window.lift()                # Bring to front
+
         # Default puff interval
         self.puff_interval = 10  # Default to 10
     
@@ -198,12 +202,11 @@ class DataCollectionWindow:
         self.setup_styles()
 
         # Click tracking variables
+        # Simplified click tracking
         self.last_click_time = 0
-        self.last_click_xy = (0,0)
-        self.double_click_threshold = 500
-        self.cell_border_frame = None
-        self.single_click_after_id = None
-        self.columns = ["puffs", "before_weight", "after_weight", "draw_pressure", "smell", "notes", "tpm"]
+        self.last_clicked_item = None
+        self.last_clicked_column = None
+
 
         # Initialize data structures
         self.initialize_data()
@@ -224,6 +227,8 @@ class DataCollectionWindow:
     
         # Start auto-save timer
         self.start_auto_save_timer()
+
+        self.ensure_initial_tpm_calculation()
     
         self.log(f"DataCollectionWindow initialized for {test_name} with {self.num_samples} samples", "debug")
     
@@ -287,7 +292,7 @@ class DataCollectionWindow:
         self.log("Menu bar created successfully", "debug")
     
     def setup_styles(self):
-        """Set up styles for ttk widgets to ensure no blue backgrounds."""
+        """Set up styles for ttk widgets with enhanced visual separation."""
         # Configure ttk styles to use system defaults
         self.style.configure('TFrame', background='SystemButtonFace')
         self.style.configure('TLabel', background='SystemButtonFace')
@@ -297,51 +302,37 @@ class DataCollectionWindow:
         self.style.configure('TNotebook.Tab', background='SystemButtonFace')
 
         # Create special styles for headers
-        self.style.configure('Header.TLabel', 
-                             font=("Arial", 14, "bold"), 
-                             background='SystemButtonFace')
-
-        self.style.configure('SubHeader.TLabel', 
-                             font=("Arial", 12), 
-                             background='SystemButtonFace')
-
-        # Style for stats panel
-        self.style.configure('Stats.TLabel', 
-                             font=("Arial", 14, "bold"), 
-                             background='SystemButtonFace')
-
-        # Style for sample info
-        self.style.configure('SampleInfo.TLabel',
-                             font=("Arial", 11),
-                             background='SystemButtonFace')
+        self.style.configure('Header.TLabel', font=("Arial", 14, "bold"), background='SystemButtonFace')
+        self.style.configure('SubHeader.TLabel', font=("Arial", 12), background='SystemButtonFace')
+        self.style.configure('Stats.TLabel', font=("Arial", 14, "bold"), background='SystemButtonFace')
+        self.style.configure('SampleInfo.TLabel', font=("Arial", 11), background='SystemButtonFace')
                      
-        # Style for Treeview with enhanced visual separation
+        # Enhanced Treeview styling with better visual separation
         self.style.configure('Treeview', 
                             background='white',
                             fieldbackground='white',
-                            borderwidth=1)
-
-        # Add gridlines to the Treeview cells
-        self.style.configure('Treeview', rowheight=30)  # Increased for better visibility
+                            borderwidth=1,
+                            rowheight=28,  # Taller rows for better separation
+                            font=('Arial', 10))
     
         # Configure selection colors
         self.style.map('Treeview', 
-                      background=[('selected', '#3874CC')],
-                      foreground=[('selected', 'white')])
+                      background=[('selected', '#E8F4FD')],
+                      foreground=[('selected', 'black')])
 
-        # Style headers with a distinct look
+        # Style headers with enhanced borders
         self.style.configure('Treeview.Heading',
                             background='#D0D0D0',
                             foreground='black',
-                            relief='raised',
+                            font=('Arial', 10, 'bold'),
                             borderwidth=2,
-                            font=('Arial', 10, 'bold'))
+                            relief='raised')
     
-        # Add hover effect for headers
+        # Add hover effect
         self.style.map('Treeview.Heading',
                       background=[('active', '#C0C0C0')])
 
-        print("DEBUG: Styles configured with enhanced visual separation")
+        print("DEBUG: Enhanced styles configured with better visual separation")
     
     def center_window(self):
         """Center the window on the screen."""
@@ -352,6 +343,23 @@ class DataCollectionWindow:
         y = (self.window.winfo_screenheight() // 2) - (height // 2)
         self.window.geometry(f"{width}x{height}+{x}+{y}")
     
+    def on_canvas_resize(self, event=None):
+        """Handle canvas resize events to update plot size."""
+        if hasattr(self, 'tpm_canvas') and hasattr(self, 'tpm_figure'):
+            # Get the current canvas size
+            canvas_widget = self.tpm_canvas.get_tk_widget()
+            width = canvas_widget.winfo_width()
+            height = canvas_widget.winfo_height()
+        
+            if width > 1 and height > 1:  # Valid size
+                # Convert to inches (assuming 80 DPI)
+                fig_width = width / 80.0
+                fig_height = height / 80.0
+            
+                # Update figure size
+                self.tpm_figure.set_size_inches(fig_width, fig_height)
+                self.tpm_canvas.draw()
+
     def create_widgets(self):
         """Create the data collection UI with a cleaner structure."""
         # Configure window
@@ -812,7 +820,7 @@ class DataCollectionWindow:
         """Clear data for the currently selected sample."""
         current_tab = self.notebook.index(self.notebook.select())
         sample_id = f"Sample {current_tab + 1}"
-    
+
         if messagebox.askyesno("Confirm Clear", 
                              f"Are you sure you want to clear all data for {sample_id}?"):
             # Clear all data except puffs
@@ -821,6 +829,9 @@ class DataCollectionWindow:
             # Add chronography for User Test Simulation
             if self.test_name in ["User Test Simulation", "User Simulation Test"]:
                 clear_keys.append("chronography")
+            else:
+                # Add resistance and clog for standard tests
+                clear_keys.extend(["resistance", "clog"])
         
             for key in clear_keys:
                 for i in range(len(self.data[sample_id][key])):
@@ -1133,16 +1144,16 @@ Developed by Charlie Becquet
                 
                     # Skip resistance column (F + offset) - not used in User Test Simulation
                 
-                    # Smell column (G + offset)
+                    # Failure column (G + offset)
                     if self.data[sample_id]["smell"][i]:
                         try:
-                            ws.cell(row=row, column=7 + col_offset, value=float(self.data[sample_id]["smell"][i]))
+                            ws.cell(row=row, column=6 + col_offset, value=float(self.data[sample_id]["smell"][i]))
                         except:
-                            ws.cell(row=row, column=7 + col_offset, value=self.data[sample_id]["smell"][i])
+                            ws.cell(row=row, column=6 + col_offset, value=self.data[sample_id]["smell"][i])
                 
                     # Notes column (H + offset)
                     if self.data[sample_id]["notes"][i]:
-                        ws.cell(row=row, column=8 + col_offset, value=str(self.data[sample_id]["notes"][i]))
+                        ws.cell(row=row, column=7 + col_offset, value=str(self.data[sample_id]["notes"][i]))
                     
                     print(f"DEBUG: Saved User Test Simulation row {i} for {sample_id}")
                 
@@ -1172,12 +1183,24 @@ Developed by Charlie Becquet
                         except:
                             ws.cell(row=row, column=4 + col_offset, value=self.data[sample_id]["draw_pressure"][i])
         
+                    if self.data[sample_id]["resistance"][i]:
+                        try:
+                            ws.cell(row=row, column=5 + col_offset, value=float(self.data[sample_id]["resistance"][i]))
+                        except:
+                            ws.cell(row=row, column=5 + col_offset, value=self.data[sample_id]["resistance"][i])
+
                     # Smell column (F + offset)
                     if self.data[sample_id]["smell"][i]:
                         try:
                             ws.cell(row=row, column=6 + col_offset, value=float(self.data[sample_id]["smell"][i]))
                         except:
                             ws.cell(row=row, column=6 + col_offset, value=self.data[sample_id]["smell"][i])
+
+                    if self.data[sample_id]["clog"][i]:
+                        try:
+                            ws.cell(row=row, column=7 + col_offset, value=float(self.data[sample_id]["clog"][i]))
+                        except:
+                            ws.cell(row=row, column=7 + col_offset, value=self.data[sample_id]["clog"][i])
         
                     # Notes column (H + offset)
                     if self.data[sample_id]["notes"][i]:
@@ -1264,6 +1287,9 @@ Developed by Charlie Becquet
         # Create main container
         main_container = ttk.Frame(parent_frame)
         main_container.pack(fill="both", expand=True)
+        # Ensure main container expands
+        main_container.grid_rowconfigure(0, weight=1)
+        main_container.grid_columnconfigure(0, weight=1)
 
         # Create scrollable frame
         canvas = tk.Canvas(main_container, bg='white')
@@ -1286,10 +1312,10 @@ Developed by Charlie Becquet
         if self.test_name in ["User Test Simulation", "User Simulation Test"]:
             print(f"DEBUG: Setting up User Test Simulation columns with chronography")
             # User Test Simulation: 8 columns including chronography
-            columns = ["Chronography", "Puffs", "Before Weight", "After Weight", "Draw Pressure","Failure", "Notes", "TPM"]
+            columns = ["Chronography", "Puffs", "Before Weight", "After Weight", "Draw Pressure", "Failure", "Notes", "TPM"]
             column_widths = [100, 80, 100, 100, 100, 80, 150, 80]
             self.tree_columns = len(columns)
-    
+
             # Ensure chronography data exists
             if "chronography" not in self.data[sample_id]:
                 print(f"DEBUG: Creating chronography data structure for {sample_id}")
@@ -1298,23 +1324,31 @@ Developed by Charlie Becquet
                 existing_length = len(self.data[sample_id]["puffs"])
                 for j in range(existing_length):
                     self.data[sample_id]["chronography"].append("")
-                
+            
             print(f"DEBUG: User Test Simulation columns: {columns}")
         else:
-            # Standard tests: 12 columns without chronography  
+            # Standard tests: 9 columns without chronography  
             columns = ["Puffs", "Before Weight", "After Weight", "Draw Pressure", "Resistance", "Smell", "Clog", "Notes", "TPM"]
             column_widths = [80, 100, 100, 100, 100, 80, 80, 150, 80]
             self.tree_columns = len(columns)
             print(f"DEBUG: Standard test columns: {columns}")
 
-        # Create treeview with determined columns
-        tree = ttk.Treeview(scrollable_frame, columns=columns, show="headings", height=15)
+        tree = ttk.Treeview(scrollable_frame, columns=columns, show="headings")
 
-        # Configure columns
+        # Configure columns with better spacing
         for i, (col, width) in enumerate(zip(columns, column_widths)):
             tree.heading(col, text=col)
-            tree.column(col, width=width, minwidth=50)
+            tree.column(col, width=width, minwidth=50, anchor='center')  # Center align for better appearance
             print(f"DEBUG: Configured column {i}: {col} with width {width}")
+
+        # Configure highlighting tags
+        tree.tag_configure('highlight_selected', background='#CCE5FF', foreground='black')
+        # Configure TPM calculated cells with green background - ONLY for TPM column
+        tree.tag_configure('tpm_calculated', background='#C6EFCE', foreground='black')
+
+        # Configure striped rows for better visual separation
+        tree.tag_configure('evenrow', background='#F8F8F8')
+        tree.tag_configure('oddrow', background='white')
 
         # Create tree scrollbars
         tree_v_scrollbar = ttk.Scrollbar(scrollable_frame, orient="vertical", command=tree.yview)
@@ -1359,7 +1393,7 @@ Developed by Charlie Becquet
         return None
 
     def update_treeview(self, tree, sample_id):
-        """Update the treeview with current data for the specified sample."""
+        """Update the treeview with current data, highlighting only TPM cells."""
         print(f"DEBUG: Updating treeview for {sample_id}")
     
         # Clear existing items
@@ -1370,35 +1404,58 @@ Developed by Charlie Becquet
         data_length = len(self.data[sample_id]["puffs"])
         print(f"DEBUG: Data length for {sample_id}: {data_length}")
     
-        # Insert data rows
+        # Insert data rows with alternating colors for better visual separation
         for i in range(data_length):
             if self.test_name in ["User Test Simulation", "User Simulation Test"]:
-                # User Test Simulation format with chronography
+                # User Test Simulation format: [Chronography, Puffs, Before Weight, After Weight, Draw Pressure, Failure, Notes, TPM]
+                tpm_value = ""
+                has_tpm = False
+                if i < len(self.data[sample_id]["tpm"]) and self.data[sample_id]["tpm"][i] is not None:
+                    tpm_value = f"{self.data[sample_id]['tpm'][i]:.6f}"
+                    has_tpm = True
+            
                 values = [
                     self.data[sample_id]["chronography"][i] if i < len(self.data[sample_id]["chronography"]) else "",
                     self.data[sample_id]["puffs"][i] if i < len(self.data[sample_id]["puffs"]) else "",
                     self.data[sample_id]["before_weight"][i] if i < len(self.data[sample_id]["before_weight"]) else "",
                     self.data[sample_id]["after_weight"][i] if i < len(self.data[sample_id]["after_weight"]) else "",
                     self.data[sample_id]["draw_pressure"][i] if i < len(self.data[sample_id]["draw_pressure"]) else "",
-                    "",  # Resistance - not used in User Test Simulation
-                    self.data[sample_id]["smell"][i] if i < len(self.data[sample_id]["smell"]) else "",
-                    self.data[sample_id]["notes"][i] if i < len(self.data[sample_id]["notes"]) else ""
+                    self.data[sample_id]["smell"][i] if i < len(self.data[sample_id]["smell"]) else "",  # Failure column (stored in smell field)
+                    self.data[sample_id]["notes"][i] if i < len(self.data[sample_id]["notes"]) else "",
+                    tpm_value  # TPM column
                 ]
-                print(f"DEBUG: Row {i} values for User Test Simulation: {values}")
             else:
-                # Standard format without chronography
+                # Standard format: [Puffs, Before Weight, After Weight, Draw Pressure, Resistance, Smell, Clog, Notes, TPM]
+                tpm_value = ""
+                has_tpm = False
+                if i < len(self.data[sample_id]["tpm"]) and self.data[sample_id]["tpm"][i] is not None:
+                    tpm_value = f"{self.data[sample_id]['tpm'][i]:.6f}"
+                    has_tpm = True
+            
                 values = [
                     self.data[sample_id]["puffs"][i] if i < len(self.data[sample_id]["puffs"]) else "",
                     self.data[sample_id]["before_weight"][i] if i < len(self.data[sample_id]["before_weight"]) else "",
                     self.data[sample_id]["after_weight"][i] if i < len(self.data[sample_id]["after_weight"]) else "",
                     self.data[sample_id]["draw_pressure"][i] if i < len(self.data[sample_id]["draw_pressure"]) else "",
-                    "",  # Resistance
+                    self.data[sample_id]["resistance"][i] if i < len(self.data[sample_id]["resistance"]) else "",
                     self.data[sample_id]["smell"][i] if i < len(self.data[sample_id]["smell"]) else "",
-                    "",  # Power
-                    self.data[sample_id]["notes"][i] if i < len(self.data[sample_id]["notes"]) else ""
+                    self.data[sample_id]["clog"][i] if i < len(self.data[sample_id]["clog"]) else "",
+                    self.data[sample_id]["notes"][i] if i < len(self.data[sample_id]["notes"]) else "",
+                    tpm_value  # TPM column
                 ]
-            print(values)
-            tree.insert("", "end", values=values)
+        
+            # Determine row coloring and TPM highlighting
+            tags = []
+            if i % 2 == 0:
+                tags.append('evenrow')
+            else:
+                tags.append('oddrow')
+        
+            # Only add TPM highlighting if this row has calculated TPM
+            if has_tpm:
+                tags.append('tpm_calculated')
+        
+            item = tree.insert("", "end", values=values, tags=tags)
     
         print(f"DEBUG: Treeview updated for {sample_id} with {data_length} rows")
 
@@ -1633,18 +1690,24 @@ Developed by Charlie Becquet
                         after_weight_cell = ws.cell(row=excel_row, column=4 + col_offset)   # After weight
                         draw_pressure_cell = ws.cell(row=excel_row, column=5 + col_offset)  # Draw pressure
                         # Skip resistance column (6)
-                        smell_cell = ws.cell(row=excel_row, column=7 + col_offset)   # Smell
-                        notes_cell = ws.cell(row=excel_row, column=8 + col_offset)   # Notes
+                        failure_cell = ws.cell(row=excel_row, column=6 + col_offset)   # failure
+                        notes_cell = ws.cell(row=excel_row, column=7 + col_offset)   # Notes
                         tpm_cell = None  # TPM not stored in User Test Simulation format
+                        resistance_cell = None  # Not used in User Test Simulation
+                        clog_cell = None  # Not used in User Test Simulation
+                        smell_cell = failure_cell
                     else:
                         # Standard layout (12 columns)
                         puffs_cell = ws.cell(row=excel_row, column=1 + col_offset)
                         before_weight_cell = ws.cell(row=excel_row, column=2 + col_offset)
                         after_weight_cell = ws.cell(row=excel_row, column=3 + col_offset)
                         draw_pressure_cell = ws.cell(row=excel_row, column=4 + col_offset)
+                        resistance_cell = ws.cell(row=excel_row, column=5 + col_offset)  # Column E - Resistance
                         smell_cell = ws.cell(row=excel_row, column=6 + col_offset)  # Column F
+                        clog_cell = ws.cell(row=excel_row, column=7 + col_offset)   # Column G - Clog
                         notes_cell = ws.cell(row=excel_row, column=8 + col_offset)  # Column H
                         tpm_cell = ws.cell(row=excel_row, column=9 + col_offset)    # Column I
+                        failure_cell = smell_cell
         
                     # Check if this row has meaningful numeric data (skip text like "Day 1", "Day 2", etc.)
                     
@@ -1720,7 +1783,19 @@ Developed by Charlie Becquet
                         if draw_pressure_cell.value is not None and isinstance(draw_pressure_cell.value, (int, float)):
                             draw_pressure_value = float(draw_pressure_cell.value)
                         self.data[sample_id]["draw_pressure"][data_row_idx] = draw_pressure_value
-            
+                        
+                        # Resistance - convert to float or empty string
+                        resistance_value = ""
+                        if resistance_cell and resistance_cell.value is not None and isinstance(resistance_cell.value, (int, float)):
+                            resistance_value = float(resistance_cell.value)
+                        self.data[sample_id]["resistance"][data_row_idx] = resistance_value
+
+                        # Clog - convert to float or empty string  
+                        clog_value = ""
+                        if clog_cell and clog_cell.value is not None and isinstance(clog_cell.value, (int, float)):
+                            clog_value = float(clog_cell.value)
+                        self.data[sample_id]["clog"][data_row_idx] = clog_value
+
                         # Smell - convert to float or empty string
                         smell_value = ""
                         if smell_cell.value is not None and isinstance(smell_cell.value, (int, float)):
@@ -1759,16 +1834,17 @@ Developed by Charlie Becquet
 
             print(f"DEBUG: Successfully loaded existing data for {loaded_data_count} samples")
 
-            # Update all treeviews to show the loaded data
-            for i, sample_tree in enumerate(self.sample_trees):
-                sample_id = f"Sample {i + 1}"
-                self.update_treeview(sample_tree, sample_id)
-                print(f"DEBUG: Updated treeview for {sample_id}")
-
-            # Recalculate TPM values for all samples
+            # Recalculate TPM values for all samples FIRST
             for i in range(self.num_samples):
                 sample_id = f"Sample {i + 1}"
                 self.calculate_tpm(sample_id)
+                print(f"DEBUG: Calculated TPM for {sample_id}")
+
+            # Update all treeviews to show the loaded data WITH calculated TPM
+            for i, sample_tree in enumerate(self.sample_trees):
+                sample_id = f"Sample {i + 1}"
+                self.update_treeview(sample_tree, sample_id)
+                print(f"DEBUG: Updated treeview for {sample_id} with TPM values")
 
             # Update the stats panel
             self.update_stats_panel()
@@ -1781,6 +1857,26 @@ Developed by Charlie Becquet
             traceback.print_exc()
             # Don't show error to user - just continue with empty data
     
+    def ensure_initial_tpm_calculation(self):
+        """Ensure TPM is calculated and displayed when window opens."""
+        print("DEBUG: Ensuring initial TPM calculation and display")
+    
+        for i in range(self.num_samples):
+            sample_id = f"Sample {i + 1}"
+        
+            # Calculate TPM for this sample
+            self.calculate_tpm(sample_id)
+        
+            # Update the treeview to show calculated TPM with highlighting
+            if i < len(self.sample_trees):
+                tree = self.sample_trees[i]
+                self.update_treeview(tree, sample_id)
+    
+        # Update stats panel to show current TPM data
+        self.update_stats_panel()
+    
+        print("DEBUG: Initial TPM calculation and display completed")
+
     def setup_event_handlers(self):
         """Set up event handlers for the window."""
         # Handle window close with auto-save
@@ -1793,25 +1889,25 @@ Developed by Charlie Becquet
         """Set up keyboard shortcuts for navigation."""
         if not hasattr(self, 'hotkey_bindings'):
             self.hotkey_bindings = {}
-        
+    
         # Clear any existing bindings
         for key, binding_id in self.hotkey_bindings.items():
             self.window.unbind(key, binding_id)
-        
+    
         self.hotkey_bindings.clear()
-        
-        # Bind Ctrl+S for quick save
-        binding_id = self.window.bind("<Control-s>", lambda e: self.quick_save() if self.hotkeys_enabled else None)
+    
+        # Bind Ctrl+S for quick save - FIX: use save_data directly
+        binding_id = self.window.bind("<Control-s>", lambda e: self.save_data(show_confirmation=False) if self.hotkeys_enabled else None)
         self.hotkey_bindings["<Control-s>"] = binding_id
-        
+    
         # Bind Ctrl+O for open raw Excel
         binding_id = self.window.bind("<Control-o>", lambda e: self.open_raw_excel() if self.hotkeys_enabled else None)
         self.hotkey_bindings["<Control-o>"] = binding_id
-        
+    
         # Bind Ctrl+Left/Right for sample navigation
         binding_id = self.window.bind("<Control-Left>", lambda e: self.go_to_previous_sample() if self.hotkeys_enabled else None)
         self.hotkey_bindings["<Control-Left>"] = binding_id
-        
+    
         binding_id = self.window.bind("<Control-Right>", lambda e: self.go_to_next_sample() if self.hotkeys_enabled else None)
         self.hotkey_bindings["<Control-Right>"] = binding_id
     
@@ -1819,6 +1915,7 @@ Developed by Charlie Becquet
         """Handle window close event with auto-save."""
         self.log("Window close event triggered", "debug")
     
+
         # Cancel auto-save timer
         if self.auto_save_timer:
             self.window.after_cancel(self.auto_save_timer)
@@ -1908,27 +2005,27 @@ Developed by Charlie Becquet
         self.data = {}
         for i in range(self.num_samples):
             sample_id = f"Sample {i+1}"
-        
+    
             # Basic data structure
             self.data[sample_id] = {
                 "current_row_index": 0, 
                 "avg_tpm": 0.0
             }
-        
-            # Add standard columns
-            columns = ["puffs", "before_weight", "after_weight", "draw_pressure", "smell", "notes", "tpm"]
+    
+            # Add standard columns (smell field will be used for both "smell" and "failure" depending on test type)
+            columns = ["puffs", "before_weight", "after_weight", "draw_pressure", "resistance", "smell", "clog", "notes", "tpm"]
             for column in columns:
                 self.data[sample_id][column] = []
-        
+    
             # Add special columns for User Test Simulation
             if self.test_name in ["User Test Simulation", "User Simulation Test"]:
                 self.data[sample_id]["chronography"] = []
-        
+    
             # Pre-initialize rows
             for j in range(50):
                 puff = (j + 1) * self.puff_interval
                 self.data[sample_id]["puffs"].append(puff)
-            
+        
                 # Initialize other columns with empty values
                 for column in columns:
                     if column == "puffs":
@@ -1937,11 +2034,11 @@ Developed by Charlie Becquet
                         self.data[sample_id][column].append(None)
                     else:
                         self.data[sample_id][column].append("")
-            
+        
                 # Initialize chronography if needed
                 if "chronography" in self.data[sample_id]:
                     self.data[sample_id]["chronography"].append("")
-                
+            
             self.log(f"Initialized data for Sample {i+1}", "debug")
 
     def on_cancel(self):
@@ -1957,6 +2054,7 @@ Developed by Charlie Becquet
                  "cancel" if the user cancelled.
         """
         print("DEBUG: Showing DataCollectionWindow")
+        self.window.focus_force()
         self.window.wait_window()
         
         # Clean up auto-save timer
@@ -1964,19 +2062,7 @@ Developed by Charlie Becquet
             self.window.after_cancel(self.auto_save_timer)
         
         print(f"DEBUG: DataCollectionWindow closed with result: {self.result}")
-        return self.result
-    
-    def quick_save(self):
-        """Quick save without closing the window."""
-        self.save_data(show_confirmation=False)
-
-    def save_and_continue(self):
-        """Save data and continue working."""
-        self.save_data(show_confirmation=True)
-
-    def save_and_exit(self):
-        """Save data and exit the window."""
-        self.save_data(exit_after=True)    
+        return self.result  
 
     def create_tpm_stats_panel(self):
         """Create the enhanced TPM statistics panel with plot on the right side."""
@@ -2020,17 +2106,30 @@ Developed by Charlie Becquet
         self.current_sample_stats_frame.pack(fill="x", pady=5)
     
         # Create frame for TPM plot with proper sizing
-        plot_frame = ttk.LabelFrame(scrollable_stats_frame, text="TPM Over Time", style='TLabelframe')
-        plot_frame.pack(fill="both", expand=True, padx=10, pady=(20, 10))
+        plot_frame = ttk.LabelFrame(scrollable_stats_frame, text="TPM (mg/puff)", style='TLabelframe')
+        plot_frame.pack(fill="both", expand=True, padx=2, pady=(1, 1))
+
+        # Ensure plot frame expands properly
+        plot_frame.grid_rowconfigure(0, weight=1)
+        plot_frame.grid_columnconfigure(0, weight=1)
     
-        # Create matplotlib figure for TPM plot with proper sizing
+        # Create matplotlib figure for TPM plot with responsive sizing
         plt.style.use('default')  # Ensure we're using default style
-        self.tpm_figure = plt.Figure(figsize=(4, 3), dpi=80, facecolor='white', tight_layout=True)
+        self.tpm_figure = plt.Figure(figsize=(5, 4), dpi=80, facecolor='white')
         self.tpm_ax = self.tpm_figure.add_subplot(111)
     
         # Create canvas with proper configuration
         self.tpm_canvas = FigureCanvasTkAgg(self.tpm_figure, plot_frame)
-        self.tpm_canvas.get_tk_widget().pack(fill="both", expand=True, padx=2, pady=2)
+        self.tpm_canvas.get_tk_widget().pack(fill="both", expand=True)
+
+        def on_canvas_configure(event):
+            # Delay the resize to avoid too many rapid calls
+            if hasattr(self, '_resize_timer'):
+                self.window.after_cancel(self._resize_timer)
+            self._resize_timer = self.window.after(100, self.update_plot_size)
+
+        # Bind resize event
+        self.tpm_canvas.get_tk_widget().bind('<Configure>', self.on_canvas_resize)
     
         # Configure the plot with tight layout
         self.tpm_figure.tight_layout(pad=1.0)
@@ -2050,6 +2149,31 @@ Developed by Charlie Becquet
     
         print("DEBUG: Enhanced TPM statistics panel created successfully")
     
+    def update_plot_size(self):
+        """Update plot size to fit container."""
+        if hasattr(self, 'tpm_canvas') and hasattr(self, 'tpm_figure'):
+            try:
+                # Get the container size
+                canvas_widget = self.tpm_canvas.get_tk_widget()
+                canvas_widget.update_idletasks()
+            
+                width = canvas_widget.winfo_width()
+                height = canvas_widget.winfo_height()
+            
+                # Only resize if we have valid dimensions
+                if width > 50 and height > 50:
+                    # Convert pixels to inches (80 DPI)
+                    fig_width = max(3, width / 80.0)   # Minimum 3 inches wide
+                    fig_height = max(2, height / 80.0) # Minimum 2 inches tall
+                
+                    # Update figure size
+                    self.tpm_figure.set_size_inches(fig_width, fig_height)
+                    self.tpm_figure.tight_layout(pad=0.5)
+                    self.tpm_canvas.draw()
+                
+            except Exception as e:
+                print(f"DEBUG: Error updating plot size: {e}")
+
     def update_stats_panel(self, event=None):
         """Update the TPM statistics panel to show only current sample with enhanced stats."""
         print("DEBUG: Updating enhanced TPM statistics panel")
@@ -2200,6 +2324,8 @@ Developed by Charlie Becquet
     
         # Refresh the canvas
         self.tpm_canvas.draw()
+
+        self.window.after(50, self.update_plot_size)
     
         print(f"DEBUG: TPM plot updated for {sample_id} with autosizing")
     
@@ -2207,58 +2333,46 @@ Developed by Charlie Becquet
         """Navigate to the previous sample tab."""
         if not self.hotkeys_enabled:
             return
-            
         current_tab = self.notebook.index(self.notebook.select())
-        if current_tab > 0:
-            self.notebook.select(current_tab - 1)
-        else:
-            # Wrap around to last tab
-            self.notebook.select(len(self.sample_frames) - 1)
-    
+        target_tab = (current_tab - 1) % len(self.sample_frames)  # Wrap around
+        self.notebook.select(target_tab)
+
     def go_to_next_sample(self):
         """Navigate to the next sample tab."""
         if not self.hotkeys_enabled:
             return
-            
         current_tab = self.notebook.index(self.notebook.select())
-        if current_tab < len(self.sample_frames) - 1:
-            self.notebook.select(current_tab + 1)
-        else:
-            # Wrap around to first tab
-            self.notebook.select(0)
+        target_tab = (current_tab + 1) % len(self.sample_frames)  # Wrap around
+        self.notebook.select(target_tab)
     
-    def update_puff_interval(self):
-        """Update the puff interval for future rows."""
-        try:
-            self.puff_interval = self.puff_interval_var.get()
-            print(f"DEBUG: Updated puff interval to {self.puff_interval}")
-        except:
-            messagebox.showerror("Error", "Invalid puff interval. Please enter a positive number.")
-            self.puff_interval_var.set(self.puff_interval)
 
     def get_column_name(self, col_idx):
         """Get the internal column name based on column index."""
         # Column mapping varies by test type
         if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+            # User Test Simulation: [Chronography, Puffs, Before Weight, After Weight, Draw Pressure, Failure, Notes, TPM]
             column_map = {
                 0: "chronography",
                 1: "puffs", 
                 2: "before_weight", 
                 3: "after_weight", 
                 4: "draw_pressure", 
-                5: "failure",  # This might map to "smell" in data structure
-                6: "notes"
+                5: "smell",  # "Failure" column maps to "smell" field in data structure
+                6: "notes",
+                7: "tpm"  # TPM column (read-only)
             }
         else:
+            # Standard test: [Puffs, Before Weight, After Weight, Draw Pressure, Resistance, Smell, Clog, Notes, TPM]
             column_map = {
                 0: "puffs", 
                 1: "before_weight", 
                 2: "after_weight", 
                 3: "draw_pressure", 
-                4: "resistance",  # Not used in data structure
+                4: "resistance",
                 5: "smell", 
-                6: "clog",        # Not used in data structure
-                7: "notes"
+                6: "clog",
+                7: "notes",
+                8: "tpm"  # TPM column (read-only)
             }
     
         # Return appropriate column name or default to a safe value
@@ -2324,38 +2438,50 @@ Developed by Charlie Becquet
         """Create control buttons at the bottom of the window."""
         button_frame = ttk.Frame(parent_frame, style='TFrame')
         button_frame.pack(fill="x", pady=(10, 0))
-    
+
         # Left side controls
         left_controls = ttk.Frame(button_frame, style='TFrame')
         left_controls.pack(side="left", fill="x")
-    
+
         ttk.Label(left_controls, text="Puff Interval:", style='TLabel').pack(side="left")
         self.puff_interval_var = tk.IntVar(value=self.puff_interval)
+    
+        # FIX: Define update function inline since update_puff_interval was deleted
+        def update_interval():
+            try:
+                self.puff_interval = self.puff_interval_var.get()
+                print(f"DEBUG: Updated puff interval to {self.puff_interval}")
+            except:
+                messagebox.showerror("Error", "Invalid puff interval. Please enter a positive number.")
+                self.puff_interval_var.set(self.puff_interval)
+    
         puff_spinbox = ttk.Spinbox(
             left_controls, 
             from_=1, 
             to=100, 
             textvariable=self.puff_interval_var, 
             width=5,
-            command=self.update_puff_interval
+            command=update_interval  # FIX: use inline function
         )
         puff_spinbox.pack(side="left", padx=5)
-    
+
         # Sample navigation
         nav_frame = ttk.Frame(button_frame, style='TFrame')
         nav_frame.pack(side="left", padx=20)
-    
+
         ttk.Button(nav_frame, text="← Prev Sample", command=self.go_to_previous_sample).pack(side="left")
         ttk.Button(nav_frame, text="Next Sample →", command=self.go_to_next_sample).pack(side="left", padx=5)
-    
-        # Right side controls
+
+        # Right side controls - consolidated save methods
         ttk.Button(button_frame, text="Quick Save", 
                   command=lambda: self.save_data(show_confirmation=False)).pack(side="right", padx=(10, 0))
         ttk.Button(button_frame, text="Save & Exit", 
                   command=lambda: self.save_data(exit_after=True)).pack(side="right")
         ttk.Button(button_frame, text="Cancel", command=self.on_cancel).pack(side="right", padx=(0, 10))
-    
+
         self.log("Control buttons created", "debug")
+
+
 
     # ============================================================================
     # COMPLETE CELL EDITING AND NAVIGATION METHODS
@@ -2385,6 +2511,7 @@ Developed by Charlie Becquet
                 self.data[sample_id][column_name][row_idx] = value
                 self.mark_unsaved_changes()
 
+                # Auto-progression features
                 if column_name == "after_weight":
                     self.auto_progress_weight(tree, sample_id, row_idx, value)
                 elif column_name == "puffs":
@@ -2396,10 +2523,20 @@ Developed by Charlie Becquet
         values[col_idx] = str(value) if value != "" else ""
         tree.item(item, values=values)
 
-        # TPM calculation if weights or puffs changed
+        # ENHANCED: Live TPM calculation and display update
         if column_name in ["before_weight", "after_weight", "puffs"]:
-            self.calculate_tpm(sample_id)
+            print(f"DEBUG: Triggering live TPM calculation for {sample_id} due to {column_name} change")
+        
+            # Calculate TPM for this specific row and potentially affected rows
+            self.calculate_tpm_for_row(sample_id, row_idx)
+        
+            # Update the entire treeview to reflect TPM changes
+            self.update_treeview(tree, sample_id)
+        
+            # Update stats panel
             self.update_stats_panel()
+        
+            print(f"DEBUG: Live TPM update completed for {sample_id}")
 
         # Finish edit mode before navigating
         self.end_editing()
@@ -2408,6 +2545,73 @@ Developed by Charlie Becquet
         if event and event.keysym in ["Right", "Left"]:
             direction = "right" if event.keysym == "Right" else "left"
             self.handle_arrow_key(event, tree, sample_id, direction)
+
+    def calculate_tpm_for_row(self, sample_id, changed_row_idx):
+        """Calculate TPM for a specific row and related rows when data changes."""
+        print(f"DEBUG: Calculating TPM for {sample_id}, row {changed_row_idx}")
+    
+        # Calculate TPM for the changed row
+        self.calculate_single_row_tpm(sample_id, changed_row_idx)
+    
+        # If puffs changed, recalculate all subsequent rows since intervals may have changed
+        if changed_row_idx < len(self.data[sample_id]["puffs"]) - 1:
+            for i in range(changed_row_idx + 1, len(self.data[sample_id]["puffs"])):
+                self.calculate_single_row_tpm(sample_id, i)
+    
+        # Update average TPM
+        valid_tpm_values = [v for v in self.data[sample_id]["tpm"] if v is not None]
+        self.data[sample_id]["avg_tpm"] = sum(valid_tpm_values) / len(valid_tpm_values) if valid_tpm_values else 0.0
+
+    def calculate_single_row_tpm(self, sample_id, row_idx):
+        """Calculate TPM for a single row."""
+        try:
+            # Ensure TPM list is long enough
+            while len(self.data[sample_id]["tpm"]) <= row_idx:
+                self.data[sample_id]["tpm"].append(None)
+        
+            # Get weight values for this row
+            before_weight_str = self.data[sample_id]["before_weight"][row_idx] if row_idx < len(self.data[sample_id]["before_weight"]) else ""
+            after_weight_str = self.data[sample_id]["after_weight"][row_idx] if row_idx < len(self.data[sample_id]["after_weight"]) else ""
+        
+            # Skip if either weight is missing
+            if not before_weight_str or not after_weight_str:
+                self.data[sample_id]["tpm"][row_idx] = None
+                return
+            
+            # Convert to float
+            before_weight = float(before_weight_str)
+            after_weight = float(after_weight_str)
+        
+            # Validate weights
+            if before_weight <= after_weight:
+                self.data[sample_id]["tpm"][row_idx] = None
+                return
+            
+            # Calculate puffs in this interval
+            current_puff = int(self.data[sample_id]["puffs"][row_idx]) if row_idx < len(self.data[sample_id]["puffs"]) else 0
+            puffs_in_interval = current_puff
+        
+            if row_idx > 0:
+                prev_puff = int(self.data[sample_id]["puffs"][row_idx - 1]) if (row_idx - 1) < len(self.data[sample_id]["puffs"]) else 0
+                puffs_in_interval = current_puff - prev_puff
+        
+            # Skip if invalid puff interval
+            if puffs_in_interval <= 0:
+                self.data[sample_id]["tpm"][row_idx] = None
+                return
+            
+            # Calculate TPM (mg/puff)
+            weight_consumed = before_weight - after_weight  # in grams
+            tpm = (weight_consumed * 1000) / puffs_in_interval  # Convert to mg per puff
+        
+            # Store result
+            self.data[sample_id]["tpm"][row_idx] = round(tpm, 6)
+        
+            print(f"DEBUG: Calculated TPM for {sample_id} row {row_idx}: {tpm:.6f} mg/puff")
+        
+        except (ValueError, TypeError, IndexError) as e:
+            print(f"DEBUG: Error calculating TPM for {sample_id} row {row_idx}: {e}")
+            self.data[sample_id]["tpm"][row_idx] = None
 
     def convert_cell_value(self, value, column_name):
         """Convert user-entered value to appropriate type."""
@@ -2418,9 +2622,9 @@ Developed by Charlie Becquet
         try:
             if column_name == "puffs":
                 return int(float(value))
-            elif column_name in ["before_weight", "after_weight", "draw_pressure", "smell"]:
+            elif column_name in ["before_weight", "after_weight", "draw_pressure", "resistance", "smell", "clog"]:
                 return float(value)
-            elif column_name == "chronography":
+            elif column_name in ["chronography", "notes"]:
                 return str(value)
         except ValueError:
             return value  # Keep as-is if conversion fails
@@ -2469,12 +2673,22 @@ Developed by Charlie Becquet
 
     def edit_cell(self, tree, item, column, row_idx, sample_id):
         """Single unified method for cell editing."""
-        # End any existing edit first
-        self.end_editing()
-    
         # Get column name based on column index
         col_idx = int(column[1:]) - 1
         column_name = self.get_column_name(col_idx)
+    
+        # Check if this is the TPM column - make it read-only
+        if column_name == "tpm":
+            print("DEBUG: TPM column is read-only (calculated automatically)")
+            return  # Don't allow editing of TPM column
+    
+        # Check if the column exists in our data structure
+        if column_name not in self.data[sample_id]:
+            print(f"DEBUG: Column {column_name} not found in data structure")
+            return
+    
+        # End any existing edit first
+        self.end_editing()
     
         # Get cell coordinates and create editing frame
         x, y, width, height = tree.bbox(item, column)
@@ -2794,76 +3008,34 @@ Developed by Charlie Becquet
         self.hotkeys_enabled = True
 
     def highlight_cell(self, tree, item, column):
-        """Highlight a specific cell instead of the entire row."""
-        # Remove any existing cell highlights
-        self.clear_cell_highlights(tree)
+        """Highlight a specific cell using enhanced treeview selection."""
+        # Clear previous selection
+        tree.selection_set()
     
-        # Create a unique tag for this cell
-        cell_tag = f"selected_cell_{item}_{column}"
-    
-        # Get all existing tags for this item
-        existing_tags = list(tree.item(item, 'tags'))
-    
-        # Add our cell selection tag
-        if cell_tag not in existing_tags:
-            existing_tags.append(cell_tag)
-    
-        # Apply the tags
-        tree.item(item, tags=existing_tags)
-    
-        # Configure the cell highlight
-        # We'll use a custom approach to highlight individual cells
-        col_idx = int(column[1:]) - 1
-    
-        # Store current selection info
-        self.selected_cell = {
-            'tree': tree,
-            'item': item,
-            'column': column,
-            'col_idx': col_idx
-        }
-    
-        # Use selection to track the row but we'll add visual indicator for the cell
+        # Select the item and focus on it
         tree.selection_set(item)
         tree.focus(item)
+        tree.see(item)
     
-        # Draw a border around the selected cell
-        self.draw_cell_border(tree, item, column)
-
-    def clear_cell_highlights(self, tree):
-        """Clear all cell highlight tags."""
-        for item in tree.get_children():
-            tags = list(tree.item(item, 'tags'))
-            # Remove any cell selection tags
-            tags = [tag for tag in tags if not tag.startswith('selected_cell_')]
-            tree.item(item, tags=tags)
+        # Store current selection for keyboard navigation
+        self.current_item = item
+        self.current_column = column
     
-        # Remove any existing cell border
-        if hasattr(self, 'cell_border_frame') and self.cell_border_frame is not None:
-            self.cell_border_frame.destroy()
-            self.cell_border_frame = None
-
-    def draw_cell_border(self, tree, item, column):
-        """Draw a transparent border around a cell without obscuring its content."""
-        # Remove old border
-        if self.cell_border_frame:
-            self.cell_border_frame.destroy()
-            self.cell_border_frame = None
-
-        bbox = tree.bbox(item, column)
-        if not bbox:
-            return
-
-        x, y, width, height = bbox
-
-        # Draw an invisible frame with just border
-        self.cell_border_frame = tk.Frame(
-            tree, bg="", highlightbackground="blue",
-            highlightthickness=2, bd=0
-        )
-        self.cell_border_frame.place(x=x - 1, y=y - 1, width=width + 2, height=height + 2)
-        self.cell_border_frame.lift()  # Ensure it's above background but doesn't obscure text
-
+        # Add visual emphasis by applying a special tag
+        current_tags = list(tree.item(item, 'tags'))
+    
+        # Remove any existing highlight tags from other items
+        for child in tree.get_children():
+            tags = list(tree.item(child, 'tags'))
+            tags = [tag for tag in tags if not tag.startswith('highlight_')]
+            tree.item(child, tags=tags)
+    
+        # Add highlight tag to current item
+        if 'highlight_selected' not in current_tags:
+            current_tags.append('highlight_selected')
+            tree.item(item, tags=current_tags)
+    
+        print(f"DEBUG: Cell highlighted - item: {item}, column: {column}")
 
     # ============================================================================
     # END OF CELL EDITING AND NAVIGATION METHODS
