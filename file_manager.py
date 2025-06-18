@@ -39,7 +39,8 @@ from utils import (
     get_save_path,
     is_standard_file,
     FONT,
-    APP_BACKGROUND_COLOR
+    APP_BACKGROUND_COLOR,
+    load_excel_file_with_formulas
 )
 from database_manager import DatabaseManager
 

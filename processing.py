@@ -70,21 +70,39 @@ def get_y_data_for_plot_type(sample_data, plot_type):
         puffing_intervals = pd.Series(index=puffs.index, dtype=float)
         for i, idx in enumerate(puffs.index):
             if i == 0:  # First row: current_puffs - 0
-                puffing_intervals.loc[idx] = puffs.loc[idx] if pd.notna(puffs.loc[idx]) else 0
+                current_puffs = puffs.loc[idx] if pd.notna(puffs.loc[idx]) else 10  # Default to 10 if NaN
+                puffing_intervals.loc[idx] = current_puffs
             else:  # Subsequent rows: current_puffs - previous_puffs
                 prev_idx = puffs.index[i-1]
                 current_puffs = puffs.loc[idx] if pd.notna(puffs.loc[idx]) else 0
                 prev_puffs = puffs.loc[prev_idx] if pd.notna(puffs.loc[prev_idx]) else 0
-                puffing_intervals.loc[idx] = current_puffs - prev_puffs
+                puff_interval = current_puffs - prev_puffs
+                
+                # If interval is negative, zero, or current puffs is NaN, use current puffs or default
+                if puff_interval <= 0 or pd.isna(current_puffs):
+                    if pd.isna(current_puffs) or current_puffs == 0:
+                        # Both puffs and interval are invalid, default to 10
+                        fallback_puffs = 10
+                        print(f"DEBUG: Row {i} - Both puffs ({current_puffs}) and interval ({puff_interval}) invalid, using default {fallback_puffs}")
+                        puffing_intervals.loc[idx] = fallback_puffs
+                    else:
+                        # Use current puffs value
+                        print(f"DEBUG: Row {i} - Interval {puff_interval} <= 0, using current puffs {current_puffs}")
+                        puffing_intervals.loc[idx] = current_puffs
+                else:
+                    puffing_intervals.loc[idx] = puff_interval
         
         # Calculate TPM: (before - after) / puffing_interval * 1000 (mg/puff)
         weight_diff = (before_weights - after_weights) * 1000  # Convert g to mg
         calculated_tpm = weight_diff / puffing_intervals
-        
-        print(f"DEBUG: Puffs: {puffs.dropna().tolist()}")
-        print(f"DEBUG: Puffing intervals: {puffing_intervals.dropna().tolist()}")
-        print(f"DEBUG: Weight differences (mg): {weight_diff.dropna().tolist()}")
-        print(f"DEBUG: Calculated TPM values (mg/puff): {calculated_tpm.dropna().tolist()}")
+        # Only calculate TPM where puffing_intervals > 0
+        calculated_tpm = pd.Series(index=weight_diff.index, dtype=float)
+        for idx in weight_diff.index:
+            if pd.notna(puffing_intervals.loc[idx]) and puffing_intervals.loc[idx] > 0:
+                calculated_tpm.loc[idx] = weight_diff.loc[idx] / puffing_intervals.loc[idx]
+            else:
+                calculated_tpm.loc[idx] = np.nan
+                print(f"DEBUG: Skipping TPM calculation for row with invalid interval: {puffing_intervals.loc[idx]}")
         return calculated_tpm
         
     elif plot_type == "Power Efficiency":
@@ -281,25 +299,42 @@ def get_y_data_for_user_test_simulation_plot_type(sample_data, plot_type):
         before_weights = pd.to_numeric(sample_data.iloc[3:, 2], errors='coerce')  # Adjust as needed
         after_weights = pd.to_numeric(sample_data.iloc[3:, 3], errors='coerce')   # Adjust as needed
         
-        # Calculate puffing intervals
         puffing_intervals = pd.Series(index=puffs.index, dtype=float)
         for i, idx in enumerate(puffs.index):
             if i == 0:  # First row: current_puffs - 0
-                puffing_intervals.loc[idx] = puffs.loc[idx] if pd.notna(puffs.loc[idx]) else 0
+                current_puffs = puffs.loc[idx] if pd.notna(puffs.loc[idx]) else 10  # Default to 10 if NaN
+                puffing_intervals.loc[idx] = current_puffs
             else:  # Subsequent rows: current_puffs - previous_puffs
                 prev_idx = puffs.index[i-1]
                 current_puffs = puffs.loc[idx] if pd.notna(puffs.loc[idx]) else 0
                 prev_puffs = puffs.loc[prev_idx] if pd.notna(puffs.loc[prev_idx]) else 0
-                puffing_intervals.loc[idx] = current_puffs - prev_puffs
+                puff_interval = current_puffs - prev_puffs
+                
+                # If interval is negative, zero, or current puffs is NaN, use current puffs or default
+                if puff_interval <= 0 or pd.isna(current_puffs):
+                    if pd.isna(current_puffs) or current_puffs == 0:
+                        # Both puffs and interval are invalid, default to 10
+                        fallback_puffs = 10
+                        print(f"DEBUG: Row {i} - Both puffs ({current_puffs}) and interval ({puff_interval}) invalid, using default {fallback_puffs}")
+                        puffing_intervals.loc[idx] = fallback_puffs
+                    else:
+                        # Use current puffs value
+                        print(f"DEBUG: Row {i} - Interval {puff_interval} <= 0, using current puffs {current_puffs}")
+                        puffing_intervals.loc[idx] = current_puffs
+                else:
+                    puffing_intervals.loc[idx] = puff_interval
         
         # Calculate TPM: (before - after) / puffing_interval * 1000 (mg/puff)
         weight_diff = (before_weights - after_weights) * 1000  # Convert g to mg
         calculated_tpm = weight_diff / puffing_intervals
         
-        print(f"DEBUG: User Test Simulation - Puffs: {puffs.dropna().tolist()}")
-        print(f"DEBUG: User Test Simulation - Puffing intervals: {puffing_intervals.dropna().tolist()}")
-        print(f"DEBUG: User Test Simulation - Weight differences (mg): {weight_diff.dropna().tolist()}")
-        print(f"DEBUG: User Test Simulation - Calculated TPM values (mg/puff): {calculated_tpm.dropna().tolist()}")
+        for idx in weight_diff.index:
+            if pd.notna(puffing_intervals.loc[idx]) and puffing_intervals.loc[idx] > 0:
+                calculated_tpm.loc[idx] = weight_diff.loc[idx] / puffing_intervals.loc[idx]
+            else:
+                calculated_tpm.loc[idx] = np.nan
+                print(f"DEBUG: User Test Simulation - Skipping TPM calculation for row with invalid interval: {puffing_intervals.loc[idx]}")
+
         return calculated_tpm
         
     elif plot_type == "Power Efficiency":

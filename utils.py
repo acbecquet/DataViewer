@@ -312,12 +312,89 @@ def read_sheet_with_values(file_path: str, sheet_name: Optional[str] = None):
     df = pd.DataFrame(data)
     return df
 
+def load_excel_file_with_formulas(file_path):
+    """
+    Load an Excel file with formula evaluation and return its sheets.
+    Uses openpyxl with data_only=True to evaluate formulas.
+
+    Args:
+        file_path (str): Path to the Excel file.
+
+    Returns:
+        dict: Dictionary of sheet names and DataFrames.
+    """
+    try:
+        print(f"DEBUG: Loading Excel file with formula evaluation: {file_path}")
+        
+        # Load workbook with evaluated formulas
+        wb = openpyxl.load_workbook(file_path, data_only=True)
+        sheets = {}
+        
+        for sheet_name in wb.sheetnames:
+            print(f"DEBUG: Processing sheet: {sheet_name}")
+            ws = wb[sheet_name]
+            
+            # Convert worksheet to DataFrame
+            data = []
+            for row in ws.iter_rows(values_only=True):
+                data.append(row)
+            
+            if data:
+                # Create DataFrame from the data
+                max_cols = max(len(row) for row in data) if data else 0
+                normalized_data = []
+                for row in data:
+                    normalized_row = list(row) + [None] * (max_cols - len(row))
+                    normalized_data.append(normalized_row)
+                
+                df = pd.DataFrame(normalized_data)
+                sheets[sheet_name] = df
+                print(f"DEBUG: Sheet {sheet_name} loaded with shape: {df.shape}")
+            else:
+                # Empty sheet
+                sheets[sheet_name] = pd.DataFrame()
+                print(f"DEBUG: Sheet {sheet_name} is empty")
+        
+        wb.close()
+        print(f"DEBUG: Successfully loaded {len(sheets)} sheets with formula evaluation")
+        return sheets
+        
+    except Exception as e:
+        print(f"ERROR: Failed to load Excel file with formula evaluation: {e}")
+        # Fallback to original method
+        try:
+            sheets = pd.read_excel(file_path, sheet_name=None, engine='openpyxl')
+            print("DEBUG: Fallback to pandas read_excel successful")
+            return sheets
+        except Exception as fallback_error:
+            raise ValueError(f"Error loading Excel file {file_path}: {fallback_error}")
+
 def read_sheet_with_values_standards(file_path: str, sheet_name: Optional[str] = None):
-    """Read Excel sheet with values exactly as they appear."""
-    df = pd.read_excel(file_path, sheet_name=sheet_name, header=None)
-    # Assign the first row as the header
+    """Read Excel sheet with values exactly as they appear, evaluating formulas."""
+    print(f"DEBUG: Reading sheet with formula evaluation: {sheet_name}")
+    
+    # Use openpyxl with data_only=True to evaluate formulas
+    wb = load_workbook(file_path, data_only=True)
+    if sheet_name:
+        ws = wb[sheet_name]
+    else:
+        ws = wb.active
+    
+    # Convert to DataFrame
+    data = []
+    for row in ws.iter_rows(values_only=True):
+        data.append(row)
+    
+    if not data:
+        return pd.DataFrame()
+    
+    # Create DataFrame and set first row as header
+    df = pd.DataFrame(data)
     df.columns = df.iloc[0]
     df = df[1:].reset_index(drop=True)
+    
+    wb.close()
+    print(f"DEBUG: Successfully read sheet {sheet_name} with formula evaluation")
     return df
 
 def unmerge_all_cells(ws: Worksheet) -> None:
