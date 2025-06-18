@@ -11,6 +11,9 @@ import numpy as np
 import os
 import copy
 import openpyxl
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import statistics
 from openpyxl.styles import PatternFill
 from utils import FONT
 import threading
@@ -52,16 +55,33 @@ Key Points:
 - Standard 12-column data collection
 - Record all measurements consistently
     """,
+
+"User Simulation Test": """
+SOP - User Test Simulation:
+
+Day 1: Collect Initial Draw Resistance, TPM for 50 puffs, then use puff per day calculator to determine number of puffs. Make sure to enter initial oil mass.
+Days 2-4: 10 puffs with TPM, then complete the daily number of puffs.
+Day 5: Extended Test, every 10 puffs until device is empty
+Day 6: Full Disassembly + Photos
+
+Be sure to take detailed notes while conducting this test.
+
+Key Points:
+- Split testing: Phase 1 (0-50 puffs) and Phase 2 (extended puffs)
+- 8 columns per sample instead of 12
+- Puffs recorded in second column
+- No resistance measurements during extended testing
+    """,
     
     "Big Headspace High Temperature": """
 SOP - Big Headspace High Temperature Test:
 
-Conduct testing at elevated temperature conditions.
-Monitor device performance under high temperature stress.
-Record standard measurements: TPM, draw pressure, resistance.
+Drain device to 30% remaining and then place in the oven at 40C.
+After 1 hour, collect 10 puffs, tracking TPM and draw resistance for each puff. Repeat this 3 times, for 30 total puffs.
+Be sure to take detailed notes on bubbling and any failure modes.
 
 Key Points:
-- Elevated temperature environment
+- 40C big headspace test
 - Standard plotting sheet format
 - Monitor for thermal effects
 - Document temperature-related observations
@@ -71,8 +91,8 @@ Key Points:
 SOP - Extended Test:
 
 Long-duration testing to assess device lifetime and performance degradation.
-Regular measurement intervals throughout test duration.
-Monitor for performance consistency over time.
+Sessions of 10 puffs with a 60mL/3s/30s puffing regime. Rest 15 minutes between sessions.
+Monitor for performance consistency over time. Measure initial and final draw resistance, and measure TPM every 10 puffs.
 
 Key Points:
 - Extended duration testing
@@ -156,8 +176,8 @@ class DataCollectionWindow:
         # Create the window
         self.window = tk.Toplevel(self.root)
         self.window.title(f"Data Collection - {test_name}")
-        self.window.geometry("1100x600")  # Wider window to accommodate TPM panel
-        self.window.minsize(1000, 500)
+        self.window.geometry("1375x750")  # was "1100x600"
+        self.window.minsize(1250, 625)    # was "1000x500"
         
         # Default puff interval
         self.puff_interval = 10  # Default to 10
@@ -469,13 +489,32 @@ class DataCollectionWindow:
         print(f"DEBUG: Creating SOP section for test: {self.test_name}")
     
         # Create a collapsible SOP frame
-        sop_frame = ttk.LabelFrame(parent_frame, text="Standard Operating Procedure (SOP)", style='TLabelframe')
+        sop_frame = ttk.LabelFrame(parent_frame, text="", style='TLabelframe')
         sop_frame.pack(fill="x", pady=(0, 10))
+    
+        # Create a header frame for button and title
+        header_frame = ttk.Frame(sop_frame, style='TFrame')
+        header_frame.pack(fill="x", padx=5, pady=5)
+    
+        # Add small toggle button on the LEFT with minimal size
+        self.sop_visible = True
+        self.toggle_sop_button = ttk.Button(
+            header_frame,
+            text="Hide",
+            width=6,  # Even smaller width
+            command=self.toggle_sop_visibility
+        )
+        self.toggle_sop_button.pack(side="left", padx=(0, 10))  # Small gap between button and title
+    
+        # Add title label after the button
+        title_label = ttk.Label(header_frame, text="Standard Operating Procedure (SOP)", 
+                               font=("Arial", 10, "bold"), style='TLabel')
+        title_label.pack(side="left")
     
         # Get the SOP text for the current test
         sop_text = TEST_SOPS.get(self.test_name, TEST_SOPS["default"])
     
-        # Create a text widget to display the SOP
+        # Create a text widget to display the SOP with centered text
         self.sop_text_widget = tk.Text(
             sop_frame, 
             height=6,  # Adjust height as needed
@@ -488,25 +527,17 @@ class DataCollectionWindow:
             padx=10,
             pady=5
         )
-        self.sop_text_widget.pack(fill="x", padx=10, pady=5)
+        self.sop_text_widget.pack(fill="x", padx=10, pady=(0, 5))
     
-        # Insert the SOP text
+        # Insert the SOP text and center it
         self.sop_text_widget.insert("1.0", sop_text.strip())
+    
+        # Center the text
+        self.sop_text_widget.tag_configure("center", justify='center')
+        self.sop_text_widget.tag_add("center", "1.0", "end")
     
         # Make it read-only
         self.sop_text_widget.config(state="disabled")
-    
-        # Add a toggle button to show/hide the SOP
-        toggle_frame = ttk.Frame(sop_frame, style='TFrame')
-        toggle_frame.pack(fill="x", padx=10, pady=(0, 5))
-    
-        self.sop_visible = True
-        self.toggle_sop_button = ttk.Button(
-            toggle_frame,
-            text="Hide SOP ▲",
-            command=self.toggle_sop_visibility
-        )
-        self.toggle_sop_button.pack(side="right")
     
         print("DEBUG: SOP section created successfully")
 
@@ -515,13 +546,13 @@ class DataCollectionWindow:
         if self.sop_visible:
             # Hide the SOP
             self.sop_text_widget.pack_forget()
-            self.toggle_sop_button.config(text="Show SOP ▼")
+            self.toggle_sop_button.config(text="Show")
             self.sop_visible = False
             print("DEBUG: SOP section hidden")
         else:
             # Show the SOP
-            self.sop_text_widget.pack(fill="x", padx=10, pady=5)
-            self.toggle_sop_button.config(text="Hide SOP ▲")
+            self.sop_text_widget.pack(fill="x", padx=10, pady=(0, 5))
+            self.toggle_sop_button.config(text="Hide")
             self.sop_visible = True
             print("DEBUG: SOP section shown")
 
@@ -1572,37 +1603,51 @@ Developed by Charlie Becquet
                         after_weight_value = float(value)
                         next_row_idx = row_idx + 1
                         if next_row_idx < len(self.data[sample_id]["before_weight"]):
+                            print(f"DEBUG: AUTO-WEIGHT PROGRESSION: Setting next row ({next_row_idx}) before_weight to {after_weight_value}")
                             self.data[sample_id]["before_weight"][next_row_idx] = after_weight_value
                             # Update the tree display for the next row
                             next_item = tree.get_children()[next_row_idx] if next_row_idx < len(tree.get_children()) else None
                             if next_item:
                                 next_values = list(tree.item(next_item, "values"))
-                                # Adjust column index based on test type
-                                weight_col_idx = 2 if self.test_name == "User Test Simulation" else 1
-                                next_values[weight_col_idx] = str(after_weight_value)
+                                # Determine correct column index for before_weight based on test type
+                                if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+                                    before_weight_col_idx = 2  # User Test Simulation: Chronography(0), Puffs(1), Before Weight(2)
+                                else:
+                                    before_weight_col_idx = 1  # Standard: Puffs(0), Before Weight(1)
+                                
+                                print(f"DEBUG: Updating tree display - column index {before_weight_col_idx} for before_weight")
+                                next_values[before_weight_col_idx] = str(after_weight_value)
                                 tree.item(next_item, values=next_values)
-                    except (ValueError, TypeError):
+                                print(f"DEBUG: Successfully updated next row before_weight display")
+                    except (ValueError, TypeError) as e:
+                        print(f"DEBUG: Error in AUTO-WEIGHT PROGRESSION: {e}")
                         pass
 
                 # AUTO-PUFF PROGRESSION: If puffs was changed, update all subsequent rows
+                # BUT NOT for User Test Simulation tests
                 if column_name == "puffs" and value != "" and value != 0:
-                    try:
-                        new_puff_value = int(value)
-                        total_rows = len(self.data[sample_id]["puffs"])
-                        for subsequent_row_idx in range(row_idx + 1, total_rows):
-                            rows_ahead = subsequent_row_idx - row_idx
-                            expected_puff = new_puff_value + (rows_ahead * self.puff_interval)
-                            self.data[sample_id]["puffs"][subsequent_row_idx] = expected_puff
-                            # Update the tree display
-                            if subsequent_row_idx < len(tree.get_children()):
-                                subsequent_item = tree.get_children()[subsequent_row_idx]
-                                subsequent_values = list(tree.item(subsequent_item, "values"))
-                                # Adjust column index based on test type
-                                puff_col_idx = 1 if self.test_name == "User Test Simulation" else 0
-                                subsequent_values[puff_col_idx] = str(expected_puff)
-                                tree.item(subsequent_item, values=subsequent_values)
-                    except (ValueError, TypeError):
-                        pass
+                    # Skip auto-puff progression for User Test Simulation
+                    if self.test_name not in ["User Test Simulation", "User Simulation Test"]:
+                        try:
+                            new_puff_value = int(value)
+                            total_rows = len(self.data[sample_id]["puffs"])
+                            print(f"DEBUG: AUTO-PUFF PROGRESSION for non-User Test: updating {total_rows - row_idx - 1} subsequent rows")
+                            for subsequent_row_idx in range(row_idx + 1, total_rows):
+                                rows_ahead = subsequent_row_idx - row_idx
+                                expected_puff = new_puff_value + (rows_ahead * self.puff_interval)
+                                self.data[sample_id]["puffs"][subsequent_row_idx] = expected_puff
+                                # Update the tree display
+                                if subsequent_row_idx < len(tree.get_children()):
+                                    subsequent_item = tree.get_children()[subsequent_row_idx]
+                                    subsequent_values = list(tree.item(subsequent_item, "values"))
+                                    # Adjust column index based on test type
+                                    puff_col_idx = 1 if self.test_name == "User Test Simulation" else 0
+                                    subsequent_values[puff_col_idx] = str(expected_puff)
+                                    tree.item(subsequent_item, values=subsequent_values)
+                        except (ValueError, TypeError):
+                            pass
+                    else:
+                        print(f"DEBUG: AUTO-PUFF PROGRESSION disabled for User Test Simulation")
 
         # Update the tree display
         col_idx = int(column[1:]) - 1
@@ -2136,90 +2181,229 @@ Developed by Charlie Becquet
             entry.icursor(1)
 
     def create_tpm_stats_panel(self):
-        """Create the TPM statistics panel on the right side."""
+        """Create the enhanced TPM statistics panel with plot on the right side."""
+        print("DEBUG: Creating enhanced TPM statistics panel")
+    
         # Clear existing widgets
         for widget in self.stats_frame.winfo_children():
             widget.destroy()
-            
-        # Create a title without background color
-        title_label = ttk.Label(self.stats_frame, text="TPM Statistics", style='Stats.TLabel')
-        title_label.pack(pady=(0, 20))
-        
-        # Create frame for statistics
-        stats_container = ttk.Frame(self.stats_frame, style='TFrame')
-        stats_container.pack(fill="both", expand=True)
-        
-        # Create individual stat frames for each sample
+    
+        # Create scrollable frame for the stats panel
+        canvas = tk.Canvas(self.stats_frame, bg='white')
+        scrollbar = ttk.Scrollbar(self.stats_frame, orient="vertical", command=canvas.yview)
+        scrollable_stats_frame = ttk.Frame(canvas)
+    
+        scrollable_stats_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+    
+        canvas.create_window((0, 0), window=scrollable_stats_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+    
+        # Pack scrollbar and canvas
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+    
+        # Create a title
+        title_label = ttk.Label(scrollable_stats_frame, text="TPM Statistics", 
+                               font=("Arial", 12, "bold"), style='TLabel')
+        title_label.pack(pady=(10, 20))
+    
+        # Create frame for current sample statistics only
+        stats_container = ttk.Frame(scrollable_stats_frame, style='TFrame')
+        stats_container.pack(fill="x", padx=10, pady=5)
+    
+        # Initialize TPM labels dictionary
         self.tpm_labels = {}
-        for i in range(self.num_samples):
-            sample_id = f"Sample {i+1}"
-            sample_name = self.header_data["samples"][i]["id"]
-            
-            # Create a frame for this sample - using standard ttk frames instead of LabelFrame
-            sample_frame = ttk.Frame(stats_container, style='TFrame')
-            sample_frame.pack(fill="x", pady=5, padx=10)
-            
-            # Add a header label
-            ttk.Label(sample_frame, 
-                     text=f"Sample {i+1}: {sample_name}",
-                     style='SampleInfo.TLabel').pack(anchor="w", pady=(0, 5))
-            
-            # Add a separator
-            ttk.Separator(sample_frame, orient="horizontal").pack(fill="x", pady=2)
-            
-            # Add TPM statistics
-            stat_grid = ttk.Frame(sample_frame, style='TFrame')
-            stat_grid.pack(fill="x", pady=5, padx=10)
-            
-            # Row 1: Average TPM
-            ttk.Label(stat_grid, text="Average TPM:", style='TLabel').grid(row=0, column=0, sticky="w", pady=2)
-            avg_tpm_label = ttk.Label(stat_grid, text="N/A", font=("Arial", 10, "bold"), style='TLabel')
-            avg_tpm_label.grid(row=0, column=1, sticky="e", pady=2)
-            
-            # Row 2: Latest TPM
-            ttk.Label(stat_grid, text="Latest TPM:", style='TLabel').grid(row=1, column=0, sticky="w", pady=2)
-            latest_tpm_label = ttk.Label(stat_grid, text="N/A", font=("Arial", 10), style='TLabel')
-            latest_tpm_label.grid(row=1, column=1, sticky="e", pady=2)
-            
-            # Row 3: Puff Count
-            ttk.Label(stat_grid, text="Puff Count:", style='TLabel').grid(row=2, column=0, sticky="w", pady=2)
-            puff_count_label = ttk.Label(stat_grid, text="0", style='TLabel')
-            puff_count_label.grid(row=2, column=1, sticky="e", pady=2)
-            
-            # Store references to labels
-            self.tpm_labels[sample_id] = {
-                "avg_tpm": avg_tpm_label,
-                "latest_tpm": latest_tpm_label,
-                "puff_count": puff_count_label
-            }
-            
+    
+        # Create placeholder for current sample stats (will be updated in update_stats_panel)
+        self.current_sample_stats_frame = ttk.Frame(stats_container, style='TFrame')
+        self.current_sample_stats_frame.pack(fill="x", pady=5)
+    
+        # Create frame for TPM plot with proper sizing
+        plot_frame = ttk.LabelFrame(scrollable_stats_frame, text="TPM Over Time", style='TLabelframe')
+        plot_frame.pack(fill="both", expand=True, padx=10, pady=(20, 10))
+    
+        # Create matplotlib figure for TPM plot with proper sizing
+        plt.style.use('default')  # Ensure we're using default style
+        self.tpm_figure = plt.Figure(figsize=(4, 3), dpi=80, facecolor='white', tight_layout=True)
+        self.tpm_ax = self.tpm_figure.add_subplot(111)
+    
+        # Create canvas with proper configuration
+        self.tpm_canvas = FigureCanvasTkAgg(self.tpm_figure, plot_frame)
+        self.tpm_canvas.get_tk_widget().pack(fill="both", expand=True, padx=2, pady=2)
+    
+        # Configure the plot with tight layout
+        self.tpm_figure.tight_layout(pad=1.0)
+    
+        # Initialize empty plot
+        self.tpm_ax.set_xlabel('Puffs')
+        self.tpm_ax.set_ylabel('TPM')
+        self.tpm_ax.set_title('TPM Over Time')
+        self.tpm_ax.grid(True, alpha=0.3)
+    
+        # Apply tight layout and draw
+        self.tpm_figure.tight_layout(pad=1.0)
+        self.tpm_canvas.draw()
+    
         # Update the statistics for the current sample
         self.update_stats_panel()
     
+        print("DEBUG: Enhanced TPM statistics panel created successfully")
+    
     def update_stats_panel(self, event=None):
-        """Update the TPM statistics panel based on current data."""
-        # Update stats for all samples
-        for i in range(self.num_samples):
-            sample_id = f"Sample {i+1}"
-            
-            # Calculate TPM values if needed
-            self.calculate_tpm(sample_id)
-            
-            # Get TPM values (filtering out None values)
-            tpm_values = [v for v in self.data[sample_id]["tpm"] if v is not None]
-            
-            # Update labels
-            if tpm_values:
-                avg_tpm = sum(tpm_values) / len(tpm_values)
-                self.data[sample_id]["avg_tpm"] = avg_tpm
-                self.tpm_labels[sample_id]["avg_tpm"].config(text=f"{avg_tpm:.6f}")
-                self.tpm_labels[sample_id]["latest_tpm"].config(text=f"{tpm_values[-1]:.6f}")
-                puff_count = self.data[sample_id]["puffs"][-1] if self.data[sample_id]["puffs"] else 0
-                self.tpm_labels[sample_id]["puff_count"].config(text=str(puff_count))
+        """Update the TPM statistics panel to show only current sample with enhanced stats."""
+        print("DEBUG: Updating enhanced TPM statistics panel")
+    
+        # Get currently selected sample
+        try:
+            current_tab_index = self.notebook.index(self.notebook.select())
+            current_sample_id = f"Sample {current_tab_index + 1}"
+            print(f"DEBUG: Updating stats for {current_sample_id}")
+        except:
+            current_sample_id = "Sample 1"  # Default fallback
+            current_tab_index = 0
+    
+        # Clear current sample stats frame
+        for widget in self.current_sample_stats_frame.winfo_children():
+            widget.destroy()
+    
+        # Get sample name
+        sample_name = "Unknown Sample"
+        if current_tab_index < len(self.header_data.get('samples', [])):
+            sample_name = self.header_data['samples'][current_tab_index].get('id', f"Sample {current_tab_index + 1}")
+    
+        # Calculate TPM values if needed
+        self.calculate_tpm(current_sample_id)
+    
+        # Get TPM values and data for current sample (filtering out None values)
+        tpm_values = [v for v in self.data[current_sample_id]["tpm"] if v is not None]
+    
+        # Create sample header
+        sample_header = ttk.Label(self.current_sample_stats_frame, 
+                                 text=f"{current_sample_id}: {sample_name}",
+                                 font=("Arial", 11, "bold"), style='TLabel')
+        sample_header.pack(anchor="w", pady=(0, 10))
+    
+        # Add separator
+        ttk.Separator(self.current_sample_stats_frame, orient="horizontal").pack(fill="x", pady=5)
+    
+        # Create statistics grid
+        stat_grid = ttk.Frame(self.current_sample_stats_frame, style='TFrame')
+        stat_grid.pack(fill="x", pady=10)
+    
+        if tpm_values:
+            # Calculate statistics
+            avg_tpm = sum(tpm_values) / len(tpm_values)
+            latest_tpm = tpm_values[-1]
+        
+            # Calculate standard deviation of last 5 sessions (or all if < 5)
+            recent_tpm_values = tpm_values[-5:] if len(tpm_values) >= 5 else tpm_values
+            std_dev = statistics.stdev(recent_tpm_values) if len(recent_tpm_values) > 1 else 0.0
+        
+            # Find current puff count (furthest down row with after_weight data)
+            current_puff_count = 0
+            for i in range(len(self.data[current_sample_id]["after_weight"]) - 1, -1, -1):
+                if (self.data[current_sample_id]["after_weight"][i] and 
+                    str(self.data[current_sample_id]["after_weight"][i]).strip()):
+                    current_puff_count = self.data[current_sample_id]["puffs"][i] if i < len(self.data[current_sample_id]["puffs"]) else 0
+                    break
+        
+            self.data[current_sample_id]["avg_tpm"] = avg_tpm
+        else:
+            avg_tpm = 0.0
+            latest_tpm = 0.0
+            std_dev = 0.0
+            current_puff_count = 0
+            recent_tpm_values = []
+    
+        # Row 1: Average TPM
+        ttk.Label(stat_grid, text="Average TPM:", style='TLabel').grid(row=0, column=0, sticky="w", pady=2)
+        avg_tpm_label = ttk.Label(stat_grid, text=f"{avg_tpm:.6f}" if tpm_values else "N/A", 
+                                 font=("Arial", 10, "bold"), style='TLabel')
+        avg_tpm_label.grid(row=0, column=1, sticky="e", pady=2)
+    
+        # Row 2: Latest TPM
+        ttk.Label(stat_grid, text="Latest TPM:", style='TLabel').grid(row=1, column=0, sticky="w", pady=2)
+        latest_tpm_label = ttk.Label(stat_grid, text=f"{latest_tpm:.6f}" if tpm_values else "N/A", 
+                                    font=("Arial", 10), style='TLabel')
+        latest_tpm_label.grid(row=1, column=1, sticky="e", pady=2)
+    
+        # Row 3: Standard Deviation (last 5 sessions)
+        sessions_text = f"(last {len(recent_tpm_values)} sessions)" if tpm_values else ""
+        ttk.Label(stat_grid, text=f"Std Dev {sessions_text}:", style='TLabel').grid(row=2, column=0, sticky="w", pady=2)
+        std_dev_label = ttk.Label(stat_grid, text=f"{std_dev:.6f}" if tpm_values else "N/A", 
+                                 font=("Arial", 10), style='TLabel')
+        std_dev_label.grid(row=2, column=1, sticky="e", pady=2)
+    
+        # Row 4: Current Puff Count
+        ttk.Label(stat_grid, text="Current Puffs:", style='TLabel').grid(row=3, column=0, sticky="w", pady=2)
+        puff_count_label = ttk.Label(stat_grid, text=str(current_puff_count), style='TLabel')
+        puff_count_label.grid(row=3, column=1, sticky="e", pady=2)
+    
+        # Store references to labels for current sample
+        self.tpm_labels[current_sample_id] = {
+            "avg_tpm": avg_tpm_label,
+            "latest_tpm": latest_tpm_label,
+            "std_dev": std_dev_label,
+            "puff_count": puff_count_label
+        }
+    
+        # Update TPM plot for current sample
+        self.update_tpm_plot(current_sample_id)
+    
+        print(f"DEBUG: Enhanced stats updated for {current_sample_id}")
+
+    def update_tpm_plot(self, sample_id):
+        """Update the TPM plot for the specified sample with proper autosizing."""
+        print(f"DEBUG: Updating TPM plot for {sample_id}")
+    
+        # Clear the plot
+        self.tpm_ax.clear()
+    
+        # Get data for the sample
+        tpm_values = [v for v in self.data[sample_id]["tpm"] if v is not None]
+        puff_values = []
+    
+        # Get corresponding puff values for non-None TPM values
+        for i, tpm in enumerate(self.data[sample_id]["tpm"]):
+            if tpm is not None and i < len(self.data[sample_id]["puffs"]):
+                puff_values.append(self.data[sample_id]["puffs"][i])
+    
+        if tpm_values and puff_values and len(tpm_values) == len(puff_values):
+            # Plot TPM over puffs
+            self.tpm_ax.plot(puff_values, tpm_values, marker='o', linewidth=2, markersize=4, color='blue')
+            self.tpm_ax.set_xlabel('Puffs', fontsize=9)
+            self.tpm_ax.set_ylabel('TPM', fontsize=9)
+            self.tpm_ax.set_title(f'TPM Over Time - {sample_id}', fontsize=10)
+            self.tpm_ax.grid(True, alpha=0.3)
+        
+            # Set reasonable y-axis limits
+            if max(tpm_values) <= 9:
+                self.tpm_ax.set_ylim(0, 9)
             else:
-                self.tpm_labels[sample_id]["avg_tpm"].config(text="N/A")
-                self.tpm_labels[sample_id]["latest_tpm"].config(text="N/A")
-                self.tpm_labels[sample_id]["puff_count"].config(text="0")
+                self.tpm_ax.set_ylim(0, max(tpm_values) * 1.1)
+            
+            # Adjust tick label sizes for better fit
+            self.tpm_ax.tick_params(axis='both', which='major', labelsize=8)
+        
+        else:
+            # Show empty plot with labels
+            self.tpm_ax.set_xlabel('Puffs', fontsize=9)
+            self.tpm_ax.set_ylabel('TPM', fontsize=9)
+            self.tpm_ax.set_title(f'TPM Over Time - {sample_id}', fontsize=10)
+            self.tpm_ax.grid(True, alpha=0.3)
+            self.tpm_ax.text(0.5, 0.5, 'No TPM data available', 
+                            transform=self.tpm_ax.transAxes, ha='center', va='center', fontsize=9)
+    
+        # Apply tight layout to ensure everything fits
+        self.tpm_figure.tight_layout(pad=0.5)
+    
+        # Refresh the canvas
+        self.tpm_canvas.draw()
+    
+        print(f"DEBUG: TPM plot updated for {sample_id} with autosizing")
 
     # Add all remaining methods from your current implementation
     # These include all the cell editing, navigation, and interaction methods
