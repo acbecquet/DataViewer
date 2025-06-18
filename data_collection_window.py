@@ -11,6 +11,7 @@ import numpy as np
 import os
 import copy
 import openpyxl
+import logging
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import statistics
@@ -18,6 +19,15 @@ from openpyxl.styles import PatternFill
 from utils import FONT
 import threading
 import subprocess
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("datacollection.log"),
+        logging.StreamHandler()
+    ]
+)
 
 # Standard Operating Procedures for each test
 TEST_SOPS = {
@@ -136,7 +146,7 @@ class DataCollectionWindow:
     def __init__(self, parent, file_path, test_name, header_data):
         """
         Initialize the data collection window.
-        
+    
         Args:
             parent (tk.Tk): The parent window.
             file_path (str): Path to the Excel file.
@@ -150,120 +160,86 @@ class DataCollectionWindow:
         self.header_data = header_data
         self.num_samples = header_data["num_samples"]
         self.result = None
-    
+
         # Validate num_samples
         if self.num_samples <= 0:
-            
             self.num_samples = len(header_data.get('samples', []))
             if self.num_samples <= 0:
-                
                 self.num_samples = 1
-    
 
-        
         # Auto-save settings
         self.auto_save_interval = 5 * 60 * 1000  # 5 minutes in milliseconds
         self.auto_save_timer = None
         self.has_unsaved_changes = False
         self.last_save_time = None
-        
+    
         # Create the window
         self.window = tk.Toplevel(self.root)
         self.window.title(f"Data Collection - {test_name}")
-        self.window.geometry("1375x750")  # was "1100x600"
-        self.window.minsize(1250, 625)    # was "1000x500"
-        
+        self.window.geometry("1375x750")
+        self.window.minsize(1250, 625)
+    
         # Default puff interval
         self.puff_interval = 10  # Default to 10
-        
+    
         # Tracking variables for cell editing
         self.editing = False
         self.current_edit_widget = None
         self.current_edit = None
         self.current_item = None
         self.current_column = None
-        
+    
         # Set up keyboard shortcut flags
         self.hotkeys_enabled = True
         self.hotkey_bindings = {}
-        
+    
         # Create the style for ttk widgets
         self.style = ttk.Style()
         self.setup_styles()
 
-        # Click tracking variables - IMPROVED APPROACH
+        # Click tracking variables
         self.last_click_time = 0
         self.last_click_xy = (0,0)
-        self.double_click_threshold = 500  # milliseconds
-        self.cell_border_frame = None # Initialize cell border frame
+        self.double_click_threshold = 500
+        self.cell_border_frame = None
         self.single_click_after_id = None
         self.columns = ["puffs", "before_weight", "after_weight", "draw_pressure", "smell", "notes", "tpm"]
 
-        # Data storage
-        self.data = {}
-        for i in range(self.num_samples):
-            sample_id = f"Sample {i+1}"
-            self.data[sample_id] = {
-                "puffs": [],           # Will be populated dynamically
-                "before_weight": [],   # Will be populated dynamically
-                "after_weight": [],    # Will be populated dynamically
-                "draw_pressure": [],   # Will be populated dynamically
-                "smell": [],           # Will be populated dynamically
-                "notes": [],           # Will be populated dynamically
-                "tpm": [],             # Will store calculated TPM values
-                "current_row_index": 0, # Track the current editable row
-                "avg_tpm": 0.0         # Track average TPM
-            }
-            # Add chronography for User Test Simulation
-            if self.test_name in ["User Test Simulation", "User Simulation Test"]:
-                self.data[sample_id]["chronography"] = []
-                
-            # Pre-initialize 50 rows
-            for j in range(50):
-                puff = (j + 1) * self.puff_interval
-                self.data[sample_id]["puffs"].append(puff)
-                self.data[sample_id]["before_weight"].append("")
-                self.data[sample_id]["after_weight"].append("")
-                self.data[sample_id]["draw_pressure"].append("")
-                self.data[sample_id]["smell"].append("")
-                self.data[sample_id]["notes"].append("")
-                self.data[sample_id]["tpm"].append(None)
-
-                # Add chronography initialization for User Test Simulation
-                if self.test_name in ["User Test Simulation", "User Simulation Test"]:
-                    self.data[sample_id]["chronography"].append("")
-
+        # Initialize data structures
+        self.initialize_data()
+    
         # Create the menu bar first
         self.create_menu_bar()
-        
+    
         # Create the UI
         self.create_widgets()
 
         self.load_existing_data_from_file()
-        
+    
         # Center the window
         self.center_window()
-        
+    
         # Set up event handlers
         self.setup_event_handlers()
-        
+    
         # Start auto-save timer
         self.start_auto_save_timer()
-        
-        print(f"DEBUG: DataCollectionWindow initialized for {test_name} with {self.num_samples} samples")
+    
+        self.log(f"DataCollectionWindow initialized for {test_name} with {self.num_samples} samples", "debug")
     
     def create_menu_bar(self):
         """Create a comprehensive menu bar for the data collection window."""
-        
-        
         menubar = tk.Menu(self.window)
         self.window.config(menu=menubar)
-        
+    
         # File menu
         file_menu = tk.Menu(menubar, tearoff=0)
-        file_menu.add_command(label="Save", accelerator="Ctrl+S", command=self.quick_save)
-        file_menu.add_command(label="Save and Continue", command=self.save_and_continue)
-        file_menu.add_command(label="Save and Exit", command=self.save_and_exit)
+        file_menu.add_command(label="Save", accelerator="Ctrl+S", 
+                            command=lambda: self.save_data(show_confirmation=False))
+        file_menu.add_command(label="Save and Continue", 
+                            command=lambda: self.save_data(show_confirmation=True))
+        file_menu.add_command(label="Save and Exit", 
+                            command=lambda: self.save_data(exit_after=True))
         file_menu.add_separator()
         file_menu.add_command(label="Open Raw Excel File", command=self.open_raw_excel)
         file_menu.add_separator()
@@ -271,10 +247,10 @@ class DataCollectionWindow:
         file_menu.add_separator()
         file_menu.add_command(label="Exit without Saving", command=self.exit_without_saving)
         menubar.add_cascade(label="File", menu=file_menu)
-        
+    
         # Edit menu  
         edit_menu = tk.Menu(menubar, tearoff=0)
-        edit_menu.add_command(label="Edit Headers", command = self.edit_headers)
+        edit_menu.add_command(label="Edit Headers", command=self.edit_headers)
         edit_menu.add_command(label="Clear Current Sample", command=self.clear_current_sample)
         edit_menu.add_command(label="Clear All Data", command=self.clear_all_data)
         edit_menu.add_separator()
@@ -283,15 +259,17 @@ class DataCollectionWindow:
         edit_menu.add_separator()
         edit_menu.add_command(label="Recalculate TPM", command=self.recalculate_all_tpm)
         menubar.add_cascade(label="Edit", menu=edit_menu)
-        
+    
         # Navigate menu
         navigate_menu = tk.Menu(menubar, tearoff=0)
-        navigate_menu.add_command(label="Previous Sample", accelerator="Ctrl+Left", command=self.go_to_previous_sample)
-        navigate_menu.add_command(label="Next Sample", accelerator="Ctrl+Right", command=self.go_to_next_sample)
+        navigate_menu.add_command(label="Previous Sample", accelerator="Ctrl+Left", 
+                                command=self.go_to_previous_sample)
+        navigate_menu.add_command(label="Next Sample", accelerator="Ctrl+Right", 
+                                command=self.go_to_next_sample)
         navigate_menu.add_separator()
         navigate_menu.add_command(label="Go to Sample...", command=self.go_to_sample_dialog)
         menubar.add_cascade(label="Navigate", menu=navigate_menu)
-        
+    
         # Tools menu
         tools_menu = tk.Menu(menubar, tearoff=0)
         tools_menu.add_command(label="Change Puff Interval", command=self.change_puff_interval_dialog)
@@ -299,14 +277,14 @@ class DataCollectionWindow:
         tools_menu.add_separator()
         tools_menu.add_command(label="Switch Test", command=self.switch_test_dialog)
         menubar.add_cascade(label="Tools", menu=tools_menu)
-        
+    
         # Help menu
         help_menu = tk.Menu(menubar, tearoff=0)
         help_menu.add_command(label="Keyboard Shortcuts", command=self.show_keyboard_shortcuts)
         help_menu.add_command(label="About Data Collection", command=self.show_about)
         menubar.add_cascade(label="Help", menu=help_menu)
-        
-        print("DEBUG: Menu bar created successfully")
+    
+        self.log("Menu bar created successfully", "debug")
     
     def setup_styles(self):
         """Set up styles for ttk widgets to ensure no blue backgrounds."""
@@ -375,109 +353,63 @@ class DataCollectionWindow:
         self.window.geometry(f"{width}x{height}+{x}+{y}")
     
     def create_widgets(self):
-        """Create the data collection UI."""
-        # Set window background to system default
+        """Create the data collection UI with a cleaner structure."""
+        # Configure window
         self.window.configure(background='SystemButtonFace')
     
-        # Create a horizontal split layout
-        main_frame = ttk.Frame(self.window, padding=10, style='TFrame')
+        # Create a main frame with padding
+        main_frame = ttk.Frame(self.window, padding=10)
         main_frame.pack(fill="both", expand=True)
     
-        # Header with test information and save status
-        header_frame = ttk.Frame(main_frame, style='TFrame')
-        header_frame.pack(fill="x", pady=(0, 10))
+        # Create header section
+        self.create_header_section(main_frame)
     
-        # Left side of header
-        header_left = ttk.Frame(header_frame, style='TFrame')
-        header_left.pack(side="left", fill="x", expand=True)
-    
-        # Use styled labels
-        ttk.Label(header_left, text=f"Test: {self.test_name}", style='Header.TLabel').pack(side="left")
-        ttk.Label(header_left, text=f"Tester: {self.header_data['common']['tester']}", style='SubHeader.TLabel').pack(side="left", padx=(20, 0))
-    
-        # Right side of header - save status
-        header_right = ttk.Frame(header_frame, style='TFrame')
-        header_right.pack(side="right")
-    
-        self.save_status_label = ttk.Label(header_right, text="●", style='SubHeader.TLabel', foreground="red")
-        self.save_status_label.pack(side="right")
-    
-        self.save_status_text = ttk.Label(header_right, text="Unsaved changes", style='SubHeader.TLabel')
-        self.save_status_text.pack(side="right", padx=(0, 5))
-    
-        # ADD SOP SECTION HERE - before the paned window
+        # Create SOP section
         self.create_sop_section(main_frame)
     
-        # Create a horizontal paned window to split the main area
-        paned_window = ttk.PanedWindow(main_frame, orient="horizontal")
-        paned_window.pack(fill="both", expand=True)
+        # Create main content area with horizontal split
+        content_frame = ttk.PanedWindow(main_frame, orient="horizontal")
+        content_frame.pack(fill="both", expand=True)
     
-        # Left side - Data entry area
-        data_frame = ttk.Frame(paned_window, style='TFrame')
-        paned_window.add(data_frame, weight=3)  # 75% of the width
+        # Create data entry area (left side)
+        data_frame = ttk.Frame(content_frame)
+        content_frame.add(data_frame, weight=3)  # 75% width
     
-        # Right side - TPM stats panel
-        self.stats_frame = ttk.Frame(paned_window, style='TFrame')
-        paned_window.add(self.stats_frame, weight=1)  # 25% of the width
+        # Create stats panel (right side)
+        self.stats_frame = ttk.Frame(content_frame)
+        content_frame.add(self.stats_frame, weight=1)  # 25% width
     
-        # Setup data entry area with notebook
+        # Create notebook with sample tabs
         self.notebook = ttk.Notebook(data_frame)
         self.notebook.pack(fill="both", expand=True)
     
-        # Create a tab for each sample
-        self.sample_frames = []
-        self.sample_trees = []
+        # Create sample tabs
+        self.create_sample_tabs()
     
-        for i in range(self.num_samples):
-            sample_id = f"Sample {i+1}"
-            sample_frame = ttk.Frame(self.notebook, padding=10, style='TFrame')
-            self.notebook.add(sample_frame, text=f"Sample {i+1} - {self.header_data['samples'][i]['id']}")
-            self.sample_frames.append(sample_frame)
-        
-            # Create the sample tab content
-            tree = self.create_sample_tab(sample_frame, sample_id, i)
-            self.sample_trees.append(tree)
-    
-        # Create the TPM stats panel
+        # Create stats panel
         self.create_tpm_stats_panel()
     
-        # Control buttons at the bottom
-        button_frame = ttk.Frame(main_frame, style='TFrame')
-        button_frame.pack(fill="x", pady=(10, 0))
+        # Create control buttons at bottom
+        self.create_control_buttons(main_frame)
     
-        # Left side controls
-        left_controls = ttk.Frame(button_frame, style='TFrame')
-        left_controls.pack(side="left", fill="x")
-    
-        ttk.Label(left_controls, text="Puff Interval:", style='TLabel').pack(side="left")
-        self.puff_interval_var = tk.IntVar(value=self.puff_interval)
-        puff_spinbox = ttk.Spinbox(
-            left_controls, 
-            from_=1, 
-            to=100, 
-            textvariable=self.puff_interval_var, 
-            width=5,
-            command=self.update_puff_interval
-        )
-        puff_spinbox.pack(side="left", padx=5)
-    
-        # Sample navigation
-        nav_frame = ttk.Frame(button_frame, style='TFrame')
-        nav_frame.pack(side="left", padx=20)
-    
-        ttk.Button(nav_frame, text="← Prev Sample", command=self.go_to_previous_sample).pack(side="left")
-        ttk.Button(nav_frame, text="Next Sample →", command=self.go_to_next_sample).pack(side="left", padx=5)
-    
-        # Right side controls
-        ttk.Button(button_frame, text="Quick Save", command=self.quick_save).pack(side="right", padx=(10, 0))
-        ttk.Button(button_frame, text="Save & Exit", command=self.save_and_exit).pack(side="right")
-        ttk.Button(button_frame, text="Cancel", command=self.on_cancel).pack(side="right", padx=(0, 10))
-    
-        # Bind notebook tab change to update stats panel
+        # Bind notebook tab change event
         self.notebook.bind("<<NotebookTabChanged>>", self.update_stats_panel)
+   
+    def log(self, message, level="info"):
+        """Log a message with the specified level."""
+        logger = logging.getLogger("DataCollectionWindow")
     
-        print("DEBUG: Main widgets created successfully")
-    
+        if level.lower() == "debug":
+            logger.debug(message)
+        elif level.lower() == "info":
+            logger.info(message)
+        elif level.lower() == "warning":
+            logger.warning(message)
+        elif level.lower() == "error":
+            logger.error(message)
+        elif level.lower() == "critical":
+            logger.critical(message)
+
     # Add this new method to create the SOP section:
     def create_sop_section(self, parent_frame):
         """Create the SOP (Standard Operating Procedure) section."""
@@ -559,13 +491,13 @@ class DataCollectionWindow:
         
         self.auto_save_timer = self.window.after(self.auto_save_interval, self.auto_save)
         
-    
+    # needs modification
     def auto_save(self):
         """Perform automatic save without user confirmation."""
         if self.has_unsaved_changes:
             
             try:
-                self.save_data_internal(show_confirmation=False, auto_save=True)
+                self.save_data(show_confirmation=False, auto_save=True)
                 self.update_save_status(False)  # Mark as saved
                 print("DEBUG: Auto-save completed successfully")
             except Exception as e:
@@ -593,34 +525,6 @@ class DataCollectionWindow:
             import datetime
             self.last_save_time = datetime.datetime.now()
     
-    # Menu action methods
-    def quick_save(self):
-        """Quick save without closing the window."""
-        try:
-            self.save_data_internal(show_confirmation=False)
-            self.update_save_status(False)
-            messagebox.showinfo("Save Complete", "Data saved and main view updated.")
-        except Exception as e:
-            messagebox.showerror("Save Error", f"Failed to save data: {e}")
-    
-    def save_and_continue(self):
-        """Save data and continue working."""
-        
-        try:
-            self.save_data_internal(show_confirmation=True)
-            self.update_save_status(False)
-        except Exception as e:
-            messagebox.showerror("Save Error", f"Failed to save data: {e}")
-    
-    def save_and_exit(self):
-        """Save data and exit the window."""
-        
-        try:
-            self.save_data_internal(show_confirmation=False)
-            self.result = "load_file"
-            self.window.destroy()
-        except Exception as e:
-            messagebox.showerror("Save Error", f"Failed to save data: {e}")
     
     def exit_without_saving(self):
         """Exit without saving (with confirmation)."""
@@ -1135,49 +1039,6 @@ Developed by Charlie Becquet
         """
         messagebox.showinfo("About Data Collection", about_text)
     
-    # Enhanced saving functionality
-    def save_data_internal(self, show_confirmation=True, auto_save=False):
-        """
-        Internal save method that handles both Excel and VAP3 files.
-    
-        Args:
-            show_confirmation (bool): Whether to show confirmation dialog
-            auto_save (bool): Whether this is an auto-save operation
-        """
-        # End any active editing
-        self.end_editing()
-    
-        # Confirm save if not auto-save
-        if show_confirmation and not auto_save:
-            if not messagebox.askyesno("Confirm Save", "Save the collected data to the file?"):
-                return
-    
-        print(f"DEBUG: Starting save operation (auto_save: {auto_save})")
-    
-        # Ensure TPM values are calculated for all samples
-        for i in range(self.num_samples):
-            sample_id = f"Sample {i+1}"
-            self.calculate_tpm(sample_id)
-    
-        # Save to Excel file
-        self._save_to_excel()
-    
-        # Update application state if this is the main file
-        self._update_application_state()
-    
-        # Refresh the main GUI to show updated data (but not during auto-save to avoid disruption)
-        if not auto_save:
-            print("DEBUG: About to call refresh_main_gui_after_save()")
-            self.refresh_main_gui_after_save()
-            print("DEBUG: refresh_main_gui_after_save() call completed")
-        else:
-            print("DEBUG: Skipping GUI refresh for auto-save")
-    
-        # Mark as saved
-        self.has_unsaved_changes = False
-    
-        if not auto_save:
-            print("DEBUG: Save operation completed successfully")
     
     def _save_to_excel(self):
         """Save data to the Excel file."""
@@ -1394,7 +1255,7 @@ Developed by Charlie Becquet
                         
                 except Exception as e:
                     print(f"DEBUG: Error updating VAP3 file: {e}")
-    
+    # modify
     def create_sample_tab(self, parent_frame, sample_id, sample_index):
         """Create a tab for a single sample with data entry controls."""
         print(f"DEBUG: Creating sample tab for {sample_id}")
@@ -1474,7 +1335,7 @@ Developed by Charlie Becquet
 
         # Bind events for editing
         tree.bind("<Button-1>", lambda event: self.on_tree_click(event, tree, sample_id))
-        tree.bind("<Double-1>", lambda event: self.on_tree_double_click(event, tree, sample_id))
+        tree.bind("<Double-1>", lambda event: self.on_tree_click(event, tree, sample_id))
         tree.bind("<KeyPress>", lambda event: self.on_tree_key_press(event, tree, sample_id))
 
         # Mouse wheel scrolling for canvas
@@ -1485,7 +1346,7 @@ Developed by Charlie Becquet
 
         print(f"DEBUG: Sample tab created for {sample_id} with {len(columns)} columns")
         return tree
-
+    # modify
     def on_tree_key_press(self, event, tree, sample_id):
         """Handle key press events in the treeview."""
         if event.keysym == "Tab":
@@ -1613,71 +1474,58 @@ Developed by Charlie Becquet
             print(f"ERROR: Refresh failed: {e}")
             import traceback
             traceback.print_exc()
-
+    # modified
     def calculate_tpm(self, sample_id):
-        """Calculate TPM for all rows with before and after weights."""
-        calculated_count = 0
+        """Calculate TPM (Total Particulate Matter) for all rows with valid data."""
+        valid_tpm_values = []
+    
         for i in range(len(self.data[sample_id]["puffs"])):
             try:
+                # Get weight values
                 before_weight_str = self.data[sample_id]["before_weight"][i]
                 after_weight_str = self.data[sample_id]["after_weight"][i]
-        
-                # Skip if either weight is missing or empty
-                if not before_weight_str or before_weight_str == "":
-                    continue
-                if not after_weight_str or after_weight_str == "":
-                    continue
             
-                # Convert to float
-                try:
-                    before_weight = float(before_weight_str)
-                    after_weight = float(after_weight_str)
-                except (ValueError, TypeError):
+                # Skip if either weight is missing
+                if not before_weight_str or not after_weight_str:
                     continue
-        
-                # Validate that before_weight > after_weight
+                
+                # Convert to float
+                before_weight = float(before_weight_str)
+                after_weight = float(after_weight_str)
+            
+                # Validate weights
                 if before_weight <= after_weight:
                     continue
-        
-                # Get puff interval
-                try:
-                    puff_interval = int(self.data[sample_id]["puffs"][i]) if self.data[sample_id]["puffs"][i] != "" else 0
-                except (ValueError, TypeError):
-                    continue
-        
-                # Calculate puffs in this interval
-                if i > 0:
-                    try:
-                        prev_puff = int(self.data[sample_id]["puffs"][i - 1]) if self.data[sample_id]["puffs"][i - 1] != "" else 0
-                        puffs_in_interval = puff_interval - prev_puff
-                    except (ValueError, TypeError):
-                        continue
-                else:
-                    puffs_in_interval = puff_interval
-        
-                # Calculate TPM
-                if puffs_in_interval > 0:
-                    weight_consumed = before_weight - after_weight  # in grams
-                    tpm = (weight_consumed * 1000) / puffs_in_interval  # Convert to mg per puff
-            
-                    # Ensure tpm list is long enough
-                    while len(self.data[sample_id]["tpm"]) <= i:
-                        self.data[sample_id]["tpm"].append(None)
                 
-                    self.data[sample_id]["tpm"][i] = round(tpm, 6)
-                    calculated_count += 1
+                # Calculate puffs in this interval
+                puff_interval = int(self.data[sample_id]["puffs"][i])
+                puffs_in_interval = puff_interval
             
-            except Exception as e:
+                if i > 0:
+                    prev_puff = int(self.data[sample_id]["puffs"][i - 1])
+                    puffs_in_interval = puff_interval - prev_puff
+                
+                # Skip if invalid puff interval
+                if puffs_in_interval <= 0:
+                    continue
+                
+                # Calculate TPM (mg/puff)
+                weight_consumed = before_weight - after_weight  # in grams
+                tpm = (weight_consumed * 1000) / puffs_in_interval  # Convert to mg per puff
+            
+                # Store result
+                self.data[sample_id]["tpm"][i] = round(tpm, 6)
+                valid_tpm_values.append(tpm)
+                
+            except Exception:
                 # Ensure tpm list is long enough even for failed calculations
                 while len(self.data[sample_id]["tpm"]) <= i:
                     self.data[sample_id]["tpm"].append(None)
-        
-        # Update average TPM for the sample
-        valid_tpm_values = [v for v in self.data[sample_id]["tpm"] if v is not None]
-        if valid_tpm_values:
-            self.data[sample_id]["avg_tpm"] = sum(valid_tpm_values) / len(valid_tpm_values)
-        else:
-            self.data[sample_id]["avg_tpm"] = 0.0
+    
+        # Update average TPM
+        self.data[sample_id]["avg_tpm"] = sum(valid_tpm_values) / len(valid_tpm_values) if valid_tpm_values else 0.0
+    
+        return len(valid_tpm_values) > 0
 
     def validate_weight_entry(self, sample_id, row_idx, column_name, value):
         """
@@ -1940,7 +1788,7 @@ Developed by Charlie Becquet
         
         # Set up hotkeys
         self.setup_hotkeys()
-    
+    # update
     def setup_hotkeys(self):
         """Set up keyboard shortcuts for navigation."""
         if not hasattr(self, 'hotkey_bindings'):
@@ -1969,18 +1817,18 @@ Developed by Charlie Becquet
     
     def on_window_close(self):
         """Handle window close event with auto-save."""
-        print("DEBUG: Window close event triggered")
-        
+        self.log("Window close event triggered", "debug")
+    
         # Cancel auto-save timer
         if self.auto_save_timer:
             self.window.after_cancel(self.auto_save_timer)
-        
+    
         # Auto-save if there are unsaved changes
         if self.has_unsaved_changes:
             if messagebox.askyesno("Save Changes", 
                                  "You have unsaved changes. Save before closing?"):
                 try:
-                    self.save_data_internal(show_confirmation=False)
+                    self.save_data(show_confirmation=False)
                     self.result = "load_file"
                 except Exception as e:
                     messagebox.showerror("Save Error", f"Failed to save: {e}")
@@ -1989,13 +1837,113 @@ Developed by Charlie Becquet
                 self.result = "cancel"
         else:
             self.result = "load_file" if self.last_save_time else "cancel"
-        
+    
         self.window.destroy()
     
-    def save_data(self):
-        """Legacy save method for compatibility."""
-        self.save_and_exit()
+    def save_data(self, exit_after=False, show_confirmation=True, auto_save=False):
+        """Unified method for saving data."""
+        # End any active editing
+        self.end_editing()
     
+        # For auto-save, we'll set a flag to avoid certain behaviors
+        if auto_save:
+            self._auto_save_in_progress = True
+    
+        # Confirm save if requested and not auto-saving
+        if show_confirmation and not auto_save:
+            if not messagebox.askyesno("Confirm Save", "Save the collected data to the file?"):
+                return False
+    
+        try:
+            # Calculate TPM values for all samples
+            for i in range(self.num_samples):
+                sample_id = f"Sample {i+1}"
+                self.calculate_tpm(sample_id)
+        
+            # Save to Excel file
+            self._save_to_excel()
+        
+            # Update application state if needed
+            if hasattr(self.parent, 'filtered_sheets'):
+                self._update_application_state()
+        
+            # Refresh the main GUI if not auto-saving
+            if not auto_save:
+                self.refresh_main_gui_after_save()
+        
+            # Mark as saved
+            self.has_unsaved_changes = False
+            self.update_save_status(False)
+        
+            # Show confirmation if requested (not for auto-save)
+            if show_confirmation and not auto_save and not exit_after:
+                messagebox.showinfo("Save Complete", "Data saved successfully.")
+        
+            # Clean up auto-save flag
+            if auto_save:
+                self._auto_save_in_progress = False
+        
+            # Exit if requested
+            if exit_after:
+                self.result = "load_file"
+                self.window.destroy()
+            
+            return True
+        
+        except Exception as e:
+            # Clean up auto-save flag
+            if auto_save:
+                self._auto_save_in_progress = False
+            
+            error_msg = f"Failed to save data: {e}"
+            self.log(error_msg, "error")
+        
+            if not auto_save:  # Don't show errors for auto-save
+                messagebox.showerror("Save Error", error_msg)
+            
+            return False
+    
+    def initialize_data(self):
+        """Initialize data structures for all samples."""
+        self.data = {}
+        for i in range(self.num_samples):
+            sample_id = f"Sample {i+1}"
+        
+            # Basic data structure
+            self.data[sample_id] = {
+                "current_row_index": 0, 
+                "avg_tpm": 0.0
+            }
+        
+            # Add standard columns
+            columns = ["puffs", "before_weight", "after_weight", "draw_pressure", "smell", "notes", "tpm"]
+            for column in columns:
+                self.data[sample_id][column] = []
+        
+            # Add special columns for User Test Simulation
+            if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+                self.data[sample_id]["chronography"] = []
+        
+            # Pre-initialize rows
+            for j in range(50):
+                puff = (j + 1) * self.puff_interval
+                self.data[sample_id]["puffs"].append(puff)
+            
+                # Initialize other columns with empty values
+                for column in columns:
+                    if column == "puffs":
+                        continue  # Already initialized
+                    elif column == "tpm":
+                        self.data[sample_id][column].append(None)
+                    else:
+                        self.data[sample_id][column].append("")
+            
+                # Initialize chronography if needed
+                if "chronography" in self.data[sample_id]:
+                    self.data[sample_id]["chronography"].append("")
+                
+            self.log(f"Initialized data for Sample {i+1}", "debug")
+
     def on_cancel(self):
         """Handle cancel button click or window close."""
         self.on_window_close()
@@ -2018,46 +1966,17 @@ Developed by Charlie Becquet
         print(f"DEBUG: DataCollectionWindow closed with result: {self.result}")
         return self.result
     
-    def start_edit_on_typing(self, event, tree, sample_id):
-        """Start editing if a printable character is typed while a cell is selected."""
-        if not event.char.isprintable():
-            return  # Skip control keys
+    def quick_save(self):
+        """Quick save without closing the window."""
+        self.save_data(show_confirmation=False)
 
-        item = tree.focus()
-        column = getattr(self, 'current_column', '#2')
+    def save_and_continue(self):
+        """Save data and continue working."""
+        self.save_data(show_confirmation=True)
 
-        if not item:
-            items = tree.get_children()
-            if not items:
-                return
-            item = items[0]
-            tree.selection_set(item)
-            tree.focus(item)
-
-        row_idx = tree.index(item)
-        col_idx = int(column[1:]) - 1
-
-        # Determine column name based on test type and column index
-        if self.test_name in ["User Test Simulation", "User Simulation Test"]:
-            column_names = ["Chronography", "Puffs", "Before Weight", "After Weight", "Draw Pressure","Failure", "Notes", "TPM"]
-            if col_idx >= len(column_names):
-                return
-            column_name = column_names[col_idx]
-            print(f"DEBUG: User Test Simulation - editing column {col_idx}: {column_name}")
-        else:
-            column_names = ["Puffs", "Before Weight", "After Weight", "Draw Pressure", "Resistance", "Smell", "Clog", "Notes", "TPM"]
-            if col_idx >= len(column_names):
-                return
-            column_name = column_names[col_idx]
-            print(f"DEBUG: Standard test - editing column {col_idx}: {column_name}")
-
-        # Start editing with the key typed
-        self.edit_cell(tree, item, column, row_idx, sample_id, column_name)
-        if self.current_edit and self.current_edit["entry"]:
-            entry = self.current_edit["entry"]
-            entry.delete(0, tk.END)
-            entry.insert(0, event.char)
-            entry.icursor(1)
+    def save_and_exit(self):
+        """Save data and exit the window."""
+        self.save_data(exit_after=True)    
 
     def create_tpm_stats_panel(self):
         """Create the enhanced TPM statistics panel with plot on the right side."""
@@ -2317,6 +2236,127 @@ Developed by Charlie Becquet
             messagebox.showerror("Error", "Invalid puff interval. Please enter a positive number.")
             self.puff_interval_var.set(self.puff_interval)
 
+    def get_column_name(self, col_idx):
+        """Get the internal column name based on column index."""
+        # Column mapping varies by test type
+        if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+            column_map = {
+                0: "chronography",
+                1: "puffs", 
+                2: "before_weight", 
+                3: "after_weight", 
+                4: "draw_pressure", 
+                5: "failure",  # This might map to "smell" in data structure
+                6: "notes"
+            }
+        else:
+            column_map = {
+                0: "puffs", 
+                1: "before_weight", 
+                2: "after_weight", 
+                3: "draw_pressure", 
+                4: "resistance",  # Not used in data structure
+                5: "smell", 
+                6: "clog",        # Not used in data structure
+                7: "notes"
+            }
+    
+        # Return appropriate column name or default to a safe value
+        return column_map.get(col_idx, "notes")
+
+    def create_header_section(self, parent_frame):
+        """Create the header section with test information and save status."""
+        header_frame = ttk.Frame(parent_frame, style='TFrame')
+        header_frame.pack(fill="x", pady=(0, 10))
+    
+        # Left side of header
+        header_left = ttk.Frame(header_frame, style='TFrame')
+        header_left.pack(side="left", fill="x", expand=True)
+    
+        # Use styled labels
+        ttk.Label(header_left, text=f"Test: {self.test_name}", style='Header.TLabel').pack(side="left")
+        ttk.Label(header_left, text=f"Tester: {self.header_data['common']['tester']}", 
+                 style='SubHeader.TLabel').pack(side="left", padx=(20, 0))
+    
+        # Right side of header - save status
+        header_right = ttk.Frame(header_frame, style='TFrame')
+        header_right.pack(side="right")
+    
+        self.save_status_label = ttk.Label(header_right, text="●", 
+                                         style='SubHeader.TLabel', foreground="red")
+        self.save_status_label.pack(side="right")
+    
+        self.save_status_text = ttk.Label(header_right, text="Unsaved changes", 
+                                        style='SubHeader.TLabel')
+        self.save_status_text.pack(side="right", padx=(0, 5))
+    
+        self.log("Header section created", "debug")
+
+    def create_sample_tabs(self):
+        """Create tabs for all samples in the notebook."""
+        # Initialize lists to store references
+        self.sample_frames = []
+        self.sample_trees = []
+    
+        # Create a tab for each sample
+        for i in range(self.num_samples):
+            sample_id = f"Sample {i+1}"
+        
+            # Create frame for this sample
+            sample_frame = ttk.Frame(self.notebook, padding=10, style='TFrame')
+        
+            # Get sample name safely
+            sample_name = "Unknown Sample"
+            if i < len(self.header_data.get('samples', [])):
+                sample_name = self.header_data['samples'][i].get('id', f"Sample {i+1}")
+        
+            # Add tab to notebook
+            self.notebook.add(sample_frame, text=f"Sample {i+1} - {sample_name}")
+            self.sample_frames.append(sample_frame)
+        
+            # Create tab content
+            tree = self.create_sample_tab(sample_frame, sample_id, i)
+            self.sample_trees.append(tree)
+    
+        self.log(f"Created {self.num_samples} sample tabs", "debug")
+
+    def create_control_buttons(self, parent_frame):
+        """Create control buttons at the bottom of the window."""
+        button_frame = ttk.Frame(parent_frame, style='TFrame')
+        button_frame.pack(fill="x", pady=(10, 0))
+    
+        # Left side controls
+        left_controls = ttk.Frame(button_frame, style='TFrame')
+        left_controls.pack(side="left", fill="x")
+    
+        ttk.Label(left_controls, text="Puff Interval:", style='TLabel').pack(side="left")
+        self.puff_interval_var = tk.IntVar(value=self.puff_interval)
+        puff_spinbox = ttk.Spinbox(
+            left_controls, 
+            from_=1, 
+            to=100, 
+            textvariable=self.puff_interval_var, 
+            width=5,
+            command=self.update_puff_interval
+        )
+        puff_spinbox.pack(side="left", padx=5)
+    
+        # Sample navigation
+        nav_frame = ttk.Frame(button_frame, style='TFrame')
+        nav_frame.pack(side="left", padx=20)
+    
+        ttk.Button(nav_frame, text="← Prev Sample", command=self.go_to_previous_sample).pack(side="left")
+        ttk.Button(nav_frame, text="Next Sample →", command=self.go_to_next_sample).pack(side="left", padx=5)
+    
+        # Right side controls
+        ttk.Button(button_frame, text="Quick Save", 
+                  command=lambda: self.save_data(show_confirmation=False)).pack(side="right", padx=(10, 0))
+        ttk.Button(button_frame, text="Save & Exit", 
+                  command=lambda: self.save_data(exit_after=True)).pack(side="right")
+        ttk.Button(button_frame, text="Cancel", command=self.on_cancel).pack(side="right", padx=(0, 10))
+    
+        self.log("Control buttons created", "debug")
+
     # ============================================================================
     # COMPLETE CELL EDITING AND NAVIGATION METHODS
     # ============================================================================
@@ -2427,197 +2467,83 @@ Developed by Charlie Becquet
         except (ValueError, TypeError):
             print("DEBUG: Error in auto-puff progression")
 
-    def handle_tab_in_edit(self, event):
-        self.finish_edit(event)
-        self.navigate_cell("right")
-        return "break"
-
-    def handle_return_in_edit(self, event):
-        self.finish_edit(event)
-        self.navigate_cell("down")
-        return "break"
-
-    def handle_arrow_in_edit(self, event):
-        entry = self.current_edit["entry"]
-        cursor = entry.index(tk.INSERT)
-
-        if (event.keysym == "Left" and cursor == 0) or \
-           (event.keysym == "Right" and cursor == len(entry.get())):
-            self.finish_edit(event)
-            self.navigate_cell("left" if event.keysym == "Left" else "right")
-            return "break"
-
-    
-    def edit_cell(self, tree, item, column, row_idx, sample_id, column_name):
-        """Create an entry widget for editing a cell."""
-        # Cancel any existing edit
+    def edit_cell(self, tree, item, column, row_idx, sample_id):
+        """Single unified method for cell editing."""
+        # End any existing edit first
         self.end_editing()
-        
-        # Remove cell border during editing
-        if hasattr(self, 'cell_border_frame') and self.cell_border_frame:
-            self.cell_border_frame.destroy()
-            self.cell_border_frame = None
-
-        # Mark that we're editing
-        self.editing = True
-        self.hotkeys_enabled = False
-        
-        # Get the current value
-        current_value = ""
-        if row_idx < len(self.data[sample_id][column_name]):
-            current_value = self.data[sample_id][column_name][row_idx]
-        
-        # Get the cell coordinates
+    
+        # Get column name based on column index
+        col_idx = int(column[1:]) - 1
+        column_name = self.get_column_name(col_idx)
+    
+        # Get cell coordinates and create editing frame
         x, y, width, height = tree.bbox(item, column)
-        
-        # Create a frame for the entry
         frame = tk.Frame(tree, borderwidth=0, highlightthickness=1, highlightbackground="black")
         frame.place(x=x, y=y, width=width, height=height)
-        
-        # Create the entry widget
+    
+        # Create entry widget with current value
         entry = tk.Entry(frame, borderwidth=0)
         entry.pack(fill="both", expand=True)
-        
+    
         # Set current value
+        current_value = self.data[sample_id][column_name][row_idx] if row_idx < len(self.data[sample_id][column_name]) else ""
         if current_value:
-            entry.insert(0, current_value)
-        
-        # Select all text
+            entry.insert(0, str(current_value))
         entry.select_range(0, tk.END)
-        
-        # Save references
+    
+        # Store edit state
+        self.editing = True
+        self.hotkeys_enabled = False
         self.current_edit = {
-            "frame": frame,
-            "entry": entry,
-            "tree": tree,
-            "item": item,
-            "column": column,
-            "column_name": column_name,
-            "row_idx": row_idx,
-            "sample_id": sample_id
+            "frame": frame, "entry": entry, "tree": tree, "item": item,
+            "column": column, "column_name": column_name, "row_idx": row_idx, "sample_id": sample_id
         }
-        
-        # Focus the entry
+    
+        # Set up event bindings
         entry.focus_set()
-        
-        # Bind events for the entry widget
-        entry.bind("<Tab>", lambda e: self.move_to_next_cell_during_edit(e, tree, sample_id, direction="right"))
-        entry.bind("<Return>", lambda e: self.move_to_next_cell(tree, sample_id, direction="down"))
+        entry.bind("<Return>", self.finish_edit)
+        entry.bind("<Tab>", self.handle_tab_in_edit)
         entry.bind("<Escape>", self.cancel_edit)
         entry.bind("<FocusOut>", self.finish_edit)
         entry.bind("<Left>", self.handle_arrow_in_edit)
         entry.bind("<Right>", self.handle_arrow_in_edit)
-        
-        print(f"DEBUG: Started editing cell - sample: {sample_id}, row: {row_idx}, column: {column_name}")
+    
+        self.log(f"Started editing cell - sample: {sample_id}, row: {row_idx}, column: {column_name}", "debug")
     
     def on_tree_click(self, event, tree, sample_id):
-        """Delay single-click action to detect double-clicks."""
-        # Cancel any previous scheduled single-click
-        if self.single_click_after_id:
-            self.window.after_cancel(self.single_click_after_id)
-            self.single_click_after_id = None
-
-        # Schedule the single-click action after 300ms
-        self.single_click_after_id = self.window.after(
-            300,
-            lambda: self._handle_single_click(event, tree, sample_id)
-        )
-
-    def on_tree_double_click(self, event, tree, sample_id):
+        """Unified method for handling tree clicks."""
+        import time
+    
         item = tree.identify("item", event.x, event.y)
         column = tree.identify("column", event.x, event.y)
         region = tree.identify("region", event.x, event.y)
-
+    
+        # Ignore clicks outside cells
         if not item or not column or region != "cell":
             return
-
-        row_idx = tree.index(item)
-        self.edit_cell(tree, item, column, row_idx, sample_id, column_name)
-
-    def _handle_single_click(self, event, tree, sample_id):
-        """Actual logic for handling a single-click."""
-        item = tree.identify("item", event.x, event.y)
-        column = tree.identify("column", event.x, event.y)
-        region = tree.identify("region", event.x, event.y)
-
-        if not item or not column or region != "cell":
-            return
-
-        self.end_editing()
-        self.current_column = column
+    
+        # Store current selection
         self.current_item = item
-        self.highlight_cell(tree, item, column)
-        print(f"DEBUG: Single-click - item: {item}, column: {column}")
-
-    def move_to_next_cell_during_edit(self, event, tree, sample_id, direction="right"):
-        """Handle Tab navigation during editing."""
-        if not self.editing or not self.current_edit:
-            return "break"
-
-        current_item = self.current_edit["item"]
-        current_column = self.current_edit["column"]
-        row_idx = self.current_edit["row_idx"]
-        col_idx = int(current_column[1:])
-
-        self.finish_edit()
-
-        items = tree.get_children()
-
-        if direction == "right":
-            if col_idx < 6:
-                # Go to next column in the same row
-                next_column = f"#{col_idx + 1}"
-                column_name = self.columns[col_idx]
-                self.edit_cell(tree, current_item, next_column, row_idx, sample_id, column_name)
-            elif row_idx < len(items) - 1:
-                # Wrap to next row, first editable column
-                next_item = items[row_idx + 1]
-                next_column = "#2"
-                column_name = "before_weight"
-                self.edit_cell(tree, next_item, next_column, row_idx + 1, sample_id, column_name)
-
-        if direction == "left":
-            if col_idx > 0:
-                # Go to previous column in the same row
-                prev_column = f"#{col_idx - 1}"
-                column_name = self.columns[col_idx]
-                self.edit_cell(tree, current_item, prev_column, row_idx, sample_id, column_name)
-            
-
-        return "break"
-
-    def move_to_next_cell(self, tree, sample_id, direction="right"):
-        """Handle Tab or Enter navigation during editing."""
-        self.finish_edit()
-
-        item = self.current_item
-        column = self.current_column
-        items = tree.get_children()
-
-        if not item or not column:
-            return "break"
-
-        col_idx = int(column[1:])
-        row_idx = items.index(item)
-
-        if direction == "right":
-            next_col_idx = col_idx + 1
-            if next_col_idx > 6:
-                return "break"
-            next_column = f"#{next_col_idx}"
-            column_name = ["puffs", "before_weight", "after_weight", "draw_pressure", "smell", "notes"][next_col_idx - 1]
-            self.edit_cell(tree, item, next_column, row_idx, sample_id, column_name)
-        elif direction == "down":
-            if row_idx >= len(items) - 1:
-                return "break"
-            next_item = items[row_idx + 1]
-            tree.selection_set(next_item)
-            tree.focus(next_item)
-            tree.see(next_item)
-            column_name = ["puffs", "before_weight", "after_weight", "draw_pressure", "smell", "notes"][col_idx - 1]
-            self.edit_cell(tree, next_item, f"#{col_idx}", row_idx + 1, sample_id, column_name)
-
-        return "break"
+        self.current_column = column
+    
+        # Check for double-click (based on time since last click)
+        current_time = time.time() * 1000
+        is_double_click = (current_time - self.last_click_time < 300 and
+                          item == getattr(self, 'last_clicked_item', None) and
+                          column == getattr(self, 'last_clicked_column', None))
+    
+        if is_double_click:
+            # Start editing on double-click
+            row_idx = tree.index(item)
+            self.edit_cell(tree, item, column, row_idx, sample_id)
+        else:
+            # Single click - just highlight cell
+            self.highlight_cell(tree, item, column)
+    
+        # Update click tracking
+        self.last_click_time = current_time
+        self.last_clicked_item = item
+        self.last_clicked_column = column
 
     def handle_tab_key(self, event, tree, sample_id):
         """Handle Tab key press in the treeview."""
@@ -2670,6 +2596,104 @@ Developed by Charlie Becquet
             self.current_column = f"#{next_col_idx}"
             self.highlight_cell(tree, item, self.current_column)
         
+        return "break"  # Stop event propagation
+
+    def start_edit_on_typing(self, event, tree, sample_id):
+        """Start editing if a printable character is typed while a cell is selected."""
+        if not event.char.isprintable():
+            return  # Skip control keys
+
+        item = tree.focus()
+        column = getattr(self, 'current_column', '#2')
+
+        if not item:
+            items = tree.get_children()
+            if not items:
+                return
+            item = items[0]
+            tree.selection_set(item)
+            tree.focus(item)
+
+        row_idx = tree.index(item)
+    
+        # Start editing with the key typed
+        self.edit_cell(tree, item, column, row_idx, sample_id)
+    
+        if self.current_edit and self.current_edit["entry"]:
+            entry = self.current_edit["entry"]
+            entry.delete(0, tk.END)
+            entry.insert(0, event.char)
+            entry.icursor(1)
+
+    def handle_tab_in_edit(self, event):
+        """Handle tab key pressed while editing a cell."""
+        self.log("Tab pressed during edit", "debug")
+    
+        # Store the current edit info before finishing
+        current_tree = self.current_edit["tree"]
+        current_sample_id = self.current_edit["sample_id"]
+    
+        # Save the current edit
+        self.finish_edit(event)
+    
+        # Use the handle_tab_navigation method
+        return self.handle_tab_navigation(event)
+
+    def handle_tab_navigation(self, event):
+        """Handle tab key navigation during editing."""
+        if not self.editing or not self.current_edit:
+            return
+    
+        # Store current edit values before finishing
+        tree = self.current_edit["tree"]
+        sample_id = self.current_edit["sample_id"]
+        column = self.current_edit["column"]
+        row_idx = self.current_edit["row_idx"]
+    
+        # Get column index and direction
+        col_idx = int(column[1:])
+        shift_pressed = event.state & 0x0001  # Check if Shift key is pressed
+        direction = "left" if shift_pressed else "right"
+    
+        # Finish current edit
+        self.finish_edit()
+    
+        # Navigate based on direction
+        items = tree.get_children()
+    
+        if direction == "right":
+            # Navigate to next column or row
+            next_col_idx = col_idx + 1
+        
+            if next_col_idx <= self.tree_columns:
+                # Go to next column in same row
+                next_column = f"#{next_col_idx}"
+                self.edit_cell(tree, self.current_item, next_column, row_idx, sample_id)
+            elif row_idx < len(items) - 1:
+                # Go to first column of next row
+                next_item = items[row_idx + 1]
+                tree.selection_set(next_item)
+                tree.focus(next_item)
+                tree.see(next_item)
+                self.current_item = next_item
+                self.edit_cell(tree, next_item, "#1", row_idx + 1, sample_id)
+        else:
+            # Navigate to previous column or row
+            prev_col_idx = col_idx - 1
+        
+            if prev_col_idx >= 1:
+                # Go to previous column in same row
+                prev_column = f"#{prev_col_idx}"
+                self.edit_cell(tree, self.current_item, prev_column, row_idx, sample_id)
+            elif row_idx > 0:
+                # Go to last column of previous row
+                prev_item = items[row_idx - 1]
+                tree.selection_set(prev_item)
+                tree.focus(prev_item)
+                tree.see(prev_item)
+                self.current_item = prev_item
+                self.edit_cell(tree, prev_item, f"#{self.tree_columns}", row_idx - 1, sample_id)
+    
         return "break"  # Stop event propagation
 
     def handle_arrow_key(self, event, tree, sample_id, direction):
@@ -2744,7 +2768,7 @@ Developed by Charlie Becquet
         # Only handle left/right arrows
         if event.keysym not in ["Left", "Right"]:
             return
-        
+    
         # Check if at beginning or end of text
         entry = self.current_edit["entry"]
         cursor_pos = entry.index(tk.INSERT)
@@ -2752,7 +2776,7 @@ Developed by Charlie Becquet
         # If at beginning and pressing left, or at end and pressing right, navigate to next cell
         if (cursor_pos == 0 and event.keysym == "Left") or \
            (cursor_pos == len(entry.get()) and event.keysym == "Right"):
-            print(f"DEBUG: Arrow key navigation from edit - {event.keysym}")
+            self.log(f"Arrow key navigation from edit - {event.keysym}", "debug")
             self.finish_edit(event)
             return "break"  # Stop event propagation
 
@@ -2840,21 +2864,6 @@ Developed by Charlie Becquet
         self.cell_border_frame.place(x=x - 1, y=y - 1, width=width + 2, height=height + 2)
         self.cell_border_frame.lift()  # Ensure it's above background but doesn't obscure text
 
-    def handle_tab_in_edit(self, event):
-        """Handle tab key pressed while editing a cell."""
-        print("DEBUG: Tab pressed during edit")
-    
-        # Store the current edit info before finishing
-        current_tree = self.current_edit["tree"]
-        current_sample_id = self.current_edit["sample_id"]
-    
-        # Save the current edit
-        self.finish_edit(event)
-    
-        # Now handle tab navigation
-        self.handle_tab_key(event, current_tree, current_sample_id)
-    
-        return "break"  # Stop event propagation
 
     # ============================================================================
     # END OF CELL EDITING AND NAVIGATION METHODS
