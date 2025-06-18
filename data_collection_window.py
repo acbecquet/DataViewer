@@ -1928,26 +1928,38 @@ Developed by Charlie Becquet
                         tpm_cell = ws.cell(row=excel_row, column=9 + col_offset)    # Column I
         
                     # Check if this row has meaningful numeric data (skip text like "Day 1", "Day 2", etc.)
+                    
                     has_meaningful_data = False
-                
-                    # Check puffs - should be numeric
-                    if puffs_cell.value is not None:
-                        if isinstance(puffs_cell.value, (int, float)):
-                            has_meaningful_data = True
-                        elif isinstance(puffs_cell.value, str) and puffs_cell.value.replace('.', '').replace('-', '').isdigit():
-                            has_meaningful_data = True
-                
-                    # Check weights - should be numeric
-                    if not has_meaningful_data:
-                        for cell in [before_weight_cell, after_weight_cell, draw_pressure_cell]:
-                            if cell.value is not None and isinstance(cell.value, (int, float)) and cell.value != 0:
+
+                    if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+                        # For User Test Simulation, be more restrictive (skip "Day 1", "Day 2" text rows)
+                        if puffs_cell.value is not None:
+                            if isinstance(puffs_cell.value, (int, float)):
+                                has_meaningful_data = True
+                            elif isinstance(puffs_cell.value, str) and puffs_cell.value.replace('.', '').replace('-', '').isdigit():
+                                has_meaningful_data = True
+    
+                        if not has_meaningful_data:
+                            for cell in [before_weight_cell, after_weight_cell, draw_pressure_cell]:
+                                if cell.value is not None and isinstance(cell.value, (int, float)) and cell.value != 0:
+                                    has_meaningful_data = True
+                                    break
+                    else:
+                        # For normal tests, be permissive - load any row that has data in any field
+                        for cell in [puffs_cell, before_weight_cell, after_weight_cell, draw_pressure_cell, smell_cell, notes_cell]:
+                            if cell.value is not None and str(cell.value).strip():
                                 has_meaningful_data = True
                                 break
-                
-                    # If no meaningful numeric data, skip this row
+                        # Also check TPM for standard format
+                        if not has_meaningful_data and tmp_cell and tpm_cell.value is not None:
+                            has_meaningful_data = True
+
+                    # If no meaningful data, skip this row
                     if not has_meaningful_data:
-                        print(f"DEBUG: Skipping row {excel_row} - no meaningful numeric data. Puffs: {puffs_cell.value}")
+                        print(f"DEBUG: Skipping row {excel_row} - no data found")
                         continue
+                    
+                    print(f"DEBUG: Loading row {excel_row} for {sample_id} - found meaningful data")
         
                     # Load the data with proper type conversion
                     try:

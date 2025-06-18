@@ -293,19 +293,34 @@ def plot_all_samples(full_sample_data: pd.DataFrame, num_columns_per_sample: int
             start_col = i * num_columns_per_sample
             sample_data = full_sample_data.iloc[:, start_col:start_col + num_columns_per_sample]
 
+            print(f"DEBUG: Sample {i+1} data shape: {sample_data.shape}")
+            print(f"DEBUG: Sample {i+1} columns: {sample_data.columns.tolist()}")
+    
             x_data = sample_data.iloc[3:, 0].dropna()
+            print(f"DEBUG: Sample {i+1} x_data (puffs) length: {len(x_data)}, first few values: {x_data.head().tolist()}")
+    
             y_data = get_y_data_for_plot_type(sample_data, plot_type)
+            print(f"DEBUG: Sample {i+1} raw y_data length: {len(y_data)}, first few values: {y_data.head().tolist()}")
+    
             y_data = pd.to_numeric(y_data, errors='coerce').dropna()
+            print(f"DEBUG: Sample {i+1} numeric y_data length: {len(y_data)}, first few values: {y_data.head().tolist()}")
 
             common_index = x_data.index.intersection(y_data.index)
+            print(f"DEBUG: Sample {i+1} common_index length: {len(common_index)}")
+    
             x_data = x_data.loc[common_index]
             y_data = y_data.loc[common_index]
+    
+            print(f"DEBUG: Sample {i+1} final x_data length: {len(x_data)}, y_data length: {len(y_data)}")
 
             if not x_data.empty and not y_data.empty:
                 sample_name = sample_data.columns[5]
+                print(f"DEBUG: Sample {i+1} plotting with sample_name: {sample_name}")
                 ax.plot(x_data, y_data, marker='o', label=sample_name)
                 sample_names.append(sample_name)
                 y_max = max(y_max, y_data.max())
+            else:
+                print(f"DEBUG: Sample {i+1} SKIPPED - x_data empty: {x_data.empty}, y_data empty: {y_data.empty}")
 
         ax.set_xlabel('Puffs')
         ax.set_ylabel(get_y_label_for_plot_type(plot_type))
