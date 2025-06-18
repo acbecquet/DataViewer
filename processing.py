@@ -515,7 +515,6 @@ def plot_all_samples(full_sample_data: pd.DataFrame, num_columns_per_sample: int
 
     return fig, sample_names
 
-
 def plot_tpm_bar_chart(ax, full_sample_data, num_samples, num_columns_per_sample):
     """
     Generate a bar chart of the average TPM for each sample with wrapped sample names.

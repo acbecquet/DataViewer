@@ -150,22 +150,16 @@ class DataCollectionWindow:
         self.header_data = header_data
         self.num_samples = header_data["num_samples"]
         self.result = None
-
-        print(f"DEBUG: DataCollectionWindow.__init__")
-        print(f"DEBUG: test_name = '{test_name}'")
-        print(f"DEBUG: num_samples = {self.num_samples}")
-        print(f"DEBUG: header_data keys: {list(header_data.keys())}")
-        print(f"DEBUG: header_data['samples'] length: {len(header_data.get('samples', []))}")
     
         # Validate num_samples
         if self.num_samples <= 0:
-            print(f"DEBUG: Invalid num_samples ({self.num_samples}), using length of samples list")
+            
             self.num_samples = len(header_data.get('samples', []))
             if self.num_samples <= 0:
-                print(f"DEBUG: Still invalid, defaulting to 1 sample")
+                
                 self.num_samples = 1
     
-        print(f"DEBUG: Final num_samples = {self.num_samples}")
+
         
         # Auto-save settings
         self.auto_save_interval = 5 * 60 * 1000  # 5 minutes in milliseconds
@@ -203,7 +197,8 @@ class DataCollectionWindow:
         self.double_click_threshold = 500  # milliseconds
         self.cell_border_frame = None # Initialize cell border frame
         self.single_click_after_id = None
-        
+        self.columns = ["puffs", "before_weight", "after_weight", "draw_pressure", "smell", "notes"]
+
         # Data storage
         self.data = {}
         for i in range(self.num_samples):
@@ -222,7 +217,7 @@ class DataCollectionWindow:
             # Add chronography for User Test Simulation
             if self.test_name in ["User Test Simulation", "User Simulation Test"]:
                 self.data[sample_id]["chronography"] = []
-                print(f"DEBUG: Added chronography data structure for {sample_id}")
+                
             # Pre-initialize 50 rows
             for j in range(50):
                 puff = (j + 1) * self.puff_interval
@@ -259,7 +254,7 @@ class DataCollectionWindow:
     
     def create_menu_bar(self):
         """Create a comprehensive menu bar for the data collection window."""
-        print("DEBUG: Creating menu bar for DataCollectionWindow")
+        
         
         menubar = tk.Menu(self.window)
         self.window.config(menu=menubar)
@@ -486,7 +481,7 @@ class DataCollectionWindow:
     # Add this new method to create the SOP section:
     def create_sop_section(self, parent_frame):
         """Create the SOP (Standard Operating Procedure) section."""
-        print(f"DEBUG: Creating SOP section for test: {self.test_name}")
+        
     
         # Create a collapsible SOP frame
         sop_frame = ttk.LabelFrame(parent_frame, text="", style='TLabelframe')
@@ -563,12 +558,12 @@ class DataCollectionWindow:
             self.window.after_cancel(self.auto_save_timer)
         
         self.auto_save_timer = self.window.after(self.auto_save_interval, self.auto_save)
-        print(f"DEBUG: Auto-save timer started - will save in {self.auto_save_interval/1000/60:.1f} minutes")
+        
     
     def auto_save(self):
         """Perform automatic save without user confirmation."""
         if self.has_unsaved_changes:
-            print("DEBUG: Performing auto-save...")
+            
             try:
                 self.save_data_internal(show_confirmation=False, auto_save=True)
                 self.update_save_status(False)  # Mark as saved
@@ -585,7 +580,7 @@ class DataCollectionWindow:
         if not self.has_unsaved_changes:
             self.has_unsaved_changes = True
             self.update_save_status(True)
-            print("DEBUG: Marked as having unsaved changes")
+            
     
     def update_save_status(self, has_changes):
         """Update the save status indicator in the UI."""
@@ -610,7 +605,7 @@ class DataCollectionWindow:
     
     def save_and_continue(self):
         """Save data and continue working."""
-        print("DEBUG: Save and continue initiated")
+        
         try:
             self.save_data_internal(show_confirmation=True)
             self.update_save_status(False)
@@ -619,7 +614,7 @@ class DataCollectionWindow:
     
     def save_and_exit(self):
         """Save data and exit the window."""
-        print("DEBUG: Save and exit initiated")
+        
         try:
             self.save_data_internal(show_confirmation=False)
             self.result = "load_file"
@@ -640,7 +635,7 @@ class DataCollectionWindow:
     
     def open_raw_excel(self):
         """Open the raw Excel file for direct editing."""
-        print(f"DEBUG: Opening raw Excel file: {self.file_path}")
+        
         try:
             if os.path.exists(self.file_path):
                 os.startfile(self.file_path)
@@ -651,7 +646,7 @@ class DataCollectionWindow:
     
     def export_csv(self):
         """Export current data to CSV files."""
-        print("DEBUG: Exporting data to CSV")
+        
         from tkinter import filedialog
         
         # Ask for directory to save CSV files
@@ -825,7 +820,7 @@ class DataCollectionWindow:
 
     def update_header_display(self):
         """Update the header information displayed in the UI."""
-        print("DEBUG: Updating header display")
+        
         
         # Update the header labels (if they exist)
         try:
@@ -840,7 +835,7 @@ class DataCollectionWindow:
                     sample_name = self.header_data['samples'][i].get('id', f"Sample {i+1}")
                     self.notebook.tab(i, text=f"Sample {i+1} - {sample_name}")
             
-            print("DEBUG: Header display updated")
+            
             
         except Exception as e:
             print(f"DEBUG: Error updating header display: {e}")
@@ -908,7 +903,6 @@ class DataCollectionWindow:
         
         # Remove it after the specified duration
         self.window.after(duration_ms, lambda: temp_label.destroy() if temp_label.winfo_exists() else None)
-
 
     def clear_current_sample(self):
         """Clear data for the currently selected sample."""
@@ -1401,10 +1395,6 @@ Developed by Charlie Becquet
                 except Exception as e:
                     print(f"DEBUG: Error updating VAP3 file: {e}")
     
-    # Keep all existing methods for UI creation and interaction
-    # (create_sample_tab, update_treeview, editing methods, etc.)
-    # These remain the same as in your current implementation
-    
     def create_sample_tab(self, parent_frame, sample_id, sample_index):
         """Create a tab for a single sample with data entry controls."""
         print(f"DEBUG: Creating sample tab for {sample_id}")
@@ -1435,8 +1425,8 @@ Developed by Charlie Becquet
         if self.test_name in ["User Test Simulation", "User Simulation Test"]:
             print(f"DEBUG: Setting up User Test Simulation columns with chronography")
             # User Test Simulation: 8 columns including chronography
-            columns = ["Chronography", "Puffs", "Before Weight", "After Weight", "Draw Pressure", "Resistance", "Smell", "Notes"]
-            column_widths = [100, 80, 100, 100, 100, 100, 80, 150]
+            columns = ["Chronography", "Puffs", "Before Weight", "After Weight", "Draw Pressure", "Smell", "Notes"]
+            column_widths = [100, 80, 100, 100, 100, 80, 150]
             self.tree_columns = len(columns)
     
             # Ensure chronography data exists
@@ -1451,8 +1441,8 @@ Developed by Charlie Becquet
             print(f"DEBUG: User Test Simulation columns: {columns}")
         else:
             # Standard tests: 12 columns without chronography  
-            columns = ["Puffs", "Before Weight", "After Weight", "Draw Pressure", "Resistance", "Smell", "Power", "Notes", "TPM", "C9", "C10", "C11"]
-            column_widths = [80, 100, 100, 100, 100, 80, 80, 150, 80, 80, 80, 80]
+            columns = ["Puffs", "Before Weight", "After Weight", "Draw Pressure", "Resistance", "Smell", "Power", "Notes", "TPM"]
+            column_widths = [80, 100, 100, 100, 100, 80, 80, 150, 80]
             self.tree_columns = len(columns)
             print(f"DEBUG: Standard test columns: {columns}")
 
@@ -1544,132 +1534,13 @@ Developed by Charlie Becquet
                     "",  # Resistance
                     self.data[sample_id]["smell"][i] if i < len(self.data[sample_id]["smell"]) else "",
                     "",  # Power
-                    self.data[sample_id]["notes"][i] if i < len(self.data[sample_id]["notes"]) else "",
-                    "",  # TPM
-                    "",  # C9
-                    "",  # C10
-                    ""   # C11
+                    self.data[sample_id]["notes"][i] if i < len(self.data[sample_id]["notes"]) else ""
                 ]
-        
+            print(values)
             tree.insert("", "end", values=values)
     
         print(f"DEBUG: Treeview updated for {sample_id} with {data_length} rows")
-    
-    def finish_edit(self, event=None):
-        """Save the current edit and move to the next cell if needed."""
-        if not self.editing or not hasattr(self, 'current_edit'):
-            return
 
-        value = self.current_edit["entry"].get()
-        tree = self.current_edit["tree"]
-        item = self.current_edit["item"]
-        column = self.current_edit["column"]
-        column_name = self.current_edit["column_name"]
-        row_idx = self.current_edit["row_idx"]
-        sample_id = self.current_edit["sample_id"]
-
-        # Convert value to appropriate type based on column
-        if column_name in ["puffs", "before_weight", "after_weight", "draw_pressure", "smell"]:
-            if value.strip():
-                try:
-                    if column_name == "puffs":
-                        converted_value = int(float(value.strip()))
-                    else:
-                        converted_value = float(value.strip())
-                    value = converted_value
-                except ValueError:
-                    pass  # Keep as string if conversion fails
-            else:
-                if column_name in ["before_weight", "after_weight", "draw_pressure", "smell"]:
-                    value = "" 
-                else:
-                    value = 0
-        elif column_name == "chronography":
-            # Keep chronography as string
-            value = str(value) if value else ""
-
-        # Update data storage
-        if row_idx < len(self.data[sample_id][column_name]):
-            old_value = self.data[sample_id][column_name][row_idx]
-            self.data[sample_id][column_name][row_idx] = value
-
-            # Only mark as changed if value actually changed
-            if old_value != value:
-                self.mark_unsaved_changes()
-
-                # AUTO-WEIGHT PROGRESSION: If after_weight was changed, update next row's before_weight
-                if column_name == "after_weight" and value != "" and value != 0:
-                    try:
-                        after_weight_value = float(value)
-                        next_row_idx = row_idx + 1
-                        if next_row_idx < len(self.data[sample_id]["before_weight"]):
-                            print(f"DEBUG: AUTO-WEIGHT PROGRESSION: Setting next row ({next_row_idx}) before_weight to {after_weight_value}")
-                            self.data[sample_id]["before_weight"][next_row_idx] = after_weight_value
-                            # Update the tree display for the next row
-                            next_item = tree.get_children()[next_row_idx] if next_row_idx < len(tree.get_children()) else None
-                            if next_item:
-                                next_values = list(tree.item(next_item, "values"))
-                                # Determine correct column index for before_weight based on test type
-                                if self.test_name in ["User Test Simulation", "User Simulation Test"]:
-                                    before_weight_col_idx = 2  # User Test Simulation: Chronography(0), Puffs(1), Before Weight(2)
-                                else:
-                                    before_weight_col_idx = 1  # Standard: Puffs(0), Before Weight(1)
-                                
-                                print(f"DEBUG: Updating tree display - column index {before_weight_col_idx} for before_weight")
-                                next_values[before_weight_col_idx] = str(after_weight_value)
-                                tree.item(next_item, values=next_values)
-                                print(f"DEBUG: Successfully updated next row before_weight display")
-                    except (ValueError, TypeError) as e:
-                        print(f"DEBUG: Error in AUTO-WEIGHT PROGRESSION: {e}")
-                        pass
-
-                # AUTO-PUFF PROGRESSION: If puffs was changed, update all subsequent rows
-                # BUT NOT for User Test Simulation tests
-                if column_name == "puffs" and value != "" and value != 0:
-                    # Skip auto-puff progression for User Test Simulation
-                    if self.test_name not in ["User Test Simulation", "User Simulation Test"]:
-                        try:
-                            new_puff_value = int(value)
-                            total_rows = len(self.data[sample_id]["puffs"])
-                            print(f"DEBUG: AUTO-PUFF PROGRESSION for non-User Test: updating {total_rows - row_idx - 1} subsequent rows")
-                            for subsequent_row_idx in range(row_idx + 1, total_rows):
-                                rows_ahead = subsequent_row_idx - row_idx
-                                expected_puff = new_puff_value + (rows_ahead * self.puff_interval)
-                                self.data[sample_id]["puffs"][subsequent_row_idx] = expected_puff
-                                # Update the tree display
-                                if subsequent_row_idx < len(tree.get_children()):
-                                    subsequent_item = tree.get_children()[subsequent_row_idx]
-                                    subsequent_values = list(tree.item(subsequent_item, "values"))
-                                    # Adjust column index based on test type
-                                    puff_col_idx = 1 if self.test_name == "User Test Simulation" else 0
-                                    subsequent_values[puff_col_idx] = str(expected_puff)
-                                    tree.item(subsequent_item, values=subsequent_values)
-                        except (ValueError, TypeError):
-                            pass
-                    else:
-                        print(f"DEBUG: AUTO-PUFF PROGRESSION disabled for User Test Simulation")
-
-        # Update the tree display
-        col_idx = int(column[1:]) - 1
-        values = list(tree.item(item, "values"))
-        values[col_idx] = str(value) if value != "" else ""
-        tree.item(item, values=values)
-
-        # Calculate TPM if weight OR puffs was changed
-        if column_name in ["before_weight", "after_weight", "puffs"]:
-            self.calculate_tpm(sample_id)
-            self.update_stats_panel()
-
-        # End the current edit BEFORE navigation
-        self.end_editing()
-
-        # Handle navigation keys
-        if event and event.keysym in ["Right", "Left"]:
-            if event.keysym == "Right":
-                self.handle_arrow_key(event, tree, sample_id, "right")
-            elif event.keysym == "Left":
-                self.handle_arrow_key(event, tree, sample_id, "left")
-    
     def refresh_main_gui_after_save(self):
         """Refresh the main GUI to show updated data after saving."""
         print("DEBUG: Starting main GUI refresh")
@@ -1951,7 +1822,7 @@ Developed by Charlie Becquet
                                 has_meaningful_data = True
                                 break
                         # Also check TPM for standard format
-                        if not has_meaningful_data and tmp_cell and tpm_cell.value is not None:
+                        if not has_meaningful_data and tpm_cell and tpm_cell.value is not None:
                             has_meaningful_data = True
 
                     # If no meaningful data, skip this row
@@ -2146,10 +2017,6 @@ Developed by Charlie Becquet
         
         print(f"DEBUG: DataCollectionWindow closed with result: {self.result}")
         return self.result
-
-    # Include all the remaining methods from your original implementation
-    # (I'm including the essential ones here, but you should merge all editing, 
-    # navigation, and UI methods from your current data_collection_window.py)
     
     def start_edit_on_typing(self, event, tree, sample_id):
         """Start editing if a printable character is typed while a cell is selected."""
@@ -2416,10 +2283,6 @@ Developed by Charlie Becquet
         self.tpm_canvas.draw()
     
         print(f"DEBUG: TPM plot updated for {sample_id} with autosizing")
-
-    # Add all remaining methods from your current implementation
-    # These include all the cell editing, navigation, and interaction methods
-    # For brevity, I'm not including them all here, but you should merge them from your current file
     
     def go_to_previous_sample(self):
         """Navigate to the previous sample tab."""
@@ -2457,6 +2320,133 @@ Developed by Charlie Becquet
     # ============================================================================
     # COMPLETE CELL EDITING AND NAVIGATION METHODS
     # ============================================================================
+
+    def finish_edit(self, event=None):
+        """Finalize editing of a cell, update data and UI, and optionally navigate."""
+        if not self.editing or not hasattr(self, 'current_edit'):
+            return
+
+        edit = self.current_edit
+        value = edit["entry"].get()
+        sample_id = edit["sample_id"]
+        tree = edit["tree"]
+        item = edit["item"]
+        column = edit["column"]
+        column_name = edit["column_name"]
+        row_idx = edit["row_idx"]
+
+        # Attempt to convert value
+        value = self.convert_cell_value(value, column_name)
+
+        # Update internal data if changed
+        if row_idx < len(self.data[sample_id][column_name]):
+            old_value = self.data[sample_id][column_name][row_idx]
+            if old_value != value:
+                self.data[sample_id][column_name][row_idx] = value
+                self.mark_unsaved_changes()
+
+                if column_name == "after_weight":
+                    self.auto_progress_weight(tree, sample_id, row_idx, value)
+                elif column_name == "puffs":
+                    self.auto_progress_puffs(tree, sample_id, row_idx, value)
+
+        # Update Treeview display
+        col_idx = int(column[1:]) - 1
+        values = list(tree.item(item, "values"))
+        values[col_idx] = str(value) if value != "" else ""
+        tree.item(item, values=values)
+
+        # TPM calculation if weights or puffs changed
+        if column_name in ["before_weight", "after_weight", "puffs"]:
+            self.calculate_tpm(sample_id)
+            self.update_stats_panel()
+
+        # Finish edit mode before navigating
+        self.end_editing()
+
+        # Optional keyboard navigation
+        if event and event.keysym in ["Right", "Left"]:
+            direction = "right" if event.keysym == "Right" else "left"
+            self.handle_arrow_key(event, tree, sample_id, direction)
+
+    def convert_cell_value(self, value, column_name):
+        """Convert user-entered value to appropriate type."""
+        value = value.strip()
+        if not value:
+            return "" if column_name != "puffs" else 0
+
+        try:
+            if column_name == "puffs":
+                return int(float(value))
+            elif column_name in ["before_weight", "after_weight", "draw_pressure", "smell"]:
+                return float(value)
+            elif column_name == "chronography":
+                return str(value)
+        except ValueError:
+            return value  # Keep as-is if conversion fails
+        return value
+
+    def auto_progress_weight(self, tree, sample_id, row_idx, value):
+        """Auto-fill the next row's before_weight with current after_weight."""
+        if value in ["", 0, None]:
+            return
+        try:
+            val = float(value)
+            next_row = row_idx + 1
+            if next_row < len(self.data[sample_id]["before_weight"]):
+                self.data[sample_id]["before_weight"][next_row] = val
+                if next_row < len(tree.get_children()):
+                    next_item = tree.get_children()[next_row]
+                    values = list(tree.item(next_item, "values"))
+                    col_idx = 2 if self.test_name in ["User Test Simulation", "User Simulation Test"] else 1
+                    values[col_idx] = str(val)
+                    tree.item(next_item, values=values)
+                    print(f"DEBUG: Auto-set Sample {sample_id} row {next_row} before_weight to {val}")
+        except (ValueError, TypeError):
+            print("DEBUG: Failed auto weight progression due to invalid value")
+
+    def auto_progress_puffs(self, tree, sample_id, row_idx, value):
+        """Auto-fill puffs for subsequent rows unless test is user-driven."""
+        if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+            print("DEBUG: Skipping auto-puff progression for user simulation test")
+            return
+
+        try:
+            start_val = int(value)
+            for i in range(row_idx + 1, len(self.data[sample_id]["puffs"])):
+                increment = (i - row_idx) * self.puff_interval
+                puff_val = start_val + increment
+                self.data[sample_id]["puffs"][i] = puff_val
+                if i < len(tree.get_children()):
+                    item = tree.get_children()[i]
+                    values = list(tree.item(item, "values"))
+                    puff_col = 1 if self.test_name == "User Test Simulation" else 0
+                    values[puff_col] = str(puff_val)
+                    tree.item(item, values=values)
+            print(f"DEBUG: Auto-puff progression applied from row {row_idx}")
+        except (ValueError, TypeError):
+            print("DEBUG: Error in auto-puff progression")
+
+    def handle_tab_in_edit(self, event):
+        self.finish_edit(event)
+        self.navigate_cell("right")
+        return "break"
+
+    def handle_return_in_edit(self, event):
+        self.finish_edit(event)
+        self.navigate_cell("down")
+        return "break"
+
+    def handle_arrow_in_edit(self, event):
+        entry = self.current_edit["entry"]
+        cursor = entry.index(tk.INSERT)
+
+        if (event.keysym == "Left" and cursor == 0) or \
+           (event.keysym == "Right" and cursor == len(entry.get())):
+            self.finish_edit(event)
+            self.navigate_cell("left" if event.keysym == "Left" else "right")
+            return "break"
+
     
     def edit_cell(self, tree, item, column, row_idx, sample_id, column_name):
         """Create an entry widget for editing a cell."""
@@ -2534,11 +2524,6 @@ Developed by Charlie Becquet
         )
 
     def on_tree_double_click(self, event, tree, sample_id):
-        """Handle double-click and cancel pending single-click."""
-        if self.single_click_after_id:
-            self.window.after_cancel(self.single_click_after_id)
-            self.single_click_after_id = None
-
         item = tree.identify("item", event.x, event.y)
         column = tree.identify("column", event.x, event.y)
         region = tree.identify("region", event.x, event.y)
@@ -2546,14 +2531,7 @@ Developed by Charlie Becquet
         if not item or not column or region != "cell":
             return
 
-        col_idx = int(column[1:])
-        if col_idx == 1:
-            print("DEBUG: Double-click on puffs column — not editable")
-            return
-
         row_idx = tree.index(item)
-        column_name = ["puffs", "before_weight", "after_weight", "draw_pressure", "smell", "notes"][col_idx - 1]
-        print(f"DEBUG: Double-click - editing item: {item}, column: {column}, row_idx: {row_idx}")
         self.edit_cell(tree, item, column, row_idx, sample_id, column_name)
 
     def _handle_single_click(self, event, tree, sample_id):
@@ -2589,7 +2567,7 @@ Developed by Charlie Becquet
             if col_idx < 6:
                 # Go to next column in the same row
                 next_column = f"#{col_idx + 1}"
-                column_name = ["puffs", "before_weight", "after_weight", "draw_pressure", "smell", "notes"][col_idx]
+                column_name = self.columns[col_idx]
                 self.edit_cell(tree, current_item, next_column, row_idx, sample_id, column_name)
             elif row_idx < len(items) - 1:
                 # Wrap to next row, first editable column
@@ -2597,6 +2575,14 @@ Developed by Charlie Becquet
                 next_column = "#2"
                 column_name = "before_weight"
                 self.edit_cell(tree, next_item, next_column, row_idx + 1, sample_id, column_name)
+
+        if direction == "left":
+            if col_idx > 0:
+                # Go to previous column in the same row
+                prev_column = f"#{col_idx - 1}"
+                column_name = self.columns[col_idx]
+                self.edit_cell(tree, current_item, prev_column, row_idx, sample_id, column_name)
+            
 
         return "break"
 
@@ -2646,7 +2632,7 @@ Developed by Charlie Becquet
                 item = tree.get_children()[0]
                 tree.selection_set(item)
                 tree.focus(item)
-                self.edit_cell(tree, item, "#1", 0, sample_id, "puffs")  # Start with puffs column
+                self.edit_cell(tree, item, "#1", 0, sample_id, 'puffs')  # Start with puffs column
             return "break"
         
         # Get the current column
@@ -2675,7 +2661,7 @@ Developed by Charlie Becquet
                 tree.see(next_item)
             
                 # Edit the first column (puffs - now editable)
-                self.edit_cell(tree, next_item, "#1", idx + 1, sample_id, "puffs")
+                self.edit_cell(tree, next_item, "#1", idx + 1, sample_id, 'puffs')
             else:
                 # At the last row, move to next sample
                 self.go_to_next_sample()
@@ -2771,30 +2757,17 @@ Developed by Charlie Becquet
             return "break"  # Stop event propagation
 
     def cancel_edit(self, event=None):
-        """Cancel the current edit without saving."""
-        print("DEBUG: Edit cancelled")
         self.end_editing()
-        return "break"  # Stop event propagation
+        return "break"
 
     def end_editing(self):
-        """Clean up editing widgets and state."""
         if not self.editing:
             return
-    
-        if hasattr(self, 'current_edit') and self.current_edit:
-            if "frame" in self.current_edit:
-                self.current_edit["frame"].destroy()
-            self.current_edit = None
-    
+        if self.current_edit and "frame" in self.current_edit:
+            self.current_edit["frame"].destroy()
+        self.current_edit = None
         self.editing = False
         self.hotkeys_enabled = True
-    
-        # Also remove the cell border frame if it exists
-        if hasattr(self, 'cell_border_frame') and self.cell_border_frame is not None:
-            self.cell_border_frame.destroy()
-            self.cell_border_frame = None
-        
-        print("DEBUG: Editing ended and cleanup completed")
 
     def highlight_cell(self, tree, item, column):
         """Highlight a specific cell instead of the entire row."""

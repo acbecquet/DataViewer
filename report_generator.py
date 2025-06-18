@@ -218,8 +218,7 @@ class ReportGenerator:
             print(f"Error writing Excel report for sheet '{sheet_name}': {e}")  
             traceback.print_exc()
 
-    def write_powerpoint_report_for_test(self, ppt_save_path: str, images_to_delete: list, sheet_name: str, 
-                                    processed_data, full_sample_data, plot_options: list) -> None:
+    def write_powerpoint_report_for_test(self, ppt_save_path: str, images_to_delete: list, sheet_name: str, processed_data, full_sample_data, plot_options: list) -> None:
         try:
             prs = Presentation()
             prs.slide_width = Inches(13.33)
@@ -469,6 +468,7 @@ class ReportGenerator:
                         os.remove(image_path)
                     except OSError as cleanup_error:
                         print(f"Error deleting image {image_path}: {cleanup_error}")
+
     def _update_ppt_progress(self, processed: int, total: int):
         """Update progress for PowerPoint phase (40% of total)"""
         base_progress = 60  # Excel phase already completed
@@ -517,7 +517,6 @@ class ReportGenerator:
                 pass
             except OSError as e:
                 print(f"Error deleting file {image_path}: {e}")
-
 
     def add_table_to_slide(self, slide, processed_data, table_width, is_plotting) -> bool:
         processed_data = processed_data.fillna(' ')
@@ -609,7 +608,6 @@ class ReportGenerator:
             top = start_top + row * (cell_height + vertical_margin) + y_offset
 
             slide.shapes.add_picture(img_path, left=left, top=top, width=display_width, height = display_height)
-
 
     def setup_image_slide(self, prs, slide, sheet_name):
         """Sets up the background, logo, and title for an image slide."""
