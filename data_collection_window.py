@@ -197,7 +197,7 @@ class DataCollectionWindow:
         self.double_click_threshold = 500  # milliseconds
         self.cell_border_frame = None # Initialize cell border frame
         self.single_click_after_id = None
-        self.columns = ["puffs", "before_weight", "after_weight", "draw_pressure", "smell", "notes"]
+        self.columns = ["puffs", "before_weight", "after_weight", "draw_pressure", "smell", "notes", "tpm"]
 
         # Data storage
         self.data = {}
@@ -1425,8 +1425,8 @@ Developed by Charlie Becquet
         if self.test_name in ["User Test Simulation", "User Simulation Test"]:
             print(f"DEBUG: Setting up User Test Simulation columns with chronography")
             # User Test Simulation: 8 columns including chronography
-            columns = ["Chronography", "Puffs", "Before Weight", "After Weight", "Draw Pressure", "Smell", "Notes"]
-            column_widths = [100, 80, 100, 100, 100, 80, 150]
+            columns = ["Chronography", "Puffs", "Before Weight", "After Weight", "Draw Pressure","Failure", "Notes", "TPM"]
+            column_widths = [100, 80, 100, 100, 100, 80, 150, 80]
             self.tree_columns = len(columns)
     
             # Ensure chronography data exists
@@ -1441,7 +1441,7 @@ Developed by Charlie Becquet
             print(f"DEBUG: User Test Simulation columns: {columns}")
         else:
             # Standard tests: 12 columns without chronography  
-            columns = ["Puffs", "Before Weight", "After Weight", "Draw Pressure", "Resistance", "Smell", "Power", "Notes", "TPM"]
+            columns = ["Puffs", "Before Weight", "After Weight", "Draw Pressure", "Resistance", "Smell", "Clog", "Notes", "TPM"]
             column_widths = [80, 100, 100, 100, 100, 80, 80, 150, 80]
             self.tree_columns = len(columns)
             print(f"DEBUG: Standard test columns: {columns}")
@@ -2039,13 +2039,13 @@ Developed by Charlie Becquet
 
         # Determine column name based on test type and column index
         if self.test_name in ["User Test Simulation", "User Simulation Test"]:
-            column_names = ["chronography", "puffs", "before_weight", "after_weight", "draw_pressure", "resistance", "smell", "notes"]
+            column_names = ["Chronography", "Puffs", "Before Weight", "After Weight", "Draw Pressure","Failure", "Notes", "TPM"]
             if col_idx >= len(column_names):
                 return
             column_name = column_names[col_idx]
             print(f"DEBUG: User Test Simulation - editing column {col_idx}: {column_name}")
         else:
-            column_names = ["puffs", "before_weight", "after_weight", "draw_pressure", "resistance", "smell", "power", "notes"]
+            column_names = ["Puffs", "Before Weight", "After Weight", "Draw Pressure", "Resistance", "Smell", "Clog", "Notes", "TPM"]
             if col_idx >= len(column_names):
                 return
             column_name = column_names[col_idx]
