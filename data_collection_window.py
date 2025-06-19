@@ -179,9 +179,15 @@ class DataCollectionWindow:
         self.window.geometry("1375x750")
         self.window.minsize(1250, 625)
     
-        # Keep window manageable but capture focus
-        self.window.focus_set()           # Give focus to this window
-        self.window.lift()                # Bring to front
+        # BRING WINDOW TO FRONT - ADD THESE LINES:
+        self.window.transient(self.root)  # Make it a child of the main window
+        self.window.grab_set()  # Make it modal and bring to front
+        self.window.lift()  # Bring to top of window stack
+        self.window.focus_force()  # Force focus to this window
+    
+        # Optional: Make it stay on top temporarily
+        self.window.attributes('-topmost', True)
+        self.window.after(100, lambda: self.window.attributes('-topmost', False)) 
 
         # Default puff interval
         self.puff_interval = 10  # Default to 10
@@ -2054,7 +2060,10 @@ Developed by Charlie Becquet
                  "cancel" if the user cancelled.
         """
         print("DEBUG: Showing DataCollectionWindow")
+        self.window.lift()
         self.window.focus_force()
+        self.window.grab_set()  # Ensure it maintains focus
+    
         self.window.wait_window()
         
         # Clean up auto-save timer
@@ -2067,88 +2076,146 @@ Developed by Charlie Becquet
     def create_tpm_stats_panel(self):
         """Create the enhanced TPM statistics panel with plot on the right side."""
         print("DEBUG: Creating enhanced TPM statistics panel")
-    
+
         # Clear existing widgets
         for widget in self.stats_frame.winfo_children():
             widget.destroy()
-    
+
         # Create scrollable frame for the stats panel
         canvas = tk.Canvas(self.stats_frame, bg='white')
         scrollbar = ttk.Scrollbar(self.stats_frame, orient="vertical", command=canvas.yview)
         scrollable_stats_frame = ttk.Frame(canvas)
-    
+
         scrollable_stats_frame.bind(
             "<Configure>",
             lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
         )
-    
+
         canvas.create_window((0, 0), window=scrollable_stats_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
-    
+
         # Pack scrollbar and canvas
         scrollbar.pack(side="right", fill="y")
         canvas.pack(side="left", fill="both", expand=True)
-    
-        # Create a title
+
+        # Create a title with minimal padding
         title_label = ttk.Label(scrollable_stats_frame, text="TPM Statistics", 
                                font=("Arial", 12, "bold"), style='TLabel')
-        title_label.pack(pady=(10, 20))
-    
-        # Create frame for current sample statistics only
+        title_label.pack(pady=(2, 5))  # Reduced from (10, 20)
+
+        # Create frame for current sample statistics - 1/3 of height
         stats_container = ttk.Frame(scrollable_stats_frame, style='TFrame')
-        stats_container.pack(fill="x", padx=10, pady=5)
-    
+        stats_container.pack(fill="x", padx=5, pady=2)  # Reduced padding
+
         # Initialize TPM labels dictionary
         self.tpm_labels = {}
-    
+
         # Create placeholder for current sample stats (will be updated in update_stats_panel)
         self.current_sample_stats_frame = ttk.Frame(stats_container, style='TFrame')
-        self.current_sample_stats_frame.pack(fill="x", pady=5)
-    
-        # Create frame for TPM plot with proper sizing
-        plot_frame = ttk.LabelFrame(scrollable_stats_frame, text="TPM (mg/puff)", style='TLabelframe')
-        plot_frame.pack(fill="both", expand=True, padx=2, pady=(1, 1))
+        self.current_sample_stats_frame.pack(fill="x", pady=2)  # Reduced padding
 
-        # Ensure plot frame expands properly
-        plot_frame.grid_rowconfigure(0, weight=1)
-        plot_frame.grid_columnconfigure(0, weight=1)
+        # Create frame for TPM plot - 2/3 of height with minimal padding
+        plot_frame = ttk.LabelFrame(scrollable_stats_frame, text="TPM Over Time", style='TLabelframe')
+        plot_frame.pack(fill="both", expand=True, padx=5, pady=(5, 2))  # Reduced from (20, 10)
     
+        # Add resize handling for the plot frame
+        plot_frame.bind('<Configure>', self._on_plot_frame_resize)
+    
+        # Store reference to plot_frame for resize handling
+        self.plot_frame = plot_frame
+
         # Create matplotlib figure for TPM plot with responsive sizing
         plt.style.use('default')  # Ensure we're using default style
-        self.tpm_figure = plt.Figure(figsize=(5, 4), dpi=80, facecolor='white')
+    
+        # Calculate initial size based on frame - will be updated on resize
+        initial_width = 4  # Fallback width in inches
+        initial_height = 3  # Fallback height in inches
+    
+        print(f"DEBUG: Creating TPM figure with initial size: {initial_width}x{initial_height}")
+    
+        self.tpm_figure = plt.Figure(figsize=(initial_width, initial_height), dpi=80, 
+                                    facecolor='white', tight_layout=True)
         self.tpm_ax = self.tpm_figure.add_subplot(111)
-    
-        # Create canvas with proper configuration
-        self.tpm_canvas = FigureCanvasTkAgg(self.tpm_figure, plot_frame)
-        self.tpm_canvas.get_tk_widget().pack(fill="both", expand=True)
 
-        def on_canvas_configure(event):
-            # Delay the resize to avoid too many rapid calls
-            if hasattr(self, '_resize_timer'):
-                self.window.after_cancel(self._resize_timer)
-            self._resize_timer = self.window.after(100, self.update_plot_size)
-
-        # Bind resize event
-        self.tpm_canvas.get_tk_widget().bind('<Configure>', self.on_canvas_resize)
+        # Create canvas with minimal padding and center it
+        canvas_frame = ttk.Frame(plot_frame)
+        canvas_frame.pack(fill="both", expand=True)
     
+        self.tpm_canvas = FigureCanvasTkAgg(self.tpm_figure, canvas_frame)
+        self.tpm_canvas.get_tk_widget().pack(fill="both", expand=True, padx=1, pady=1)  # Minimal padding
+
         # Configure the plot with tight layout
-        self.tpm_figure.tight_layout(pad=1.0)
-    
+        self.tpm_figure.tight_layout(pad=0.1)  # Much tighter layout
+
         # Initialize empty plot
-        self.tpm_ax.set_xlabel('Puffs')
-        self.tpm_ax.set_ylabel('TPM')
-        self.tpm_ax.set_title('TPM Over Time')
+        self.tpm_ax.set_xlabel('Puffs', fontsize=9)
+        self.tpm_ax.set_ylabel('TPM', fontsize=9)
+        self.tpm_ax.set_title('TPM Over Time', fontsize=10)
         self.tpm_ax.grid(True, alpha=0.3)
-    
+
         # Apply tight layout and draw
-        self.tpm_figure.tight_layout(pad=1.0)
+        self.tpm_figure.tight_layout(pad=0.1)
         self.tpm_canvas.draw()
-    
+
         # Update the statistics for the current sample
         self.update_stats_panel()
-    
+
         print("DEBUG: Enhanced TPM statistics panel created successfully")
-    
+
+    def _on_plot_frame_resize(self, event):
+        """Handle plot frame resize to maintain responsive plot sizing."""
+        # Only handle resize events for the plot_frame itself, not its children
+        if event.widget != self.plot_frame:
+            return
+        
+        try:
+            # Get current frame dimensions
+            frame_width = self.plot_frame.winfo_width()
+            frame_height = self.plot_frame.winfo_height()
+        
+            print(f"DEBUG: Plot frame resized to: {frame_width}x{frame_height}")
+        
+            # Skip if dimensions are too small or not ready
+            if frame_width <= 1 or frame_height <= 1:
+                print("DEBUG: Frame dimensions too small, skipping resize")
+                return
+            
+            # Calculate figure size in inches (accounting for minimal padding and DPI)
+            dpi = 80
+            padding_pixels = 4  # Minimal padding - reduced from 20
+        
+            # Use 2/3 of available height for plot (66.7%)
+            available_plot_height = frame_height * 0.95  # Use almost all available space
+        
+            # Calculate dimensions with minimal padding
+            new_width_inches = max(2.0, (frame_width - padding_pixels) / dpi)
+            new_height_inches = max(1.5, (available_plot_height - padding_pixels) / dpi)
+        
+            print(f"DEBUG: Calculated new figure size: {new_width_inches:.2f}x{new_height_inches:.2f} inches")
+        
+            # Only resize if the change is significant (avoid excessive redraws)
+            current_size = self.tpm_figure.get_size_inches()
+            width_diff = abs(current_size[0] - new_width_inches)
+            height_diff = abs(current_size[1] - new_height_inches)
+        
+            if width_diff > 0.1 or height_diff > 0.1:
+                print(f"DEBUG: Resizing figure from {current_size[0]:.2f}x{current_size[1]:.2f} to {new_width_inches:.2f}x{new_height_inches:.2f}")
+            
+                # Resize the figure
+                self.tpm_figure.set_size_inches(new_width_inches, new_height_inches)
+            
+                # Apply very tight layout and redraw
+                self.tpm_figure.tight_layout(pad=0.05)  # Very minimal padding
+                self.tpm_canvas.draw()
+            
+                print("DEBUG: Plot resizing completed successfully")
+            else:
+                print("DEBUG: Size change too small, skipping resize to avoid excessive redraws")
+            
+        except Exception as e:
+            print(f"DEBUG: Error during plot resize: {e}")
+
+
     def update_plot_size(self):
         """Update plot size to fit container."""
         if hasattr(self, 'tpm_canvas') and hasattr(self, 'tpm_figure'):
@@ -2177,7 +2244,7 @@ Developed by Charlie Becquet
     def update_stats_panel(self, event=None):
         """Update the TPM statistics panel to show only current sample with enhanced stats."""
         print("DEBUG: Updating enhanced TPM statistics panel")
-    
+
         # Get currently selected sample
         try:
             current_tab_index = self.notebook.index(self.notebook.select())
@@ -2186,44 +2253,48 @@ Developed by Charlie Becquet
         except:
             current_sample_id = "Sample 1"  # Default fallback
             current_tab_index = 0
-    
+
         # Clear current sample stats frame
         for widget in self.current_sample_stats_frame.winfo_children():
             widget.destroy()
-    
+
         # Get sample name
         sample_name = "Unknown Sample"
         if current_tab_index < len(self.header_data.get('samples', [])):
             sample_name = self.header_data['samples'][current_tab_index].get('id', f"Sample {current_tab_index + 1}")
-    
+
         # Calculate TPM values if needed
         self.calculate_tpm(current_sample_id)
-    
+
         # Get TPM values and data for current sample (filtering out None values)
         tpm_values = [v for v in self.data[current_sample_id]["tpm"] if v is not None]
-    
-        # Create sample header
+
+        # Create sample header with minimal padding
         sample_header = ttk.Label(self.current_sample_stats_frame, 
                                  text=f"{current_sample_id}: {sample_name}",
                                  font=("Arial", 11, "bold"), style='TLabel')
-        sample_header.pack(anchor="w", pady=(0, 10))
-    
-        # Add separator
-        ttk.Separator(self.current_sample_stats_frame, orient="horizontal").pack(fill="x", pady=5)
-    
-        # Create statistics grid
+        sample_header.pack(anchor="w", pady=(0, 2))  # Reduced from (0, 10)
+
+        # Add separator with minimal padding
+        ttk.Separator(self.current_sample_stats_frame, orient="horizontal").pack(fill="x", pady=1)  # Reduced from 5
+
+        # Create statistics grid with minimal padding
         stat_grid = ttk.Frame(self.current_sample_stats_frame, style='TFrame')
-        stat_grid.pack(fill="x", pady=10)
-    
+        stat_grid.pack(fill="x", pady=2)  # Reduced from 10
+
+        # Configure grid columns
+        stat_grid.columnconfigure(0, weight=1)
+        stat_grid.columnconfigure(1, weight=0)
+
         if tpm_values:
             # Calculate statistics
             avg_tpm = sum(tpm_values) / len(tpm_values)
             latest_tpm = tpm_values[-1]
-        
+    
             # Calculate standard deviation of last 5 sessions (or all if < 5)
             recent_tpm_values = tpm_values[-5:] if len(tpm_values) >= 5 else tpm_values
             std_dev = statistics.stdev(recent_tpm_values) if len(recent_tpm_values) > 1 else 0.0
-        
+    
             # Find current puff count (furthest down row with after_weight data)
             current_puff_count = 0
             for i in range(len(self.data[current_sample_id]["after_weight"]) - 1, -1, -1):
@@ -2231,7 +2302,7 @@ Developed by Charlie Becquet
                     str(self.data[current_sample_id]["after_weight"][i]).strip()):
                     current_puff_count = self.data[current_sample_id]["puffs"][i] if i < len(self.data[current_sample_id]["puffs"]) else 0
                     break
-        
+    
             self.data[current_sample_id]["avg_tpm"] = avg_tpm
         else:
             avg_tpm = 0.0
@@ -2239,31 +2310,31 @@ Developed by Charlie Becquet
             std_dev = 0.0
             current_puff_count = 0
             recent_tpm_values = []
-    
-        # Row 1: Average TPM
-        ttk.Label(stat_grid, text="Average TPM:", style='TLabel').grid(row=0, column=0, sticky="w", pady=2)
+
+        # Row 1: Average TPM - minimal padding
+        ttk.Label(stat_grid, text="Average TPM:", style='TLabel').grid(row=0, column=0, sticky="w", pady=1)  # Reduced from 2
         avg_tpm_label = ttk.Label(stat_grid, text=f"{avg_tpm:.6f}" if tpm_values else "N/A", 
                                  font=("Arial", 10, "bold"), style='TLabel')
-        avg_tpm_label.grid(row=0, column=1, sticky="e", pady=2)
-    
+        avg_tpm_label.grid(row=0, column=1, sticky="e", pady=1)
+
         # Row 2: Latest TPM
-        ttk.Label(stat_grid, text="Latest TPM:", style='TLabel').grid(row=1, column=0, sticky="w", pady=2)
+        ttk.Label(stat_grid, text="Latest TPM:", style='TLabel').grid(row=1, column=0, sticky="w", pady=1)
         latest_tpm_label = ttk.Label(stat_grid, text=f"{latest_tpm:.6f}" if tpm_values else "N/A", 
                                     font=("Arial", 10), style='TLabel')
-        latest_tpm_label.grid(row=1, column=1, sticky="e", pady=2)
-    
+        latest_tpm_label.grid(row=1, column=1, sticky="e", pady=1)
+
         # Row 3: Standard Deviation (last 5 sessions)
         sessions_text = f"(last {len(recent_tpm_values)} sessions)" if tpm_values else ""
-        ttk.Label(stat_grid, text=f"Std Dev {sessions_text}:", style='TLabel').grid(row=2, column=0, sticky="w", pady=2)
+        ttk.Label(stat_grid, text=f"Std Dev {sessions_text}:", style='TLabel').grid(row=2, column=0, sticky="w", pady=1)
         std_dev_label = ttk.Label(stat_grid, text=f"{std_dev:.6f}" if tpm_values else "N/A", 
                                  font=("Arial", 10), style='TLabel')
-        std_dev_label.grid(row=2, column=1, sticky="e", pady=2)
-    
+        std_dev_label.grid(row=2, column=1, sticky="e", pady=1)
+
         # Row 4: Current Puff Count
-        ttk.Label(stat_grid, text="Current Puffs:", style='TLabel').grid(row=3, column=0, sticky="w", pady=2)
+        ttk.Label(stat_grid, text="Current Puffs:", style='TLabel').grid(row=3, column=0, sticky="w", pady=1)
         puff_count_label = ttk.Label(stat_grid, text=str(current_puff_count), style='TLabel')
-        puff_count_label.grid(row=3, column=1, sticky="e", pady=2)
-    
+        puff_count_label.grid(row=3, column=1, sticky="e", pady=1)
+
         # Store references to labels for current sample
         self.tpm_labels[current_sample_id] = {
             "avg_tpm": avg_tpm_label,
@@ -2271,10 +2342,10 @@ Developed by Charlie Becquet
             "std_dev": std_dev_label,
             "puff_count": puff_count_label
         }
-    
+
         # Update TPM plot for current sample
         self.update_tpm_plot(current_sample_id)
-    
+
         print(f"DEBUG: Enhanced stats updated for {current_sample_id}")
 
     def update_tpm_plot(self, sample_id):
