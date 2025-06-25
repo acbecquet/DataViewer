@@ -698,8 +698,9 @@ class TestingGUI:
             process_function = processing.get_processing_function(sheet_name)
             processed_data, _, full_sample_data = process_function(data)
             print(f"DEBUG: Processing complete - processed_data: {processed_data.shape}, full_sample_data: {full_sample_data.shape}")
+            self.current_sheet_data = processed_data
             #SPECIAL HANDLING FOR USER TEST SIMULATION:
-            #SPECIAL HANDLING FOR USER TEST SIMULATION:
+            
             if sheet_name in ["User Test Simulation", "User Simulation Test"]:
                 print("DEBUG: Detected User Test Simulation - using 8 columns per sample")
                 self.plot_options = self.user_test_simulation_plot_options
@@ -928,8 +929,7 @@ class TestingGUI:
 
         # Determine the number of columns per sample
         num_columns = getattr(self, 'num_columns_per_sample', 12)
-    
-        print(f"DEBUG: Displaying plot with {num_columns} columns per sample")
+
 
         # Generate and embed the plot - force it to respect container width
         self.plot_manager.plot_all_samples(self.plot_frame, full_sample_data, num_columns)
@@ -1056,6 +1056,7 @@ class TestingGUI:
 
         sheet_data = self.filtered_sheets[current_sheet]["data"]
         valid_plot_options = get_valid_plot_options(self.plot_options, sheet_data)
+        
 
         if valid_plot_options:
             # Update the plot type dropdown with available plot options

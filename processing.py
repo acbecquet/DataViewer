@@ -171,118 +171,143 @@ def get_y_label_for_plot_type(plot_type):
     }
     return y_label_mapping.get(plot_type, 'TPM (mg/puff)')  # Default to TPM
 
-def plot_user_test_simulation_samples(full_sample_data: pd.DataFrame, num_columns_per_sample: int, plot_type: str) -> Tuple[plt.Figure, List[str]]:
+def plot_user_test_simulation_samples(full_sample_data: pd.DataFrame, num_columns_per_sample: int, plot_type: str, sample_names: List[str] = None) -> Tuple[plt.Figure, List[str]]:
     """
     Generate split plots for User Test Simulation.
     Creates two separate plots: one for puffs 0-50 (first 5 rows) and one for remaining puffs (9th row onwards).
+    
+    Args:
+        full_sample_data (pd.DataFrame): DataFrame containing sample data.
+        num_columns_per_sample (int): Number of columns per sample.
+        plot_type (str): Type of plot to generate.
+        sample_names (List[str], optional): List of sample names to use in legend.
     """
-    print(f"DEBUG: plot_user_test_simulation_samples called with plot_type: {plot_type}")
+    print(f"DEBUG: plot_user_test_simulation_samples called with data shape: {full_sample_data.shape}")
+    print(f"DEBUG: Provided sample_names: {sample_names}")
+    print(f"DEBUG: Full sample data first few rows:")
+    print(full_sample_data.iloc[:5, :15].to_string())
     
     num_samples = full_sample_data.shape[1] // num_columns_per_sample
+    print(f"DEBUG: User Test Simulation - Number of samples: {num_samples}")
+    
+    # Replace 0 with NaN for cleaner plotting
     full_sample_data = full_sample_data.replace(0, np.nan)
     
-    # Create subplots - 1 row, 2 columns for the two phases
+    # Create subplots for split plotting
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
-    sample_names = []
     
-    # Store line references for checkbox functionality
-    phase1_lines = []  # Lines for Phase 1 plot
-    phase2_lines = []  # Lines for Phase 2 plot
-
-    if plot_type == "TPM (Bar)":
-        # For bar charts, we'll create separate bar charts for each phase
-        sample_names = plot_user_test_simulation_bar_chart(ax1, ax2, full_sample_data, num_samples, num_columns_per_sample)
-    else:
-        y_max = 0
+    extracted_sample_names = []
+    phase1_lines = []
+    phase2_lines = []
+    y_max = 0
+    
+    for i in range(num_samples):
+        start_col = i * num_columns_per_sample
+        sample_data = full_sample_data.iloc[:, start_col:start_col + num_columns_per_sample]
         
-        for i in range(num_samples):
-            start_col = i * num_columns_per_sample
-            sample_data = full_sample_data.iloc[:, start_col:start_col + num_columns_per_sample]
-
-            # For User Test Simulation, puffs are in column 1 instead of 0
-            x_data = sample_data.iloc[3:, 1].dropna()  # Column 1 for puffs
-            y_data = get_y_data_for_user_test_simulation_plot_type(sample_data, plot_type)
-            y_data = pd.to_numeric(y_data, errors='coerce').dropna()
-
-            common_index = x_data.index.intersection(y_data.index)
-            x_data = x_data.loc[common_index]
-            y_data = y_data.loc[common_index]
-
-            if not x_data.empty and not y_data.empty:
-                # Get sample name from the extracted data
-                sample_name = f"Sample {i+1}"
-                if sample_data.shape[0] > 0 and sample_data.shape[1] > 5:
-                    sample_id_value = sample_data.iloc[0, 5]
-                    if sample_id_value and str(sample_id_value).strip() and str(sample_id_value).strip().lower() != 'nan':
-                        sample_name = str(sample_id_value).strip()
-                
-                sample_names.append(sample_name)
-                
-                # Split data into two phases
-                data_start_index = 3  # Data starts at row 3
-                
-                # Phase 1: First 5 data rows (puffs 0-50)
-                phase1_end_index = data_start_index + 5  # First 5 data rows
-                phase1_mask = x_data.index < phase1_end_index
-                phase1_x = x_data[phase1_mask]
-                phase1_y = y_data[phase1_mask]
-                
-                # Phase 2: From 9th data row onwards (extended puffs)
-                phase2_start_index = data_start_index + 8  # 9th data row (0-indexed: 8th)
-                phase2_mask = x_data.index >= phase2_start_index
-                phase2_x = x_data[phase2_mask]
-                phase2_y = y_data[phase2_mask]
-                
-                # Plot Phase 1 (0-50 puffs) and store line reference
-                if not phase1_x.empty and not phase1_y.empty:
-                    line1 = ax1.plot(phase1_x, phase1_y, marker='o', label=sample_name)[0]
-                    phase1_lines.append(line1)
-                    y_max = max(y_max, phase1_y.max())
-                else:
-                    # Add placeholder line for consistency
-                    line1 = ax1.plot([], [], marker='o', label=sample_name)[0]
-                    phase1_lines.append(line1)
-                
-                # Plot Phase 2 (remaining puffs) and store line reference
-                if not phase2_x.empty and not phase2_y.empty:
-                    line2 = ax2.plot(phase2_x, phase2_y, marker='o', label=sample_name)[0]
-                    phase2_lines.append(line2)
-                    y_max = max(y_max, phase2_y.max())
-                else:
-                    # Add placeholder line for consistency
-                    line2 = ax2.plot([], [], marker='o', label=sample_name)[0]
-                    phase2_lines.append(line2)
-
-        # Configure Phase 1 plot
-        ax1.set_xlabel('Puffs')
-        ax1.set_ylabel(get_y_label_for_plot_type(plot_type))
-        ax1.set_title(f'{plot_type} - Phase 1 (Puffs 0-50)')
-        ax1.legend(loc='upper right')
-        ax1.set_xlim(0, 60)  # Slightly wider than 50 for better visualization
+        print(f"DEBUG: Processing sample {i+1} columns {start_col} to {start_col + num_columns_per_sample - 1}")
         
-        # Configure Phase 2 plot  
-        ax2.set_xlabel('Puffs')
-        ax2.set_ylabel(get_y_label_for_plot_type(plot_type))
-        ax2.set_title(f'{plot_type} - Phase 2 (Extended Puffs)')
-        ax2.legend(loc='upper right')
-
-        # Set consistent y-axis limits
-        if y_max > 9 and y_max <= 50:
-            ax1.set_ylim(0, y_max)
-            ax2.set_ylim(0, y_max)
+        # Extract puffs data (column index 1 in User Test Simulation)
+        x_data = pd.to_numeric(sample_data.iloc[3:, 1], errors='coerce').dropna()
+        print(f"DEBUG: Sample {i+1} puffs data length: {len(x_data)}, values: {x_data.head().tolist()}")
+        
+        # Extract y-data based on plot type
+        y_data = get_y_data_for_user_test_simulation_plot_type(sample_data, plot_type)
+        y_data = pd.to_numeric(y_data, errors='coerce').dropna()
+        print(f"DEBUG: Sample {i+1} y_data length: {len(y_data)}, values: {y_data.head().tolist()}")
+        
+        # Ensure x and y data have common indices
+        common_index = x_data.index.intersection(y_data.index)
+        if common_index.empty:
+            print(f"DEBUG: Sample {i+1} SKIPPED - no common data points")
+            continue
+            
+        x_data = x_data.loc[common_index]
+        y_data = y_data.loc[common_index]
+        
+        # FIXED: Use provided sample names if available, otherwise use default
+        if sample_names and i < len(sample_names):
+            sample_name = sample_names[i]
+            print(f"DEBUG: Using provided sample name: '{sample_name}'")
         else:
-            ax1.set_ylim(0, 9)
-            ax2.set_ylim(0, 9)
+            sample_name = f"Sample {i+1}"
+            print(f"DEBUG: Using default sample name: '{sample_name}'")
+            
+        extracted_sample_names.append(sample_name)
+        
+        # Split data into two phases
+        data_start_index = 3  # Data starts at row 3
+        
+        # Phase 1: First 5 data rows (puffs 0-50)
+        phase1_end_index = data_start_index + 5  # First 5 data rows
+        phase1_mask = x_data.index < phase1_end_index
+        phase1_x = x_data[phase1_mask]
+        phase1_y = y_data[phase1_mask]
+        
+        # Phase 2: From 9th data row onwards (extended puffs)
+        phase2_start_index = data_start_index + 8  # 9th data row (0-indexed: 8th)
+        phase2_mask = x_data.index >= phase2_start_index
+        phase2_x = x_data[phase2_mask]
+        phase2_y = y_data[phase2_mask]
+        
+        print(f"DEBUG: Sample {i+1} Phase 1 data points: {len(phase1_x)}, Phase 2 data points: {len(phase2_x)}")
+        
+        # Plot Phase 1 (0-50 puffs) and store line reference
+        if not phase1_x.empty and not phase1_y.empty:
+            line1 = ax1.plot(phase1_x, phase1_y, marker='o', label=sample_name)[0]
+            phase1_lines.append(line1)
+            y_max = max(y_max, phase1_y.max())
+            print(f"DEBUG: Plotted Phase 1 for {sample_name} with {len(phase1_x)} points")
+        else:
+            # Add placeholder line for consistency
+            line1 = ax1.plot([], [], marker='o', label=sample_name)[0]
+            phase1_lines.append(line1)
+            print(f"DEBUG: Added placeholder Phase 1 line for {sample_name}")
+        
+        # Plot Phase 2 (remaining puffs) and store line reference
+        if not phase2_x.empty and not phase2_y.empty:
+            line2 = ax2.plot(phase2_x, phase2_y, marker='o', label=sample_name)[0]
+            phase2_lines.append(line2)
+            y_max = max(y_max, phase2_y.max())
+            print(f"DEBUG: Plotted Phase 2 for {sample_name} with {len(phase2_x)} points")
+        else:
+            # Add placeholder line for consistency
+            line2 = ax2.plot([], [], marker='o', label=sample_name)[0]
+            phase2_lines.append(line2)
+            print(f"DEBUG: Added placeholder Phase 2 line for {sample_name}")
+
+    print(f"DEBUG: Final sample names for legend: {extracted_sample_names}")
+
+    # Configure Phase 1 plot
+    ax1.set_xlabel('Puffs')
+    ax1.set_ylabel(get_y_label_for_plot_type(plot_type))
+    ax1.set_title(f'{plot_type} - Phase 1 (Puffs 0-50)')
+    ax1.legend(loc='upper right')
+    ax1.set_xlim(0, 60)  # Slightly wider than 50 for better visualization
+    
+    # Configure Phase 2 plot  
+    ax2.set_xlabel('Puffs')
+    ax2.set_ylabel(get_y_label_for_plot_type(plot_type))
+    ax2.set_title(f'{plot_type} - Phase 2 (Extended Puffs)')
+    ax2.legend(loc='upper right')
+
+    # Set consistent y-axis limits
+    if y_max > 9 and y_max <= 50:
+        ax1.set_ylim(0, y_max)
+        ax2.set_ylim(0, y_max)
+    else:
+        ax1.set_ylim(0, 9)
+        ax2.set_ylim(0, 9)
 
     plt.tight_layout()
     
     # Store both sets of lines for checkbox functionality
-    # This is a special case - we need to store both phase lines
     fig.phase1_lines = phase1_lines
     fig.phase2_lines = phase2_lines
     fig.is_split_plot = True
     
-    return fig, sample_names
+    print(f"DEBUG: Successfully created User Test Simulation split plot with {len(extracted_sample_names)} samples")
+    return fig, extracted_sample_names
 
 def get_y_data_for_user_test_simulation_plot_type(sample_data, plot_type):
     """
@@ -383,91 +408,159 @@ def get_y_data_for_user_test_simulation_plot_type(sample_data, plot_type):
         # Default to TPM for any other plot type
         return get_y_data_for_user_test_simulation_plot_type(sample_data, "TPM")
 
-def plot_user_test_simulation_bar_chart(ax1, ax2, full_sample_data, num_samples, num_columns_per_sample):
+def plot_user_test_simulation_bar_chart(ax1, ax2, full_sample_data, num_samples, num_columns_per_sample, sample_names=None):
     """
-    Generate split bar charts for User Test Simulation average TPM.
+    Generate split bar charts for User Test Simulation average TPM with error bars.
+    Creates two bar charts: Phase 1 (0-50 puffs) and Phase 2 (extended puffs).
+    Each bar shows average TPM with standard deviation as error bars.
     """
+    print(f"DEBUG: plot_user_test_simulation_bar_chart called with {num_samples} samples")
+    
     phase1_averages = []
+    phase1_std_devs = []
     phase2_averages = []
+    phase2_std_devs = []
     labels = []
-    sample_names = []
+    extracted_sample_names = []
 
     for i in range(num_samples):
         start_col = i * num_columns_per_sample
         end_col = start_col + num_columns_per_sample
         sample_data = full_sample_data.iloc[:, start_col:end_col]
 
-        if pd.isna(sample_data.iloc[3, 1]):  # Check puffs column (column 1)
+        print(f"DEBUG: Processing sample {i+1} for bar chart, columns {start_col} to {end_col-1}")
+
+        # Check if sample has valid data (check puffs column - column 1 for User Test Simulation)
+        if sample_data.shape[0] <= 3 or pd.isna(sample_data.iloc[3, 1]):
+            print(f"DEBUG: Sample {i+1} has no valid data, skipping")
             continue
 
-        tpm_data = sample_data.iloc[3:, 7].dropna()  # TPM column (column 7 for 8-column layout)
+        # Calculate TPM values using the same method as the line plots
+        tpm_data = get_y_data_for_user_test_simulation_plot_type(sample_data, "TPM")
+        tpm_numeric = pd.to_numeric(tpm_data, errors='coerce').dropna()
         
-        # Split TPM data into phases
-        # Phase 1: First 5 data points
-        phase1_tpm = tpm_data.iloc[:5] if len(tpm_data) >= 5 else tpm_data
-        # Phase 2: From 9th data point onwards (index 8+)
-        phase2_tpm = tpm_data.iloc[8:] if len(tpm_data) > 8 else pd.Series(dtype=float)
+        print(f"DEBUG: Sample {i+1} TPM data length: {len(tpm_numeric)}, values: {tpm_numeric.head().tolist()}")
         
+        if tpm_numeric.empty:
+            print(f"DEBUG: Sample {i+1} has no valid TPM data, skipping")
+            continue
+        
+        # Split TPM data into phases based on the same logic as line plots
+        # Phase 1: First 5 data points (corresponding to 0-50 puffs)
+        phase1_tpm = tpm_numeric.iloc[:5] if len(tpm_numeric) >= 5 else tpm_numeric
+        # Phase 2: From 9th data point onwards (index 8+, corresponding to extended puffs)
+        phase2_tpm = tpm_numeric.iloc[8:] if len(tpm_numeric) > 8 else pd.Series(dtype=float)
+        
+        # Calculate averages and standard deviations
         phase1_avg = phase1_tpm.mean() if not phase1_tpm.empty else 0
+        phase1_std = phase1_tpm.std() if len(phase1_tpm) > 1 else 0
         phase2_avg = phase2_tpm.mean() if not phase2_tpm.empty else 0
+        phase2_std = phase2_tpm.std() if len(phase2_tpm) > 1 else 0
         
         phase1_averages.append(phase1_avg)
+        phase1_std_devs.append(phase1_std)
         phase2_averages.append(phase2_avg)
+        phase2_std_devs.append(phase2_std)
 
-        # Get sample name
-        sample_name = f"Sample {i+1}"
-        if sample_data.shape[0] > 0 and sample_data.shape[1] > 5:
-            sample_id_value = sample_data.iloc[0, 5]
-            if sample_id_value and str(sample_id_value).strip() and str(sample_id_value).strip().lower() != 'nan':
-                sample_name = str(sample_id_value).strip()
+        # Get sample name - use provided sample_names if available, otherwise extract from data
+        if sample_names and i < len(sample_names):
+            sample_name = sample_names[i]
+            print(f"DEBUG: Using provided sample name: '{sample_name}'")
+        else:
+            # Extract sample name from the data (same method as line plots)
+            sample_name = f"Sample {i+1}"
+            try:
+                # For User Test Simulation, sample names are in row 0, column F (5) of each sample block
+                sample_name_col_index = 5 + (i * num_columns_per_sample)
+                if sample_name_col_index < full_sample_data.shape[1]:
+                    sample_name_value = full_sample_data.iloc[0, sample_name_col_index]
+                    if sample_name_value and str(sample_name_value).strip() and str(sample_name_value).strip().lower() != 'nan':
+                        sample_name = str(sample_name_value).strip()
+                        print(f"DEBUG: Extracted sample name from data: '{sample_name}'")
+            except Exception as e:
+                print(f"DEBUG: Error extracting sample name for sample {i+1}: {e}")
         
-        sample_names.append(sample_name)
+        extracted_sample_names.append(sample_name)
         wrapped_name = wrap_text(text=sample_name, max_width=10)
         labels.append(wrapped_name)
+        
+        print(f"DEBUG: Sample {i+1} - Phase 1: avg={phase1_avg:.3f}, std={phase1_std:.3f}, Phase 2: avg={phase2_avg:.3f}, std={phase2_std:.3f}")
+
+    if not phase1_averages:
+        print("DEBUG: No valid samples found for bar chart")
+        return []
 
     # Create colormaps for unique colors
     num_bars = len(phase1_averages)
-    colors = cm.get_cmap('tab10', num_bars)(np.linspace(0, 1, num_bars))
+    colors = plt.cm.get_cmap('tab10', num_bars)(np.linspace(0, 1, num_bars))
 
-    # Plot Phase 1 bar chart
-    ax1.bar(labels, phase1_averages, color=colors)
+    # Plot Phase 1 bar chart with error bars
+    bars1 = ax1.bar(labels, phase1_averages, yerr=phase1_std_devs, 
+                     color=colors, capsize=5, error_kw={'ewidth': 2, 'capthick': 2})
     ax1.set_xlabel('Samples')
     ax1.set_ylabel('Average TPM (mg/puff)')
     ax1.set_title('Average TPM - Phase 1 (Puffs 0-50)')
-    ax1.tick_params(axis='x', labelsize=8)
+    ax1.tick_params(axis='x', labelsize=8, rotation=45)
+    
+    # Set y-axis to start from 0 and add some padding
+    ax1.set_ylim(0, max(phase1_averages) * 1.2 if phase1_averages else 1)
 
-    # Plot Phase 2 bar chart
-    ax2.bar(labels, phase2_averages, color=colors)
+    # Plot Phase 2 bar chart with error bars
+    bars2 = ax2.bar(labels, phase2_averages, yerr=phase2_std_devs, 
+                     color=colors, capsize=5, error_kw={'ewidth': 2, 'capthick': 2})
     ax2.set_xlabel('Samples')
     ax2.set_ylabel('Average TPM (mg/puff)')
     ax2.set_title('Average TPM - Phase 2 (Extended Puffs)')
-    ax2.tick_params(axis='x', labelsize=8)
+    ax2.tick_params(axis='x', labelsize=8, rotation=45)
+    
+    # Set y-axis to start from 0 and add some padding
+    ax2.set_ylim(0, max(phase2_averages) * 1.2 if phase2_averages else 1)
 
-    return sample_names
+    print(f"DEBUG: Created User Test Simulation bar charts with {len(extracted_sample_names)} samples")
+    return extracted_sample_names
 
-def plot_all_samples(full_sample_data: pd.DataFrame, num_columns_per_sample: int, plot_type: str) -> Tuple[plt.Figure, List[str]]:
-    """Generate the plot for all samples and return the figure."""
+def plot_all_samples(full_sample_data: pd.DataFrame, plot_type: str, num_columns_per_sample: int = 12, sample_names: List[str] = None) -> Tuple[plt.Figure, List[str]]:
+    """
+    Generate plots for all samples in the provided data.
+
+    Args:
+        full_sample_data (pd.DataFrame): DataFrame containing sample data.
+        plot_type (str): Type of plot to generate.
+        num_columns_per_sample (int): Number of columns per sample.
+        sample_names (List[str], optional): List of sample names to use in legend.
+
+    Returns:
+        tuple: (matplotlib.figure.Figure, list of sample names)
+    """
     # ADD THESE DEBUG LINES:
     print(f"DEBUG: plot_all_samples - full_sample_data shape: {full_sample_data.shape}")
-    print(f"DEBUG: plot_all_samples - full_sample_data columns: {full_sample_data.columns.tolist()}")
-    print(f"DEBUG: plot_all_samples - full_sample_data contents:")
-    print(full_sample_data.to_string())
+    print(f"DEBUG: plot_all_samples - provided sample_names: {sample_names}")
     print(f"DEBUG: plot_all_samples - first 5 rows, first 15 columns:")
     print(full_sample_data.iloc[:5, :15].to_string())
     print("=" * 80)
+
+    # ENSURE num_columns_per_sample is an integer
+    try:
+        num_columns_per_sample = int(num_columns_per_sample)
+        print(f"DEBUG:   num_columns_per_sample after int conversion: {num_columns_per_sample}")
+    except (ValueError, TypeError) as e:
+        print(f"ERROR: Could not convert num_columns_per_sample to int: {e}")
+        raise ValueError(f"num_columns_per_sample must be convertible to int, got: {num_columns_per_sample} (type: {type(num_columns_per_sample)})")
+    
+    
     # Check if this is User Test Simulation (8 columns per sample)
     if num_columns_per_sample == 8:
         print("DEBUG: Detected User Test Simulation - using split plotting")
-        return plot_user_test_simulation_samples(full_sample_data, num_columns_per_sample, plot_type)
+        return plot_user_test_simulation_samples(full_sample_data, num_columns_per_sample, plot_type, sample_names)
 
     # Original logic for standard tests (12 columns per sample)
     num_samples = full_sample_data.shape[1] // num_columns_per_sample
     full_sample_data = full_sample_data.replace(0, np.nan)
     fig, ax = plt.subplots(figsize=(8, 6))
-    sample_names = []
+    extracted_sample_names = []
 
     if plot_type == "TPM (Bar)":
-        sample_names = plot_tpm_bar_chart(ax, full_sample_data, num_samples, num_columns_per_sample)
+        extracted_sample_names = plot_tpm_bar_chart(ax, full_sample_data, num_samples, num_columns_per_sample, sample_names)
     else:
         y_max = 0
         for i in range(num_samples):
@@ -495,10 +588,16 @@ def plot_all_samples(full_sample_data: pd.DataFrame, num_columns_per_sample: int
             print(f"DEBUG: Sample {i+1} final x_data length: {len(x_data)}, y_data length: {len(y_data)}")
 
             if not x_data.empty and not y_data.empty:
-                sample_name = sample_data.columns[5]
-                print(f"DEBUG: Sample {i+1} plotting with sample_name: {sample_name}")
+                # Use provided sample name if available, otherwise extract from data
+                if sample_names and i < len(sample_names):
+                    sample_name = sample_names[i]
+                    print(f"DEBUG: Using provided sample name: '{sample_name}'")
+                else:
+                    sample_name = sample_data.columns[5]
+                    print(f"DEBUG: Using extracted sample name: '{sample_name}'")
+                
                 ax.plot(x_data, y_data, marker='o', label=sample_name)
-                sample_names.append(sample_name)
+                extracted_sample_names.append(sample_name)
                 y_max = max(y_max, y_data.max())
             else:
                 print(f"DEBUG: Sample {i+1} SKIPPED - x_data empty: {x_data.empty}, y_data empty: {y_data.empty}")
@@ -513,7 +612,7 @@ def plot_all_samples(full_sample_data: pd.DataFrame, num_columns_per_sample: int
         else:
             ax.set_ylim(0, 9)
 
-    return fig, sample_names
+    return fig, extracted_sample_names
 
 def plot_tpm_bar_chart(ax, full_sample_data, num_samples, num_columns_per_sample):
     """

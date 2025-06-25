@@ -190,21 +190,50 @@ class ReportGenerator:
         if numeric_data.isna().all(axis=0).all():
             print(f"No numeric data available for plotting in sheet '{sheet_name}'.")
             return
+        sample_names = None
+        if hasattr(self, 'header_data') and self.header_data and 'samples' in self.header_data:
+            sample_names = [sample['id'] for sample in self.header_data['samples']]
+            print(f"DEBUG: Extracted sample names from header_data: {sample_names}")
 
+        # Determine if this is User Test Simulation
+        is_user_test_simulation = sheet_name in ["User Test Simulation", "User Simulation Test"]
+        num_columns_per_sample = 8 if is_user_test_simulation else 12
+    
         for i, plot_option in enumerate(valid_plot_options):
             plot_image_path = f"{sheet_name}_{plot_option}_plot.png"
             try:
-                processing.plot_all_samples(numeric_data, 12, plot_option)
-                plt.savefig(plot_image_path)
+                # FIXED: Correct argument order
+                fig, sample_names_returned = processing.plot_all_samples(numeric_data, plot_option, num_columns_per_sample, sample_names)
+            
+                if is_user_test_simulation and hasattr(fig, 'is_split_plot') and fig.is_split_plot:
+                    # For User Test Simulation split plots, save with adjusted size and spacing
+                    plt.savefig(plot_image_path, dpi=150, bbox_inches='tight')
+                    print(f"DEBUG: Saved User Test Simulation split plot: {plot_image_path}")
+                
+                    # Adjust positioning for split plots (they're wider)
+                    plot_x = left_column_x if i % 2 == 0 else right_column_x - Inches(1.0)  # Shift left for wider plots
+                    if i % 2 != 0:
+                        plot_top += Inches(2.2)  # More vertical spacing for taller plots
+                    
+                    # Add with larger dimensions for split plots
+                    slide.shapes.add_picture(plot_image_path, plot_x, plot_top, Inches(3.5), Inches(2.0))
+                else:
+                    # Standard single plots
+                    plt.savefig(plot_image_path, dpi=150)
+                    print(f"DEBUG: Saved standard plot: {plot_image_path}")
+                
+                    plot_x = left_column_x if i % 2 == 0 else right_column_x
+                    if i % 2 != 0:
+                        plot_top += Inches(1.83)
+                    slide.shapes.add_picture(plot_image_path, plot_x, plot_top, Inches(2.29), Inches(1.72))
+                
                 plt.close()
                 if plot_image_path not in images_to_delete:
                     images_to_delete.append(plot_image_path)
-                plot_x = left_column_x if i % 2 == 0 else right_column_x
-                if i % 2 != 0:
-                    plot_top += Inches(1.83)
-                slide.shapes.add_picture(plot_image_path, plot_x, plot_top, Inches(2.29), Inches(1.72))
             except Exception as e:
                 print(f"Error generating plot '{plot_option}' for sheet '{sheet_name}': {e}")
+                import traceback
+                traceback.print_exc()
 
     def write_excel_report(self, writer, sheet_name: str, processed_data, full_sample_data, valid_plot_options=[], images_to_delete=None) -> None:
         try:
@@ -480,22 +509,51 @@ class ReportGenerator:
         try:
             worksheet = writer.sheets[sheet_name]
             numeric_data = full_sample_data.apply(pd.to_numeric, errors='coerce')
+            sample_names = None
+            if hasattr(self, 'header_data') and self.header_data and 'samples' in self.header_data:
+                sample_names = [sample['id'] for sample in self.header_data['samples']]
+                print(f"DEBUG: Extracted sample names from header_data: {sample_names}")
             if numeric_data.isna().all().all():
                 return
+            
+            # Determine if this is User Test Simulation
+            is_user_test_simulation = sheet_name in ["User Test Simulation", "User Simulation Test"]
+            num_columns_per_sample = int(8 if is_user_test_simulation else 12)
+        
             for i, plot_option in enumerate(valid_plot_options):
                 plot_image_path = f"{sheet_name}_{plot_option}_plot.png"
                 try:
-                    processing.plot_all_samples(numeric_data, 12, plot_option)
-                    plt.savefig(plot_image_path, dpi=300)
+                    # FIXED: Correct argument order
+                    fig, sample_names_returned = processing.plot_all_samples(numeric_data, plot_option, num_columns_per_sample, sample_names)
+                
+                    if is_user_test_simulation and hasattr(fig, 'is_split_plot') and fig.is_split_plot:
+                        # For User Test Simulation split plots, save with higher DPI and better format
+                        plt.savefig(plot_image_path, dpi=200, bbox_inches='tight')
+                        print(f"DEBUG: Saved User Test Simulation split plot for Excel: {plot_image_path}")
+                    
+                        # Adjust Excel positioning for wider split plots
+                        col_offset = 10 + (i % 2) * 15  # More spacing for wider plots
+                        row_offset = 2 + (i // 2) * 25  # More vertical spacing
+                    else:
+                        # Standard plots
+                        plt.savefig(plot_image_path, dpi=300)
+                        print(f"DEBUG: Saved standard plot for Excel: {plot_image_path}")
+                    
+                        col_offset = 10 + (i % 2) * 10
+                        row_offset = 2 + (i // 2) * 20
+                
                     plt.close()
                     images_to_delete.append(plot_image_path)
-                    col_offset = 10 + (i % 2) * 10
-                    row_offset = 2 + (i // 2) * 20
                     worksheet.insert_image(row_offset, col_offset, plot_image_path)
+                
                 except Exception as e:
                     print(f"Error generating plot '{plot_option}' for sheet '{sheet_name}': {e}")
+                    import traceback
+                    traceback.print_exc()
         except Exception as e:
             print(f"Error adding plots to Excel for sheet '{sheet_name}': {e}")
+            import traceback
+            traceback.print_exc()
 
     def add_logo_to_slide(self, slide) -> None:
         logo_path = get_resource_path('resources/ccell_logo_full.png')

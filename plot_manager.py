@@ -153,52 +153,72 @@ class PlotManager:
         then embeds the figure into the frame.
         """
         print(f"DEBUG: plot_all_samples called with data shape: {full_sample_data.shape}")
-        
+    
         # Clear frame contents
         for widget in frame.winfo_children():
             widget.pack_forget()
-            
+        
         # Check if data is empty or invalid
         if full_sample_data.empty:
             print("DEBUG: Data is completely empty - showing placeholder for data collection")
             self.show_empty_plot_placeholder(frame, "No data loaded yet.\nUse 'Collect Data' to add measurements.")
             return
-            
+        
         # Check if data contains only NaN values
         if full_sample_data.isna().all().all():
             print("DEBUG: Data contains only NaN values - showing placeholder for data collection")
             self.show_empty_plot_placeholder(frame, "No measurement data available yet.\nUse 'Collect Data' to add measurements.")
             return
-            
+        
         # Check if there's any numeric data for plotting
         numeric_data = full_sample_data.apply(pd.to_numeric, errors='coerce')
         if numeric_data.isna().all().all():
             print("DEBUG: No numeric data available for plotting - showing placeholder")
             self.show_empty_plot_placeholder(frame, "No numeric data available for plotting.\nUse 'Collect Data' to add measurement values.")
             return
-            
-        print("DEBUG: Data appears valid for plotting, proceeding with plot generation")
         
+        print("DEBUG: Data appears valid for plotting, proceeding with plot generation")
+    
+        # Extract sample names from the processed data if available
+        sample_names = None
         try:
-            # Generate figure (and optionally sample names) via processing module.
-            result = processing.plot_all_samples(full_sample_data, num_columns_per_sample, self.selected_plot_type.get())
+            # Try to get sample names from the parent GUI if it has processed data
+            if hasattr(self.parent, 'current_sheet_data') and hasattr(self.parent.current_sheet_data, 'iloc'):
+                # Extract sample names from the processed data table if available
+                if 'Sample Name' in self.parent.current_sheet_data.columns:
+                    sample_names = self.parent.current_sheet_data['Sample Name'].tolist()
+                    print(f"DEBUG: Extracted sample names from processed data: {sample_names}")
+        except Exception as e:
+            print(f"DEBUG: Could not extract sample names from processed data: {e}")
+    
+        try:
+            # FIXED: Correct argument order - plot_type comes second, then num_columns_per_sample, then sample_names
+            result = processing.plot_all_samples(
+                full_sample_data, 
+                self.selected_plot_type.get(), 
+                num_columns_per_sample, 
+                sample_names
+            )
+        
             if isinstance(result, tuple):
-                fig, sample_names = result
+                fig, extracted_sample_names = result
             else:
-                fig, sample_names = result, None
-                
-            print("DEBUG: Plot generated successfully, embedding in frame")
+                fig, extracted_sample_names = result, None
             
+            print("DEBUG: Plot generated successfully, embedding in frame")
+        
             # Embed the figure
             self.canvas = self.embed_plot_in_frame(fig, frame)
-            
-            # Add checkboxes using the (optional) sample names
-            self.add_checkboxes(sample_names=sample_names)
-            
+        
+            # Add checkboxes using the extracted sample names
+            self.add_checkboxes(sample_names=extracted_sample_names)
+        
             print("DEBUG: Plot embedded and checkboxes added successfully")
-            
+        
         except Exception as e:
             print(f"ERROR: Failed to generate or embed plot: {e}")
+            import traceback
+            traceback.print_exc()
             # Show error message instead of plot
             self.show_empty_plot_placeholder(frame, f"Error generating plot: {str(e)}\nTry using 'Collect Data' to add valid measurements.")
 
