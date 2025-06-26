@@ -106,17 +106,17 @@ class PlotManager:
         Controls both Phase 1 and Phase 2 plots simultaneously.
         """
         print(f"DEBUG: User Test Simulation checkbox clicked: {wrapped_label}")
-    
+
         if not hasattr(self.figure, 'phase1_lines') or not hasattr(self.figure, 'phase2_lines'):
             print("DEBUG: No phase lines found on figure")
             return
-        
+    
         # Get the original label from the wrapped label
         original_label = self.label_mapping.get(wrapped_label)
         if original_label is None:
             print(f"DEBUG: Could not find original label for: {wrapped_label}")
             return
-    
+
         # Find the index of the clicked sample
         try:
             index = self.parent.line_labels.index(original_label)
@@ -124,26 +124,71 @@ class PlotManager:
         except ValueError:
             print(f"DEBUG: Could not find index for label: {original_label}")
             return
-        
+    
         # Get the corresponding lines from both plots
         if index < len(self.figure.phase1_lines) and index < len(self.figure.phase2_lines):
             phase1_line = self.figure.phase1_lines[index]
             phase2_line = self.figure.phase2_lines[index]
-        
+    
             # Toggle visibility for both lines
             is_visible = phase1_line.get_visible()
             new_visibility = not is_visible
-        
+    
             phase1_line.set_visible(new_visibility)
             phase2_line.set_visible(new_visibility)
-        
+    
             print(f"DEBUG: Toggled sample '{original_label}' visibility to {new_visibility} in both plots")
-        
+    
             # Redraw the canvas
             if self.canvas:
                 self.canvas.draw_idle()
         else:
             print(f"DEBUG: Index {index} out of range for phase lines")
+
+    def on_user_test_simulation_bar_checkbox_click(self, wrapped_label):
+        """
+        Handle checkbox clicks for User Test Simulation split bar charts.
+        Controls both Phase 1 and Phase 2 bar charts simultaneously.
+        """
+        print(f"DEBUG: User Test Simulation bar chart checkbox clicked: {wrapped_label}")
+
+        if not hasattr(self.figure, 'phase1_bars') or not hasattr(self.figure, 'phase2_bars'):
+            print("DEBUG: No phase bars found on figure")
+            return
+    
+        # Get the original label from the wrapped label
+        original_label = self.label_mapping.get(wrapped_label)
+        if original_label is None:
+            print(f"DEBUG: Could not find original label for: {wrapped_label}")
+            return
+
+        # Find the index of the clicked sample
+        try:
+            index = self.parent.line_labels.index(original_label)
+            print(f"DEBUG: Found sample index: {index} for label: {original_label}")
+        except ValueError:
+            print(f"DEBUG: Could not find index for label: {original_label}")
+            return
+    
+        # Get the corresponding bars from both plots
+        if index < len(self.figure.phase1_bars) and index < len(self.figure.phase2_bars):
+            phase1_bar = self.figure.phase1_bars[index]
+            phase2_bar = self.figure.phase2_bars[index]
+    
+            # Toggle visibility for both bars
+            is_visible = phase1_bar.get_visible()
+            new_visibility = not is_visible
+    
+            phase1_bar.set_visible(new_visibility)
+            phase2_bar.set_visible(new_visibility)
+    
+            print(f"DEBUG: Toggled sample '{original_label}' bar visibility to {new_visibility} in both plots")
+    
+            # Redraw the canvas
+            if self.canvas:
+                self.canvas.draw_idle()
+        else:
+            print(f"DEBUG: Index {index} out of range for phase bars")
 
     def plot_all_samples(self, frame: ttk.Frame, full_sample_data: pd.DataFrame, num_columns_per_sample: int) -> None:
         """
@@ -414,7 +459,7 @@ class PlotManager:
     def add_checkboxes(self, sample_names=None):
         """
         Add checkboxes to toggle visibility of plot elements with properly balanced spacing.
-        Enhanced to handle User Test Simulation split plots.
+        Enhanced to handle User Test Simulation split plots and split bar charts.
         """
         self.parent.line_labels = []
         self.parent.original_lines_data = []
@@ -424,43 +469,57 @@ class PlotManager:
         if self.check_buttons:
             self.check_buttons.ax.clear()
             self.check_buttons = None
-    
+
         is_bar_chart = self.selected_plot_type.get() == "TPM (Bar)"
-    
+
         # Check if this is a User Test Simulation split plot
         is_split_plot = hasattr(self.figure, 'is_split_plot') and self.figure.is_split_plot
-        print(f"DEBUG: add_checkboxes - is_split_plot: {is_split_plot}, is_bar_chart: {is_bar_chart}")
+        is_split_bar_chart = is_split_plot and hasattr(self.figure, 'is_bar_chart') and self.figure.is_bar_chart
+        print(f"DEBUG: add_checkboxes - is_split_plot: {is_split_plot}, is_bar_chart: {is_bar_chart}, is_split_bar_chart: {is_split_bar_chart}")
 
         if sample_names is None:
             sample_names = self.parent.line_labels
-    
+
         if sample_names:
             self.parent.line_labels = sample_names
             print(f"DEBUG: Using provided sample_names: {sample_names}")
-    
-        if is_bar_chart and sample_names:
-            self.parent.line_labels = sample_names
-            self.parent.original_lines_data = [(patch.get_x(), patch.get_height()) for patch in self.axes.patches]
+
+        # Handle different plot types in priority order
+        if is_split_bar_chart and hasattr(self.figure, 'phase1_bars'):
+            # For split bar charts, store bar data from both phases
+            if not self.parent.line_labels:
+                self.parent.line_labels = sample_names or [f"Sample {i+1}" for i in range(len(self.figure.phase1_bars))]
+
+            # Store original data for both phases (bar charts use different data structure)
+            phase1_data = [(bar.get_x(), bar.get_height()) for bar in self.figure.phase1_bars]
+            phase2_data = [(bar.get_x(), bar.get_height()) for bar in self.figure.phase2_bars] 
+            self.parent.original_lines_data = list(zip(phase1_data, phase2_data))
+            print(f"DEBUG: Split bar chart - stored data for {len(self.parent.line_labels)} samples")
         elif is_split_plot and hasattr(self.figure, 'phase1_lines'):
-            # For split plots, use the sample names and store line data from both phases
+            # For split line plots, use the sample names and store line data from both phases
             if not self.parent.line_labels:
                 self.parent.line_labels = sample_names or [f"Sample {i+1}" for i in range(len(self.figure.phase1_lines))]
-        
+
             # Store original data for both phases
             phase1_data = [(line.get_xdata(), line.get_ydata()) for line in self.figure.phase1_lines]
             phase2_data = [(line.get_xdata(), line.get_ydata()) for line in self.figure.phase2_lines]
             self.parent.original_lines_data = list(zip(phase1_data, phase2_data))
             print(f"DEBUG: Split plot - stored data for {len(self.parent.line_labels)} samples")
+        elif is_bar_chart and sample_names:
+            # For regular bar charts (not split plots)
+            self.parent.line_labels = sample_names
+            self.parent.original_lines_data = [(patch.get_x(), patch.get_height()) for patch in self.axes.patches]
         else:
             if not self.parent.line_labels:
                 self.parent.line_labels = [line.get_label() for line in self.lines]
                 self.parent.original_lines_data = [(line.get_xdata(), line.get_ydata()) for line in self.lines]
-        
+
         for label in self.parent.line_labels:
             wrapped_label = wrap_text(text=label, max_width=12)
             self.label_mapping[wrapped_label] = label
             wrapped_labels.append(wrapped_label)
 
+        # CREATE THE CHECKBOXES - This was missing!
         # Adjusted positioning - increase top margin, reduce width on right
         # Format: [left, bottom, width, height]
         checkbox_ax = self.figure.add_axes([
@@ -476,7 +535,7 @@ class PlotManager:
 
         for spine in checkbox_ax.spines.values():
             spine.set_visible(False)
-    
+
         # Make font slightly smaller to ensure all labels fit
         for label in self.check_buttons.labels:
             label.set_fontsize(7)
@@ -518,7 +577,10 @@ class PlotManager:
         ))
 
         # Bind callbacks based on plot type
-        if is_split_plot:
+        if is_split_bar_chart:
+            print("DEBUG: Using User Test Simulation split bar chart checkbox callback")
+            self.checkbox_cid = self.check_buttons.on_clicked(self.on_user_test_simulation_bar_checkbox_click)
+        elif is_split_plot:
             print("DEBUG: Using User Test Simulation checkbox callback")
             self.checkbox_cid = self.check_buttons.on_clicked(self.on_user_test_simulation_checkbox_click)
         elif is_bar_chart:
@@ -527,7 +589,7 @@ class PlotManager:
         else:
             print("DEBUG: Using standard line plot checkbox callback")
             self.checkbox_cid = self.check_buttons.on_clicked(self.on_checkbox_click)
-    
+
         if self.canvas:
             self.canvas.draw_idle()
 

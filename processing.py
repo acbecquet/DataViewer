@@ -189,6 +189,26 @@ def plot_user_test_simulation_samples(full_sample_data: pd.DataFrame, num_column
     
     num_samples = full_sample_data.shape[1] // num_columns_per_sample
     print(f"DEBUG: User Test Simulation - Number of samples: {num_samples}")
+
+    # Check if this should be a bar chart
+    if plot_type == "TPM (Bar)":
+        print("DEBUG: Creating User Test Simulation bar chart")
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+        extracted_sample_names = plot_user_test_simulation_bar_chart(ax1, ax2, full_sample_data, num_samples, num_columns_per_sample, sample_names)
+        
+        # Mark this as a split plot with bar chart data
+        fig.is_split_plot = True
+        fig.is_bar_chart = True
+        
+        # Store bar references for checkbox functionality
+        fig.phase1_bars = ax1.patches
+        fig.phase2_bars = ax2.patches
+        
+        print(f"DEBUG: Successfully created User Test Simulation bar chart with {len(extracted_sample_names)} samples")
+        return fig, extracted_sample_names
+    
+    # Original line plot logic for other plot types
+    print(f"DEBUG: User Test Simulation - Number of samples: {num_samples}")
     
     # Replace 0 with NaN for cleaner plotting
     full_sample_data = full_sample_data.replace(0, np.nan)
@@ -462,23 +482,13 @@ def plot_user_test_simulation_bar_chart(ax1, ax2, full_sample_data, num_samples,
         phase2_averages.append(phase2_avg)
         phase2_std_devs.append(phase2_std)
 
-        # Get sample name - use provided sample_names if available, otherwise extract from data
+
         if sample_names and i < len(sample_names):
             sample_name = sample_names[i]
             print(f"DEBUG: Using provided sample name: '{sample_name}'")
         else:
-            # Extract sample name from the data (same method as line plots)
             sample_name = f"Sample {i+1}"
-            try:
-                # For User Test Simulation, sample names are in row 0, column F (5) of each sample block
-                sample_name_col_index = 5 + (i * num_columns_per_sample)
-                if sample_name_col_index < full_sample_data.shape[1]:
-                    sample_name_value = full_sample_data.iloc[0, sample_name_col_index]
-                    if sample_name_value and str(sample_name_value).strip() and str(sample_name_value).strip().lower() != 'nan':
-                        sample_name = str(sample_name_value).strip()
-                        print(f"DEBUG: Extracted sample name from data: '{sample_name}'")
-            except Exception as e:
-                print(f"DEBUG: Error extracting sample name for sample {i+1}: {e}")
+            print(f"DEBUG: Using default sample name: '{sample_name}'")
         
         extracted_sample_names.append(sample_name)
         wrapped_name = wrap_text(text=sample_name, max_width=10)
@@ -494,25 +504,36 @@ def plot_user_test_simulation_bar_chart(ax1, ax2, full_sample_data, num_samples,
     num_bars = len(phase1_averages)
     colors = plt.cm.get_cmap('tab10', num_bars)(np.linspace(0, 1, num_bars))
 
+    # Create numeric positions for bars to prevent overlapping
+    x_positions = np.arange(len(phase1_averages))
+
     # Plot Phase 1 bar chart with error bars
-    bars1 = ax1.bar(labels, phase1_averages, yerr=phase1_std_devs, 
-                     color=colors, capsize=5, error_kw={'ewidth': 2, 'capthick': 2})
+    bars1 = ax1.bar(x_positions, phase1_averages, yerr=phase1_std_devs, 
+                     color=colors, capsize=5, error_kw={'elinewidth': 2, 'capthick': 2}, width=0.6)
     ax1.set_xlabel('Samples')
     ax1.set_ylabel('Average TPM (mg/puff)')
     ax1.set_title('Average TPM - Phase 1 (Puffs 0-50)')
-    ax1.tick_params(axis='x', labelsize=8, rotation=45)
-    
+
+    # Set x-axis ticks and labels properly
+    ax1.set_xticks(x_positions)
+    ax1.set_xticklabels(labels, rotation=45, ha='right')
+    ax1.tick_params(axis='x', labelsize=8)
+
     # Set y-axis to start from 0 and add some padding
     ax1.set_ylim(0, max(phase1_averages) * 1.2 if phase1_averages else 1)
 
     # Plot Phase 2 bar chart with error bars
-    bars2 = ax2.bar(labels, phase2_averages, yerr=phase2_std_devs, 
-                     color=colors, capsize=5, error_kw={'ewidth': 2, 'capthick': 2})
+    bars2 = ax2.bar(x_positions, phase2_averages, yerr=phase2_std_devs, 
+                     color=colors, capsize=5, error_kw={'elinewidth': 2, 'capthick': 2}, width=0.6)
     ax2.set_xlabel('Samples')
     ax2.set_ylabel('Average TPM (mg/puff)')
     ax2.set_title('Average TPM - Phase 2 (Extended Puffs)')
-    ax2.tick_params(axis='x', labelsize=8, rotation=45)
-    
+
+    # Set x-axis ticks and labels properly
+    ax2.set_xticks(x_positions)
+    ax2.set_xticklabels(labels, rotation=45, ha='right')
+    ax2.tick_params(axis='x', labelsize=8)
+
     # Set y-axis to start from 0 and add some padding
     ax2.set_ylim(0, max(phase2_averages) * 1.2 if phase2_averages else 1)
 
@@ -614,7 +635,7 @@ def plot_all_samples(full_sample_data: pd.DataFrame, plot_type: str, num_columns
 
     return fig, extracted_sample_names
 
-def plot_tpm_bar_chart(ax, full_sample_data, num_samples, num_columns_per_sample):
+def plot_tpm_bar_chart(ax, full_sample_data, num_samples, num_columns_per_sample, sample_names=None):
     """
     Generate a bar chart of the average TPM for each sample with wrapped sample names.
 
@@ -623,13 +644,14 @@ def plot_tpm_bar_chart(ax, full_sample_data, num_samples, num_columns_per_sample
         full_sample_data (pd.DataFrame): DataFrame of sample data.
         num_samples (int): Number of samples.
         num_columns_per_sample (int): Columns per sample.
+        sample_names (list): Optional list of sample names.
 
     Returns:
         list: Sample names.
     """
     averages = []
     labels = []
-    sample_names = []
+    extracted_sample_names = []
 
     for i in range(num_samples):
         start_col = i * num_columns_per_sample
@@ -643,23 +665,45 @@ def plot_tpm_bar_chart(ax, full_sample_data, num_samples, num_columns_per_sample
         average_tpm = tpm_data.mean()
         averages.append(average_tpm)
 
-        sample_name = sample_data.columns[5]
-        sample_names.append(sample_name)  # Add original sample name
+        # Use provided sample name if available, otherwise extract from data
+        if sample_names and i < len(sample_names):
+            sample_name = sample_names[i]
+            print(f"DEBUG: Using provided sample name: '{sample_name}'")
+        else:
+            sample_name = sample_data.columns[5] if len(sample_data.columns) > 5 else f"Sample {i+1}"
+            print(f"DEBUG: Using extracted sample name: '{sample_name}'")
+        
+        extracted_sample_names.append(sample_name)
         wrapped_name = wrap_text(text=sample_name, max_width=10)  # Use `wrap_text` to dynamically wrap names
         labels.append(wrapped_name)
 
+    if not averages:
+        print("DEBUG: No valid samples found for bar chart")
+        return []
+
+    # Create numeric positions for bars
+    x_positions = np.arange(len(averages))
+    
     # Create a colormap with unique colors
     num_bars = len(averages)
-    colors = cm.get_cmap('tab10', num_bars)(np.linspace(0, 1, num_bars))
+    colors = plt.cm.get_cmap('tab10', num_bars)(np.linspace(0, 1, num_bars))
 
-    # Plot the bar chart with unique colors
-    ax.bar(labels, averages, color=colors)
+    # Plot the bar chart with proper positioning
+    bars = ax.bar(x_positions, averages, color=colors, width=0.6)
+    
+    # Set the x-axis labels and ticks
+    ax.set_xticks(x_positions)
+    ax.set_xticklabels(labels, rotation=45, ha='right')
+    
     ax.set_xlabel('Samples')
     ax.set_ylabel('Average TPM (mg/puff)')
     ax.set_title('Average TPM per Sample')
-    ax.tick_params(axis='x', labelsize=8)  # Rotate x-axis labels for better readability
+    ax.tick_params(axis='x', labelsize=8)
+    
+    # Set y-axis to start from 0 and add some padding
+    ax.set_ylim(0, max(averages) * 1.2 if averages else 1)
 
-    return sample_names
+    return extracted_sample_names
 
 def clean_presentation_tables(presentation):
     """
