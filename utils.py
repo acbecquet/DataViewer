@@ -8,6 +8,7 @@ import os
 import re
 import sys
 import tempfile
+import traceback
 import pandas as pd
 import openpyxl
 from tkinter import filedialog, messagebox, Toplevel, Label, Button
@@ -44,21 +45,25 @@ def get_save_path(self, default_extension: str = ".xlsx") -> Optional[str]:
     )
 
 def get_resource_path(relative_path: str) -> str:
-    """Get absolute path to resource, works for PyInstaller and Python execution.
-
-    Args:
-        relative_path (str): Relative path of the resource.
-
-    Returns:
-        str: Absolute path to the resource.
-    """
+    """Get absolute path to resource, works for development and installed package."""
     try:
         # PyInstaller creates a temp folder and stores path in _MEIPASS
         base_path = sys._MEIPASS
+        print(f"DEBUG: Using PyInstaller path: {base_path}")
     except AttributeError:
-        base_path = os.path.abspath(".")
+        # Check if running as installed package
+        try:
+            import pkg_resources
+            base_path = pkg_resources.resource_filename(__name__, '.')
+            print(f"DEBUG: Using package resource path: {base_path}")
+        except ImportError:
+            # Development mode
+            base_path = os.path.abspath(".")
+            print(f"DEBUG: Using development path: {base_path}")
 
-    return os.path.join(base_path, relative_path)
+    full_path = os.path.join(base_path, relative_path)
+    print(f"DEBUG: Resource path for {relative_path}: {full_path}")
+    return full_path
 
 def generate_temp_image(self, figure):
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
@@ -297,7 +302,7 @@ def get_plot_sheet_names():
         "Quick Screening Test", "Lifetime Test", "Device Life Test", "Horizontal Puffing Test", "Extended Test", "Long Puff Test",
         "Rapid Puff Test", "Intense Test", "Big Headspace Low T Test", "Big Headspace High T Test",
         "Viscosity Compatibility", "Upside Down Test", "Big Headspace Pocket Test",
-        "Low Temperature Stability","Vacuum Test", "Negative Pressure Test", "Viscosity Compatibility", "User Test Simulation","Various Oil Compatibility", "Sheet1"
+        "Low Temperature Stability","Vacuum Test", "Negative Pressure Test", "Viscosity Compatibility", "User Test Simulation", "User Simulation Test","Various Oil Compatibility", "Sheet1"
     ]
 
 def read_sheet_with_values(file_path: str, sheet_name: Optional[str] = None):

@@ -19,6 +19,9 @@ import tkinter as tk
 from tkinter import ttk, messagebox, Toplevel
 from tkintertable import TableCanvas, TableModel
 import matplotlib
+import requests
+import json
+from packaging import version
 matplotlib.use('TkAgg')  # Ensure Matplotlib uses TkAgg backend
 
 # Import our new manager classes and utility functions.
@@ -31,6 +34,30 @@ from progress_dialog import ProgressDialog
 from image_loader import ImageLoader
 from viscosity_calculator import ViscosityCalculator
 from utils import FONT, get_resource_path, clean_columns, get_save_path, is_standard_file, plotting_sheet_test, APP_BACKGROUND_COLOR,BUTTON_COLOR, PLOT_CHECKBOX_TITLE
+
+class UpdateManager:
+    def __init__(self, current_version="3.0.0"):
+        self.current_version = current_version
+        self.update_url = "https://your-domain.com/api/latest-version"
+    
+    def check_for_updates(self):
+        """Check if updates are available."""
+        try:
+            response = requests.get(self.update_url, timeout=5)
+            latest_info = response.json()
+            latest_version = latest_info["version"]
+            
+            if version.parse(latest_version) > version.parse(self.current_version):
+                return True, latest_info
+            return False, None
+        except Exception as e:
+            print(f"DEBUG: Update check failed: {e}")
+            return False, None
+    
+    def download_update(self, download_url):
+        """Download and install update."""
+        # Implement download and installation logic
+        pass
 
 class TestingGUI:
     """Main GUI class for the Standardized Testing application."""
@@ -46,7 +73,19 @@ class TestingGUI:
         self.image_loader = None # Initialize ImageLoader placeholder
         # Bind the window close event
         self.root.protocol("WM_DELETE_WINDOW", self.on_app_close)
-
+        def check_updates_on_startup(self):
+            """Check for updates when app starts."""
+            update_manager = UpdateManager()
+            has_update, update_info = update_manager.check_for_updates()
+    
+            if has_update:
+                result = messagebox.askyesno(
+                    "Update Available",
+                    f"Version {update_info['version']} is available. Update now?"
+                )
+                if result:
+                    # Handle update installation
+                    pass
 
     # Initialization and Configuration
     def initialize_variables(self) -> None:

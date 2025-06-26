@@ -1,0 +1,6 @@
+[console_scripts]
+sdr-testing = main:main
+testing-gui = main:main
+
+[gui_scripts]
+testing-gui-windowed = main:main

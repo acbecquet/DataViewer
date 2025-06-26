@@ -6,10 +6,17 @@ and plotting graphs.
 
 import logging
 import os
+import sys
 import tkinter as tk
 from tkinter import messagebox
-from utils import get_resource_path  # Utility function
 
+# Add current directory to path for development mode
+if __name__ == "__main__" and not hasattr(sys, '_MEIPASS'):
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    if current_dir not in sys.path:
+        sys.path.insert(0, current_dir)
+
+from utils import get_resource_path  # Utility function
 from main_gui import TestingGUI
 from image_loader import ImageLoader
 from file_manager import FileManager
@@ -26,12 +33,30 @@ def main():
         root.withdraw()  # Hide the main window
         messagebox.showerror("Error", f"An error occurred: {str(e)}")
 
-    # Set up logging to a filelog_file = os.path.join(os.path.expanduser("~"), 'app.log')
-    log_file = os.path.join(os.path.dirname(__file__), 'app.log')
-    logging.basicConfig(filename=log_file, level=logging.DEBUG, 
-                        format='%(asctime)s:%(levelname)s:%(message)s')
-
+    # Set up logging - use user directory for installed package
+    try:
+        # Try to use application data directory
+        if hasattr(sys, '_MEIPASS'):
+            # PyInstaller
+            log_dir = os.path.dirname(__file__)
+        else:
+            # Installed package or development
+            log_dir = os.path.expanduser("~/.standardized-testing-gui")
+            os.makedirs(log_dir, exist_ok=True)
+        
+        log_file = os.path.join(log_dir, 'app.log')
+    except Exception:
+        # Fallback to current directory
+        log_file = os.path.join(os.path.dirname(__file__), 'app.log')
+    
+    logging.basicConfig(
+        filename=log_file, 
+        level=logging.DEBUG, 
+        format='%(asctime)s:%(levelname)s:%(message)s'
+    )
+    
     logging.info('Application started')
+    print(f"DEBUG: Log file location: {log_file}")
 
     try:
         # Initialize Tkinter root window
@@ -49,4 +74,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

@@ -1,0 +1,51 @@
+VcXsrv Installation Guide
+========================
+
+VcXsrv is required to display GUI applications from Docker containers on Windows.
+
+Step 1: Download VcXsrv
+-----------------------
+Go to: https://sourceforge.net/projects/vcxsrv/
+Click "Download" and save the installer.
+
+Step 2: Install VcXsrv
+----------------------
+1. Run the downloaded installer
+2. Follow the installation wizard
+3. Accept default settings
+
+Step 3: Configure XLaunch
+-------------------------
+1. Start "XLaunch" from the Start Menu
+2. Display settings: Choose "Multiple windows"
+3. Session type: Choose "Start no client"
+4. Extra settings: 
+   - CHECK "Disable access control"
+   - CHECK "Native opengl" (optional)
+5. Click "Next" then "Finish"
+
+Step 4: Allow through Firewall
+------------------------------
+When Windows Firewall asks:
+- Allow VcXsrv on both Private and Public networks
+
+Step 5: Verify VcXsrv is Running
+--------------------------------
+- Look for VcXsrv icon in system tray (bottom-right corner)
+- The icon should be visible when running
+
+Step 6: Test Docker GUI
+-----------------------
+Run: docker-test.bat
+
+This should open a small test window if everything is working.
+
+Troubleshooting
+---------------
+If GUI doesn't appear:
+1. Check VcXsrv is running (system tray icon)
+2. Check Windows Firewall settings
+3. Try restarting VcXsrv
+4. Run docker-test.bat to isolate issues
+
+For help, the application debug output will show any connection errors.

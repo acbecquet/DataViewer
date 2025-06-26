@@ -283,12 +283,15 @@ class ReportGenerator:
             # Add table/plots
             plot_sheet_names = get_plot_sheet_names()
             is_plotting = sheet_name in plot_sheet_names
+
+            # For test reports, ALWAYS use processed data for tables
             table_width = Inches(8.07) if is_plotting else Inches(13.03)
             self.add_table_to_slide(main_slide, 
-                                   processed_data if is_plotting else full_sample_data,
+                                   processed_data,  # <-- ALWAYS use processed_data for test reports
                                    table_width, 
                                    is_plotting)
 
+            # Only add plots if it's a plotting sheet AND we have valid plot options
             if is_plotting:
                 valid_plot_options = processing.get_valid_plot_options(plot_options, full_sample_data)
                 if valid_plot_options:

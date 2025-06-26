@@ -1,0 +1,15 @@
+# Docker-optimized requirements (Linux, runtime only)
+# Generated automatically
+
+matplotlib==3.9.2
+numpy==2.0.0
+opencv-python-headless==4.11.0.86
+openpyxl==3.1.5
+packaging==24.1
+pandas==2.2.2
+pillow==10.4.0
+psutil==6.0.0
+python-pptx==0.6.23
+requests==2.32.4
+scipy==1.15.2
+tkintertable==1.3.3
