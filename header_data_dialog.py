@@ -6,7 +6,7 @@ Dialog for entering test header data.
 
 import tkinter as tk
 from tkinter import ttk, messagebox
-from utils import APP_BACKGROUND_COLOR, FONT
+from utils import APP_BACKGROUND_COLOR, FONT, debug_print
 
 class HeaderDataDialog:
     def __init__(self, parent, file_path, selected_test, edit_mode=False, current_data=None):
@@ -28,7 +28,7 @@ class HeaderDataDialog:
         self.result = None
         self.header_data = {}
     
-        print(f"DEBUG: HeaderDataDialog initialized - edit_mode: {edit_mode}, has_current_data: {current_data is not None}")
+        debug_print(f"DEBUG: HeaderDataDialog initialized - edit_mode: {edit_mode}, has_current_data: {current_data is not None}")
     
         # Initialize references for cleanup
         self.canvas = None
@@ -50,7 +50,7 @@ class HeaderDataDialog:
             if self.current_data:
                 # Use provided current data (from data collection window)
                 self.existing_data = self.current_data
-                print("DEBUG: Using provided current data for header editing")
+                debug_print("DEBUG: Using provided current data for header editing")
             else:
                 # Load from file (from main GUI)
                 self.load_existing_header_data()
@@ -69,7 +69,7 @@ class HeaderDataDialog:
     
     def create_widgets(self):
         """Create the dialog widgets."""
-        print("DEBUG: Creating widgets for HeaderDataDialog")
+        debug_print("DEBUG: Creating widgets for HeaderDataDialog")
         
         # Main container with scrolling capability
         main_container = ttk.Frame(self.dialog)
@@ -105,11 +105,11 @@ class HeaderDataDialog:
                 try:
                     self.canvas.yview_scroll(int(-1*(event.delta/120)), "units")
                 except tk.TclError as e:
-                    print(f"DEBUG: Canvas scrolling error (canvas may be destroyed): {e}")
+                    debug_print(f"DEBUG: Canvas scrolling error (canvas may be destroyed): {e}")
                     # Unbind the event if canvas is invalid
                     self.cleanup_mousewheel_binding()
             else:
-                print("DEBUG: Canvas no longer exists, cleaning up mousewheel binding")
+                debug_print("DEBUG: Canvas no longer exists, cleaning up mousewheel binding")
                 self.cleanup_mousewheel_binding()
         
         # Use bind instead of bind_all to limit scope to this canvas
@@ -118,7 +118,7 @@ class HeaderDataDialog:
         # Also bind to the dialog to capture mousewheel when over the dialog
         self.dialog.bind("<MouseWheel>", _on_mousewheel)
         
-        print("DEBUG: Canvas and mousewheel binding created successfully")
+        debug_print("DEBUG: Canvas and mousewheel binding created successfully")
         
         # Header
         header_label = ttk.Label(
@@ -258,14 +258,14 @@ class HeaderDataDialog:
         button_text = "Update" if self.edit_mode else "Continue"
         ttk.Button(button_frame, text=button_text, command=self.on_continue).pack(side="right", padx=(0, 5))
         
-        print("DEBUG: All widgets created successfully")
+        debug_print("DEBUG: All widgets created successfully")
     
     def populate_existing_data(self):
         """Populate form fields with existing data."""
         if not hasattr(self, 'existing_data') or not self.existing_data:
             return
             
-        print("DEBUG: Populating form with existing data")
+        debug_print("DEBUG: Populating form with existing data")
         
         # Handle both file format and current_data format
         if 'common' in self.existing_data:
@@ -302,17 +302,17 @@ class HeaderDataDialog:
                     self.sample_id_vars[i].set(sample_data.get('id', ''))
                     self.resistance_vars[i].set(sample_data.get('resistance', ''))
         
-        print("DEBUG: Form populated with existing data")
+        debug_print("DEBUG: Form populated with existing data")
 
     def load_existing_header_data(self):
         """Load existing header data from the Excel file."""
-        print(f"DEBUG: Loading existing header data from {self.file_path}")
+        debug_print(f"DEBUG: Loading existing header data from {self.file_path}")
         try:
             import openpyxl
             wb = openpyxl.load_workbook(self.file_path)
             
             if self.selected_test not in wb.sheetnames:
-                print(f"DEBUG: Sheet {self.selected_test} not found in file")
+                debug_print(f"DEBUG: Sheet {self.selected_test} not found in file")
                 return
                 
             ws = wb[self.selected_test]
@@ -339,10 +339,10 @@ class HeaderDataDialog:
                         'resistance': str(resistance) if resistance else ""
                     })
             
-            print(f"DEBUG: Loaded existing data: {len(self.existing_data['samples'])} samples")
+            debug_print(f"DEBUG: Loaded existing data: {len(self.existing_data['samples'])} samples")
             
         except Exception as e:
-            print(f"DEBUG: Error loading existing header data: {e}")
+            debug_print(f"DEBUG: Error loading existing header data: {e}")
             self.existing_data = None
 
     def cleanup_mousewheel_binding(self):
@@ -350,26 +350,26 @@ class HeaderDataDialog:
         try:
             if self.canvas and self.canvas.winfo_exists():
                 self.canvas.unbind("<MouseWheel>")
-                print("DEBUG: Canvas mousewheel binding cleaned up")
+                debug_print("DEBUG: Canvas mousewheel binding cleaned up")
         except tk.TclError:
-            print("DEBUG: Canvas already destroyed, binding cleanup not needed")
+            debug_print("DEBUG: Canvas already destroyed, binding cleanup not needed")
         
         try:
             if self.dialog and self.dialog.winfo_exists():
                 self.dialog.unbind("<MouseWheel>")
-                print("DEBUG: Dialog mousewheel binding cleaned up")
+                debug_print("DEBUG: Dialog mousewheel binding cleaned up")
         except tk.TclError:
-            print("DEBUG: Dialog already destroyed, binding cleanup not needed")
+            debug_print("DEBUG: Dialog already destroyed, binding cleanup not needed")
     
     def cleanup_and_close(self):
         """Clean up resources and close the dialog when window is closed."""
-        print("DEBUG: Window close button clicked - cleaning up HeaderDataDialog resources")
+        debug_print("DEBUG: Window close button clicked - cleaning up HeaderDataDialog resources")
         self.cleanup_mousewheel_binding()
         self.on_cancel()
     
     def update_sample_fields(self):
         """Update the sample-specific fields based on the number of samples."""
-        print(f"DEBUG: Updating sample fields for {self.num_samples_var.get()} samples")
+        debug_print(f"DEBUG: Updating sample fields for {self.num_samples_var.get()} samples")
         
         # Clear existing widgets
         for widget in self.samples_frame.winfo_children():
@@ -423,11 +423,11 @@ class HeaderDataDialog:
         self.samples_frame.columnconfigure(1, weight=1)
         self.samples_frame.columnconfigure(3, weight=1)
         
-        print(f"DEBUG: Sample fields updated successfully for {num_samples} samples")
+        debug_print(f"DEBUG: Sample fields updated successfully for {num_samples} samples")
     
     def validate_data(self):
         """Validate the header data."""
-        print("DEBUG: Validating header data")
+        debug_print("DEBUG: Validating header data")
         
         # Check for empty required fields
         if not self.tester_var.get().strip():
@@ -461,12 +461,12 @@ class HeaderDataDialog:
                 messagebox.showerror("Validation Error", f"Resistance for Sample {i+1} must be a numeric value.")
                 return False
         
-        print("DEBUG: Header data validation successful")
+        debug_print("DEBUG: Header data validation successful")
         return True
     
     def collect_header_data(self):
         """Collect header data from form fields."""
-        print("DEBUG: Collecting header data from form")
+        debug_print("DEBUG: Collecting header data from form")
         
         num_samples = self.num_samples_var.get()
         
@@ -496,23 +496,23 @@ class HeaderDataDialog:
             "num_samples": num_samples
         }
         
-        print(f"DEBUG: Collected header data for {num_samples} samples with puffing regime: {common_data['puffing_regime']}")
+        debug_print(f"DEBUG: Collected header data for {num_samples} samples with puffing regime: {common_data['puffing_regime']}")
         return header_data
     
     def on_continue(self):
         """Handle Continue button click."""
-        print("DEBUG: Continue button clicked")
+        debug_print("DEBUG: Continue button clicked")
         
         if self.validate_data():
             self.header_data = self.collect_header_data()
             self.result = True
             self.cleanup_mousewheel_binding()
             self.dialog.destroy()
-            print("DEBUG: Header data collection completed successfully")
+            debug_print("DEBUG: Header data collection completed successfully")
     
     def on_cancel(self):
         """Handle Cancel button click."""
-        print("DEBUG: Dialog cancelled - setting result to False")
+        debug_print("DEBUG: Dialog cancelled - setting result to False")
         self.result = False
         self.dialog.destroy()
     
@@ -524,11 +524,11 @@ class HeaderDataDialog:
             tuple: (result, header_data) where result is True if Continue was clicked,
                    and header_data is a dictionary of header data.
         """
-        print("DEBUG: Showing HeaderDataDialog")
+        debug_print("DEBUG: Showing HeaderDataDialog")
         self.dialog.wait_window()
-        print(f"DEBUG: HeaderDataDialog closed with result: {self.result}")
+        debug_print(f"DEBUG: HeaderDataDialog closed with result: {self.result}")
         if self.result:
-            print("DEBUG: Dialog succeeded - continuing to data collection window")
+            debug_print("DEBUG: Dialog succeeded - continuing to data collection window")
         else:
-            print("DEBUG: Dialog was cancelled - not proceeding to data collection")
+            debug_print("DEBUG: Dialog was cancelled - not proceeding to data collection")
         return self.result, self.header_data

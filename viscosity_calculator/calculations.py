@@ -6,7 +6,7 @@ from scipy.optimize import minimize_scalar
 from sklearn.impute import SimpleImputer
 import tkinter as tk
 from tkinter import messagebox
-
+from utils import debug_print
 class Calculation_Methods:
     def calculate_terpene_percentage(self):
         """
@@ -296,7 +296,7 @@ class Calculation_Methods:
                                     scaled_value = (percent / 100.0) * terpene_decimal
                                     profile[terpene_compound] = scaled_value
                     
-                                print(f"Using default profile for {terpene_name}, scaled to {terpene_pct}% total terpenes")
+                                debug_print(f"Using default profile for {terpene_name}, scaled to {terpene_pct}% total terpenes")
                                 has_measured_profile = True
                             else:
                                 # Try to find a suitable default profile based on substring matching
@@ -331,7 +331,7 @@ class Calculation_Methods:
                                         scaled_value = (percent / 100.0) * terpene_decimal
                                         profile[terpene_compound] = scaled_value
                         
-                                    print(f"Using default '{matched_profile}' profile for {terpene_name}, scaled to {terpene_pct}% total terpenes")
+                                    debug_print(f"Using default '{matched_profile}' profile for {terpene_name}, scaled to {terpene_pct}% total terpenes")
                                     has_measured_profile = True
             
                         # If we have a valid profile (measured or default), use it
@@ -446,8 +446,8 @@ class Calculation_Methods:
                     model_info = self.consolidated_models[model_key]
                 
                     # Debug the model inputs
-                    print(f"Using consolidated model for {media}")
-                    print(f"Step 1: {step1_percent}%, viscosity = {step1_viscosity}")
+                    debug_print(f"Using consolidated model for {media}")
+                    debug_print(f"Step 1: {step1_percent}%, viscosity = {step1_viscosity}")
                 
                     # Use optimization to find optimal terpene percentage
                     from scipy.optimize import minimize_scalar
@@ -490,8 +490,8 @@ class Calculation_Methods:
                 
                 except Exception as e:
                     import traceback
-                    print(f"Error using model for prediction: {str(e)}")
-                    print(traceback.format_exc())
+                    debug_print(f"Error using model for prediction: {str(e)}")
+                    debug_print(traceback.format_exc())
                     # Fall back to exponential calculation below
         
             # Fallback: Use exponential model based on the two measurements

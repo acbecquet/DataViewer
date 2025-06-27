@@ -16,6 +16,50 @@ from typing import Optional
 from openpyxl import load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
+# =============================================================================
+# GLOBAL DEBUG SYSTEM
+# =============================================================================
+
+# Global debug flag - change this to control ALL debug output across the app
+DEBUG_ENABLED = False  # Set to True when you need debugging
+
+def debug_print(*args, **kwargs):
+    """
+    Global debug print function that can be imported by all modules.
+    Only prints if DEBUG_ENABLED is True.
+    
+    Usage:
+        from utils import debug_print
+        debug_print("This is a debug message")
+        debug_print(f"Variable value: {variable}")
+    """
+    if DEBUG_ENABLED:
+        print(*args, **kwargs)
+
+def set_debug_mode(enabled):
+    """
+    Enable or disable debug mode globally.
+    
+    Args:
+        enabled (bool): True to enable debug output, False to disable
+    """
+    global DEBUG_ENABLED
+    DEBUG_ENABLED = enabled
+    debug_print(f"Debug mode {'enabled' if enabled else 'disabled'}")
+
+def is_debug_enabled():
+    """
+    Check if debug mode is currently enabled.
+    
+    Returns:
+        bool: True if debug is enabled, False otherwise
+    """
+    return DEBUG_ENABLED
+
+# =============================================================================
+# END DEBUG SYSTEM
+# =============================================================================
+
 FONT = ('Arial', 12)
 # Global constants
 APP_BACKGROUND_COLOR = '#0504AA'
@@ -49,20 +93,20 @@ def get_resource_path(relative_path: str) -> str:
     try:
         # PyInstaller creates a temp folder and stores path in _MEIPASS
         base_path = sys._MEIPASS
-        print(f"DEBUG: Using PyInstaller path: {base_path}")
+        debug_print(f"DEBUG: Using PyInstaller path: {base_path}")
     except AttributeError:
         # Check if running as installed package
         try:
             import pkg_resources
             base_path = pkg_resources.resource_filename(__name__, '.')
-            print(f"DEBUG: Using package resource path: {base_path}")
+            debug_print(f"DEBUG: Using package resource path: {base_path}")
         except ImportError:
             # Development mode
             base_path = os.path.abspath(".")
-            print(f"DEBUG: Using development path: {base_path}")
+            debug_print(f"DEBUG: Using development path: {base_path}")
 
     full_path = os.path.join(base_path, relative_path)
-    print(f"DEBUG: Resource path for {relative_path}: {full_path}")
+    debug_print(f"DEBUG: Resource path for {relative_path}: {full_path}")
     return full_path
 
 def generate_temp_image(self, figure):
@@ -199,27 +243,27 @@ def is_standard_file(file_path: str) -> bool:
         sheet_names = list(sheets_dict.keys())
         num_sheets = len(sheet_names)
         
-        print(f"DEBUG: File contains {num_sheets} sheet(s): {sheet_names}")
+        debug_print(f"DEBUG: File contains {num_sheets} sheet(s): {sheet_names}")
         
         # Check for legacy file criteria
         # Legacy file MUST have exactly 1 sheet AND that sheet must be named 'Sheet1'
         if num_sheets == 1 and sheet_names[0] == 'Sheet1':
-            print("DEBUG: File meets legacy criteria: 1 sheet named 'Sheet1' -> File is legacy.")
-            print(f"DEBUG: Legacy sheet name: '{sheet_names[0]}'")
+            debug_print("DEBUG: File meets legacy criteria: 1 sheet named 'Sheet1' -> File is legacy.")
+            debug_print(f"DEBUG: Legacy sheet name: '{sheet_names[0]}'")
             return False  # Return False for legacy files
         else:
-            print("DEBUG: File does not meet legacy criteria -> File is standard.")
+            debug_print("DEBUG: File does not meet legacy criteria -> File is standard.")
             if num_sheets > 1:
-                print(f"DEBUG: Multiple sheets found ({num_sheets}), treating as standard")
+                debug_print(f"DEBUG: Multiple sheets found ({num_sheets}), treating as standard")
             elif num_sheets == 1:
-                print(f"DEBUG: Single sheet found but name is '{sheet_names[0]}' (not 'Sheet1'), treating as standard")
+                debug_print(f"DEBUG: Single sheet found but name is '{sheet_names[0]}' (not 'Sheet1'), treating as standard")
             return True   # Return True for standard files
             
     except Exception as e:
         print(f"ERROR: Exception while checking file format: {e}")
-        print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
         # On error, default to treating as standard file
-        print("DEBUG: Error occurred, defaulting to standard file format")
+        debug_print("DEBUG: Error occurred, defaulting to standard file format")
         return True
 
 def plotting_sheet_test(sheet_name, data):
@@ -239,10 +283,10 @@ def plotting_sheet_test(sheet_name, data):
             # print(f"Checking row {i} for headers: {header_row.values}")
 
             if header_row.str.contains("puffs").any() and header_row.str.contains("tpm").any():
-                print(f"Found plotting headers in row {i}")
+                debug_print(f"Found plotting headers in row {i}")
                 return True
 
-        print("No valid plotting headers found")
+        debug_print("No valid plotting headers found")
         return False
 
     except Exception as e:
@@ -329,14 +373,14 @@ def load_excel_file_with_formulas(file_path):
         dict: Dictionary of sheet names and DataFrames.
     """
     try:
-        print(f"DEBUG: Loading Excel file with formula evaluation: {file_path}")
+        debug_print(f"DEBUG: Loading Excel file with formula evaluation: {file_path}")
         
         # Load workbook with evaluated formulas
         wb = openpyxl.load_workbook(file_path, data_only=True)
         sheets = {}
         
         for sheet_name in wb.sheetnames:
-            print(f"DEBUG: Processing sheet: {sheet_name}")
+            debug_print(f"DEBUG: Processing sheet: {sheet_name}")
             ws = wb[sheet_name]
             
             # Convert worksheet to DataFrame
@@ -354,14 +398,14 @@ def load_excel_file_with_formulas(file_path):
                 
                 df = pd.DataFrame(normalized_data)
                 sheets[sheet_name] = df
-                print(f"DEBUG: Sheet {sheet_name} loaded with shape: {df.shape}")
+                debug_print(f"DEBUG: Sheet {sheet_name} loaded with shape: {df.shape}")
             else:
                 # Empty sheet
                 sheets[sheet_name] = pd.DataFrame()
-                print(f"DEBUG: Sheet {sheet_name} is empty")
+                debug_print(f"DEBUG: Sheet {sheet_name} is empty")
         
         wb.close()
-        print(f"DEBUG: Successfully loaded {len(sheets)} sheets with formula evaluation")
+        debug_print(f"DEBUG: Successfully loaded {len(sheets)} sheets with formula evaluation")
         return sheets
         
     except Exception as e:
@@ -369,14 +413,14 @@ def load_excel_file_with_formulas(file_path):
         # Fallback to original method
         try:
             sheets = pd.read_excel(file_path, sheet_name=None, engine='openpyxl')
-            print("DEBUG: Fallback to pandas read_excel successful")
+            debug_print("DEBUG: Fallback to pandas read_excel successful")
             return sheets
         except Exception as fallback_error:
             raise ValueError(f"Error loading Excel file {file_path}: {fallback_error}")
 
 def read_sheet_with_values_standards(file_path: str, sheet_name: Optional[str] = None):
     """Read Excel sheet with values exactly as they appear, evaluating formulas."""
-    print(f"DEBUG: Reading sheet with formula evaluation: {sheet_name}")
+    debug_print(f"DEBUG: Reading sheet with formula evaluation: {sheet_name}")
     
     # Use openpyxl with data_only=True to evaluate formulas
     wb = load_workbook(file_path, data_only=True)
@@ -399,7 +443,7 @@ def read_sheet_with_values_standards(file_path: str, sheet_name: Optional[str] =
     df = df[1:].reset_index(drop=True)
     
     wb.close()
-    print(f"DEBUG: Successfully read sheet {sheet_name} with formula evaluation")
+    debug_print(f"DEBUG: Successfully read sheet {sheet_name} with formula evaluation")
     return df
 
 def unmerge_all_cells(ws: Worksheet) -> None:

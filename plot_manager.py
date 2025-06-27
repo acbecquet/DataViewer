@@ -4,7 +4,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolb
 from matplotlib.widgets import CheckButtons
 import tkinter as tk
 from tkinter import ttk, messagebox, Toplevel, Label, Button
-from utils import wrap_text,APP_BACKGROUND_COLOR,BUTTON_COLOR, PLOT_CHECKBOX_TITLE,FONT
+from utils import wrap_text,APP_BACKGROUND_COLOR,BUTTON_COLOR, PLOT_CHECKBOX_TITLE,FONT, debug_print
 import processing
 import pandas as pd
 
@@ -65,7 +65,7 @@ class PlotManager:
         if is_split_plot:
             # For split plots, adjust margins to accommodate checkboxes for both plots
             fig.subplots_adjust(right=0.80)
-            print("DEBUG: Split plot detected, adjusted margins")
+            debug_print("DEBUG: Split plot detected, adjusted margins")
         else:
             # Standard right margin - don't make it too small
             fig.subplots_adjust(right=0.82)
@@ -86,7 +86,7 @@ class PlotManager:
             # For split plots, we have multiple axes
             self.axes = fig.axes  # List of axes
             self.lines = []  # Will be handled by the split plot logic
-            print(f"DEBUG: Split plot - found {len(self.axes)} axes")
+            debug_print(f"DEBUG: Split plot - found {len(self.axes)} axes")
         else:
             # Standard single plot
             self.axes = fig.gca()
@@ -105,24 +105,24 @@ class PlotManager:
         Handle checkbox clicks for User Test Simulation split plots.
         Controls both Phase 1 and Phase 2 plots simultaneously.
         """
-        print(f"DEBUG: User Test Simulation checkbox clicked: {wrapped_label}")
+        debug_print(f"DEBUG: User Test Simulation checkbox clicked: {wrapped_label}")
 
         if not hasattr(self.figure, 'phase1_lines') or not hasattr(self.figure, 'phase2_lines'):
-            print("DEBUG: No phase lines found on figure")
+            debug_print("DEBUG: No phase lines found on figure")
             return
     
         # Get the original label from the wrapped label
         original_label = self.label_mapping.get(wrapped_label)
         if original_label is None:
-            print(f"DEBUG: Could not find original label for: {wrapped_label}")
+            debug_print(f"DEBUG: Could not find original label for: {wrapped_label}")
             return
 
         # Find the index of the clicked sample
         try:
             index = self.parent.line_labels.index(original_label)
-            print(f"DEBUG: Found sample index: {index} for label: {original_label}")
+            debug_print(f"DEBUG: Found sample index: {index} for label: {original_label}")
         except ValueError:
-            print(f"DEBUG: Could not find index for label: {original_label}")
+            debug_print(f"DEBUG: Could not find index for label: {original_label}")
             return
     
         # Get the corresponding lines from both plots
@@ -137,37 +137,37 @@ class PlotManager:
             phase1_line.set_visible(new_visibility)
             phase2_line.set_visible(new_visibility)
     
-            print(f"DEBUG: Toggled sample '{original_label}' visibility to {new_visibility} in both plots")
+            debug_print(f"DEBUG: Toggled sample '{original_label}' visibility to {new_visibility} in both plots")
     
             # Redraw the canvas
             if self.canvas:
                 self.canvas.draw_idle()
         else:
-            print(f"DEBUG: Index {index} out of range for phase lines")
+            debug_print(f"DEBUG: Index {index} out of range for phase lines")
 
     def on_user_test_simulation_bar_checkbox_click(self, wrapped_label):
         """
         Handle checkbox clicks for User Test Simulation split bar charts.
         Controls both Phase 1 and Phase 2 bar charts simultaneously.
         """
-        print(f"DEBUG: User Test Simulation bar chart checkbox clicked: {wrapped_label}")
+        debug_print(f"DEBUG: User Test Simulation bar chart checkbox clicked: {wrapped_label}")
 
         if not hasattr(self.figure, 'phase1_bars') or not hasattr(self.figure, 'phase2_bars'):
-            print("DEBUG: No phase bars found on figure")
+            debug_print("DEBUG: No phase bars found on figure")
             return
     
         # Get the original label from the wrapped label
         original_label = self.label_mapping.get(wrapped_label)
         if original_label is None:
-            print(f"DEBUG: Could not find original label for: {wrapped_label}")
+            debug_print(f"DEBUG: Could not find original label for: {wrapped_label}")
             return
 
         # Find the index of the clicked sample
         try:
             index = self.parent.line_labels.index(original_label)
-            print(f"DEBUG: Found sample index: {index} for label: {original_label}")
+            debug_print(f"DEBUG: Found sample index: {index} for label: {original_label}")
         except ValueError:
-            print(f"DEBUG: Could not find index for label: {original_label}")
+            debug_print(f"DEBUG: Could not find index for label: {original_label}")
             return
     
         # Get the corresponding bars from both plots
@@ -182,13 +182,13 @@ class PlotManager:
             phase1_bar.set_visible(new_visibility)
             phase2_bar.set_visible(new_visibility)
     
-            print(f"DEBUG: Toggled sample '{original_label}' bar visibility to {new_visibility} in both plots")
+            debug_print(f"DEBUG: Toggled sample '{original_label}' bar visibility to {new_visibility} in both plots")
     
             # Redraw the canvas
             if self.canvas:
                 self.canvas.draw_idle()
         else:
-            print(f"DEBUG: Index {index} out of range for phase bars")
+            debug_print(f"DEBUG: Index {index} out of range for phase bars")
 
     def plot_all_samples(self, frame: ttk.Frame, full_sample_data: pd.DataFrame, num_columns_per_sample: int) -> None:
         """
@@ -197,7 +197,7 @@ class PlotManager:
         Uses processing.plot_all_samples to generate the figure (and sample names, if any),
         then embeds the figure into the frame.
         """
-        print(f"DEBUG: plot_all_samples called with data shape: {full_sample_data.shape}")
+        debug_print(f"DEBUG: plot_all_samples called with data shape: {full_sample_data.shape}")
     
         # Clear frame contents
         for widget in frame.winfo_children():
@@ -205,24 +205,24 @@ class PlotManager:
         
         # Check if data is empty or invalid
         if full_sample_data.empty:
-            print("DEBUG: Data is completely empty - showing placeholder for data collection")
+            debug_print("DEBUG: Data is completely empty - showing placeholder for data collection")
             self.show_empty_plot_placeholder(frame, "No data loaded yet.\nUse 'Collect Data' to add measurements.")
             return
         
         # Check if data contains only NaN values
         if full_sample_data.isna().all().all():
-            print("DEBUG: Data contains only NaN values - showing placeholder for data collection")
+            debug_print("DEBUG: Data contains only NaN values - showing placeholder for data collection")
             self.show_empty_plot_placeholder(frame, "No measurement data available yet.\nUse 'Collect Data' to add measurements.")
             return
         
         # Check if there's any numeric data for plotting
         numeric_data = full_sample_data.apply(pd.to_numeric, errors='coerce')
         if numeric_data.isna().all().all():
-            print("DEBUG: No numeric data available for plotting - showing placeholder")
+            debug_print("DEBUG: No numeric data available for plotting - showing placeholder")
             self.show_empty_plot_placeholder(frame, "No numeric data available for plotting.\nUse 'Collect Data' to add measurement values.")
             return
         
-        print("DEBUG: Data appears valid for plotting, proceeding with plot generation")
+        debug_print("DEBUG: Data appears valid for plotting, proceeding with plot generation")
     
         # Extract sample names from the processed data if available
         sample_names = None
@@ -232,9 +232,9 @@ class PlotManager:
                 # Extract sample names from the processed data table if available
                 if 'Sample Name' in self.parent.current_sheet_data.columns:
                     sample_names = self.parent.current_sheet_data['Sample Name'].tolist()
-                    print(f"DEBUG: Extracted sample names from processed data: {sample_names}")
+                    debug_print(f"DEBUG: Extracted sample names from processed data: {sample_names}")
         except Exception as e:
-            print(f"DEBUG: Could not extract sample names from processed data: {e}")
+            debug_print(f"DEBUG: Could not extract sample names from processed data: {e}")
     
         try:
             # FIXED: Correct argument order - plot_type comes second, then num_columns_per_sample, then sample_names
@@ -250,7 +250,7 @@ class PlotManager:
             else:
                 fig, extracted_sample_names = result, None
             
-            print("DEBUG: Plot generated successfully, embedding in frame")
+            debug_print("DEBUG: Plot generated successfully, embedding in frame")
         
             # Embed the figure
             self.canvas = self.embed_plot_in_frame(fig, frame)
@@ -258,10 +258,10 @@ class PlotManager:
             # Add checkboxes using the extracted sample names
             self.add_checkboxes(sample_names=extracted_sample_names)
         
-            print("DEBUG: Plot embedded and checkboxes added successfully")
+            debug_print("DEBUG: Plot embedded and checkboxes added successfully")
         
         except Exception as e:
-            print(f"ERROR: Failed to generate or embed plot: {e}")
+            debug_print(f"ERROR: Failed to generate or embed plot: {e}")
             import traceback
             traceback.print_exc()
             # Show error message instead of plot
@@ -306,7 +306,7 @@ class PlotManager:
         )
         instruction_label.pack(pady=(10, 0))
         
-        print("DEBUG: Empty plot placeholder displayed successfully")
+        debug_print("DEBUG: Empty plot placeholder displayed successfully")
 
     def update_plot(self, full_sample_data, num_columns_per_sample, frame=None):
         """
@@ -399,7 +399,7 @@ class PlotManager:
         
             # Use the correct number of columns per sample
             num_columns = getattr(self.parent, 'num_columns_per_sample', 12)
-            print(f"DEBUG: update_plot_from_dropdown using {num_columns} columns per sample")
+            debug_print(f"DEBUG: update_plot_from_dropdown using {num_columns} columns per sample")
         
             # Update the plot
             self.plot_all_samples(self.parent.plot_frame, full_sample_data, num_columns)
@@ -475,14 +475,14 @@ class PlotManager:
         # Check if this is a User Test Simulation split plot
         is_split_plot = hasattr(self.figure, 'is_split_plot') and self.figure.is_split_plot
         is_split_bar_chart = is_split_plot and hasattr(self.figure, 'is_bar_chart') and self.figure.is_bar_chart
-        print(f"DEBUG: add_checkboxes - is_split_plot: {is_split_plot}, is_bar_chart: {is_bar_chart}, is_split_bar_chart: {is_split_bar_chart}")
+        debug_print(f"DEBUG: add_checkboxes - is_split_plot: {is_split_plot}, is_bar_chart: {is_bar_chart}, is_split_bar_chart: {is_split_bar_chart}")
 
         if sample_names is None:
             sample_names = self.parent.line_labels
 
         if sample_names:
             self.parent.line_labels = sample_names
-            print(f"DEBUG: Using provided sample_names: {sample_names}")
+            debug_print(f"DEBUG: Using provided sample_names: {sample_names}")
 
         # Handle different plot types in priority order
         if is_split_bar_chart and hasattr(self.figure, 'phase1_bars'):
@@ -494,7 +494,7 @@ class PlotManager:
             phase1_data = [(bar.get_x(), bar.get_height()) for bar in self.figure.phase1_bars]
             phase2_data = [(bar.get_x(), bar.get_height()) for bar in self.figure.phase2_bars] 
             self.parent.original_lines_data = list(zip(phase1_data, phase2_data))
-            print(f"DEBUG: Split bar chart - stored data for {len(self.parent.line_labels)} samples")
+            debug_print(f"DEBUG: Split bar chart - stored data for {len(self.parent.line_labels)} samples")
         elif is_split_plot and hasattr(self.figure, 'phase1_lines'):
             # For split line plots, use the sample names and store line data from both phases
             if not self.parent.line_labels:
@@ -504,7 +504,7 @@ class PlotManager:
             phase1_data = [(line.get_xdata(), line.get_ydata()) for line in self.figure.phase1_lines]
             phase2_data = [(line.get_xdata(), line.get_ydata()) for line in self.figure.phase2_lines]
             self.parent.original_lines_data = list(zip(phase1_data, phase2_data))
-            print(f"DEBUG: Split plot - stored data for {len(self.parent.line_labels)} samples")
+            debug_print(f"DEBUG: Split plot - stored data for {len(self.parent.line_labels)} samples")
         elif is_bar_chart and sample_names:
             # For regular bar charts (not split plots)
             self.parent.line_labels = sample_names
@@ -578,16 +578,16 @@ class PlotManager:
 
         # Bind callbacks based on plot type
         if is_split_bar_chart:
-            print("DEBUG: Using User Test Simulation split bar chart checkbox callback")
+            debug_print("DEBUG: Using User Test Simulation split bar chart checkbox callback")
             self.checkbox_cid = self.check_buttons.on_clicked(self.on_user_test_simulation_bar_checkbox_click)
         elif is_split_plot:
-            print("DEBUG: Using User Test Simulation checkbox callback")
+            debug_print("DEBUG: Using User Test Simulation checkbox callback")
             self.checkbox_cid = self.check_buttons.on_clicked(self.on_user_test_simulation_checkbox_click)
         elif is_bar_chart:
-            print("DEBUG: Using bar chart checkbox callback")
+            debug_print("DEBUG: Using bar chart checkbox callback")
             self.checkbox_cid = self.check_buttons.on_clicked(self.on_bar_checkbox_click)
         else:
-            print("DEBUG: Using standard line plot checkbox callback")
+            debug_print("DEBUG: Using standard line plot checkbox callback")
             self.checkbox_cid = self.check_buttons.on_clicked(self.on_checkbox_click)
 
         if self.canvas:

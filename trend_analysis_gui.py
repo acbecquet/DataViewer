@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 import pandas as pd
 import processing
-from utils import get_resource_path  # you can import any shared constants here
+from utils import get_resource_path, debug_print
 
 # Global constants
 APP_BACKGROUND_COLOR = '#0504AA'
@@ -147,7 +147,7 @@ class TrendAnalysisGUI:
             messagebox.showerror("Error", f"Sheet '{selected_sheet}' not found.")
             return
         full_sample_data = sheet_info["data"]
-        print(f"Selected sheet: {selected_sheet}, shape: {full_sample_data.shape}")
+        debug_print(f"Selected sheet: {selected_sheet}, shape: {full_sample_data.shape}")
         if full_sample_data.empty:
             messagebox.showerror("Error", f"No data available for sheet '{selected_sheet}'.")
             return

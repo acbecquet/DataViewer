@@ -9,7 +9,7 @@ import os
 import sys
 import tkinter as tk
 from tkinter import messagebox
-
+from utils import debug_print
 # Add current directory to path for development mode
 if __name__ == "__main__" and not hasattr(sys, '_MEIPASS'):
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -56,7 +56,7 @@ def main():
     )
     
     logging.info('Application started')
-    print(f"DEBUG: Log file location: {log_file}")
+    debug_print(f"DEBUG: Log file location: {log_file}")
 
     try:
         # Initialize Tkinter root window

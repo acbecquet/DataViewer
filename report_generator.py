@@ -12,7 +12,7 @@ from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
 from datetime import datetime
 import processing
-from utils import get_resource_path, get_save_path, plotting_sheet_test, get_plot_sheet_names
+from utils import get_resource_path, get_save_path, plotting_sheet_test, get_plot_sheet_names, debug_print
 
 from tkinter import messagebox  # For showing info/errors
 
@@ -48,38 +48,38 @@ class ReportGenerator:
                 for sheet_name, sheet_info in filtered_sheets.items():
                     try:
                         if not isinstance(sheet_info, dict) or "data" not in sheet_info:
-                            print(f"DEBUG: Skipping sheet '{sheet_name}': No valid 'data' key found.")
+                            debug_print(f"DEBUG: Skipping sheet '{sheet_name}': No valid 'data' key found.")
                             continue
 
                         data = sheet_info["data"]  #  Extract the actual DataFrame
-                        print(f"DEBUG: Processing sheet: {sheet_name}")
-                        print(f"DEBUG: Sheet data shape: {data.shape}")
+                        debug_print(f"DEBUG: Processing sheet: {sheet_name}")
+                        debug_print(f"DEBUG: Sheet data shape: {data.shape}")
                     
                         # Special handling for User Test Simulation
                         if sheet_name == "User Test Simulation":
-                            print(f"DEBUG: Processing User Test Simulation with 8-column format")
-                            print(f"DEBUG: Data columns: {data.columns.tolist()}")
-                            print(f"DEBUG: Data preview:\n{data.head()}")
+                            debug_print(f"DEBUG: Processing User Test Simulation with 8-column format")
+                            debug_print(f"DEBUG: Data columns: {data.columns.tolist()}")
+                            debug_print(f"DEBUG: Data preview:\n{data.head()}")
                     
                         is_plotting = plotting_sheet_test(sheet_name, data)
-                        print(f"DEBUG: Sheet {sheet_name} is_plotting: {is_plotting}")
+                        debug_print(f"DEBUG: Sheet {sheet_name} is_plotting: {is_plotting}")
                     
                         process_function = processing.get_processing_function(sheet_name)
-                        print(f"DEBUG: Using processing function: {process_function.__name__}")
+                        debug_print(f"DEBUG: Using processing function: {process_function.__name__}")
                     
                         if is_plotting:
                             processed_data, _, full_sample_data = process_function(data)
-                            print(f"DEBUG: Processed data shape: {processed_data.shape}")
-                            print(f"DEBUG: Full sample data shape: {full_sample_data.shape}")
+                            debug_print(f"DEBUG: Processed data shape: {processed_data.shape}")
+                            debug_print(f"DEBUG: Full sample data shape: {full_sample_data.shape}")
                             valid_plot_options = processing.get_valid_plot_options(plot_options, full_sample_data)
-                            print(f"DEBUG: Valid plot options: {valid_plot_options}")
+                            debug_print(f"DEBUG: Valid plot options: {valid_plot_options}")
                         else:
                             data = data.astype(str).replace([pd.NA], '')
                             processed_data, _, full_sample_data = process_function(data)
                             valid_plot_options = []
 
                         if processed_data.empty or full_sample_data.empty:
-                            print(f"DEBUG: Skipping sheet '{sheet_name}' due to empty processed data.")
+                            debug_print(f"DEBUG: Skipping sheet '{sheet_name}' due to empty processed data.")
                             continue
 
                         self.write_excel_report(writer, sheet_name, processed_data, full_sample_data,
@@ -87,7 +87,7 @@ class ReportGenerator:
                         processed_count += 1
                     
                     except Exception as e:
-                        print(f"DEBUG: Error processing sheet '{sheet_name}': {e}")
+                        debug_print(f"DEBUG: Error processing sheet '{sheet_name}': {e}")
                         import traceback
                         traceback.print_exc()
                         continue
@@ -107,7 +107,7 @@ class ReportGenerator:
                 self.gui.root.update_idletasks()
 
             except Exception as e:
-                print(f"DEBUG: Error writing PowerPoint report: {e}")
+                debug_print(f"DEBUG: Error writing PowerPoint report: {e}")
                 raise
 
         except Exception as e:
@@ -141,8 +141,8 @@ class ReportGenerator:
             sheet_info = sheets.get(selected_sheet, {})
             data = sheet_info.get("data", pd.DataFrame())  # Ensure it's a DataFrame
         
-            print(f"DEBUG: Test report for {selected_sheet}")
-            print(f"DEBUG: Data shape: {data.shape}")
+            debug_print(f"DEBUG: Test report for {selected_sheet}")
+            debug_print(f"DEBUG: Data shape: {data.shape}")
 
             if data is None or data.empty:
                 messagebox.showwarning("Warning", f"Sheet '{selected_sheet}' is empty.")
@@ -150,15 +150,15 @@ class ReportGenerator:
 
             # Special handling for User Test Simulation
             if selected_sheet == "User Test Simulation":
-                print(f"DEBUG: Test report processing User Test Simulation with 8-column format")
-                print(f"DEBUG: Data columns: {data.columns.tolist()}")
+                debug_print(f"DEBUG: Test report processing User Test Simulation with 8-column format")
+                debug_print(f"DEBUG: Data columns: {data.columns.tolist()}")
 
             process_function = processing.get_processing_function(selected_sheet)
-            print(f"DEBUG: Using processing function: {process_function.__name__}")
+            debug_print(f"DEBUG: Using processing function: {process_function.__name__}")
         
             processed_data, _, full_sample_data = process_function(data)
-            print(f"DEBUG: Test report processed data shape: {processed_data.shape}")
-            print(f"DEBUG: Test report full sample data shape: {full_sample_data.shape}")
+            debug_print(f"DEBUG: Test report processed data shape: {processed_data.shape}")
+            debug_print(f"DEBUG: Test report full sample data shape: {full_sample_data.shape}")
         
             if processed_data.empty or full_sample_data.empty:
                 messagebox.showwarning("Warning", f"Sheet '{selected_sheet}' did not yield valid processed data.")
@@ -166,7 +166,7 @@ class ReportGenerator:
 
             with pd.ExcelWriter(save_path, engine='xlsxwriter') as writer:
                 valid_plot_options = processing.get_valid_plot_options(plot_options, full_sample_data)
-                print(f"DEBUG: Test report valid plot options: {valid_plot_options}")
+                debug_print(f"DEBUG: Test report valid plot options: {valid_plot_options}")
                 self.write_excel_report(writer, selected_sheet, processed_data, full_sample_data,
                                           valid_plot_options, images_to_delete)
 
@@ -177,7 +177,7 @@ class ReportGenerator:
             self.cleanup_images(images_to_delete)
             messagebox.showinfo("Success", f"Test report saved successfully to:\nExcel: {save_path}\nPowerPoint: {ppt_save_path}")
         except Exception as e:
-            print(f"DEBUG: Test report generation error: {e}")
+            debug_print(f"DEBUG: Test report generation error: {e}")
             import traceback
             traceback.print_exc()
             messagebox.showerror("Error", f"An error occurred while generating the test report: {e}")
@@ -188,12 +188,12 @@ class ReportGenerator:
         right_column_x = Inches(10.84)
         numeric_data = full_sample_data.apply(pd.to_numeric, errors='coerce')
         if numeric_data.isna().all(axis=0).all():
-            print(f"No numeric data available for plotting in sheet '{sheet_name}'.")
+            debug_print(f"No numeric data available for plotting in sheet '{sheet_name}'.")
             return
         sample_names = None
         if hasattr(self, 'header_data') and self.header_data and 'samples' in self.header_data:
             sample_names = [sample['id'] for sample in self.header_data['samples']]
-            print(f"DEBUG: Extracted sample names from header_data: {sample_names}")
+            debug_print(f"DEBUG: Extracted sample names from header_data: {sample_names}")
 
         # Determine if this is User Test Simulation
         is_user_test_simulation = sheet_name in ["User Test Simulation", "User Simulation Test"]
@@ -208,7 +208,7 @@ class ReportGenerator:
                 if is_user_test_simulation and hasattr(fig, 'is_split_plot') and fig.is_split_plot:
                     # For User Test Simulation split plots, save with adjusted size and spacing
                     plt.savefig(plot_image_path, dpi=150, bbox_inches='tight')
-                    print(f"DEBUG: Saved User Test Simulation split plot: {plot_image_path}")
+                    debug_print(f"DEBUG: Saved User Test Simulation split plot: {plot_image_path}")
                 
                     # Adjust positioning for split plots (they're wider)
                     plot_x = left_column_x if i % 2 == 0 else right_column_x - Inches(1.0)  # Shift left for wider plots
@@ -220,7 +220,7 @@ class ReportGenerator:
                 else:
                     # Standard single plots
                     plt.savefig(plot_image_path, dpi=150)
-                    print(f"DEBUG: Saved standard plot: {plot_image_path}")
+                    debug_print(f"DEBUG: Saved standard plot: {plot_image_path}")
                 
                     plot_x = left_column_x if i % 2 == 0 else right_column_x
                     if i % 2 != 0:
@@ -306,7 +306,7 @@ class ReportGenerator:
 
             processing.clean_presentation_tables(prs)
             prs.save(ppt_save_path)
-            print(f"PowerPoint test report saved to {ppt_save_path}")
+            debug_print(f"PowerPoint test report saved to {ppt_save_path}")
         
         except Exception as e:
             print(f"Error generating test PowerPoint: {e}")
@@ -406,14 +406,14 @@ class ReportGenerator:
                         if sheet_info and "data" in sheet_info:
                             data = sheet_info["data"]
                         else:
-                            print(f"Skipping sheet '{sheet_name}': No data available.")
+                            debug_print(f"Skipping sheet '{sheet_name}': No data available.")
                             continue
 
                     process_function = processing.get_processing_function(sheet_name)
                     processed_data, _, full_sample_data = process_function(data)
 
                     if processed_data.empty:
-                        print(f"Skipping sheet '{sheet_name}': Processed data is empty.")
+                        debug_print(f"Skipping sheet '{sheet_name}': Processed data is empty.")
                         continue
                     try:
                         slide_layout = prs.slide_layouts[6]
@@ -439,7 +439,7 @@ class ReportGenerator:
                     is_plotting = sheet_name in plot_sheet_names
                     if not is_plotting:
                         if processed_data.empty:
-                            print(f"Skipping non-plotting sheet '{sheet_name}' due to empty data.")
+                            debug_print(f"Skipping non-plotting sheet '{sheet_name}' due to empty data.")
                             continue
                         table_width = Inches(13.03)
                         self.add_table_to_slide(slide, full_sample_data, table_width, is_plotting)
@@ -450,7 +450,7 @@ class ReportGenerator:
                         if valid_plot_options:
                             self.add_plots_to_slide(slide, sheet_name, full_sample_data, valid_plot_options, images_to_delete)
                         else:
-                            print(f"No valid plot options for sheet '{sheet_name}'. Skipping plots.")
+                            debug_print(f"No valid plot options for sheet '{sheet_name}'. Skipping plots.")
                     if slide.shapes.title:
                         title_shape = slide.shapes.title
                         spTree = slide.shapes._spTree
@@ -468,7 +468,7 @@ class ReportGenerator:
                     # Add image slide if images exist
 
                     if self.gui.current_file in self.gui.sheet_images and sheet_name in self.gui.sheet_images.get(self.gui.current_file, {}):
-                        print("Images Exist! Adding a slide...")
+                        debug_print("Images Exist! Adding a slide...")
                         current_file = self.gui.current_file
                         image_paths = self.gui.sheet_images.get(current_file, {}).get(sheet_name, [])
                         valid_image_paths = [path for path in image_paths if os.path.exists(path)]
@@ -482,13 +482,13 @@ class ReportGenerator:
 
 
                 except Exception as sheet_error:
-                    print(f"Error processing sheet '{sheet_name}': {sheet_error}")
+                    debug_print(f"Error processing sheet '{sheet_name}': {sheet_error}")
                     processed_slides += 1
                     traceback.print_exc()
                     continue
             processing.clean_presentation_tables(prs)
             prs.save(ppt_save_path)
-            print(f"PowerPoint report saved successfully at {ppt_save_path}.")
+            debug_print(f"PowerPoint report saved successfully at {ppt_save_path}.")
         except Exception as e:
             print(f"Error writing PowerPoint report: {e}")
             traceback.print_exc()
@@ -515,7 +515,7 @@ class ReportGenerator:
             sample_names = None
             if hasattr(self, 'header_data') and self.header_data and 'samples' in self.header_data:
                 sample_names = [sample['id'] for sample in self.header_data['samples']]
-                print(f"DEBUG: Extracted sample names from header_data: {sample_names}")
+                debug_print(f"DEBUG: Extracted sample names from header_data: {sample_names}")
             if numeric_data.isna().all().all():
                 return
             
@@ -532,7 +532,7 @@ class ReportGenerator:
                     if is_user_test_simulation and hasattr(fig, 'is_split_plot') and fig.is_split_plot:
                         # For User Test Simulation split plots, save with higher DPI and better format
                         plt.savefig(plot_image_path, dpi=200, bbox_inches='tight')
-                        print(f"DEBUG: Saved User Test Simulation split plot for Excel: {plot_image_path}")
+                        debug_print(f"DEBUG: Saved User Test Simulation split plot for Excel: {plot_image_path}")
                     
                         # Adjust Excel positioning for wider split plots
                         col_offset = 10 + (i % 2) * 15  # More spacing for wider plots
@@ -540,7 +540,7 @@ class ReportGenerator:
                     else:
                         # Standard plots
                         plt.savefig(plot_image_path, dpi=300)
-                        print(f"DEBUG: Saved standard plot for Excel: {plot_image_path}")
+                        debug_print(f"DEBUG: Saved standard plot for Excel: {plot_image_path}")
                     
                         col_offset = 10 + (i % 2) * 10
                         row_offset = 2 + (i // 2) * 20
@@ -584,7 +584,7 @@ class ReportGenerator:
         processed_data = processed_data.astype(str)
         rows, cols = processed_data.shape
         if cols > 20 and rows > 30 and not is_plotting:
-            print(f"Skipping table creation for slide. Number of columns ({cols}) exceeds 20, number of rows ({rows}) exceeds 30, and it is not a plotting sheet.")
+            debug_print(f"Skipping table creation for slide. Number of columns ({cols}) exceeds 20, number of rows ({rows}) exceeds 30, and it is not a plotting sheet.")
             return
         table_left = Inches(0.15)
         table_top = Inches(1.19)

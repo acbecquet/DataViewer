@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import statistics
 from openpyxl.styles import PatternFill
-from utils import FONT
+from utils import FONT, debug_print
 import threading
 import subprocess
 
@@ -46,22 +46,19 @@ Be sure to take detailed notes while conducting this test.
 
 Key Points:
 - Split testing: Phase 1 (0-50 puffs) and Phase 2 (extended puffs)
-- 8 columns per sample instead of 12
-- Puffs recorded in second column
 - No resistance measurements during extended testing
     """,
     
     "Intense Test": """
 SOP - Intense Test:
 
-Conduct intensive puffing test with high frequency puffs.
+Conduct intense testing at a draw pressure of 5kPa. Use either 200mL/3s/30s or 160mL/3s/30s regime.
 Record TPM, draw pressure, and resistance at regular intervals.
 Monitor for device overheating or failure.
-Document any unusual observations.
+Document any unusual observations in notes.
 
 Key Points:
-- High frequency puffing regime
-- Monitor device temperature
+- 5kPa draw pressure target
 - Standard 12-column data collection
 - Record all measurements consistently
     """,
@@ -78,8 +75,6 @@ Be sure to take detailed notes while conducting this test.
 
 Key Points:
 - Split testing: Phase 1 (0-50 puffs) and Phase 2 (extended puffs)
-- 8 columns per sample instead of 12
-- Puffs recorded in second column
 - No resistance measurements during extended testing
     """,
     
@@ -92,7 +87,6 @@ Be sure to take detailed notes on bubbling and any failure modes.
 
 Key Points:
 - 40C big headspace test
-- Standard plotting sheet format
 - Monitor for thermal effects
 - Document temperature-related observations
     """,
@@ -102,7 +96,7 @@ SOP - Extended Test:
 
 Long-duration testing to assess device lifetime and performance degradation.
 Sessions of 10 puffs with a 60mL/3s/30s puffing regime. Rest 15 minutes between sessions.
-Monitor for performance consistency over time. Measure initial and final draw resistance, and measure TPM every 10 puffs.
+Monitor for performance and consistency over time. Measure initial and final draw resistance, and measure TPM every 10 puffs.
 
 Key Points:
 - Extended duration testing
@@ -125,7 +119,6 @@ Key Points:
 - Basic functionality verification
     """,
     
-    # Add more SOPs as needed for other tests
     "default": """
 SOP - Standard Test Protocol:
 
@@ -153,6 +146,8 @@ class DataCollectionWindow:
             test_name (str): Name of the test being conducted.
             header_data (dict): Dictionary containing header data.
         """
+        # Debug flag - set to False to disable all debug output
+        self.DEBUG = False
         self.parent = parent
         self.root = parent.root
         self.file_path = file_path
@@ -179,13 +174,12 @@ class DataCollectionWindow:
         self.window.geometry("1375x750")
         self.window.minsize(1250, 625)
     
-        # BRING WINDOW TO FRONT - ADD THESE LINES:
         self.window.transient(self.root)  # Make it a child of the main window
         self.window.grab_set()  # Make it modal and bring to front
         self.window.lift()  # Bring to top of window stack
         self.window.focus_force()  # Force focus to this window
     
-        # Optional: Make it stay on top temporarily
+        # Make it stay on top temporarily
         self.window.attributes('-topmost', True)
         self.window.after(100, lambda: self.window.attributes('-topmost', False)) 
 
@@ -237,7 +231,8 @@ class DataCollectionWindow:
         self.ensure_initial_tpm_calculation()
     
         self.log(f"DataCollectionWindow initialized for {test_name} with {self.num_samples} samples", "debug")
-    
+
+
     def create_menu_bar(self):
         """Create a comprehensive menu bar for the data collection window."""
         menubar = tk.Menu(self.window)
@@ -338,7 +333,7 @@ class DataCollectionWindow:
         self.style.map('Treeview.Heading',
                       background=[('active', '#C0C0C0')])
 
-        print("DEBUG: Enhanced styles configured with better visual separation")
+        debug_print("DEBUG: Enhanced styles configured with better visual separation")
     
     def center_window(self):
         """Center the window on the screen."""
@@ -358,7 +353,7 @@ class DataCollectionWindow:
             height = canvas_widget.winfo_height()
         
             if width > 1 and height > 1:  # Valid size
-                # Convert to inches (assuming 80 DPI)
+                # Convert to inches at 80dpi
                 fig_width = width / 80.0
                 fig_height = height / 80.0
             
@@ -424,11 +419,9 @@ class DataCollectionWindow:
         elif level.lower() == "critical":
             logger.critical(message)
 
-    # Add this new method to create the SOP section:
     def create_sop_section(self, parent_frame):
         """Create the SOP (Standard Operating Procedure) section."""
         
-    
         # Create a collapsible SOP frame
         sop_frame = ttk.LabelFrame(parent_frame, text="", style='TLabelframe')
         sop_frame.pack(fill="x", pady=(0, 10))
@@ -437,7 +430,7 @@ class DataCollectionWindow:
         header_frame = ttk.Frame(sop_frame, style='TFrame')
         header_frame.pack(fill="x", padx=5, pady=5)
     
-        # Add small toggle button on the LEFT with minimal size
+        # Add small toggle button on the left with minimal size
         self.sop_visible = True
         self.toggle_sop_button = ttk.Button(
             header_frame,
@@ -445,7 +438,7 @@ class DataCollectionWindow:
             width=6,  # Even smaller width
             command=self.toggle_sop_visibility
         )
-        self.toggle_sop_button.pack(side="left", padx=(0, 10))  # Small gap between button and title
+        self.toggle_sop_button.pack(side="left", padx=(0, 5))  # Small gap between button and title
     
         # Add title label after the button
         title_label = ttk.Label(header_frame, text="Standard Operating Procedure (SOP)", 
@@ -458,7 +451,7 @@ class DataCollectionWindow:
         # Create a text widget to display the SOP with centered text
         self.sop_text_widget = tk.Text(
             sop_frame, 
-            height=6,  # Adjust height as needed
+            height=6,  
             wrap=tk.WORD,
             font=("Arial", 9),
             bg="SystemButtonFace",
@@ -480,7 +473,7 @@ class DataCollectionWindow:
         # Make it read-only
         self.sop_text_widget.config(state="disabled")
     
-        print("DEBUG: SOP section created successfully")
+        debug_print("DEBUG: SOP section created successfully")
 
     def toggle_sop_visibility(self):
         """Toggle the visibility of the SOP text."""
@@ -489,13 +482,13 @@ class DataCollectionWindow:
             self.sop_text_widget.pack_forget()
             self.toggle_sop_button.config(text="Show")
             self.sop_visible = False
-            print("DEBUG: SOP section hidden")
+            debug_print("DEBUG: SOP section hidden")
         else:
             # Show the SOP
             self.sop_text_widget.pack(fill="x", padx=10, pady=(0, 5))
             self.toggle_sop_button.config(text="Hide")
             self.sop_visible = True
-            print("DEBUG: SOP section shown")
+            debug_print("DEBUG: SOP section shown")
 
     # Auto-save functionality
     def start_auto_save_timer(self):
@@ -505,7 +498,7 @@ class DataCollectionWindow:
         
         self.auto_save_timer = self.window.after(self.auto_save_interval, self.auto_save)
         
-    # needs modification
+    # needs modification !!!!
     def auto_save(self):
         """Perform automatic save without user confirmation."""
         if self.has_unsaved_changes:
@@ -513,9 +506,9 @@ class DataCollectionWindow:
             try:
                 self.save_data(show_confirmation=False, auto_save=True)
                 self.update_save_status(False)  # Mark as saved
-                print("DEBUG: Auto-save completed successfully")
+                debug_print("DEBUG: Auto-save completed successfully")
             except Exception as e:
-                print(f"DEBUG: Auto-save failed: {e}")
+                debug_print(f"DEBUG: Auto-save failed: {e}")
                 # Continue even if auto-save fails
         
         # Restart the timer
@@ -547,7 +540,7 @@ class DataCollectionWindow:
                                      "You have unsaved changes. Are you sure you want to exit without saving?"):
                 return
         
-        print("DEBUG: Exiting without saving")
+        debug_print("DEBUG: Exiting without saving")
         self.result = "cancel"
         self.window.destroy()
     
@@ -604,7 +597,7 @@ class DataCollectionWindow:
     
     def edit_headers(self):
         """Open header editing dialog from within data collection."""
-        print("DEBUG: Edit Headers requested from data collection window")
+        debug_print("DEBUG: Edit Headers requested from data collection window")
         
         # Show the header data dialog in edit mode
         from header_data_dialog import HeaderDataDialog
@@ -618,7 +611,7 @@ class DataCollectionWindow:
         result, new_header_data = header_dialog.show()
         
         if result:
-            print("DEBUG: Header data updated successfully")
+            debug_print("DEBUG: Header data updated successfully")
             # Update our internal header data
             old_header_data = self.header_data.copy()
             self.header_data = new_header_data
@@ -628,7 +621,7 @@ class DataCollectionWindow:
             new_num_samples = new_header_data.get("num_samples", 0)
             
             if old_num_samples != new_num_samples:
-                print(f"DEBUG: Number of samples changed from {old_num_samples} to {new_num_samples}")
+                debug_print(f"DEBUG: Number of samples changed from {old_num_samples} to {new_num_samples}")
                 # Handle sample count change
                 self.handle_sample_count_change(old_num_samples, new_num_samples)
             
@@ -644,11 +637,11 @@ class DataCollectionWindow:
             # Show success message
             self.show_temp_status_message("Headers updated successfully", 3000)
         else:
-            print("DEBUG: Header editing was cancelled")
+            debug_print("DEBUG: Header editing was cancelled")
 
     def handle_sample_count_change(self, old_count, new_count):
         """Handle changes in the number of samples."""
-        print(f"DEBUG: Handling sample count change: {old_count} -> {new_count}")
+        debug_print(f"DEBUG: Handling sample count change: {old_count} -> {new_count}")
     
         if new_count > old_count:
             # Add new samples
@@ -685,7 +678,7 @@ class DataCollectionWindow:
                     if self.test_name in ["User Test Simulation", "User Simulation Test"]:
                         self.data[sample_id]["chronography"].append("")
         
-            print(f"DEBUG: Added {new_count - old_count} new samples")
+            debug_print(f"DEBUG: Added {new_count - old_count} new samples")
         
         elif new_count < old_count:
             # Remove excess samples
@@ -694,7 +687,7 @@ class DataCollectionWindow:
                 if sample_id in self.data:
                     del self.data[sample_id]
         
-            print(f"DEBUG: Removed {old_count - new_count} samples")
+            debug_print(f"DEBUG: Removed {old_count - new_count} samples")
     
         # Update the number of samples
         self.num_samples = new_count
@@ -704,7 +697,7 @@ class DataCollectionWindow:
 
     def recreate_sample_tabs(self):
         """Recreate all sample tabs when sample count changes."""
-        print("DEBUG: Recreating sample tabs")
+        debug_print("DEBUG: Recreating sample tabs")
         
         # Clear existing tabs
         for tab in self.notebook.tabs():
@@ -734,7 +727,7 @@ class DataCollectionWindow:
         # Recreate the TPM stats panel
         self.create_tpm_stats_panel()
         
-        print(f"DEBUG: Recreated {self.num_samples} sample tabs")
+        debug_print(f"DEBUG: Recreated {self.num_samples} sample tabs")
 
     def update_header_display(self):
         """Update the header information displayed in the UI."""
@@ -756,7 +749,7 @@ class DataCollectionWindow:
             
             
         except Exception as e:
-            print(f"DEBUG: Error updating header display: {e}")
+            debug_print(f"DEBUG: Error updating header display: {e}")
 
     def update_header_labels_recursive(self, widget):
         """Recursively update header labels in the widget tree."""
@@ -772,17 +765,17 @@ class DataCollectionWindow:
                 self.update_header_labels_recursive(child)
                 
         except Exception as e:
-            print(f"DEBUG: Error updating label: {e}")
+            debug_print(f"DEBUG: Error updating label: {e}")
 
     def apply_header_changes_to_file(self):
         """Apply header changes to the Excel file."""
-        print("DEBUG: Applying header changes to Excel file")
+        debug_print("DEBUG: Applying header changes to Excel file")
         try:
             import openpyxl
             wb = openpyxl.load_workbook(self.file_path)
             
             if self.test_name not in wb.sheetnames:
-                print(f"DEBUG: Sheet {self.test_name} not found")
+                debug_print(f"DEBUG: Sheet {self.test_name} not found")
                 return
                 
             ws = wb[self.test_name]
@@ -802,10 +795,10 @@ class DataCollectionWindow:
             
             # Save the workbook
             wb.save(self.file_path)
-            print("DEBUG: Header changes applied to Excel file")
+            debug_print("DEBUG: Header changes applied to Excel file")
             
         except Exception as e:
-            print(f"DEBUG: Error applying header changes to file: {e}")
+            debug_print(f"DEBUG: Error applying header changes to file: {e}")
 
     def show_temp_status_message(self, message, duration_ms):
         """Show a temporary status message."""
@@ -852,7 +845,7 @@ class DataCollectionWindow:
             self.update_stats_panel()
             self.mark_unsaved_changes()
         
-            print(f"DEBUG: Cleared data for {sample_id}")
+            debug_print(f"DEBUG: Cleared data for {sample_id}")
     
     def clear_all_data(self):
         """Clear all data for all samples."""
@@ -879,7 +872,7 @@ class DataCollectionWindow:
         
             self.update_stats_panel()
             self.mark_unsaved_changes()
-            print("DEBUG: Cleared all data for all samples")
+            debug_print("DEBUG: Cleared all data for all samples")
     
     def add_row(self):
         """Add a new row to all samples."""
@@ -904,7 +897,7 @@ class DataCollectionWindow:
             self.update_treeview(tree, sample_id)
     
         self.mark_unsaved_changes()
-        print(f"DEBUG: Added new row with puff count {new_puff}")
+        debug_print(f"DEBUG: Added new row with puff count {new_puff}")
     
     def remove_last_row(self):
         """Remove the last row from all samples."""
@@ -921,11 +914,11 @@ class DataCollectionWindow:
             
             self.update_stats_panel()
             self.mark_unsaved_changes()
-            print("DEBUG: Removed last row from all samples")
+            debug_print("DEBUG: Removed last row from all samples")
     
     def recalculate_all_tpm(self):
         """Recalculate TPM for all samples."""
-        print("DEBUG: Recalculating TPM for all samples")
+        debug_print("DEBUG: Recalculating TPM for all samples")
         for i in range(self.num_samples):
             sample_id = f"Sample {i + 1}"
             self.calculate_tpm(sample_id)
@@ -973,7 +966,7 @@ class DataCollectionWindow:
             self.puff_interval_var.set(new_interval)
             
             # Update puff values for future rows
-            print(f"DEBUG: Changed puff interval to {new_interval}")
+            debug_print(f"DEBUG: Changed puff interval to {new_interval}")
     
     def auto_save_settings_dialog(self):
         """Show dialog to configure auto-save settings."""
@@ -990,11 +983,11 @@ class DataCollectionWindow:
         if new_minutes:
             self.auto_save_interval = int(new_minutes * 60 * 1000)
             self.start_auto_save_timer()  # Restart with new interval
-            print(f"DEBUG: Changed auto-save interval to {new_minutes} minutes")
+            debug_print(f"DEBUG: Changed auto-save interval to {new_minutes} minutes")
     
     def switch_test_dialog(self):
         """Show dialog to switch to a different test in the same file."""
-        # This would require integration with the main application
+        # Future Integration with main gui to switch to other sheets in the file
         # For now, just show an info message
         messagebox.showinfo("Switch Test", 
                           "To switch tests, please save your current work and use the main application menu.")
@@ -1059,18 +1052,18 @@ Developed by Charlie Becquet
     
     def _save_to_excel(self):
         """Save data to the Excel file."""
-        print(f"DEBUG: _save_to_excel() starting - file: {self.file_path}")
+        debug_print(f"DEBUG: _save_to_excel() starting - file: {self.file_path}")
 
         # Load the workbook
         wb = openpyxl.load_workbook(self.file_path)
-        print(f"DEBUG: Loaded workbook, sheets: {wb.sheetnames}")
+        debug_print(f"DEBUG: Loaded workbook, sheets: {wb.sheetnames}")
 
         # Get the sheet for this test
         if self.test_name not in wb.sheetnames:
             raise Exception(f"Sheet '{self.test_name}' not found in the file.")
     
         ws = wb[self.test_name]
-        print(f"DEBUG: Opened sheet '{self.test_name}'")
+        debug_print(f"DEBUG: Opened sheet '{self.test_name}'")
 
         # Define green fill for TPM cells
         green_fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
@@ -1078,10 +1071,10 @@ Developed by Charlie Becquet
         # Determine column layout based on test type
         if self.test_name in ["User Test Simulation", "User Simulation Test"]:
             columns_per_sample = 8  # Including chronography
-            print(f"DEBUG: Using User Test Simulation format with 8 columns per sample")
+            debug_print(f"DEBUG: Using User Test Simulation format with 8 columns per sample")
         else:
             columns_per_sample = 12  # Standard format
-            print(f"DEBUG: Using standard format with 12 columns per sample")
+            debug_print(f"DEBUG: Using standard format with 12 columns per sample")
 
         # Track how much data we're actually writing
         total_data_written = 0
@@ -1093,7 +1086,7 @@ Developed by Charlie Becquet
             # Calculate column offset based on test type
             col_offset = sample_idx * columns_per_sample
     
-            print(f"DEBUG: Writing data for {sample_id} at column offset {col_offset}")
+            debug_print(f"DEBUG: Writing data for {sample_id} at column offset {col_offset}")
     
             sample_data_written = 0
     
@@ -1161,7 +1154,7 @@ Developed by Charlie Becquet
                     if self.data[sample_id]["notes"][i]:
                         ws.cell(row=row, column=7 + col_offset, value=str(self.data[sample_id]["notes"][i]))
                     
-                    print(f"DEBUG: Saved User Test Simulation row {i} for {sample_id}")
+                    debug_print(f"DEBUG: Saved User Test Simulation row {i} for {sample_id}")
                 
                 else:
                     # Standard column layout (12 columns)
@@ -1220,17 +1213,17 @@ Developed by Charlie Becquet
                 sample_data_written += 1
         
             total_data_written += sample_data_written
-            print(f"DEBUG: Wrote {sample_data_written} data rows for {sample_id}")
+            debug_print(f"DEBUG: Wrote {sample_data_written} data rows for {sample_id}")
 
         # Save the workbook
-        print(f"DEBUG: Saving workbook with {total_data_written} total data rows written...")
+        debug_print(f"DEBUG: Saving workbook with {total_data_written} total data rows written...")
 
-        print("DEBUG: About to save Excel file - verifying data to be saved:")
+        debug_print("DEBUG: About to save Excel file - verifying data to be saved:")
         for sample_idx in range(min(2, self.num_samples)):  # Check first 2 samples
             sample_id = f"Sample {sample_idx+1}"
             col_offset = sample_idx * columns_per_sample
         
-            print(f"DEBUG: Sample {sample_idx+1} data preview:")
+            debug_print(f"DEBUG: Sample {sample_idx+1} data preview:")
             for i in range(min(3, len(self.data[sample_id]["puffs"]))):  # First 3 rows
                 row = i + 5
                 if self.test_name in ["User Test Simulation", "User Simulation Test"]:
@@ -1238,23 +1231,23 @@ Developed by Charlie Becquet
                     puff_val = ws.cell(row=row, column=2 + col_offset).value
                     before_val = ws.cell(row=row, column=3 + col_offset).value
                     after_val = ws.cell(row=row, column=4 + col_offset).value
-                    print(f"DEBUG:   Row {i}: Chrono={chrono_val}, Puff={puff_val}, Before={before_val}, After={after_val}")
+                    debug_print(f"DEBUG:   Row {i}: Chrono={chrono_val}, Puff={puff_val}, Before={before_val}, After={after_val}")
                 else:
                     puff_val = ws.cell(row=row, column=1 + col_offset).value
                     before_val = ws.cell(row=row, column=2 + col_offset).value
                     after_val = ws.cell(row=row, column=3 + col_offset).value
                     tpm_val = ws.cell(row=row, column=9 + col_offset).value
-                    print(f"DEBUG:   Row {i}: Puff={puff_val}, Before={before_val}, After={after_val}, TPM={tpm_val}")
+                    debug_print(f"DEBUG:   Row {i}: Puff={puff_val}, Before={before_val}, After={after_val}, TPM={tpm_val}")
 
         wb.save(self.file_path)
-        print(f"DEBUG: Excel file saved successfully to {self.file_path}")
+        debug_print(f"DEBUG: Excel file saved successfully to {self.file_path}")
     
     def _update_application_state(self):
         """Update the main application's state if this is a VAP3 file."""
         # Check if the parent has methods to update state
         if hasattr(self.parent, 'filtered_sheets') and hasattr(self.parent, 'file_path'):
             if self.parent.file_path and self.parent.file_path.endswith('.vap3'):
-                print("DEBUG: Updating VAP3 file and application state")
+                debug_print("DEBUG: Updating VAP3 file and application state")
                 try:
                     # Import here to avoid circular imports
                     from vap_file_manager import VapFileManager
@@ -1278,17 +1271,17 @@ Developed by Charlie Becquet
                     )
                     
                     if success:
-                        print("DEBUG: VAP3 file updated successfully")
+                        debug_print("DEBUG: VAP3 file updated successfully")
                     else:
-                        print("DEBUG: Failed to update VAP3 file")
+                        debug_print("DEBUG: Failed to update VAP3 file")
                         
                 except Exception as e:
-                    print(f"DEBUG: Error updating VAP3 file: {e}")
+                    debug_print(f"DEBUG: Error updating VAP3 file: {e}")
     # modify
     def create_sample_tab(self, parent_frame, sample_id, sample_index):
         """Create a tab for a single sample with data entry controls."""
-        print(f"DEBUG: Creating sample tab for {sample_id}")
-        print(f"DEBUG: Test name: '{self.test_name}'")
+        debug_print(f"DEBUG: Creating sample tab for {sample_id}")
+        debug_print(f"DEBUG: Test name: '{self.test_name}'")
 
         # Create main container
         main_container = ttk.Frame(parent_frame)
@@ -1316,7 +1309,7 @@ Developed by Charlie Becquet
 
         # Determine columns based on test type
         if self.test_name in ["User Test Simulation", "User Simulation Test"]:
-            print(f"DEBUG: Setting up User Test Simulation columns with chronography")
+            debug_print(f"DEBUG: Setting up User Test Simulation columns with chronography")
             # User Test Simulation: 8 columns including chronography
             columns = ["Chronography", "Puffs", "Before Weight", "After Weight", "Draw Pressure", "Failure", "Notes", "TPM"]
             column_widths = [100, 80, 100, 100, 100, 80, 150, 80]
@@ -1324,20 +1317,20 @@ Developed by Charlie Becquet
 
             # Ensure chronography data exists
             if "chronography" not in self.data[sample_id]:
-                print(f"DEBUG: Creating chronography data structure for {sample_id}")
+                debug_print(f"DEBUG: Creating chronography data structure for {sample_id}")
                 self.data[sample_id]["chronography"] = []
                 # Pre-initialize chronography data to match existing data length
                 existing_length = len(self.data[sample_id]["puffs"])
                 for j in range(existing_length):
                     self.data[sample_id]["chronography"].append("")
             
-            print(f"DEBUG: User Test Simulation columns: {columns}")
+            debug_print(f"DEBUG: User Test Simulation columns: {columns}")
         else:
             # Standard tests: 9 columns without chronography  
             columns = ["Puffs", "Before Weight", "After Weight", "Draw Pressure", "Resistance", "Smell", "Clog", "Notes", "TPM"]
             column_widths = [80, 100, 100, 100, 100, 80, 80, 150, 80]
             self.tree_columns = len(columns)
-            print(f"DEBUG: Standard test columns: {columns}")
+            debug_print(f"DEBUG: Standard test columns: {columns}")
 
         tree = ttk.Treeview(scrollable_frame, columns=columns, show="headings")
 
@@ -1345,7 +1338,7 @@ Developed by Charlie Becquet
         for i, (col, width) in enumerate(zip(columns, column_widths)):
             tree.heading(col, text=col)
             tree.column(col, width=width, minwidth=50, anchor='center')  # Center align for better appearance
-            print(f"DEBUG: Configured column {i}: {col} with width {width}")
+            debug_print(f"DEBUG: Configured column {i}: {col} with width {width}")
 
         # Configure highlighting tags
         tree.tag_configure('highlight_selected', background='#CCE5FF', foreground='black')
@@ -1384,7 +1377,7 @@ Developed by Charlie Becquet
 
         canvas.bind("<MouseWheel>", on_mousewheel)
 
-        print(f"DEBUG: Sample tab created for {sample_id} with {len(columns)} columns")
+        debug_print(f"DEBUG: Sample tab created for {sample_id} with {len(columns)} columns")
         return tree
     # modify
     def on_tree_key_press(self, event, tree, sample_id):
@@ -1400,7 +1393,7 @@ Developed by Charlie Becquet
 
     def update_treeview(self, tree, sample_id):
         """Update the treeview with current data, highlighting only TPM cells."""
-        print(f"DEBUG: Updating treeview for {sample_id}")
+        debug_print(f"DEBUG: Updating treeview for {sample_id}")
     
         # Clear existing items
         for item in tree.get_children():
@@ -1408,7 +1401,7 @@ Developed by Charlie Becquet
     
         # Get data length
         data_length = len(self.data[sample_id]["puffs"])
-        print(f"DEBUG: Data length for {sample_id}: {data_length}")
+        debug_print(f"DEBUG: Data length for {sample_id}: {data_length}")
     
         # Insert data rows with alternating colors for better visual separation
         for i in range(data_length):
@@ -1463,50 +1456,50 @@ Developed by Charlie Becquet
         
             item = tree.insert("", "end", values=values, tags=tags)
     
-        print(f"DEBUG: Treeview updated for {sample_id} with {data_length} rows")
+        debug_print(f"DEBUG: Treeview updated for {sample_id} with {data_length} rows")
 
     def refresh_main_gui_after_save(self):
         """Refresh the main GUI to show updated data after saving."""
-        print("DEBUG: Starting main GUI refresh")
+        debug_print("DEBUG: Starting main GUI refresh")
 
         try:
             # Use test_name as the sheet to refresh
             current_sheet_name = self.test_name
-            print(f"DEBUG: Target sheet: {current_sheet_name}")
+            debug_print(f"DEBUG: Target sheet: {current_sheet_name}")
         
             # Check parent and file_manager
-            print(f"DEBUG: Has parent: {hasattr(self, 'parent')}")
-            print(f"DEBUG: Parent exists: {self.parent is not None}")
-            print(f"DEBUG: Has file_manager: {hasattr(self.parent, 'file_manager')}")
-            print(f"DEBUG: File manager exists: {self.parent.file_manager is not None}")
+            debug_print(f"DEBUG: Has parent: {hasattr(self, 'parent')}")
+            debug_print(f"DEBUG: Parent exists: {self.parent is not None}")
+            debug_print(f"DEBUG: Has file_manager: {hasattr(self.parent, 'file_manager')}")
+            debug_print(f"DEBUG: File manager exists: {self.parent.file_manager is not None}")
         
             # Force reload the file
             if hasattr(self.parent, 'file_manager') and self.parent.file_manager:
-                print(f"DEBUG: Force reloading {self.file_path}")
+                debug_print(f"DEBUG: Force reloading {self.file_path}")
             
                 # Clear any existing cache for this file first
                 if hasattr(self.parent.file_manager, 'loaded_files_cache'):
                     cache_key = f"{self.file_path}_None"
                     if cache_key in self.parent.file_manager.loaded_files_cache:
                         del self.parent.file_manager.loaded_files_cache[cache_key]
-                        print("DEBUG: Cleared file cache")
+                        debug_print("DEBUG: Cleared file cache")
             
                 self.parent.file_manager.load_excel_file(
                     self.file_path, 
                     skip_database_storage=True,
                     force_reload=True
                 )
-                print("DEBUG: File reloaded")
+                debug_print("DEBUG: File reloaded")
             else:
-                print("DEBUG: Cannot reload - file_manager not available")
+                debug_print("DEBUG: Cannot reload - file_manager not available")
 
             # Update all_filtered_sheets
             if hasattr(self.parent, 'all_filtered_sheets') and hasattr(self.parent, 'current_file'):
-                print(f"DEBUG: Updating all_filtered_sheets for {self.parent.current_file}")
+                debug_print(f"DEBUG: Updating all_filtered_sheets for {self.parent.current_file}")
                 for file_data in self.parent.all_filtered_sheets:
                     if file_data.get("file_name") == self.parent.current_file:
                         file_data["filtered_sheets"] = copy.deepcopy(self.parent.filtered_sheets)
-                        print("DEBUG: Updated all_filtered_sheets entry")
+                        debug_print("DEBUG: Updated all_filtered_sheets entry")
                         break
 
             # Set the sheet selection
@@ -1514,24 +1507,24 @@ Developed by Charlie Becquet
                 if not self.parent.selected_sheet:
                     import tkinter as tk
                     self.parent.selected_sheet = tk.StringVar()
-                    print("DEBUG: Created selected_sheet variable")
+                    debug_print("DEBUG: Created selected_sheet variable")
                 self.parent.selected_sheet.set(current_sheet_name)
-                print(f"DEBUG: Set sheet to {current_sheet_name}")
+                debug_print(f"DEBUG: Set sheet to {current_sheet_name}")
 
             # Update the display
             if hasattr(self.parent, 'update_displayed_sheet'):
-                print("DEBUG: Calling update_displayed_sheet")
+                debug_print("DEBUG: Calling update_displayed_sheet")
                 self.parent.update_displayed_sheet(current_sheet_name)
-                print("DEBUG: Display updated")
+                debug_print("DEBUG: Display updated")
             else:
-                print("DEBUG: No update_displayed_sheet method available")
+                debug_print("DEBUG: No update_displayed_sheet method available")
         
             # Force GUI update
             if hasattr(self.parent, 'root'):
                 self.parent.root.update_idletasks()
-                print("DEBUG: Forced GUI update")
+                debug_print("DEBUG: Forced GUI update")
     
-            print("DEBUG: Refresh complete")
+            debug_print("DEBUG: Refresh complete")
 
         except Exception as e:
             print(f"ERROR: Refresh failed: {e}")
@@ -1638,7 +1631,7 @@ Developed by Charlie Becquet
     
     def load_existing_data_from_file(self):
         """Load existing data from the Excel file into the data collection interface."""
-        print(f"DEBUG: Loading existing data from file: {self.file_path}")
+        debug_print(f"DEBUG: Loading existing data from file: {self.file_path}")
 
         try:
             # Load the workbook and calculate formulas
@@ -1646,19 +1639,19 @@ Developed by Charlie Becquet
 
             # Check if the test sheet exists
             if self.test_name not in wb.sheetnames:
-                print(f"DEBUG: Sheet '{self.test_name}' not found in file")
+                debug_print(f"DEBUG: Sheet '{self.test_name}' not found in file")
                 return
     
             ws = wb[self.test_name]
-            print(f"DEBUG: Successfully opened sheet '{self.test_name}'")
+            debug_print(f"DEBUG: Successfully opened sheet '{self.test_name}'")
     
             # Determine column layout based on test type
             if self.test_name in ["User Test Simulation", "User Simulation Test"]:
                 columns_per_sample = 8  # Including chronography
-                print(f"DEBUG: Loading User Test Simulation format with 8 columns per sample")
+                debug_print(f"DEBUG: Loading User Test Simulation format with 8 columns per sample")
             else:
                 columns_per_sample = 12  # Standard format
-                print(f"DEBUG: Loading standard format with 12 columns per sample")
+                debug_print(f"DEBUG: Loading standard format with 12 columns per sample")
 
             # Load data for each sample
             loaded_data_count = 0
@@ -1666,7 +1659,7 @@ Developed by Charlie Becquet
                 sample_id = f"Sample {sample_idx + 1}"
                 col_offset = sample_idx * columns_per_sample
     
-                print(f"DEBUG: Loading data for {sample_id} with column offset {col_offset}")
+                debug_print(f"DEBUG: Loading data for {sample_id} with column offset {col_offset}")
     
                 # Read data starting from row 5 (Excel row 5 = index 4)
                 row_count = 0
@@ -1744,10 +1737,10 @@ Developed by Charlie Becquet
 
                     # If no meaningful data, skip this row
                     if not has_meaningful_data:
-                        print(f"DEBUG: Skipping row {excel_row} - no data found")
+                        debug_print(f"DEBUG: Skipping row {excel_row} - no data found")
                         continue
                     
-                    print(f"DEBUG: Loading row {excel_row} for {sample_id} - found meaningful data")
+                    debug_print(f"DEBUG: Loading row {excel_row} for {sample_id} - found meaningful data")
         
                     # Load the data with proper type conversion
                     try:
@@ -1769,7 +1762,7 @@ Developed by Charlie Becquet
                             puffs_value = int(float(puffs_cell.value))
                             self.data[sample_id]["puffs"][data_row_idx] = puffs_value
                         else:
-                            print(f"DEBUG: Skipping non-numeric puffs value: {puffs_cell.value}")
+                            debug_print(f"DEBUG: Skipping non-numeric puffs value: {puffs_cell.value}")
                             continue
             
                         # Before weight - convert to float or empty string
@@ -1823,39 +1816,39 @@ Developed by Charlie Becquet
                         row_count += 1
             
                         if self.test_name in ["User Test Simulation", "User Simulation Test"]:
-                            print(f"DEBUG: {sample_id} Row {data_row_idx}: chrono={chrono_value}, puffs={puffs_value}, before={before_weight_value}, after={after_weight_value}")
+                            debug_print(f"DEBUG: {sample_id} Row {data_row_idx}: chrono={chrono_value}, puffs={puffs_value}, before={before_weight_value}, after={after_weight_value}")
                         else:
-                            print(f"DEBUG: {sample_id} Row {data_row_idx}: puffs={puffs_value}, before={before_weight_value}, after={after_weight_value}")
+                            debug_print(f"DEBUG: {sample_id} Row {data_row_idx}: puffs={puffs_value}, before={before_weight_value}, after={after_weight_value}")
             
                     except (ValueError, TypeError) as e:
-                        print(f"DEBUG: Error converting data for {sample_id} row {data_row_idx}: {e}")
+                        debug_print(f"DEBUG: Error converting data for {sample_id} row {data_row_idx}: {e}")
                         # Keep default values if conversion fails
                         continue
     
                 if sample_had_data:
                     loaded_data_count += 1
-                    print(f"DEBUG: {sample_id} - Loaded {row_count} rows of existing data")
+                    debug_print(f"DEBUG: {sample_id} - Loaded {row_count} rows of existing data")
                 else:
-                    print(f"DEBUG: {sample_id} - No existing data found")
+                    debug_print(f"DEBUG: {sample_id} - No existing data found")
 
-            print(f"DEBUG: Successfully loaded existing data for {loaded_data_count} samples")
+            debug_print(f"DEBUG: Successfully loaded existing data for {loaded_data_count} samples")
 
             # Recalculate TPM values for all samples FIRST
             for i in range(self.num_samples):
                 sample_id = f"Sample {i + 1}"
                 self.calculate_tpm(sample_id)
-                print(f"DEBUG: Calculated TPM for {sample_id}")
+                debug_print(f"DEBUG: Calculated TPM for {sample_id}")
 
             # Update all treeviews to show the loaded data WITH calculated TPM
             for i, sample_tree in enumerate(self.sample_trees):
                 sample_id = f"Sample {i + 1}"
                 self.update_treeview(sample_tree, sample_id)
-                print(f"DEBUG: Updated treeview for {sample_id} with TPM values")
+                debug_print(f"DEBUG: Updated treeview for {sample_id} with TPM values")
 
             # Update the stats panel
             self.update_stats_panel()
 
-            print("DEBUG: Existing data loading completed successfully")
+            debug_print("DEBUG: Existing data loading completed successfully")
 
         except Exception as e:
             print(f"ERROR: Failed to load existing data from file: {e}")
@@ -1865,7 +1858,7 @@ Developed by Charlie Becquet
     
     def ensure_initial_tpm_calculation(self):
         """Ensure TPM is calculated and displayed when window opens."""
-        print("DEBUG: Ensuring initial TPM calculation and display")
+        debug_print("DEBUG: Ensuring initial TPM calculation and display")
     
         for i in range(self.num_samples):
             sample_id = f"Sample {i + 1}"
@@ -1881,7 +1874,7 @@ Developed by Charlie Becquet
         # Update stats panel to show current TPM data
         self.update_stats_panel()
     
-        print("DEBUG: Initial TPM calculation and display completed")
+        debug_print("DEBUG: Initial TPM calculation and display completed")
 
     def setup_event_handlers(self):
         """Set up event handlers for the window."""
@@ -2059,7 +2052,7 @@ Developed by Charlie Becquet
             str: "load_file" if data was saved and file should be loaded for viewing,
                  "cancel" if the user cancelled.
         """
-        print("DEBUG: Showing DataCollectionWindow")
+        debug_print("DEBUG: Showing DataCollectionWindow")
         self.window.lift()
         self.window.focus_force()
         self.window.grab_set()  # Ensure it maintains focus
@@ -2070,12 +2063,12 @@ Developed by Charlie Becquet
         if self.auto_save_timer:
             self.window.after_cancel(self.auto_save_timer)
         
-        print(f"DEBUG: DataCollectionWindow closed with result: {self.result}")
+        debug_print(f"DEBUG: DataCollectionWindow closed with result: {self.result}")
         return self.result  
 
     def create_tpm_stats_panel(self):
         """Create the enhanced TPM statistics panel with plot on the right side."""
-        print("DEBUG: Creating enhanced TPM statistics panel")
+        debug_print("DEBUG: Creating enhanced TPM statistics panel")
 
         # Clear existing widgets
         for widget in self.stats_frame.winfo_children():
@@ -2131,7 +2124,7 @@ Developed by Charlie Becquet
         initial_width = 4  # Fallback width in inches
         initial_height = 3  # Fallback height in inches
     
-        print(f"DEBUG: Creating TPM figure with initial size: {initial_width}x{initial_height}")
+        debug_print(f"DEBUG: Creating TPM figure with initial size: {initial_width}x{initial_height}")
     
         self.tpm_figure = plt.Figure(figsize=(initial_width, initial_height), dpi=80, 
                                     facecolor='white', tight_layout=True)
@@ -2160,7 +2153,7 @@ Developed by Charlie Becquet
         # Update the statistics for the current sample
         self.update_stats_panel()
 
-        print("DEBUG: Enhanced TPM statistics panel created successfully")
+        debug_print("DEBUG: Enhanced TPM statistics panel created successfully")
 
     def _on_plot_frame_resize(self, event):
         """Handle plot frame resize to maintain responsive plot sizing."""
@@ -2173,11 +2166,11 @@ Developed by Charlie Becquet
             frame_width = self.plot_frame.winfo_width()
             frame_height = self.plot_frame.winfo_height()
         
-            print(f"DEBUG: Plot frame resized to: {frame_width}x{frame_height}")
+            debug_print(f"DEBUG: Plot frame resized to: {frame_width}x{frame_height}")
         
             # Skip if dimensions are too small or not ready
             if frame_width <= 1 or frame_height <= 1:
-                print("DEBUG: Frame dimensions too small, skipping resize")
+                debug_print("DEBUG: Frame dimensions too small, skipping resize")
                 return
             
             # Calculate figure size in inches (accounting for minimal padding and DPI)
@@ -2191,7 +2184,7 @@ Developed by Charlie Becquet
             new_width_inches = max(2.0, (frame_width - padding_pixels) / dpi)
             new_height_inches = max(1.5, (available_plot_height - padding_pixels) / dpi)
         
-            print(f"DEBUG: Calculated new figure size: {new_width_inches:.2f}x{new_height_inches:.2f} inches")
+            debug_print(f"DEBUG: Calculated new figure size: {new_width_inches:.2f}x{new_height_inches:.2f} inches")
         
             # Only resize if the change is significant (avoid excessive redraws)
             current_size = self.tpm_figure.get_size_inches()
@@ -2199,7 +2192,7 @@ Developed by Charlie Becquet
             height_diff = abs(current_size[1] - new_height_inches)
         
             if width_diff > 0.1 or height_diff > 0.1:
-                print(f"DEBUG: Resizing figure from {current_size[0]:.2f}x{current_size[1]:.2f} to {new_width_inches:.2f}x{new_height_inches:.2f}")
+                debug_print(f"DEBUG: Resizing figure from {current_size[0]:.2f}x{current_size[1]:.2f} to {new_width_inches:.2f}x{new_height_inches:.2f}")
             
                 # Resize the figure
                 self.tpm_figure.set_size_inches(new_width_inches, new_height_inches)
@@ -2208,12 +2201,12 @@ Developed by Charlie Becquet
                 self.tpm_figure.tight_layout(pad=0.05)  # Very minimal padding
                 self.tpm_canvas.draw()
             
-                print("DEBUG: Plot resizing completed successfully")
+                debug_print("DEBUG: Plot resizing completed successfully")
             else:
-                print("DEBUG: Size change too small, skipping resize to avoid excessive redraws")
+                debug_print("DEBUG: Size change too small, skipping resize to avoid excessive redraws")
             
         except Exception as e:
-            print(f"DEBUG: Error during plot resize: {e}")
+            debug_print(f"DEBUG: Error during plot resize: {e}")
 
 
     def update_plot_size(self):
@@ -2239,17 +2232,17 @@ Developed by Charlie Becquet
                     self.tpm_canvas.draw()
                 
             except Exception as e:
-                print(f"DEBUG: Error updating plot size: {e}")
+                debug_print(f"DEBUG: Error updating plot size: {e}")
 
     def update_stats_panel(self, event=None):
         """Update the TPM statistics panel to show only current sample with enhanced stats."""
-        print("DEBUG: Updating enhanced TPM statistics panel")
+        debug_print("DEBUG: Updating enhanced TPM statistics panel")
 
         # Get currently selected sample
         try:
             current_tab_index = self.notebook.index(self.notebook.select())
             current_sample_id = f"Sample {current_tab_index + 1}"
-            print(f"DEBUG: Updating stats for {current_sample_id}")
+            debug_print(f"DEBUG: Updating stats for {current_sample_id}")
         except:
             current_sample_id = "Sample 1"  # Default fallback
             current_tab_index = 0
@@ -2346,11 +2339,11 @@ Developed by Charlie Becquet
         # Update TPM plot for current sample
         self.update_tpm_plot(current_sample_id)
 
-        print(f"DEBUG: Enhanced stats updated for {current_sample_id}")
+        debug_print(f"DEBUG: Enhanced stats updated for {current_sample_id}")
 
     def update_tpm_plot(self, sample_id):
         """Update the TPM plot for the specified sample with proper autosizing."""
-        print(f"DEBUG: Updating TPM plot for {sample_id}")
+        debug_print(f"DEBUG: Updating TPM plot for {sample_id}")
     
         # Clear the plot
         self.tpm_ax.clear()
@@ -2398,7 +2391,7 @@ Developed by Charlie Becquet
 
         self.window.after(50, self.update_plot_size)
     
-        print(f"DEBUG: TPM plot updated for {sample_id} with autosizing")
+        debug_print(f"DEBUG: TPM plot updated for {sample_id} with autosizing")
     
     def go_to_previous_sample(self):
         """Navigate to the previous sample tab."""
@@ -2521,7 +2514,7 @@ Developed by Charlie Becquet
         def update_interval():
             try:
                 self.puff_interval = self.puff_interval_var.get()
-                print(f"DEBUG: Updated puff interval to {self.puff_interval}")
+                debug_print(f"DEBUG: Updated puff interval to {self.puff_interval}")
             except:
                 messagebox.showerror("Error", "Invalid puff interval. Please enter a positive number.")
                 self.puff_interval_var.set(self.puff_interval)
@@ -2596,7 +2589,7 @@ Developed by Charlie Becquet
 
         # ENHANCED: Live TPM calculation and display update
         if column_name in ["before_weight", "after_weight", "puffs"]:
-            print(f"DEBUG: Triggering live TPM calculation for {sample_id} due to {column_name} change")
+            debug_print(f"DEBUG: Triggering live TPM calculation for {sample_id} due to {column_name} change")
         
             # Calculate TPM for this specific row and potentially affected rows
             self.calculate_tpm_for_row(sample_id, row_idx)
@@ -2607,7 +2600,7 @@ Developed by Charlie Becquet
             # Update stats panel
             self.update_stats_panel()
         
-            print(f"DEBUG: Live TPM update completed for {sample_id}")
+            debug_print(f"DEBUG: Live TPM update completed for {sample_id}")
 
         # Finish edit mode before navigating
         self.end_editing()
@@ -2619,7 +2612,7 @@ Developed by Charlie Becquet
 
     def calculate_tpm_for_row(self, sample_id, changed_row_idx):
         """Calculate TPM for a specific row and related rows when data changes."""
-        print(f"DEBUG: Calculating TPM for {sample_id}, row {changed_row_idx}")
+        debug_print(f"DEBUG: Calculating TPM for {sample_id}, row {changed_row_idx}")
     
         # Calculate TPM for the changed row
         self.calculate_single_row_tpm(sample_id, changed_row_idx)
@@ -2678,10 +2671,10 @@ Developed by Charlie Becquet
             # Store result
             self.data[sample_id]["tpm"][row_idx] = round(tpm, 6)
         
-            print(f"DEBUG: Calculated TPM for {sample_id} row {row_idx}: {tpm:.6f} mg/puff")
+            debug_print(f"DEBUG: Calculated TPM for {sample_id} row {row_idx}: {tpm:.6f} mg/puff")
         
         except (ValueError, TypeError, IndexError) as e:
-            print(f"DEBUG: Error calculating TPM for {sample_id} row {row_idx}: {e}")
+            debug_print(f"DEBUG: Error calculating TPM for {sample_id} row {row_idx}: {e}")
             self.data[sample_id]["tpm"][row_idx] = None
 
     def convert_cell_value(self, value, column_name):
@@ -2716,14 +2709,14 @@ Developed by Charlie Becquet
                     col_idx = 2 if self.test_name in ["User Test Simulation", "User Simulation Test"] else 1
                     values[col_idx] = str(val)
                     tree.item(next_item, values=values)
-                    print(f"DEBUG: Auto-set Sample {sample_id} row {next_row} before_weight to {val}")
+                    debug_print(f"DEBUG: Auto-set Sample {sample_id} row {next_row} before_weight to {val}")
         except (ValueError, TypeError):
-            print("DEBUG: Failed auto weight progression due to invalid value")
+            debug_print("DEBUG: Failed auto weight progression due to invalid value")
 
     def auto_progress_puffs(self, tree, sample_id, row_idx, value):
         """Auto-fill puffs for subsequent rows unless test is user-driven."""
         if self.test_name in ["User Test Simulation", "User Simulation Test"]:
-            print("DEBUG: Skipping auto-puff progression for user simulation test")
+            debug_print("DEBUG: Skipping auto-puff progression for user simulation test")
             return
 
         try:
@@ -2738,9 +2731,9 @@ Developed by Charlie Becquet
                     puff_col = 1 if self.test_name == "User Test Simulation" else 0
                     values[puff_col] = str(puff_val)
                     tree.item(item, values=values)
-            print(f"DEBUG: Auto-puff progression applied from row {row_idx}")
+            debug_print(f"DEBUG: Auto-puff progression applied from row {row_idx}")
         except (ValueError, TypeError):
-            print("DEBUG: Error in auto-puff progression")
+            debug_print("DEBUG: Error in auto-puff progression")
 
     def edit_cell(self, tree, item, column, row_idx, sample_id):
         """Single unified method for cell editing."""
@@ -2750,12 +2743,12 @@ Developed by Charlie Becquet
     
         # Check if this is the TPM column - make it read-only
         if column_name == "tpm":
-            print("DEBUG: TPM column is read-only (calculated automatically)")
+            debug_print("DEBUG: TPM column is read-only (calculated automatically)")
             return  # Don't allow editing of TPM column
     
         # Check if the column exists in our data structure
         if column_name not in self.data[sample_id]:
-            print(f"DEBUG: Column {column_name} not found in data structure")
+            debug_print(f"DEBUG: Column {column_name} not found in data structure")
             return
     
         # End any existing edit first
@@ -3020,7 +3013,7 @@ Developed by Charlie Becquet
             next_column = f"#{col_idx}"
             self.current_column = next_column
             self.highlight_cell(tree, next_item, next_column)
-            print(f"DEBUG: Arrow navigation - moved to row {row_idx}, column {next_column}")
+            debug_print(f"DEBUG: Arrow navigation - moved to row {row_idx}, column {next_column}")
         
         elif direction in ["up", "down"]:
             # Vertical navigation
@@ -3035,7 +3028,7 @@ Developed by Charlie Becquet
                     tree.see(next_item)
                     self.current_column = current_column
                     self.highlight_cell(tree, next_item, self.current_column)
-                    print(f"DEBUG: Arrow navigation - moved down to row {current_idx + 1}")
+                    debug_print(f"DEBUG: Arrow navigation - moved down to row {current_idx + 1}")
             else:  # up
                 if current_idx > 0:
                     prev_item = items[current_idx - 1]
@@ -3044,7 +3037,7 @@ Developed by Charlie Becquet
                     tree.see(prev_item)
                     self.current_column = current_column
                     self.highlight_cell(tree, prev_item, self.current_column)
-                    print(f"DEBUG: Arrow navigation - moved up to row {current_idx - 1}")
+                    debug_print(f"DEBUG: Arrow navigation - moved up to row {current_idx - 1}")
     
         return "break"  # Stop event propagation
 
@@ -3106,7 +3099,7 @@ Developed by Charlie Becquet
             current_tags.append('highlight_selected')
             tree.item(item, tags=current_tags)
     
-        print(f"DEBUG: Cell highlighted - item: {item}, column: {column}")
+        debug_print(f"DEBUG: Cell highlighted - item: {item}, column: {column}")
 
     # ============================================================================
     # END OF CELL EDITING AND NAVIGATION METHODS

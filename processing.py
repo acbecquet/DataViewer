@@ -20,7 +20,8 @@ from utils import (
     unmerge_all_cells,
     validate_sheet_data,
     header_matches,
-    load_excel_file
+    load_excel_file,
+    debug_print
 )
 
 #pd.set_option('future.no_silent_downcasting', True)
@@ -59,7 +60,7 @@ def get_y_data_for_plot_type(sample_data, plot_type):
         pd.Series: y-data for plotting.
     """
     if plot_type == "TPM":
-        print("DEBUG: Calculating TPM from weight differences with puffing intervals")
+        debug_print("DEBUG: Calculating TPM from weight differences with puffing intervals")
         
         # Get puffs, before weights, and after weights
         puffs = pd.to_numeric(sample_data.iloc[3:, 0], errors='coerce')  # Column 0 for Extended Test
@@ -83,11 +84,11 @@ def get_y_data_for_plot_type(sample_data, plot_type):
                     if pd.isna(current_puffs) or current_puffs == 0:
                         # Both puffs and interval are invalid, default to 10
                         fallback_puffs = 10
-                        print(f"DEBUG: Row {i} - Both puffs ({current_puffs}) and interval ({puff_interval}) invalid, using default {fallback_puffs}")
+                        debug_print(f"DEBUG: Row {i} - Both puffs ({current_puffs}) and interval ({puff_interval}) invalid, using default {fallback_puffs}")
                         puffing_intervals.loc[idx] = fallback_puffs
                     else:
                         # Use current puffs value
-                        print(f"DEBUG: Row {i} - Interval {puff_interval} <= 0, using current puffs {current_puffs}")
+                        debug_print(f"DEBUG: Row {i} - Interval {puff_interval} <= 0, using current puffs {current_puffs}")
                         puffing_intervals.loc[idx] = current_puffs
                 else:
                     puffing_intervals.loc[idx] = puff_interval
@@ -102,11 +103,11 @@ def get_y_data_for_plot_type(sample_data, plot_type):
                 calculated_tpm.loc[idx] = weight_diff.loc[idx] / puffing_intervals.loc[idx]
             else:
                 calculated_tpm.loc[idx] = np.nan
-                print(f"DEBUG: Skipping TPM calculation for row with invalid interval: {puffing_intervals.loc[idx]}")
+                debug_print(f"DEBUG: Skipping TPM calculation for row with invalid interval: {puffing_intervals.loc[idx]}")
         return calculated_tpm
         
     elif plot_type == "Power Efficiency":
-        print("DEBUG: Calculating Power Efficiency from TPM/Power")
+        debug_print("DEBUG: Calculating Power Efficiency from TPM/Power")
         
         # Get TPM first
         tpm_data = get_y_data_for_plot_type(sample_data, "TPM")
@@ -120,27 +121,27 @@ def get_y_data_for_plot_type(sample_data, plot_type):
             voltage_val = sample_data.iloc[1, 5]  # Adjust column index as needed
             if pd.notna(voltage_val):
                 voltage = float(voltage_val)
-                print(f"DEBUG: Extracted voltage: {voltage}V")
+                debug_print(f"DEBUG: Extracted voltage: {voltage}V")
         except (ValueError, IndexError, TypeError):
-            print("DEBUG: Could not extract voltage")
+            debug_print("DEBUG: Could not extract voltage")
             
         try:
             resistance_val = sample_data.iloc[0, 3]  # Adjust column index as needed
             if pd.notna(resistance_val):
                 resistance = float(resistance_val)
-                print(f"DEBUG: Extracted resistance: {resistance}Ω")
+                debug_print(f"DEBUG: Extracted resistance: {resistance}Ω")
         except (ValueError, IndexError, TypeError):
-            print("DEBUG: Could not extract resistance")
+            debug_print("DEBUG: Could not extract resistance")
         
         # Calculate power and power efficiency
         if voltage and resistance and voltage > 0 and resistance > 0:
             power = (voltage ** 2) / resistance
-            print(f"DEBUG: Calculated power: {power:.3f}W")
+            debug_print(f"DEBUG: Calculated power: {power:.3f}W")
             calculated_power_eff = tpm_numeric / power
-            print(f"DEBUG: Calculated Power Efficiency values: {calculated_power_eff.dropna().tolist()}")
+            debug_print(f"DEBUG: Calculated Power Efficiency values: {calculated_power_eff.dropna().tolist()}")
             return calculated_power_eff
         else:
-            print("DEBUG: Cannot calculate power efficiency - missing or invalid voltage/resistance")
+            debug_print("DEBUG: Cannot calculate power efficiency - missing or invalid voltage/resistance")
             return pd.Series(dtype=float)
             
     elif plot_type == "Draw Pressure":
@@ -182,17 +183,17 @@ def plot_user_test_simulation_samples(full_sample_data: pd.DataFrame, num_column
         plot_type (str): Type of plot to generate.
         sample_names (List[str], optional): List of sample names to use in legend.
     """
-    print(f"DEBUG: plot_user_test_simulation_samples called with data shape: {full_sample_data.shape}")
-    print(f"DEBUG: Provided sample_names: {sample_names}")
-    print(f"DEBUG: Full sample data first few rows:")
-    print(full_sample_data.iloc[:5, :15].to_string())
+    debug_print(f"DEBUG: plot_user_test_simulation_samples called with data shape: {full_sample_data.shape}")
+    debug_print(f"DEBUG: Provided sample_names: {sample_names}")
+    debug_print(f"DEBUG: Full sample data first few rows:")
+    debug_print(full_sample_data.iloc[:5, :15].to_string())
     
     num_samples = full_sample_data.shape[1] // num_columns_per_sample
-    print(f"DEBUG: User Test Simulation - Number of samples: {num_samples}")
+    debug_print(f"DEBUG: User Test Simulation - Number of samples: {num_samples}")
 
     # Check if this should be a bar chart
     if plot_type == "TPM (Bar)":
-        print("DEBUG: Creating User Test Simulation bar chart")
+        debug_print("DEBUG: Creating User Test Simulation bar chart")
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
         extracted_sample_names = plot_user_test_simulation_bar_chart(ax1, ax2, full_sample_data, num_samples, num_columns_per_sample, sample_names)
         
@@ -204,11 +205,11 @@ def plot_user_test_simulation_samples(full_sample_data: pd.DataFrame, num_column
         fig.phase1_bars = ax1.patches
         fig.phase2_bars = ax2.patches
         
-        print(f"DEBUG: Successfully created User Test Simulation bar chart with {len(extracted_sample_names)} samples")
+        debug_print(f"DEBUG: Successfully created User Test Simulation bar chart with {len(extracted_sample_names)} samples")
         return fig, extracted_sample_names
     
     # Original line plot logic for other plot types
-    print(f"DEBUG: User Test Simulation - Number of samples: {num_samples}")
+    debug_print(f"DEBUG: User Test Simulation - Number of samples: {num_samples}")
     
     # Replace 0 with NaN for cleaner plotting
     full_sample_data = full_sample_data.replace(0, np.nan)
@@ -225,21 +226,21 @@ def plot_user_test_simulation_samples(full_sample_data: pd.DataFrame, num_column
         start_col = i * num_columns_per_sample
         sample_data = full_sample_data.iloc[:, start_col:start_col + num_columns_per_sample]
         
-        print(f"DEBUG: Processing sample {i+1} columns {start_col} to {start_col + num_columns_per_sample - 1}")
+        debug_print(f"DEBUG: Processing sample {i+1} columns {start_col} to {start_col + num_columns_per_sample - 1}")
         
         # Extract puffs data (column index 1 in User Test Simulation)
         x_data = pd.to_numeric(sample_data.iloc[3:, 1], errors='coerce').dropna()
-        print(f"DEBUG: Sample {i+1} puffs data length: {len(x_data)}, values: {x_data.head().tolist()}")
+        debug_print(f"DEBUG: Sample {i+1} puffs data length: {len(x_data)}, values: {x_data.head().tolist()}")
         
         # Extract y-data based on plot type
         y_data = get_y_data_for_user_test_simulation_plot_type(sample_data, plot_type)
         y_data = pd.to_numeric(y_data, errors='coerce').dropna()
-        print(f"DEBUG: Sample {i+1} y_data length: {len(y_data)}, values: {y_data.head().tolist()}")
+        debug_print(f"DEBUG: Sample {i+1} y_data length: {len(y_data)}, values: {y_data.head().tolist()}")
         
         # Ensure x and y data have common indices
         common_index = x_data.index.intersection(y_data.index)
         if common_index.empty:
-            print(f"DEBUG: Sample {i+1} SKIPPED - no common data points")
+            debug_print(f"DEBUG: Sample {i+1} SKIPPED - no common data points")
             continue
             
         x_data = x_data.loc[common_index]
@@ -248,10 +249,10 @@ def plot_user_test_simulation_samples(full_sample_data: pd.DataFrame, num_column
         # FIXED: Use provided sample names if available, otherwise use default
         if sample_names and i < len(sample_names):
             sample_name = sample_names[i]
-            print(f"DEBUG: Using provided sample name: '{sample_name}'")
+            debug_print(f"DEBUG: Using provided sample name: '{sample_name}'")
         else:
             sample_name = f"Sample {i+1}"
-            print(f"DEBUG: Using default sample name: '{sample_name}'")
+            debug_print(f"DEBUG: Using default sample name: '{sample_name}'")
             
         extracted_sample_names.append(sample_name)
         
@@ -270,33 +271,33 @@ def plot_user_test_simulation_samples(full_sample_data: pd.DataFrame, num_column
         phase2_x = x_data[phase2_mask]
         phase2_y = y_data[phase2_mask]
         
-        print(f"DEBUG: Sample {i+1} Phase 1 data points: {len(phase1_x)}, Phase 2 data points: {len(phase2_x)}")
+        debug_print(f"DEBUG: Sample {i+1} Phase 1 data points: {len(phase1_x)}, Phase 2 data points: {len(phase2_x)}")
         
         # Plot Phase 1 (0-50 puffs) and store line reference
         if not phase1_x.empty and not phase1_y.empty:
             line1 = ax1.plot(phase1_x, phase1_y, marker='o', label=sample_name)[0]
             phase1_lines.append(line1)
             y_max = max(y_max, phase1_y.max())
-            print(f"DEBUG: Plotted Phase 1 for {sample_name} with {len(phase1_x)} points")
+            debug_print(f"DEBUG: Plotted Phase 1 for {sample_name} with {len(phase1_x)} points")
         else:
             # Add placeholder line for consistency
             line1 = ax1.plot([], [], marker='o', label=sample_name)[0]
             phase1_lines.append(line1)
-            print(f"DEBUG: Added placeholder Phase 1 line for {sample_name}")
+            debug_print(f"DEBUG: Added placeholder Phase 1 line for {sample_name}")
         
         # Plot Phase 2 (remaining puffs) and store line reference
         if not phase2_x.empty and not phase2_y.empty:
             line2 = ax2.plot(phase2_x, phase2_y, marker='o', label=sample_name)[0]
             phase2_lines.append(line2)
             y_max = max(y_max, phase2_y.max())
-            print(f"DEBUG: Plotted Phase 2 for {sample_name} with {len(phase2_x)} points")
+            debug_print(f"DEBUG: Plotted Phase 2 for {sample_name} with {len(phase2_x)} points")
         else:
             # Add placeholder line for consistency
             line2 = ax2.plot([], [], marker='o', label=sample_name)[0]
             phase2_lines.append(line2)
-            print(f"DEBUG: Added placeholder Phase 2 line for {sample_name}")
+            debug_print(f"DEBUG: Added placeholder Phase 2 line for {sample_name}")
 
-    print(f"DEBUG: Final sample names for legend: {extracted_sample_names}")
+    debug_print(f"DEBUG: Final sample names for legend: {extracted_sample_names}")
 
     # Configure Phase 1 plot
     ax1.set_xlabel('Puffs')
@@ -326,7 +327,7 @@ def plot_user_test_simulation_samples(full_sample_data: pd.DataFrame, num_column
     fig.phase2_lines = phase2_lines
     fig.is_split_plot = True
     
-    print(f"DEBUG: Successfully created User Test Simulation split plot with {len(extracted_sample_names)} samples")
+    debug_print(f"DEBUG: Successfully created User Test Simulation split plot with {len(extracted_sample_names)} samples")
     return fig, extracted_sample_names
 
 def get_y_data_for_user_test_simulation_plot_type(sample_data, plot_type):
@@ -336,7 +337,7 @@ def get_y_data_for_user_test_simulation_plot_type(sample_data, plot_type):
     Adjusted for 8-column layout instead of 12-column.
     """
     if plot_type == "TPM":
-        print("DEBUG: User Test Simulation - Calculating TPM from weight differences with puffing intervals")
+        debug_print("DEBUG: User Test Simulation - Calculating TPM from weight differences with puffing intervals")
         
         # For User Test Simulation: puffs in column 1, before weight in column ?, after weight in column ?
         # You'll need to verify these column positions
@@ -360,11 +361,11 @@ def get_y_data_for_user_test_simulation_plot_type(sample_data, plot_type):
                     if pd.isna(current_puffs) or current_puffs == 0:
                         # Both puffs and interval are invalid, default to 10
                         fallback_puffs = 10
-                        print(f"DEBUG: Row {i} - Both puffs ({current_puffs}) and interval ({puff_interval}) invalid, using default {fallback_puffs}")
+                        debug_print(f"DEBUG: Row {i} - Both puffs ({current_puffs}) and interval ({puff_interval}) invalid, using default {fallback_puffs}")
                         puffing_intervals.loc[idx] = fallback_puffs
                     else:
                         # Use current puffs value
-                        print(f"DEBUG: Row {i} - Interval {puff_interval} <= 0, using current puffs {current_puffs}")
+                        debug_print(f"DEBUG: Row {i} - Interval {puff_interval} <= 0, using current puffs {current_puffs}")
                         puffing_intervals.loc[idx] = current_puffs
                 else:
                     puffing_intervals.loc[idx] = puff_interval
@@ -378,12 +379,12 @@ def get_y_data_for_user_test_simulation_plot_type(sample_data, plot_type):
                 calculated_tpm.loc[idx] = weight_diff.loc[idx] / puffing_intervals.loc[idx]
             else:
                 calculated_tpm.loc[idx] = np.nan
-                print(f"DEBUG: User Test Simulation - Skipping TPM calculation for row with invalid interval: {puffing_intervals.loc[idx]}")
+                debug_print(f"DEBUG: User Test Simulation - Skipping TPM calculation for row with invalid interval: {puffing_intervals.loc[idx]}")
 
         return calculated_tpm
         
     elif plot_type == "Power Efficiency":
-        print("DEBUG: User Test Simulation - Calculating Power Efficiency from TPM/Power")
+        debug_print("DEBUG: User Test Simulation - Calculating Power Efficiency from TPM/Power")
         
         # Get TPM first
         tpm_data = get_y_data_for_user_test_simulation_plot_type(sample_data, "TPM")
@@ -397,27 +398,27 @@ def get_y_data_for_user_test_simulation_plot_type(sample_data, plot_type):
             voltage_val = sample_data.iloc[0, 5]  # Adjust as needed
             if pd.notna(voltage_val):
                 voltage = float(voltage_val)
-                print(f"DEBUG: User Test Simulation - Extracted voltage: {voltage}V")
+                debug_print(f"DEBUG: User Test Simulation - Extracted voltage: {voltage}V")
         except (ValueError, IndexError, TypeError):
-            print("DEBUG: User Test Simulation - Could not extract voltage")
+            debug_print("DEBUG: User Test Simulation - Could not extract voltage")
             
         try:
             resistance_val = sample_data.columns[3]  # Adjust as needed
             if pd.notna(resistance_val):
                 resistance = float(resistance_val)
-                print(f"DEBUG: User Test Simulation - Extracted resistance: {resistance}Ω")
+                debug_print(f"DEBUG: User Test Simulation - Extracted resistance: {resistance}Ω")
         except (ValueError, IndexError, TypeError):
-            print("DEBUG: User Test Simulation - Could not extract resistance")
+            debug_print("DEBUG: User Test Simulation - Could not extract resistance")
         
         # Calculate power and power efficiency
         if voltage and resistance and voltage > 0 and resistance > 0:
             power = (voltage ** 2) / resistance
-            print(f"DEBUG: User Test Simulation - Calculated power: {power:.3f}W")
+            debug_print(f"DEBUG: User Test Simulation - Calculated power: {power:.3f}W")
             calculated_power_eff = tpm_numeric / power
-            print(f"DEBUG: User Test Simulation - Calculated Power Efficiency values: {calculated_power_eff.dropna().tolist()}")
+            debug_print(f"DEBUG: User Test Simulation - Calculated Power Efficiency values: {calculated_power_eff.dropna().tolist()}")
             return calculated_power_eff
         else:
-            print("DEBUG: User Test Simulation - Cannot calculate power efficiency - missing or invalid voltage/resistance")
+            debug_print("DEBUG: User Test Simulation - Cannot calculate power efficiency - missing or invalid voltage/resistance")
             return pd.Series(dtype=float)
             
     elif plot_type == "Draw Pressure":
@@ -434,7 +435,7 @@ def plot_user_test_simulation_bar_chart(ax1, ax2, full_sample_data, num_samples,
     Creates two bar charts: Phase 1 (0-50 puffs) and Phase 2 (extended puffs).
     Each bar shows average TPM with standard deviation as error bars.
     """
-    print(f"DEBUG: plot_user_test_simulation_bar_chart called with {num_samples} samples")
+    debug_print(f"DEBUG: plot_user_test_simulation_bar_chart called with {num_samples} samples")
     
     phase1_averages = []
     phase1_std_devs = []
@@ -448,21 +449,21 @@ def plot_user_test_simulation_bar_chart(ax1, ax2, full_sample_data, num_samples,
         end_col = start_col + num_columns_per_sample
         sample_data = full_sample_data.iloc[:, start_col:end_col]
 
-        print(f"DEBUG: Processing sample {i+1} for bar chart, columns {start_col} to {end_col-1}")
+        debug_print(f"DEBUG: Processing sample {i+1} for bar chart, columns {start_col} to {end_col-1}")
 
         # Check if sample has valid data (check puffs column - column 1 for User Test Simulation)
         if sample_data.shape[0] <= 3 or pd.isna(sample_data.iloc[3, 1]):
-            print(f"DEBUG: Sample {i+1} has no valid data, skipping")
+            debug_print(f"DEBUG: Sample {i+1} has no valid data, skipping")
             continue
 
         # Calculate TPM values using the same method as the line plots
         tpm_data = get_y_data_for_user_test_simulation_plot_type(sample_data, "TPM")
         tpm_numeric = pd.to_numeric(tpm_data, errors='coerce').dropna()
         
-        print(f"DEBUG: Sample {i+1} TPM data length: {len(tpm_numeric)}, values: {tpm_numeric.head().tolist()}")
+        debug_print(f"DEBUG: Sample {i+1} TPM data length: {len(tpm_numeric)}, values: {tpm_numeric.head().tolist()}")
         
         if tpm_numeric.empty:
-            print(f"DEBUG: Sample {i+1} has no valid TPM data, skipping")
+            debug_print(f"DEBUG: Sample {i+1} has no valid TPM data, skipping")
             continue
         
         # Split TPM data into phases based on the same logic as line plots
@@ -485,19 +486,19 @@ def plot_user_test_simulation_bar_chart(ax1, ax2, full_sample_data, num_samples,
 
         if sample_names and i < len(sample_names):
             sample_name = sample_names[i]
-            print(f"DEBUG: Using provided sample name: '{sample_name}'")
+            debug_print(f"DEBUG: Using provided sample name: '{sample_name}'")
         else:
             sample_name = f"Sample {i+1}"
-            print(f"DEBUG: Using default sample name: '{sample_name}'")
+            debug_print(f"DEBUG: Using default sample name: '{sample_name}'")
         
         extracted_sample_names.append(sample_name)
         wrapped_name = wrap_text(text=sample_name, max_width=10)
         labels.append(wrapped_name)
         
-        print(f"DEBUG: Sample {i+1} - Phase 1: avg={phase1_avg:.3f}, std={phase1_std:.3f}, Phase 2: avg={phase2_avg:.3f}, std={phase2_std:.3f}")
+        debug_print(f"DEBUG: Sample {i+1} - Phase 1: avg={phase1_avg:.3f}, std={phase1_std:.3f}, Phase 2: avg={phase2_avg:.3f}, std={phase2_std:.3f}")
 
     if not phase1_averages:
-        print("DEBUG: No valid samples found for bar chart")
+        debug_print("DEBUG: No valid samples found for bar chart")
         return []
 
     # Create colormaps for unique colors
@@ -537,7 +538,7 @@ def plot_user_test_simulation_bar_chart(ax1, ax2, full_sample_data, num_samples,
     # Set y-axis to start from 0 and add some padding
     ax2.set_ylim(0, max(phase2_averages) * 1.2 if phase2_averages else 1)
 
-    print(f"DEBUG: Created User Test Simulation bar charts with {len(extracted_sample_names)} samples")
+    debug_print(f"DEBUG: Created User Test Simulation bar charts with {len(extracted_sample_names)} samples")
     return extracted_sample_names
 
 def plot_all_samples(full_sample_data: pd.DataFrame, plot_type: str, num_columns_per_sample: int = 12, sample_names: List[str] = None) -> Tuple[plt.Figure, List[str]]:
@@ -554,16 +555,16 @@ def plot_all_samples(full_sample_data: pd.DataFrame, plot_type: str, num_columns
         tuple: (matplotlib.figure.Figure, list of sample names)
     """
     # ADD THESE DEBUG LINES:
-    print(f"DEBUG: plot_all_samples - full_sample_data shape: {full_sample_data.shape}")
-    print(f"DEBUG: plot_all_samples - provided sample_names: {sample_names}")
-    print(f"DEBUG: plot_all_samples - first 5 rows, first 15 columns:")
-    print(full_sample_data.iloc[:5, :15].to_string())
-    print("=" * 80)
+    debug_print(f"DEBUG: plot_all_samples - full_sample_data shape: {full_sample_data.shape}")
+    debug_print(f"DEBUG: plot_all_samples - provided sample_names: {sample_names}")
+    debug_print(f"DEBUG: plot_all_samples - first 5 rows, first 15 columns:")
+    debug_print(full_sample_data.iloc[:5, :15].to_string())
+    debug_print("=" * 80)
 
     # ENSURE num_columns_per_sample is an integer
     try:
         num_columns_per_sample = int(num_columns_per_sample)
-        print(f"DEBUG:   num_columns_per_sample after int conversion: {num_columns_per_sample}")
+        debug_print(f"DEBUG:   num_columns_per_sample after int conversion: {num_columns_per_sample}")
     except (ValueError, TypeError) as e:
         print(f"ERROR: Could not convert num_columns_per_sample to int: {e}")
         raise ValueError(f"num_columns_per_sample must be convertible to int, got: {num_columns_per_sample} (type: {type(num_columns_per_sample)})")
@@ -571,7 +572,7 @@ def plot_all_samples(full_sample_data: pd.DataFrame, plot_type: str, num_columns
     
     # Check if this is User Test Simulation (8 columns per sample)
     if num_columns_per_sample == 8:
-        print("DEBUG: Detected User Test Simulation - using split plotting")
+        debug_print("DEBUG: Detected User Test Simulation - using split plotting")
         return plot_user_test_simulation_samples(full_sample_data, num_columns_per_sample, plot_type, sample_names)
 
     # Original logic for standard tests (12 columns per sample)
@@ -588,40 +589,40 @@ def plot_all_samples(full_sample_data: pd.DataFrame, plot_type: str, num_columns
             start_col = i * num_columns_per_sample
             sample_data = full_sample_data.iloc[:, start_col:start_col + num_columns_per_sample]
 
-            print(f"DEBUG: Sample {i+1} data shape: {sample_data.shape}")
-            print(f"DEBUG: Sample {i+1} columns: {sample_data.columns.tolist()}")
+            debug_print(f"DEBUG: Sample {i+1} data shape: {sample_data.shape}")
+            debug_print(f"DEBUG: Sample {i+1} columns: {sample_data.columns.tolist()}")
     
             x_data = sample_data.iloc[3:, 0].dropna()
-            print(f"DEBUG: Sample {i+1} x_data (puffs) length: {len(x_data)}, first few values: {x_data.head().tolist()}")
+            debug_print(f"DEBUG: Sample {i+1} x_data (puffs) length: {len(x_data)}, first few values: {x_data.head().tolist()}")
     
             y_data = get_y_data_for_plot_type(sample_data, plot_type)
-            print(f"DEBUG: Sample {i+1} raw y_data length: {len(y_data)}, first few values: {y_data.head().tolist()}")
+            debug_print(f"DEBUG: Sample {i+1} raw y_data length: {len(y_data)}, first few values: {y_data.head().tolist()}")
     
             y_data = pd.to_numeric(y_data, errors='coerce').dropna()
-            print(f"DEBUG: Sample {i+1} numeric y_data length: {len(y_data)}, first few values: {y_data.head().tolist()}")
+            debug_print(f"DEBUG: Sample {i+1} numeric y_data length: {len(y_data)}, first few values: {y_data.head().tolist()}")
 
             common_index = x_data.index.intersection(y_data.index)
-            print(f"DEBUG: Sample {i+1} common_index length: {len(common_index)}")
+            debug_print(f"DEBUG: Sample {i+1} common_index length: {len(common_index)}")
     
             x_data = x_data.loc[common_index]
             y_data = y_data.loc[common_index]
     
-            print(f"DEBUG: Sample {i+1} final x_data length: {len(x_data)}, y_data length: {len(y_data)}")
+            debug_print(f"DEBUG: Sample {i+1} final x_data length: {len(x_data)}, y_data length: {len(y_data)}")
 
             if not x_data.empty and not y_data.empty:
                 # Use provided sample name if available, otherwise extract from data
                 if sample_names and i < len(sample_names):
                     sample_name = sample_names[i]
-                    print(f"DEBUG: Using provided sample name: '{sample_name}'")
+                    debug_print(f"DEBUG: Using provided sample name: '{sample_name}'")
                 else:
                     sample_name = sample_data.columns[5]
-                    print(f"DEBUG: Using extracted sample name: '{sample_name}'")
+                    debug_print(f"DEBUG: Using extracted sample name: '{sample_name}'")
                 
                 ax.plot(x_data, y_data, marker='o', label=sample_name)
                 extracted_sample_names.append(sample_name)
                 y_max = max(y_max, y_data.max())
             else:
-                print(f"DEBUG: Sample {i+1} SKIPPED - x_data empty: {x_data.empty}, y_data empty: {y_data.empty}")
+                debug_print(f"DEBUG: Sample {i+1} SKIPPED - x_data empty: {x_data.empty}, y_data empty: {y_data.empty}")
 
         ax.set_xlabel('Puffs')
         ax.set_ylabel(get_y_label_for_plot_type(plot_type))
@@ -668,17 +669,17 @@ def plot_tpm_bar_chart(ax, full_sample_data, num_samples, num_columns_per_sample
         # Use provided sample name if available, otherwise extract from data
         if sample_names and i < len(sample_names):
             sample_name = sample_names[i]
-            print(f"DEBUG: Using provided sample name: '{sample_name}'")
+            debug_print(f"DEBUG: Using provided sample name: '{sample_name}'")
         else:
             sample_name = sample_data.columns[5] if len(sample_data.columns) > 5 else f"Sample {i+1}"
-            print(f"DEBUG: Using extracted sample name: '{sample_name}'")
+            debug_print(f"DEBUG: Using extracted sample name: '{sample_name}'")
         
         extracted_sample_names.append(sample_name)
         wrapped_name = wrap_text(text=sample_name, max_width=10)  # Use `wrap_text` to dynamically wrap names
         labels.append(wrapped_name)
 
     if not averages:
-        print("DEBUG: No valid samples found for bar chart")
+        debug_print("DEBUG: No valid samples found for bar chart")
         return []
 
     # Create numeric positions for bars
@@ -797,23 +798,23 @@ def process_plot_sheet(data, headers_row=3, data_start_row=4, num_columns_per_sa
             sample_arrays (dict): Extracted sample arrays for plotting.
             full_sample_data (pd.DataFrame): Concatenated data for all samples.
     """
-    print(f"DEBUG: process_plot_sheet called with data shape: {data.shape}")
+    debug_print(f"DEBUG: process_plot_sheet called with data shape: {data.shape}")
     
     # For data collection, allow minimal data (less strict validation)
     min_required_rows = max(headers_row + 1, 3)  # At least header row + 1
     if data.shape[0] < min_required_rows:
-        print(f"DEBUG: Data has {data.shape[0]} rows, minimum required is {min_required_rows}")
+        debug_print(f"DEBUG: Data has {data.shape[0]} rows, minimum required is {min_required_rows}")
         # Create empty structure for data collection
         return create_empty_plot_structure(data, headers_row, num_columns_per_sample)
     
     if not validate_sheet_data(data, required_rows=min_required_rows):
-        print("DEBUG: Sheet validation failed, creating empty structure")
+        debug_print("DEBUG: Sheet validation failed, creating empty structure")
         return create_empty_plot_structure(data, headers_row, num_columns_per_sample)
 
     try:
         # Clean up the data
         data = remove_empty_columns(data).replace(0, np.nan)
-        print(f"DEBUG: Data after cleaning: {data.shape}")
+        debug_print(f"DEBUG: Data after cleaning: {data.shape}")
 
         samples = []
         full_sample_data = []
@@ -821,10 +822,10 @@ def process_plot_sheet(data, headers_row=3, data_start_row=4, num_columns_per_sa
 
         # Calculate the number of samples
         num_samples = data.shape[1] // num_columns_per_sample
-        print(f"DEBUG: Calculated {num_samples} samples")
+        debug_print(f"DEBUG: Calculated {num_samples} samples")
 
         if num_samples == 0:
-            print("DEBUG: No samples detected, creating empty structure")
+            debug_print("DEBUG: No samples detected, creating empty structure")
             return create_empty_plot_structure(data, headers_row, num_columns_per_sample)
 
         for i in range(num_samples):
@@ -833,7 +834,7 @@ def process_plot_sheet(data, headers_row=3, data_start_row=4, num_columns_per_sa
             sample_data = data.iloc[:, start_col:end_col]
 
             if sample_data.empty:
-                print(f"DEBUG: Sample {i+1} is empty. Skipping.")
+                debug_print(f"DEBUG: Sample {i+1} is empty. Skipping.")
                 continue
 
             # Extract plotting data with error handling
@@ -872,10 +873,10 @@ def process_plot_sheet(data, headers_row=3, data_start_row=4, num_columns_per_sa
 
                 samples.append(extracted_data)
                 full_sample_data.append(sample_data)
-                print(f"DEBUG: Successfully processed sample {i+1}")
+                debug_print(f"DEBUG: Successfully processed sample {i+1}")
                 
             except IndexError as e:
-                print(f"DEBUG: Index error for sample {i+1}: {e}. Creating placeholder.")
+                debug_print(f"DEBUG: Index error for sample {i+1}: {e}. Creating placeholder.")
                 # Create placeholder data for data collection
                 placeholder_data = {
                     "Sample Name": f"Sample {i+1}",
@@ -899,7 +900,7 @@ def process_plot_sheet(data, headers_row=3, data_start_row=4, num_columns_per_sa
             processed_data = pd.DataFrame(samples)
             full_sample_data_df = data  # Use original data structure instead of concatenated
         else:
-            print("DEBUG: No valid samples found, creating minimal structure")
+            debug_print("DEBUG: No valid samples found, creating minimal structure")
             # Create minimal structure for data collection
             processed_data = pd.DataFrame([{
                 "Sample Name": "Sample 1",
@@ -916,17 +917,17 @@ def process_plot_sheet(data, headers_row=3, data_start_row=4, num_columns_per_sa
             }])
             full_sample_data_df = data  # Use original data
 
-        print(f"DEBUG: Final processed_data shape: {processed_data.shape}")
-        print(f"DEBUG: Final full_sample_data shape: {full_sample_data_df.shape}")
-        print(f"DEBUG: process_plot_sheet - using concatenated data: {bool(samples)}")
-        print(f"DEBUG: process_plot_sheet - samples count: {len(samples) if samples else 0}")
+        debug_print(f"DEBUG: Final processed_data shape: {processed_data.shape}")
+        debug_print(f"DEBUG: Final full_sample_data shape: {full_sample_data_df.shape}")
+        debug_print(f"DEBUG: process_plot_sheet - using concatenated data: {bool(samples)}")
+        debug_print(f"DEBUG: process_plot_sheet - samples count: {len(samples) if samples else 0}")
         return processed_data, sample_arrays, full_sample_data_df
         
     except Exception as e:
-        print(f"DEBUG: Error processing plot sheet: {e}")
+        debug_print(f"DEBUG: Error processing plot sheet: {e}")
         # Return empty structure instead of failing completely
-        print(f"DEBUG: process_plot_sheet - using concatenated data: {bool(samples)}")
-        print(f"DEBUG: process_plot_sheet - samples count: {len(samples) if samples else 0}")
+        debug_print(f"DEBUG: process_plot_sheet - using concatenated data: {bool(samples)}")
+        debug_print(f"DEBUG: process_plot_sheet - samples count: {len(samples) if samples else 0}")
         return create_empty_plot_structure(data, headers_row, num_columns_per_sample)
 
 def no_efficiency_extracted_data(sample_data):
@@ -976,7 +977,7 @@ def process_generic_sheet(data, headers_row=3, data_start_row=4):
     try:
         # Check for sufficient rows
         if data.shape[0] <= headers_row or data.shape[0] <= data_start_row:
-            #print(f"Insufficient rows for processing (headers_row={headers_row}, data_start_row={data_start_row})")
+            #debug_print(f"Insufficient rows for processing (headers_row={headers_row}, data_start_row={data_start_row})")
             return pd.DataFrame(), {}, pd.DataFrame()
 
         # Extract headers and validate them
@@ -1011,7 +1012,7 @@ def create_empty_plot_structure(data, headers_row=3, num_columns_per_sample=12):
     Returns:
         tuple: (processed_data, sample_arrays, full_sample_data)
     """
-    print("DEBUG: Creating empty plot structure for data collection")
+    debug_print("DEBUG: Creating empty plot structure for data collection")
     
     # Create minimal processed data structure
     processed_data = pd.DataFrame([{
@@ -1041,7 +1042,7 @@ def create_empty_plot_structure(data, headers_row=3, num_columns_per_sample=12):
     else:
         full_sample_data = data
     
-    print(f"DEBUG: Created empty structure - processed: {processed_data.shape}, full: {full_sample_data.shape}")
+    debug_print(f"DEBUG: Created empty structure - processed: {processed_data.shape}, full: {full_sample_data.shape}")
     return processed_data, sample_arrays, full_sample_data
 
 # ==================== SHEET PROCESSING DISPATCHER ====================
@@ -1341,22 +1342,22 @@ def process_user_test_simulation(data):
     - Sample ID taken from column header 5 (index 4)
     - Extracts metadata from specific header locations
     """
-    print(f"DEBUG: process_user_test_simulation called with data shape: {data.shape}")
+    debug_print(f"DEBUG: process_user_test_simulation called with data shape: {data.shape}")
     
     # For data collection, allow minimal data (less strict validation)
     min_required_rows = max(3 + 1, 3)  # At least header row + 1
     if data.shape[0] < min_required_rows:
-        print(f"DEBUG: Data has {data.shape[0]} rows, minimum required is {min_required_rows}")
+        debug_print(f"DEBUG: Data has {data.shape[0]} rows, minimum required is {min_required_rows}")
         return create_empty_user_test_simulation_structure(data)
     
     if not validate_sheet_data(data, required_rows=min_required_rows):
-        print("DEBUG: Sheet validation failed, creating empty structure")
+        debug_print("DEBUG: Sheet validation failed, creating empty structure")
         return create_empty_user_test_simulation_structure(data)
 
     try:
         # Clean up the data
         data = remove_empty_columns(data).replace(0, np.nan)
-        print(f"DEBUG: Data after cleaning: {data.shape}")
+        debug_print(f"DEBUG: Data after cleaning: {data.shape}")
 
         samples = []
         full_sample_data = []
@@ -1365,7 +1366,7 @@ def process_user_test_simulation(data):
         # Calculate the number of potential samples (8 columns per sample)
         num_columns_per_sample = 8
         potential_samples = data.shape[1] // num_columns_per_sample
-        print(f"DEBUG: Potential samples based on columns: {potential_samples}")
+        debug_print(f"DEBUG: Potential samples based on columns: {potential_samples}")
 
         # Process each sample block
         for i in range(potential_samples):
@@ -1373,7 +1374,7 @@ def process_user_test_simulation(data):
             end_col = start_col + num_columns_per_sample
             sample_data = data.iloc[:, start_col:end_col]
             
-            print(f"DEBUG: Processing sample {i+1} in columns {start_col} to {end_col-1}")
+            debug_print(f"DEBUG: Processing sample {i+1} in columns {start_col} to {end_col-1}")
             
             # Check if this sample block has real measurement data
             # Look for numeric data in puffs column (index 1) starting from row 3
@@ -1383,12 +1384,12 @@ def process_user_test_simulation(data):
                 
                 if not puffs_data.empty and len(puffs_data) > 0:
                     has_real_data = True
-                    print(f"DEBUG: Sample {i+1} has real measurement data - {len(puffs_data)} puff values")
+                    debug_print(f"DEBUG: Sample {i+1} has real measurement data - {len(puffs_data)} puff values")
                 else:
-                    print(f"DEBUG: Sample {i+1} has no real measurement data")
+                    debug_print(f"DEBUG: Sample {i+1} has no real measurement data")
             
             if not has_real_data:
-                print(f"DEBUG: Skipping sample {i+1} - no measurement data found")
+                debug_print(f"DEBUG: Skipping sample {i+1} - no measurement data found")
                 continue
                 
             # Extract sample name from row 0, column 5 (Sample ID location)
@@ -1397,9 +1398,9 @@ def process_user_test_simulation(data):
                 sample_id_value = sample_data.columns[5]  # Row 0, Column 5
                 if sample_id_value and str(sample_id_value).strip() and str(sample_id_value).strip().lower() != 'nan':
                     sample_name = str(sample_id_value).strip()
-                    print(f"DEBUG: Extracted sample name '{sample_name}' from Sample ID location (row 0, col 5)")
+                    debug_print(f"DEBUG: Extracted sample name '{sample_name}' from Sample ID location (row 0, col 5)")
                 else:
-                    print(f"DEBUG: Sample ID location empty or invalid, using default name '{sample_name}'")
+                    debug_print(f"DEBUG: Sample ID location empty or invalid, using default name '{sample_name}'")
             
             # Extract metadata from specific header locations
             media = ""
@@ -1414,28 +1415,28 @@ def process_user_test_simulation(data):
                     media_val = sample_data.iloc[0, 1]
                     if media_val and str(media_val).strip().lower() != 'nan':
                         media = str(media_val).strip()
-                        print(f"DEBUG: Extracted media: '{media}'")
+                        debug_print(f"DEBUG: Extracted media: '{media}'")
                 
                 # Voltage: Row 1, Column 5 
                 if sample_data.shape[0] > 1 and sample_data.shape[1] > 5:
                     voltage_val = sample_data.iloc[0, 5]
                     if voltage_val and str(voltage_val).strip().lower() != 'nan':
                         voltage = str(voltage_val).strip()
-                        print(f"DEBUG: Extracted voltage: '{voltage}'")
+                        debug_print(f"DEBUG: Extracted voltage: '{voltage}'")
                 
                 # Initial Oil Mass: Row 0, Column 7
                 if sample_data.shape[0] > 0 and sample_data.shape[1] > 7:
                     oil_mass_val = sample_data.columns[7]
                     if oil_mass_val and str(oil_mass_val).strip().lower() != 'nan':
                         initial_oil_mass = str(oil_mass_val).strip()
-                        print(f"DEBUG: Extracted initial oil mass: '{initial_oil_mass}'")
+                        debug_print(f"DEBUG: Extracted initial oil mass: '{initial_oil_mass}'")
                 
                 # Power: Row 1, Column 7
                 if sample_data.shape[0] > 1 and sample_data.shape[1] > 7:
                     power_val = sample_data.iloc[0, 7]
                     if power_val and str(power_val).strip().lower() != 'nan' and str(power_val).strip() != '#DIV/0!':
                         power = str(power_val).strip()
-                        print(f"DEBUG: Extracted power: '{power}'")
+                        debug_print(f"DEBUG: Extracted power: '{power}'")
                 
                 
                 # Resistance: Row 0, Column 3
@@ -1443,11 +1444,11 @@ def process_user_test_simulation(data):
                     resistance_val = sample_data.columns[3]
                     if resistance_val and str(resistance_val).strip().lower() != 'nan' and str(resistance_val).strip() != '#DIV/0!':
                         resistance = str(resistance_val).strip()
-                        print(f"DEBUG: Extracted resistance: '{resistance}'")
+                        debug_print(f"DEBUG: Extracted resistance: '{resistance}'")
                 
                 
             except Exception as e:
-                print(f"DEBUG: Error extracting metadata for sample {i+1}: {e}")
+                debug_print(f"DEBUG: Error extracting metadata for sample {i+1}: {e}")
             
             try:
                 # Extract plotting data for User Test Simulation
@@ -1465,7 +1466,7 @@ def process_user_test_simulation(data):
                     avg_tpm = "No data"
                     std_tpm = "No data"
                 
-                print(f"DEBUG: Sample '{sample_name}' TPM stats - Avg: {avg_tpm}, Std: {std_tpm}")
+                debug_print(f"DEBUG: Sample '{sample_name}' TPM stats - Avg: {avg_tpm}, Std: {std_tpm}")
                 
                 # Calculate usage efficiency if we have the necessary data
                 usage_efficiency = ""
@@ -1477,9 +1478,9 @@ def process_user_test_simulation(data):
                             # Simple efficiency calculation - you may want to adjust this formula
                             efficiency = (avg_tpm_num / oil_mass_num) * 100
                             usage_efficiency = f"{efficiency:.2f}%"
-                            print(f"DEBUG: Calculated usage efficiency: {usage_efficiency}")
+                            debug_print(f"DEBUG: Calculated usage efficiency: {usage_efficiency}")
                     except (ValueError, TypeError):
-                        print(f"DEBUG: Could not calculate usage efficiency")
+                        debug_print(f"DEBUG: Could not calculate usage efficiency")
                 
                 # Create voltage, resistance, power combined string
                 voltage_resistance_power = ""
@@ -1507,11 +1508,11 @@ def process_user_test_simulation(data):
 
                 samples.append(extracted_data)
                 full_sample_data.append(sample_data)
-                print(f"DEBUG: Successfully processed User Test Simulation sample {len(samples)}: '{sample_name}'")
-                print(f"DEBUG: Sample data - Media: '{media}', Voltage: '{voltage}', Power: '{power}', Oil Mass: '{initial_oil_mass}'")
+                debug_print(f"DEBUG: Successfully processed User Test Simulation sample {len(samples)}: '{sample_name}'")
+                debug_print(f"DEBUG: Sample data - Media: '{media}', Voltage: '{voltage}', Power: '{power}', Oil Mass: '{initial_oil_mass}'")
                 
             except Exception as e:
-                print(f"DEBUG: Error processing sample {i+1}: {e}")
+                debug_print(f"DEBUG: Error processing sample {i+1}: {e}")
                 continue
 
         # Create processed data and full sample data  
@@ -1519,7 +1520,7 @@ def process_user_test_simulation(data):
             processed_data = pd.DataFrame(samples)
             full_sample_data_df = pd.concat(full_sample_data, axis=1) if full_sample_data else pd.DataFrame()
         else:
-            print("DEBUG: No valid samples processed, creating minimal structure")
+            debug_print("DEBUG: No valid samples processed, creating minimal structure")
             processed_data = pd.DataFrame([{
                 "Sample Name": "Sample 1",
                 "Media": "",
@@ -1533,24 +1534,24 @@ def process_user_test_simulation(data):
             }])
             full_sample_data_df = data
 
-        print(f"DEBUG: Final User Test Simulation processed_data shape: {processed_data.shape}")
-        print(f"DEBUG: Final User Test Simulation full_sample_data shape: {full_sample_data_df.shape}")
-        print(f"DEBUG: process_plot_sheet - using concatenated data: {bool(samples)}")
-        print(f"DEBUG: process_plot_sheet - samples count: {len(samples) if samples else 0}")
+        debug_print(f"DEBUG: Final User Test Simulation processed_data shape: {processed_data.shape}")
+        debug_print(f"DEBUG: Final User Test Simulation full_sample_data shape: {full_sample_data_df.shape}")
+        debug_print(f"DEBUG: process_plot_sheet - using concatenated data: {bool(samples)}")
+        debug_print(f"DEBUG: process_plot_sheet - samples count: {len(samples) if samples else 0}")
         return processed_data, sample_arrays, full_sample_data_df
         
     except Exception as e:
-        print(f"DEBUG: Error processing User Test Simulation sheet: {e}")
-        print(f"DEBUG: Error traceback: {traceback.format_exc()}")
-        print(f"DEBUG: process_plot_sheet - using concatenated data: {bool(samples)}")
-        print(f"DEBUG: process_plot_sheet - samples count: {len(samples) if samples else 0}")
+        debug_print(f"DEBUG: Error processing User Test Simulation sheet: {e}")
+        debug_print(f"DEBUG: Error traceback: {traceback.format_exc()}")
+        debug_print(f"DEBUG: process_plot_sheet - using concatenated data: {bool(samples)}")
+        debug_print(f"DEBUG: process_plot_sheet - samples count: {len(samples) if samples else 0}")
         return create_empty_user_test_simulation_structure(data)
 
 def create_empty_user_test_simulation_structure(data):
     """
     Create an empty structure for User Test Simulation data collection.
     """
-    print("DEBUG: Creating empty User Test Simulation structure for data collection")
+    debug_print("DEBUG: Creating empty User Test Simulation structure for data collection")
     
     # Create minimal processed data structure
     processed_data = pd.DataFrame([{
@@ -1579,7 +1580,7 @@ def create_empty_user_test_simulation_structure(data):
     else:
         full_sample_data = data
     
-    print(f"DEBUG: Created empty User Test Simulation structure - processed: {processed_data.shape}, full: {full_sample_data.shape}")
+    debug_print(f"DEBUG: Created empty User Test Simulation structure - processed: {processed_data.shape}, full: {full_sample_data.shape}")
     return processed_data, sample_arrays, full_sample_data
 
 # ==================== AGGREGATION FUNCTIONS ====================
@@ -1909,7 +1910,7 @@ def convert_legacy_file_using_template(legacy_file_path: str, template_path: str
     # Process each legacy sample.
     for sample_idx, sample in enumerate(legacy_samples):
         col_offset = 1 + (sample_idx * 12)
-        #print(f"\nProcessing sample {sample_idx + 1} at columns {col_offset} to {col_offset + 11}")
+        #debug_print(f"\nProcessing sample {sample_idx + 1} at columns {col_offset} to {col_offset + 11}")
 
         # --- 1. meta_data Handling ---
         sample_name = sample.get("sample_name", f"Sample {sample_idx + 1}")
@@ -1939,7 +1940,7 @@ def convert_legacy_file_using_template(legacy_file_path: str, template_path: str
             if pd.isna(val) or str(val).strip() == "":
                 cutoff = i
                 break
-        #print(f"Sample {sample_idx + 1}: Writing {cutoff} data rows based on 'After weight/g' column.")
+        #debug_print(f"Sample {sample_idx + 1}: Writing {cutoff} data rows based on 'After weight/g' column.")
 
         # Now loop over each key in DATA_COL_MAPPING and write only rows up to the cutoff.
         for key, (rel_col, is_numeric) in DATA_COL_MAPPING.items():
@@ -1957,7 +1958,7 @@ def convert_legacy_file_using_template(legacy_file_path: str, template_path: str
                     ws.cell(row=target_row, column=target_col, 
                             value=float(value) if is_numeric else str(value))
                 except Exception as e:
-                    #print(f"Error writing {key} at ({target_row},{target_col}): {e}")
+                    #debug_print(f"Error writing {key} at ({target_row},{target_col}): {e}")
                     ws.cell(row=target_row, column=target_col, value="ERROR")
 
         # --- 3. Clearing Extra Rows in the Block ---
@@ -1990,7 +1991,7 @@ def convert_legacy_file_using_template(legacy_file_path: str, template_path: str
     new_file_name = f"{base_name} Legacy.xlsx"
     new_file_path = os.path.join(folder_path, new_file_name)
     wb.save(new_file_path)
-    #print(f"\nSaved processed file to: {new_file_path}")
+    #debug_print(f"\nSaved processed file to: {new_file_path}")
     return load_excel_file(new_file_path)[new_sheet_name]
 
 def convert_legacy_standards_using_template(legacy_file_path: str, template_path: str = None) -> dict:

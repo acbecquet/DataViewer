@@ -5,7 +5,7 @@ import numpy as np
 from tkinter import filedialog, messagebox
 from sklearn.impute import SimpleImputer
 import shutil
-
+from utils import debug_print
 class DataProcessing_Methods:
     def load_models(self):
         """
@@ -25,11 +25,11 @@ class DataProcessing_Methods:
             try:
                 with open(base_model_path, 'rb') as f:
                     self.base_models = pickle.load(f)
-                print(f"Loaded {len(self.base_models)} base models")
+                debug_print(f"Loaded {len(self.base_models)} base models")
             except Exception as e:
                 print(f"Error loading base models: {e}")
         else:
-            print("No base models found. Please train models first.")
+            debug_print("No base models found. Please train models first.")
     
         # Load composition models if available
         comp_model_path = 'models/viscosity_composition_models.pkl'
@@ -37,7 +37,7 @@ class DataProcessing_Methods:
             try:
                 with open(comp_model_path, 'rb') as f:
                     self.composition_models = pickle.load(f)
-                print(f"Loaded {len(self.composition_models)} composition models")
+                debug_print(f"Loaded {len(self.composition_models)} composition models")
             except Exception as e:
                 print(f"Error loading composition models: {e}")
     
@@ -48,7 +48,7 @@ class DataProcessing_Methods:
                 with open(profile_path, 'rb') as f:
                     self.terpene_profiles = pickle.load(f)
                 profile_count = sum(len(profiles) for profiles in self.terpene_profiles.values())
-                print(f"Loaded {profile_count} terpene profiles")
+                debug_print(f"Loaded {profile_count} terpene profiles")
             except Exception as e:
                 print(f"Error loading terpene profiles: {e}")
     
@@ -75,12 +75,12 @@ class DataProcessing_Methods:
                         cleaned_models[key] = self.remove_terpene_brand_from_features(model)
                 
                     self.consolidated_models = cleaned_models
-                    print(f"Loaded and cleaned {len(models)} consolidated models from {model_path}")
+                    debug_print(f"Loaded and cleaned {len(models)} consolidated models from {model_path}")
             except Exception as e:
                 print(f"Error loading consolidated models: {e}")
                 self.consolidated_models = {}
         else:
-            print(f"No consolidated model file found at {model_path}")
+            debug_print(f"No consolidated model file found at {model_path}")
             self.consolidated_models = {}
 
     def upload_training_data(self):
@@ -243,7 +243,7 @@ class DataProcessing_Methods:
         mask = potency_missing & terpene_available
         if mask.any():
             processed_data.loc[mask, 'total_potency'] = 1.0 - (processed_data.loc[mask, 'terpene_pct'] / 100.0)
-            print(f"Filled {mask.sum()} missing potency values using inverse relationship")
+            debug_print(f"Filled {mask.sum()} missing potency values using inverse relationship")
     
         # For rows with missing terpene but available potency
         terpene_missing = processed_data['terpene_pct'].isna()
@@ -253,7 +253,7 @@ class DataProcessing_Methods:
         mask = terpene_missing & potency_available
         if mask.any():
             processed_data.loc[mask, 'terpene_pct'] = (1.0 - processed_data.loc[mask, 'total_potency']) * 100.0
-            print(f"Filled {mask.sum()} missing terpene values using inverse relationship")
+            debug_print(f"Filled {mask.sum()} missing terpene values using inverse relationship")
     
         return processed_data
 

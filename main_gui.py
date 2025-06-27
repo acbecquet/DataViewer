@@ -33,7 +33,7 @@ from trend_analysis_gui import TrendAnalysisGUI
 from progress_dialog import ProgressDialog
 from image_loader import ImageLoader
 from viscosity_calculator import ViscosityCalculator
-from utils import FONT, get_resource_path, clean_columns, get_save_path, is_standard_file, plotting_sheet_test, APP_BACKGROUND_COLOR,BUTTON_COLOR, PLOT_CHECKBOX_TITLE
+from utils import FONT, get_resource_path, clean_columns, get_save_path, is_standard_file, plotting_sheet_test, APP_BACKGROUND_COLOR,BUTTON_COLOR, PLOT_CHECKBOX_TITLE, debug_print
 
 class UpdateManager:
     def __init__(self, current_version="3.0.0"):
@@ -51,7 +51,7 @@ class UpdateManager:
                 return True, latest_info
             return False, None
         except Exception as e:
-            print(f"DEBUG: Update check failed: {e}")
+            debug_print(f"DEBUG: Update check failed: {e}")
             return False, None
     
     def download_update(self, download_url):
@@ -146,34 +146,34 @@ class TestingGUI:
     # === New Centralized Frame Creation Methods ===
     def add_static_controls(self) -> None:
         """Add static controls (Add Data and Trend Analysis buttons) to the top_frame."""
-        #print("DEBUG: Adding static controls to top_frame...")
+        #debug_print("DEBUG: Adding static controls to top_frame...")
         
         if not hasattr(self, 'controls_frame') or not self.controls_frame:
             self.controls_frame = ttk.Frame(self.top_frame)
             
             self.controls_frame.pack(side="right", fill="x", padx=5, pady=5)
-            #print("DEBUG: controls_frame created in top_frame.")
+            #debug_print("DEBUG: controls_frame created in top_frame.")
         # Add the "Add Data" button
         #add_data_btn = ttk.Button(self.controls_frame, text="Add Data", command=self.file_manager.add_data)
         #add_data_btn.pack(side="left", padx=(5, 5), pady=(5, 5))
-        #print("DEBUG: 'Add Data' button added to static controls.")
+        #debug_print("DEBUG: 'Add Data' button added to static controls.")
         # Add the "Trend Analysis" button
         #trend_button = ttk.Button(self.controls_frame, text="Trend Analysis", command=self.open_trend_analysis_window)
         #trend_button.pack(side="left", padx=(5, 5), pady=(5, 5))
-        #print("DEBUG: 'Trend Analysis' button added to static controls.")
+        #debug_print("DEBUG: 'Trend Analysis' button added to static controls.")
 
         #self.add_report_buttons(self.controls_frame)
 
     def create_static_frames(self) -> None:
         """Create persistent (static) frames that remain for the lifetime of the UI."""
-        #print("DEBUG: Creating static frames...")
+        #debug_print("DEBUG: Creating static frames...")
 
         # Create top_frame for dropdowns and control buttons.
         if not hasattr(self, 'top_frame') or not self.top_frame:
             self.top_frame = ttk.Frame(self.root,height = 30)
             self.top_frame.pack(side="top", fill="x", pady=(10, 0), padx=10)
             self.top_frame.pack_propagate(False) # Prevent height changes
-            #print("DEBUG: top_frame created.")
+            #debug_print("DEBUG: top_frame created.")
 
         # Create bottom_frame to hold the image button and image display area.
         if not hasattr(self, 'bottom_frame') or not self.bottom_frame:
@@ -181,7 +181,7 @@ class TestingGUI:
             self.bottom_frame.pack(side="bottom", fill = "x", padx=10, pady=(0,10))
             self.bottom_frame.pack_propagate(False)
             self.bottom_frame.grid_propagate(False)
-            #print(f"DEBUG: Created bottom_frame with fixed height 150 | "
+            #debug_print(f"DEBUG: Created bottom_frame with fixed height 150 | "
               #f"Current height: {self.bottom_frame.winfo_height()}")
 
         # Create a static frame for the Load Images button within bottom_frame.
@@ -189,7 +189,7 @@ class TestingGUI:
             self.image_button_frame = ttk.Frame(self.bottom_frame)
             # Pack it to the left.
             self.image_button_frame.pack(side="left", fill="y", padx=5, pady=5)
-            #print("DEBUG: image_button_frame created.")
+            #debug_print("DEBUG: image_button_frame created.")
 
             self.crop_enabled = tk.BooleanVar(value=False) # Default: Cropping is enabled
             self.crop_checkbox = ttk.Checkbutton(
@@ -206,7 +206,7 @@ class TestingGUI:
                 command=lambda: self.image_loader.add_images() if self.image_loader else None
             )
             load_image_button.pack(side="left", padx=5, pady=5)
-            #print("DEBUG: Static 'Load Images' button added to image_button_frame.")
+            #debug_print("DEBUG: Static 'Load Images' button added to image_button_frame.")
 
         # Create the dynamic image display frame within bottom_frame.
         if not hasattr(self, 'image_frame') or not self.image_frame:
@@ -216,24 +216,24 @@ class TestingGUI:
             self.image_frame.grid_propagate(False)
             # Prevent the image_frame from shrinking.
             #self.image_frame.pack_propagate(True)
-            #print("DEBUG: Dynamic image_frame created with fixed height 300.")
+            #debug_print("DEBUG: Dynamic image_frame created with fixed height 300.")
 
 
         # Create display_frame for the table/plot area.
         if not hasattr(self, 'display_frame') or not self.display_frame:
             self.display_frame = ttk.Frame(self.root)
             self.display_frame.pack(fill="both", expand=True, padx=10, pady=5)
-            #print("DEBUG: display_frame created.")
+            #debug_print("DEBUG: display_frame created.")
 
         # Create a dynamic subframe inside display_frame for table and plot content.
         if not hasattr(self, 'dynamic_frame') or not self.dynamic_frame:
             self.dynamic_frame = ttk.Frame(self.display_frame)
             self.dynamic_frame.pack(fill="both", expand=True)
-            #print("DEBUG: dynamic_frame created.")
+            #debug_print("DEBUG: dynamic_frame created.")
 
     def clear_dynamic_frame(self) -> None:
         """Clear all children widgets from the dynamic frame."""
-        #print("DEBUG: Clearing dynamic_frame contents...")
+        #debug_print("DEBUG: Clearing dynamic_frame contents...")
         for widget in self.dynamic_frame.winfo_children():
             widget.destroy()
 
@@ -415,7 +415,7 @@ class TestingGUI:
         try:
             for thread in self.threads:
                 if thread.is_alive():
-                    #print(f"Stopping thread {thread.name}")
+                    #debug_print(f"Stopping thread {thread.name}")
                     pass
             self.root.destroy()
             os._exit(0)
@@ -627,7 +627,7 @@ class TestingGUI:
         Update the displayed sheet and dynamically manage the plot options and plot type dropdown.
         Enhanced to handle empty sheets for data collection.
         """
-        print(f"DEBUG: [update_displayed_sheet] START for sheet: {sheet_name}")
+        debug_print(f"DEBUG: [update_displayed_sheet] START for sheet: {sheet_name}")
 
         # Ensure bottom_frame maintains its fixed height
         if hasattr(self, 'bottom_frame') and self.bottom_frame.winfo_exists():
@@ -636,7 +636,7 @@ class TestingGUI:
             self.bottom_frame.grid_propagate(False)
 
         if not sheet_name or sheet_name not in self.filtered_sheets:
-            print(f"DEBUG: Sheet {sheet_name} not found in filtered_sheets")
+            debug_print(f"DEBUG: Sheet {sheet_name} not found in filtered_sheets")
             return
 
         sheet_info = self.filtered_sheets.get(sheet_name)
@@ -648,14 +648,14 @@ class TestingGUI:
         is_empty = sheet_info.get("is_empty", False)
         is_plotting_sheet = plotting_sheet_test(sheet_name, data)
         
-        print(f"DEBUG: Sheet {sheet_name} - is_empty: {is_empty}, is_plotting_sheet: {is_plotting_sheet}, data_shape: {data.shape}")
+        debug_print(f"DEBUG: Sheet {sheet_name} - is_empty: {is_empty}, is_plotting_sheet: {is_plotting_sheet}, data_shape: {data.shape}")
 
         # Clear and rebuild only the dynamic content
         self.clear_dynamic_frame()
         self.setup_dynamic_frames(is_plotting_sheet)
 
         # Handle ImageLoader setup
-        print("DEBUG: Setting up ImageLoader...")
+        debug_print("DEBUG: Setting up ImageLoader...")
         if hasattr(self, 'image_loader'):
             for widget in self.image_frame.winfo_children():
                 widget.destroy()
@@ -672,19 +672,19 @@ class TestingGUI:
             for img_path in self.sheet_images[current_file][sheet_name]:
                 if img_path in self.image_crop_states:
                     self.image_loader.image_crop_states[img_path] = self.image_crop_states[img_path]
-            print(f"DEBUG: Restored images and crop states for sheet: {sheet_name}")
+            debug_print(f"DEBUG: Restored images and crop states for sheet: {sheet_name}")
 
         self.image_loader.display_images()
         self.image_frame.update_idletasks()
 
         # Check if sheet is completely empty (for data collection, we want to handle this gracefully)
         if is_empty or data.empty:
-            print(f"DEBUG: Sheet {sheet_name} is empty - checking if this is for data collection")
+            debug_print(f"DEBUG: Sheet {sheet_name} is empty - checking if this is for data collection")
             
             # For data collection, we still want to show the interface
             # Instead of showing an error, create a minimal structure
             if is_plotting_sheet:
-                print("DEBUG: Creating minimal structure for empty plotting sheet")
+                debug_print("DEBUG: Creating minimal structure for empty plotting sheet")
                 # Create minimal data for display
                 minimal_data = pd.DataFrame([{
                     "Sample Name": "No data - ready for collection",
@@ -717,31 +717,31 @@ class TestingGUI:
                     )
                     empty_plot_label.pack(expand=True)
                     
-                print("DEBUG: Minimal plotting sheet structure created")
+                debug_print("DEBUG: Minimal plotting sheet structure created")
             else:
                 # For non-plotting sheets, show a simple message
-                print("DEBUG: Creating minimal structure for empty non-plotting sheet")
+                debug_print("DEBUG: Creating minimal structure for empty non-plotting sheet")
                 minimal_data = pd.DataFrame([{
                     "Status": "No data - ready for collection",
                     "Instructions": "Use data collection tools to add information"
                 }])
                 self.display_table(self.table_frame, minimal_data, sheet_name, is_plotting_sheet)
                 
-            print("DEBUG: Empty sheet handled for data collection")
+            debug_print("DEBUG: Empty sheet handled for data collection")
             self.root.update_idletasks()
             return
 
         # Process the sheet data
         try:
-            print(f"DEBUG: Processing sheet data for {sheet_name}...")
+            debug_print(f"DEBUG: Processing sheet data for {sheet_name}...")
             process_function = processing.get_processing_function(sheet_name)
             processed_data, _, full_sample_data = process_function(data)
-            print(f"DEBUG: Processing complete - processed_data: {processed_data.shape}, full_sample_data: {full_sample_data.shape}")
+            debug_print(f"DEBUG: Processing complete - processed_data: {processed_data.shape}, full_sample_data: {full_sample_data.shape}")
             self.current_sheet_data = processed_data
             #SPECIAL HANDLING FOR USER TEST SIMULATION:
             
             if sheet_name in ["User Test Simulation", "User Simulation Test"]:
-                print("DEBUG: Detected User Test Simulation - using 8 columns per sample")
+                debug_print("DEBUG: Detected User Test Simulation - using 8 columns per sample")
                 self.plot_options = self.user_test_simulation_plot_options
                 # Store the fact that this is User Test Simulation for plotting
                 self.is_user_test_simulation = True
@@ -757,22 +757,22 @@ class TestingGUI:
             return
 
         # Display the table
-        print(f"DEBUG: Displaying table for {sheet_name}...")
+        debug_print(f"DEBUG: Displaying table for {sheet_name}...")
         try:
             self.display_table(self.table_frame, processed_data, sheet_name, is_plotting_sheet)
-            print("DEBUG: Table displayed successfully")
+            debug_print("DEBUG: Table displayed successfully")
         except Exception as e:
             print(f"ERROR: Failed to display table: {e}")
 
         # Display plot if it's a plotting sheet
         if is_plotting_sheet:
-            print(f"DEBUG: Displaying plot for sheet: {sheet_name}")
+            debug_print(f"DEBUG: Displaying plot for sheet: {sheet_name}")
             try:
                 if not full_sample_data.empty:
                     self.display_plot(full_sample_data)
-                    print("DEBUG: Plot displayed successfully")
+                    debug_print("DEBUG: Plot displayed successfully")
                 else:
-                    print("DEBUG: Full sample data is empty, showing empty plot message")
+                    debug_print("DEBUG: Full sample data is empty, showing empty plot message")
                     if hasattr(self, 'plot_frame') and self.plot_frame:
                         for widget in self.plot_frame.winfo_children():
                             widget.destroy()
@@ -788,10 +788,10 @@ class TestingGUI:
             except Exception as e:
                 print(f"ERROR: Failed to display plot: {e}")
 
-        print("DEBUG: Successfully updated displayed sheet.")
+        debug_print("DEBUG: Successfully updated displayed sheet.")
         self.root.update_idletasks()
         
-        print(f"DEBUG: [update_displayed_sheet] END for sheet: {sheet_name}")
+        debug_print(f"DEBUG: [update_displayed_sheet] END for sheet: {sheet_name}")
 
     def load_images(self, is_plotting_sheet):
         """Load and display images in the dynamic image_frame."""
@@ -810,7 +810,7 @@ class TestingGUI:
         if not sheet_name:
             return
 
-        #print(f"DEBUG: Storing images for sheet: {sheet_name}")
+        #debug_print(f"DEBUG: Storing images for sheet: {sheet_name}")
         
         # Ensure the file key exists in the sheet_images dictionary
         if self.current_file not in self.sheet_images:
@@ -827,24 +827,24 @@ class TestingGUI:
             if img_path not in self.image_crop_states:
                 self.image_crop_states[img_path] = self.crop_enabled.get()
 
-        #print(f"DEBUG: Stored image paths: {self.sheet_images[self.current_file][sheet_name]}")
-        #print(f"DEBUG: Stored crop states: {self.image_crop_states}")
+        #debug_print(f"DEBUG: Stored image paths: {self.sheet_images[self.current_file][sheet_name]}")
+        #debug_print(f"DEBUG: Stored crop states: {self.image_crop_states}")
 
     def open_data_collection(self):
         """Open data collection interface, handling both loaded and unloaded file states."""
-        print("DEBUG: Data collection requested")
+        debug_print("DEBUG: Data collection requested")
         
         # Check if we have a file loaded
         if not hasattr(self, 'filtered_sheets') or not self.filtered_sheets or not hasattr(self, 'file_path') or not self.file_path:
-            print("DEBUG: No file loaded - showing data collection startup dialog")
+            debug_print("DEBUG: No file loaded - showing data collection startup dialog")
             self.show_data_collection_startup_dialog()
         else:
-            print(f"DEBUG: File already loaded ({self.file_path}) - opening test start menu")
+            debug_print(f"DEBUG: File already loaded ({self.file_path}) - opening test start menu")
             self.file_manager.show_test_start_menu(self.file_path)
 
     def show_data_collection_startup_dialog(self):
         """Show a startup dialog for data collection when no file is loaded."""
-        print("DEBUG: Creating data collection startup dialog")
+        debug_print("DEBUG: Creating data collection startup dialog")
         
         startup_dialog = tk.Toplevel(self.root)
         startup_dialog.title("Data Collection")
@@ -905,30 +905,30 @@ class TestingGUI:
         cancel_button.pack(pady=(20, 0))
 
         self.center_window(startup_dialog)
-        print("DEBUG: Data collection startup dialog created and displayed")
+        debug_print("DEBUG: Data collection startup dialog created and displayed")
 
     def handle_data_collection_new(self, dialog):
         """Handle 'Create New File' from data collection dialog."""
-        print("DEBUG: Create New File selected from data collection dialog")
+        debug_print("DEBUG: Create New File selected from data collection dialog")
         dialog.destroy()
         
         # Use the existing new file creation logic
         file_path = self.file_manager.create_new_file_with_tests()
         if file_path:
-            print(f"DEBUG: New file created at {file_path} - will proceed to test start menu")
+            debug_print(f"DEBUG: New file created at {file_path} - will proceed to test start menu")
             # The create_new_file_with_tests method already handles showing the test start menu
         else:
-            print("DEBUG: New file creation was cancelled")
+            debug_print("DEBUG: New file creation was cancelled")
 
     def handle_data_collection_load(self, dialog):
         """Handle 'Load Existing File' from data collection dialog."""
-        print("DEBUG: Load Existing File selected from data collection dialog")
+        debug_print("DEBUG: Load Existing File selected from data collection dialog")
         dialog.destroy()
         
         # Show file selection dialog
         file_path = self.file_manager.ask_open_file()
         if file_path:
-            print(f"DEBUG: File selected for loading: {file_path}")
+            debug_print(f"DEBUG: File selected for loading: {file_path}")
             try:
                 # Load the file
                 self.file_manager.load_excel_file(file_path)
@@ -944,15 +944,15 @@ class TestingGUI:
                 self.file_manager.set_active_file(os.path.basename(file_path))
                 self.file_manager.update_ui_for_current_file()
                 
-                print(f"DEBUG: File loaded successfully - opening test start menu")
+                debug_print(f"DEBUG: File loaded successfully - opening test start menu")
                 # Show the test start menu for the loaded file
                 self.file_manager.show_test_start_menu(file_path)
                 
             except Exception as e:
-                print(f"DEBUG: Error loading file: {e}")
+                debug_print(f"DEBUG: Error loading file: {e}")
                 messagebox.showerror("Error", f"Failed to load file: {e}")
         else:
-            print("DEBUG: No file selected for loading")
+            debug_print("DEBUG: No file selected for loading")
 
     def display_plot(self, full_sample_data):
         """
@@ -982,7 +982,7 @@ class TestingGUI:
 
     def display_table(self, frame, data, sheet_name, is_plotting_sheet=False):
             """Display table with enhanced handling for empty/minimal data."""
-            print(f"DEBUG: display_table called for sheet: {sheet_name}, data_shape: {data.shape}, is_plotting_sheet: {is_plotting_sheet}")
+            debug_print(f"DEBUG: display_table called for sheet: {sheet_name}, data_shape: {data.shape}, is_plotting_sheet: {is_plotting_sheet}")
 
             if not frame or not frame.winfo_exists():
                 print(f"ERROR: Frame {frame} does not exist! Aborting display_table.")
@@ -991,11 +991,11 @@ class TestingGUI:
             for widget in frame.winfo_children():
                 widget.destroy()
 
-            print("DEBUG: Cleared existing table widgets.")
+            debug_print("DEBUG: Cleared existing table widgets.")
 
             # Handle completely empty data
             if data.empty:
-                print("DEBUG: Data is completely empty, creating placeholder")
+                debug_print("DEBUG: Data is completely empty, creating placeholder")
                 # Create a placeholder message instead of showing a warning
                 placeholder_label = tk.Label(
                     frame,
@@ -1015,13 +1015,13 @@ class TestingGUI:
             data = data.astype(str)
             data = data.replace([np.nan, pd.NA], '', regex=True)
 
-            print("DEBUG: Data processed successfully.")
+            debug_print("DEBUG: Data processed successfully.")
 
             table_frame = ttk.Frame(frame, padding=(2, 1))
             self.table_frame.pack_propagate(False)
             table_frame.pack(fill='both', expand=True)
 
-            print("DEBUG: Table frame created and packed.")
+            debug_print("DEBUG: Table frame created and packed.")
 
             # Calculate table dimensions
             table_frame.update_idletasks()
@@ -1042,7 +1042,7 @@ class TestingGUI:
             default_rowheight = 25
 
             if is_plotting_sheet:
-                print("DEBUG: Adjusting row height for plotting sheet.")
+                debug_print("DEBUG: Adjusting row height for plotting sheet.")
                 font_height = 16
                 char_per_line = 12
 
@@ -1060,7 +1060,7 @@ class TestingGUI:
                 max_row_height = int(max(row_heights)) if row_heights else default_rowheight
                 default_rowheight = max_row_height
 
-            print(f"DEBUG: Final row height: {default_rowheight}")
+            debug_print(f"DEBUG: Final row height: {default_rowheight}")
 
             # Create table canvas
             table_canvas = TableCanvas(
@@ -1083,7 +1083,7 @@ class TestingGUI:
 
             table_canvas.show()
 
-            print("DEBUG: Table displayed successfully.")
+            debug_print("DEBUG: Table displayed successfully.")
 
     def update_plot_dropdown(self):
         """Update the plot type dropdown with only the valid options and manage visibility."""
@@ -1171,11 +1171,11 @@ class TestingGUI:
                 logging.info(f"Sheet {sheet_name} - empty: {sheet_info.get('is_empty', 'unknown')}")
                 if 'data' in sheet_info:
                     logging.info(f"  Data shape: {sheet_info['data'].shape}")
-                    print(f"DEBUG: Full report - {sheet_name} data shape: {sheet_info['data'].shape}")
+                    debug_print(f"DEBUG: Full report - {sheet_name} data shape: {sheet_info['data'].shape}")
                     if sheet_name == "User Test Simulation":
-                        print(f"DEBUG: User Test Simulation data preview:")
-                        print(f"DEBUG: Columns: {sheet_info['data'].columns.tolist()}")
-                        print(f"DEBUG: First 5 rows:\n{sheet_info['data'].head()}")
+                        debug_print(f"DEBUG: User Test Simulation data preview:")
+                        debug_print(f"DEBUG: Columns: {sheet_info['data'].columns.tolist()}")
+                        debug_print(f"DEBUG: First 5 rows:\n{sheet_info['data'].head()}")
 
             # Generate report (blocks UI, but ensures dialog stays visible)
             self.report_generator.generate_full_report(
@@ -1188,8 +1188,8 @@ class TestingGUI:
             import traceback
             error_details = traceback.format_exc()
             logging.error(f"Report generation error: {str(e)}\n{error_details}")
-            print(f"DEBUG: Report generation error: {str(e)}")
-            print(f"DEBUG: Full traceback:\n{error_details}")
+            debug_print(f"DEBUG: Report generation error: {str(e)}")
+            debug_print(f"DEBUG: Full traceback:\n{error_details}")
             messagebox.showerror("Error", f"An error occurred: {e}")
 
         finally:
@@ -1205,7 +1205,7 @@ class TestingGUI:
 
     def generate_test_report(self):
         selected_sheet = self.selected_sheet.get()
-        print(f"DEBUG: Generating test report for sheet: {selected_sheet}")
+        debug_print(f"DEBUG: Generating test report for sheet: {selected_sheet}")
     
         # Show the progress dialog
         self.progress_dialog.show_progress_bar("Generating test report...")
@@ -1214,18 +1214,18 @@ class TestingGUI:
             if selected_sheet == "User Test Simulation":
                 sheet_info = self.filtered_sheets.get(selected_sheet, {})
                 if 'data' in sheet_info:
-                    print(f"DEBUG: Test report User Test Simulation data shape: {sheet_info['data'].shape}")
-                    print(f"DEBUG: Columns: {sheet_info['data'].columns.tolist()}")
-                    print(f"DEBUG: First 5 rows:\n{sheet_info['data'].head()}")
+                    debug_print(f"DEBUG: Test report User Test Simulation data shape: {sheet_info['data'].shape}")
+                    debug_print(f"DEBUG: Columns: {sheet_info['data'].columns.tolist()}")
+                    debug_print(f"DEBUG: First 5 rows:\n{sheet_info['data'].head()}")
         
             # Pass the currently selected sheet, the full sheets dictionary, and the plot options.
             self.report_generator.generate_test_report(selected_sheet, self.filtered_sheets, self.plot_options)
-            print(f"DEBUG: Test report generation completed successfully for {selected_sheet}")
+            debug_print(f"DEBUG: Test report generation completed successfully for {selected_sheet}")
         except Exception as e:
             import traceback
             error_details = traceback.format_exc()
-            print(f"DEBUG: Test report generation error: {str(e)}")
-            print(f"DEBUG: Full traceback:\n{error_details}")
+            debug_print(f"DEBUG: Test report generation error: {str(e)}")
+            debug_print(f"DEBUG: Full traceback:\n{error_details}")
             raise
         finally:
             self.progress_dialog.hide_progress_bar()

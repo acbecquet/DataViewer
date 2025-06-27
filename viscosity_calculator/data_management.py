@@ -6,7 +6,7 @@ import traceback
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, StringVar
 import json
-
+from utils import debug_print
 # These constants should be imported from your core module if they're defined there
 from .core import APP_BACKGROUND_COLOR, FONT
 
@@ -148,7 +148,7 @@ class DataManagement_Methods:
                                    f"Added {len(rows)} new measurements to master data file.")
                 return master_file
             else:
-                print("No valid data rows to save")
+                debug_print("No valid data rows to save")
                 return None
         
         except Exception as e:
@@ -319,7 +319,7 @@ class DataManagement_Methods:
             
                 # Save to CSV
                 master_df.to_csv(master_file, index=False)
-                print(f"Added {len(csv_rows)} new measurements to master CSV file.")
+                debug_print(f"Added {len(csv_rows)} new measurements to master CSV file.")
             except Exception as e:
                 import traceback
                 print(f"Error updating master CSV: {str(e)}")
@@ -532,7 +532,7 @@ class DataManagement_Methods:
         def apply_filter():
             # Start with the full dataframe
             filtered_df = df.copy()
-            print(f"Starting with {len(filtered_df)} records")  # Debug print
+            debug_print(f"Starting with {len(filtered_df)} records")  # Debug print
         
             # Apply media filter
             if media_var.get() != "All" and 'media' in filtered_df.columns:
@@ -557,7 +557,7 @@ class DataManagement_Methods:
         
                     # Check how many records have valid timestamps versus NaN
                     valid_timestamps = filtered_df['timestamp'].notna().sum()
-                    print(f"Records with valid timestamps: {valid_timestamps} out of {len(filtered_df)}")
+                    debug_print(f"Records with valid timestamps: {valid_timestamps} out of {len(filtered_df)}")
         
                     # Only apply date filter to records with timestamps
                     # For records without timestamps, keep them regardless of date range
@@ -566,7 +566,7 @@ class DataManagement_Methods:
                         filtered_df['timestamp'].isna()
                     )
                     filtered_df = filtered_df[mask]
-                    print(f"After date filter: {len(filtered_df)} records")
+                    debug_print(f"After date filter: {len(filtered_df)} records")
         
                 except Exception as e:
                     print(f"Date parsing error: {e}")
@@ -576,7 +576,7 @@ class DataManagement_Methods:
             for i in tree.get_children():
                 tree.delete(i)
 
-            print(f"Final filtered records: {len(filtered_df)}")
+            debug_print(f"Final filtered records: {len(filtered_df)}")
         
             # Populate treeview with filtered data
             for idx, row in filtered_df.iterrows():
@@ -620,7 +620,7 @@ class DataManagement_Methods:
             to_delete = []
     
             # For debugging
-            print(f"Attempting to delete {len(selected)} records")
+            debug_print(f"Attempting to delete {len(selected)} records")
     
             # Save original dataframe for potential rollback
             original_df_copy = df.copy()
@@ -639,7 +639,7 @@ class DataManagement_Methods:
                     visc_value = item_values[columns.index('viscosity')] if 'viscosity' in columns else None
             
                     # Print debug info
-                    print(f"Looking for: media={media_value}, terpene={terpene_value}, temp={temp_value}, visc={visc_value}")
+                    debug_print(f"Looking for: media={media_value}, terpene={terpene_value}, temp={temp_value}, visc={visc_value}")
             
                     # Create a flexible matching criteria
                     for idx, row in df.iterrows():
@@ -675,14 +675,14 @@ class DataManagement_Methods:
                 
                         if match:
                             to_delete.append(idx)
-                            print(f"Found match at index {idx}")
+                            debug_print(f"Found match at index {idx}")
                             break
 
             # Remove duplicates
             to_delete = list(set(to_delete))
     
             if to_delete:
-                print(f"Will delete {len(to_delete)} records")
+                debug_print(f"Will delete {len(to_delete)} records")
         
                 try:
                     # Step 1: Delete from dataframe without leaving gaps
@@ -695,11 +695,11 @@ class DataManagement_Methods:
                     # Create backup before modifying anything
                     backup_file = f"{master_file}.bak.{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
                     original_df.to_csv(backup_file, index=False)
-                    print(f"Backup saved to {backup_file}")
+                    debug_print(f"Backup saved to {backup_file}")
             
                     # Try to save the updated dataframe
                     df_updated.to_csv(master_file, index=False)
-                    print(f"Updated dataset saved to {master_file}")
+                    debug_print(f"Updated dataset saved to {master_file}")
             
                     # If we got here, the file save was successful
                     # Update the global dataframe reference
@@ -728,7 +728,7 @@ class DataManagement_Methods:
                     apply_filter()
             
             else:
-                print("No matching records found for deletion")
+                debug_print("No matching records found for deletion")
                 messagebox.showwarning("No Matches", "Could not identify the selected records in the dataset.")
     
         # Function to save changes to the CSV file

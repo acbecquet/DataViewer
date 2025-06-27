@@ -18,6 +18,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.model_selection import KFold, cross_val_score
 from sklearn.metrics import mean_squared_error, r2_score
 import math
+from utils import debug_print
 
 # Import constants from core module
 from .core import APP_BACKGROUND_COLOR, BUTTON_COLOR, FONT
@@ -909,14 +910,14 @@ class Model_Methods:
                             # Step 2: Evaluate residual model
                         
                             # First, print more diagnostic information
-                            print(f"DEBUG - Validation DataFrame columns: {encoded_val_data.columns.tolist()}")
-                            print(f"DEBUG - Required features: {residual_features}")
-                            print(f"DEBUG - Missing features: {[f for f in residual_features if f not in encoded_val_data.columns]}")
+                            debug_print(f"DEBUG - Validation DataFrame columns: {encoded_val_data.columns.tolist()}")
+                            debug_print(f"DEBUG - Required features: {residual_features}")
+                            debug_print(f"DEBUG - Missing features: {[f for f in residual_features if f not in encoded_val_data.columns]}")
     
                             # Check if 'terpene_brand' is in the required features and remove it
                             clean_residual_features = [f for f in residual_features if f != 'terpene_brand']
     
-                            print(f"DEBUG - Removed 'terpene_brand' from features. Original count: {len(residual_features)}, New count: {len(clean_residual_features)}")
+                            debug_print(f"DEBUG - Removed 'terpene_brand' from features. Original count: {len(residual_features)}, New count: {len(clean_residual_features)}")
     
                             # Create a properly aligned DataFrame with correct features
                             aligned_data = pd.DataFrame(0, index=encoded_val_data.index, columns=clean_residual_features)
@@ -932,14 +933,14 @@ class Model_Methods:
                             X_residual = aligned_data
     
                             # Debug output
-                            print(f"DEBUG - X_residual final shape: {X_residual.shape}, expected shape: ({len(encoded_val_data)}, {len(clean_residual_features)})")
+                            debug_print(f"DEBUG - X_residual final shape: {X_residual.shape}, expected shape: ({len(encoded_val_data)}, {len(clean_residual_features)})")
    
 
                             # Debug feature alignment and duplicates
-                            print(f"\nDEBUG - Model: {media} validation")
-                            print(f"residual_features length: {len(residual_features)}")
-                            print(f"residual_features unique length: {len(set(residual_features))}")
-                            print(f"X_residual columns length: {len(X_residual.columns)}")
+                            debug_print(f"\nDEBUG - Model: {media} validation")
+                            debug_print(f"residual_features length: {len(residual_features)}")
+                            debug_print(f"residual_features unique length: {len(set(residual_features))}")
+                            debug_print(f"X_residual columns length: {len(X_residual.columns)}")
 
                             # Check for duplicates in residual_features and handle them
                             duplicates = {}
@@ -952,7 +953,7 @@ class Model_Methods:
 
                             duplicate_features = list(duplicates.keys())
                             if duplicate_features:
-                                print(f"FOUND DUPLICATE FEATURES: {duplicate_features}")
+                                debug_print(f"FOUND DUPLICATE FEATURES: {duplicate_features}")
     
                                 # Create DataFrame with correct shape (matching residual_features exactly)
                                 X_aligned = pd.DataFrame(index=X_residual.index, columns=range(len(residual_features)))
@@ -1053,7 +1054,7 @@ class Model_Methods:
         report.append("5. Physical constraint features should have significant importance")
 
         # Print report to console
-        print("\n".join(report))
+        debug_print("\n".join(report))
 
         # Show dialog if requested
         if show_dialog:
@@ -1743,7 +1744,7 @@ class Model_Methods:
                         add_text(f"Error analyzing {media}: {str(e)}")
                         import traceback
                         traceback_str = traceback.format_exc()
-                        print(f"Detailed error: {traceback_str}")
+                        debug_print(f"Detailed error: {traceback_str}")
             
                 # Create comparison plot across media types
                 if len(activation_energies) > 1:
@@ -2145,7 +2146,7 @@ class Model_Methods:
         import pandas as pd
         from sklearn.linear_model import Ridge
     
-        print("Creating enhanced potency demo model with strong effects...")
+        debug_print("Creating enhanced potency demo model with strong effects...")
     
         # Define baseline model for temperature effects (Arrhenius)
         baseline_model = Ridge(alpha=1.0)

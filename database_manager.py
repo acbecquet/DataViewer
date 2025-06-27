@@ -3,6 +3,7 @@ import sqlite3
 import json
 import datetime
 from typing import Dict, List, Any, Optional
+from utils import debug_print
 
 class DatabaseManager:
     """Manages interactions with the SQLite database for storing VAP3 files and metadata."""
@@ -30,7 +31,7 @@ class DatabaseManager:
             # Create tables if they don't exist
             self._create_tables()
             
-            print(f"Database initialized at: {db_path}")
+            debug_print(f"Database initialized at: {db_path}")
         except Exception as e:
             print(f"Error initializing database: {e}")
             # Make sure conn exists even if initialization fails
@@ -114,8 +115,8 @@ class DatabaseManager:
                 filename = os.path.basename(file_path)
             
             # Print debug info before database operation
-            print(f"Storing file: {filename} (from {file_path})")
-            print(f"Meta data keys: {list(meta_data.keys())}")
+            debug_print(f"Storing file: {filename} (from {file_path})")
+            debug_print(f"Meta data keys: {list(meta_data.keys())}")
             
             # Convert meta_data to JSON for storage
             meta_data_json = json.dumps(meta_data)
@@ -130,7 +131,7 @@ class DatabaseManager:
             # Get the ID of the newly inserted record
             file_id = cursor.lastrowid
             
-            print(f"File stored in database with ID {file_id} and filename '{filename}'")
+            debug_print(f"File stored in database with ID {file_id} and filename '{filename}'")
             return file_id
             
         except Exception as e:
@@ -312,6 +313,6 @@ class DatabaseManager:
             try:
                 self.conn.close()
                 self.conn = None
-                print("Database connection closed")
+                debug_print("Database connection closed")
             except sqlite3.Error as e:
                 print(f"Error closing database connection: {e}")
