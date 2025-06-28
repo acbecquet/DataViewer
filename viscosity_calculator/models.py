@@ -1,27 +1,21 @@
 ﻿import os
 import pickle
 import threading
-import numpy as np
-import pandas as pd
-import matplotlib
-import matplotlib.pyplot as plt
-from matplotlib.figure import Figure
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import traceback
+import math
+# Keep only lightweight imports at module level
 import tkinter as tk
 from tkinter import ttk, Toplevel, Frame, Label, Text, Scrollbar, StringVar, DoubleVar, IntVar, BooleanVar, Scale, Button, HORIZONTAL
 from tkinter import messagebox
-import traceback
-from scipy.optimize import curve_fit, minimize_scalar
-from sklearn.linear_model import Ridge
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.impute import SimpleImputer
-from sklearn.model_selection import KFold, cross_val_score
-from sklearn.metrics import mean_squared_error, r2_score
-import math
-from utils import debug_print
 
-# Import constants from core module
+# Import constants from core module - these should be lightweight
 from .core import APP_BACKGROUND_COLOR, BUTTON_COLOR, FONT
+
+try:
+    from utils import debug_print
+except ImportError:
+    def debug_print(msg):
+        print(f"DEBUG: {msg}")
 
 class Model_Methods:
     def train_unified_models(self, data=None, alpha=1.0):
@@ -34,16 +28,17 @@ class Model_Methods:
             data: Optional dataframe to use for training
             alpha: Regularization strength (default=1.0)
         """
-        import os
         import pandas as pd
         import numpy as np
-        import pickle
-        import threading
         from sklearn.linear_model import Ridge
         from sklearn.ensemble import RandomForestRegressor
-        from tkinter import Toplevel, StringVar, Frame, Label, messagebox, Scale, HORIZONTAL
         from sklearn.impute import SimpleImputer
         from sklearn.model_selection import KFold, cross_val_score
+        
+        debug_print("Loaded heavy modules for train_unified_models")
+        debug_print(f"numpy version: {np.__version__}")
+        debug_print(f"pandas version: {pd.__version__}")
+        debug_print(f"Starting model training with alpha={alpha}")
 
         # Create configuration window
         config_window = Toplevel(self.root)
@@ -686,12 +681,12 @@ class Model_Methods:
         import pandas as pd
         import numpy as np
         import matplotlib.pyplot as plt
-        from tkinter import Toplevel, Text, Scrollbar, Label, Frame, Button
-        import os
-        import pickle
-        import traceback
         from sklearn.metrics import mean_squared_error, r2_score
         from sklearn.impute import SimpleImputer
+        
+        debug_print("Loaded heavy modules for analyze_models")
+        debug_print(f"matplotlib backend: {plt.get_backend()}")
+        debug_print("Starting model analysis...")
 
         # Check if consolidated models exist
         consolidated_models_exist = hasattr(self, 'consolidated_models') and self.consolidated_models
@@ -1092,10 +1087,12 @@ class Model_Methods:
         # Import required libraries
         import matplotlib.pyplot as plt
         import numpy as np
-        import os
-        from tkinter import Toplevel, Label, Frame
         from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
         from matplotlib.figure import Figure
+        
+        debug_print("Loaded heavy modules for analyze_chemical_importance")
+        debug_print(f"matplotlib Figure class: {Figure}")
+        debug_print("Starting chemical importance analysis...")
     
         # Check if consolidated models exist
         if not hasattr(self, 'consolidated_models') or not self.consolidated_models:
@@ -1311,12 +1308,10 @@ class Model_Methods:
         Analyze and visualize Arrhenius relationships for two-level model system.
         Shows temperature sensitivity and potency effects on viscosity.
         """
-        import os
         import pandas as pd
         import numpy as np
         import matplotlib
         import matplotlib.pyplot as plt
-        from tkinter import Toplevel, StringVar, DoubleVar, Frame, Label, Scale, HORIZONTAL, Text, Scrollbar
         from scipy.optimize import curve_fit
         from sklearn.metrics import r2_score
     
@@ -1851,11 +1846,16 @@ class Model_Methods:
         """
         import numpy as np
         import matplotlib
-        matplotlib.use('Agg')  # Use non-interactive backend
         import matplotlib.pyplot as plt
         from scipy.optimize import curve_fit
-        import os
         from sklearn.metrics import r2_score
+        import pandas as pd
+        
+        debug_print("Loaded heavy modules for generate_activation_energy_comparison_twolevel")
+        debug_print(f"potency_value: {potency_value}, terpene_name: {terpene_name}")
+        debug_print(f"model_level: {model_level}")
+        
+        matplotlib.use('Agg')  # Use non-interactive backend
 
         def sanitize_filename(name):
             """Replace invalid filename characters with underscores."""
@@ -2145,7 +2145,10 @@ class Model_Methods:
         import numpy as np
         import pandas as pd
         from sklearn.linear_model import Ridge
-    
+        
+        debug_print("Loaded heavy modules for create_potency_demo_model")
+        debug_print(f"pandas DataFrame class: {pd.DataFrame}")
+        debug_print(f"Ridge model class: {Ridge}")
         debug_print("Creating enhanced potency demo model with strong effects...")
     
         # Define baseline model for temperature effects (Arrhenius)
@@ -2253,8 +2256,12 @@ class Model_Methods:
         import pandas as pd
         import numpy as np
         import matplotlib.pyplot as plt
-        from tkinter import Toplevel, Label, Frame
         from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+        
+        debug_print("Loaded heavy modules for analyze_model_feature_response")
+        debug_print(f"model_key: {model_key}")
+        debug_print(f"model provided: {model is not None}")
+        debug_print("Starting feature response analysis...")
     
         # If no specific model provided, use a model from combined models
         if model is None:

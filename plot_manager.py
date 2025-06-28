@@ -1,12 +1,31 @@
 # plot_manager.py
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
-from matplotlib.widgets import CheckButtons
 import tkinter as tk
 from tkinter import ttk, messagebox, Toplevel, Label, Button
 from utils import wrap_text,APP_BACKGROUND_COLOR,BUTTON_COLOR, PLOT_CHECKBOX_TITLE,FONT, debug_print
 import processing
-import pandas as pd
+
+
+def lazy_import_matplotlib_components():
+    """Lazy import matplotlib components."""
+    try:
+        import matplotlib.pyplot as plt
+        from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+        from matplotlib.widgets import CheckButtons
+        print("TIMING: Lazy loaded matplotlib components in PlotManager")
+        return plt, FigureCanvasTkAgg, NavigationToolbar2Tk, CheckButtons
+    except ImportError as e:
+        print(f"Error importing matplotlib: {e}")
+        return None, None, None, None
+
+def lazy_import_pandas():
+    """Lazy import pandas."""
+    try:
+        import pandas as pd
+        print("TIMING: Lazy loaded pandas in PlotManager")
+        return pd
+    except ImportError as e:
+        print(f"Error importing pandas: {e}")
+        return None
 
 class PlotManager:
     def __init__(self, parent):
@@ -15,6 +34,11 @@ class PlotManager:
         so that it can access shared variables such as selected_plot_type, selected_sheet,
         filtered_sheets, and plot_options.
         """
+
+        # Add lazy loading infrastructure - THIS IS WHAT'S MISSING
+        self._matplotlib_loaded = False
+        self._pandas_loaded = False
+
         self.parent = parent
         self.figure = None
         self.canvas = None
@@ -26,6 +50,20 @@ class PlotManager:
         self.selected_sheet = self.parent.selected_sheet
         self.plot_options = self.parent.plot_options
         self.check_buttons = None
+
+    def get_matplotlib_components(self):
+        """Get matplotlib components with lazy loading."""
+        if not self._matplotlib_loaded:
+            self.plt, self.FigureCanvasTkAgg, self.NavigationToolbar2Tk, self.CheckButtons = lazy_import_matplotlib_components()
+            self._matplotlib_loaded = True
+        return self.plt, self.FigureCanvasTkAgg, self.NavigationToolbar2Tk, self.CheckButtons
+
+    def get_pandas(self):
+        """Get pandas with lazy loading."""
+        if not self._pandas_loaded:
+            self.pd = lazy_import_pandas()
+            self._pandas_loaded = True
+        return self.pd
 
     @property
     def line_labels(self):
@@ -39,11 +77,18 @@ class PlotManager:
         """Set line labels."""
         self.parent.line_labels = value
 
-    def embed_plot_in_frame(self, fig: plt.Figure, frame: ttk.Frame) -> FigureCanvasTkAgg:
+    def embed_plot_in_frame(self, fig, frame: ttk.Frame):
         """
         Embed a Matplotlib figure into a Tkinter frame with proper layout control.
         Enhanced to handle User Test Simulation split plots.
         """
+        plt, FigureCanvasTkAgg, NavigationToolbar2Tk, CheckButtons = self.get_matplotlib_components()
+    
+        # Error handling
+        if not plt or not FigureCanvasTkAgg or not NavigationToolbar2Tk:
+            print("ERROR: Could not load matplotlib components in embed_plot_in_frame")
+            return None
+
         # Clear existing widgets
         for widget in frame.winfo_children():
             widget.destroy()
@@ -190,13 +235,28 @@ class PlotManager:
         else:
             debug_print(f"DEBUG: Index {index} out of range for phase bars")
 
-    def plot_all_samples(self, frame: ttk.Frame, full_sample_data: pd.DataFrame, num_columns_per_sample: int) -> None:
+    def plot_all_samples(self, frame: ttk.Frame, full_sample_data, num_columns_per_sample: int) -> None:
         """
         Plot the provided sample data in the given frame.
         Enhanced to handle empty data for data collection.
         Uses processing.plot_all_samples to generate the figure (and sample names, if any),
         then embeds the figure into the frame.
         """
+        pd = self.get_pandas()
+        plt, FigureCanvasTkAgg, NavigationToolbar2Tk, CheckButtons = self.get_matplotlib_components()
+        # Error handling
+        if not pd:
+            print("ERROR: Could not load pandas in plot_all_samples")
+            return None
+        
+        if not plt:
+            print("ERROR: Could not load matplotlib in plot_all_samples")
+            return None
+    
+        # Validate that full_sample_data is actually a DataFrame (optional safety check)
+        if not hasattr(full_sample_data, 'empty') or not hasattr(full_sample_data, 'shape'):
+            print("ERROR: full_sample_data is not a valid DataFrame-like object")
+            return None
         debug_print(f"DEBUG: plot_all_samples called with data shape: {full_sample_data.shape}")
     
         # Clear frame contents
@@ -419,6 +479,12 @@ class PlotManager:
         """
         Clear the plot area and release Matplotlib resources.
         """
+        plt, FigureCanvasTkAgg, NavigationToolbar2Tk, CheckButtons = self.get_matplotlib_components()
+        
+        if not plt:
+            print("ERROR: Could not load matplotlib")
+            return None
+
         if hasattr(self.parent, 'plot_frame') and self.parent.plot_frame.winfo_exists():
             for widget in self.parent.plot_frame.winfo_children():
                 widget.destroy()
@@ -461,6 +527,12 @@ class PlotManager:
         Add checkboxes to toggle visibility of plot elements with properly balanced spacing.
         Enhanced to handle User Test Simulation split plots and split bar charts.
         """
+        plt, FigureCanvasTkAgg, NavigationToolbar2Tk, CheckButtons = self.get_matplotlib_components()
+        
+        if not plt:
+            print("ERROR: Could not load matplotlib")
+            return None
+
         self.parent.line_labels = []
         self.parent.original_lines_data = []
         self.label_mapping = {}

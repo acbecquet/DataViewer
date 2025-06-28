@@ -1,4 +1,4 @@
-"""
+﻿"""
 main_gui.py
 Developed By Charlie Becquet.
 Main GUI module for the DataViewer Application.
@@ -10,38 +10,137 @@ import copy
 import queue
 import os
 import threading
+import time
 import tkinter as tk
-import pandas as pd
-import processing
-import numpy as np
 from typing import Optional, Dict, List, Any
-import tkinter as tk
 from tkinter import ttk, messagebox, Toplevel
-from tkintertable import TableCanvas, TableModel
-import matplotlib
-import requests
-import json
-from packaging import version
-matplotlib.use('TkAgg')  # Ensure Matplotlib uses TkAgg backend
+from utils import debug_print
+# Time each heavy import individually
+print("TIMING: Starting individual import timing...")
 
-# Import our new manager classes and utility functions.
+import_start = time.time()
+import processing
+import_time = time.time() - import_start
+print(f"TIMING: import processing took: {import_time:.3f}s")
+
+import_start = time.time()
 from processing import get_valid_plot_options
+import_time = time.time() - import_start
+print(f"TIMING: from processing import get_valid_plot_options took: {import_time:.3f}s")
+
+import_start = time.time()
 from plot_manager import PlotManager
+import_time = time.time() - import_start
+print(f"TIMING: from plot_manager import PlotManager took: {import_time:.3f}s")
+
+import_start = time.time()
 from file_manager import FileManager
+import_time = time.time() - import_start
+print(f"TIMING: from file_manager import FileManager took: {import_time:.3f}s")
+
+import_start = time.time()
 from report_generator import ReportGenerator
+import_time = time.time() - import_start
+print(f"TIMING: from report_generator import ReportGenerator took: {import_time:.3f}s")
+
+import_start = time.time()
 from trend_analysis_gui import TrendAnalysisGUI
+import_time = time.time() - import_start
+print(f"TIMING: from trend_analysis_gui import TrendAnalysisGUI took: {import_time:.3f}s")
+
+import_start = time.time()
 from progress_dialog import ProgressDialog
+import_time = time.time() - import_start
+print(f"TIMING: from progress_dialog import ProgressDialog took: {import_time:.3f}s")
+
+import_start = time.time()
 from image_loader import ImageLoader
-from viscosity_calculator import ViscosityCalculator
-from utils import FONT, get_resource_path, clean_columns, get_save_path, is_standard_file, plotting_sheet_test, APP_BACKGROUND_COLOR,BUTTON_COLOR, PLOT_CHECKBOX_TITLE, debug_print
+import_time = time.time() - import_start
+print(f"TIMING: from image_loader import ImageLoader took: {import_time:.3f}s")
+
+import_start = time.time()
+from utils import FONT, clean_columns, get_save_path, is_standard_file, plotting_sheet_test, APP_BACKGROUND_COLOR, BUTTON_COLOR, PLOT_CHECKBOX_TITLE
+from resource_utils import get_resource_path
+import_time = time.time() - import_start
+print(f"TIMING: from utils import [multiple items] took: {import_time:.3f}s")
+
+print("TIMING: All individual imports completed")
+
+# Lazy loading helper functions
+
+def lazy_import_pandas():
+    """Lazy import pandas when needed."""
+    try:
+        import pandas as pd
+        print("TIMING: Lazy loaded pandas")
+        return pd
+    except ImportError as e:
+        print(f"Error importing pandas: {e}")
+        return None
+
+def lazy_import_numpy():
+    """Lazy import numpy when needed."""
+    try:
+        import numpy as np
+        print("TIMING: Lazy loaded numpy")
+        return np
+    except ImportError as e:
+        print(f"Error importing numpy: {e}")
+        return None
+
+def lazy_import_matplotlib():
+    """Lazy import matplotlib when needed."""
+    try:
+        import matplotlib
+        matplotlib.use('TkAgg')  # Ensure Matplotlib uses TkAgg backend
+        print("TIMING: Lazy loaded matplotlib")
+        return matplotlib
+    except ImportError as e:
+        print(f"Error importing matplotlib: {e}")
+        return None
+
+def lazy_import_tkintertable():
+    """Lazy import tkintertable when needed."""
+    try:
+        from tkintertable import TableCanvas, TableModel
+        print("TIMING: Lazy loaded tkintertable")
+        return TableCanvas, TableModel
+    except ImportError as e:
+        print(f"Error importing tkintertable: {e}")
+        return None, None
+
+def lazy_import_requests():
+    """Lazy import requests when needed."""
+    try:
+        import requests
+        print("TIMING: Lazy loaded requests")
+        return requests
+    except ImportError as e:
+        print(f"Error importing requests: {e}")
+        return None
+
+def lazy_import_packaging():
+    """Lazy import packaging when needed."""
+    try:
+        from packaging import version
+        print("TIMING: Lazy loaded packaging")
+        return version
+    except ImportError as e:
+        print(f"Error importing packaging: {e}")
+        return None
 
 class UpdateManager:
     def __init__(self, current_version="3.0.0"):
         self.current_version = current_version
-        self.update_url = "https://your-domain.com/api/latest-version"
+        self.update_url = "https://github.com/acbecquet/DataViewer"
     
     def check_for_updates(self):
         """Check if updates are available."""
+        requests = lazy_import_requests()
+        version = lazy_import_packaging()
+        if not requests or not version:
+            debug_print("DEBUG: Could not load required modules for update check")
+            return False, None
         try:
             response = requests.get(self.update_url, timeout=5)
             latest_info = response.json()
@@ -63,16 +162,44 @@ class TestingGUI:
     """Main GUI class for the Standardized Testing application."""
 
     def __init__(self, root):
+        import main 
+        
+        init_start = time.time()
+        print("TIMING: TestingGUI.__init__ started")
+
         self.root = root
         self.root.title("Standardized Testing GUI")
         self.report_thread = None
         self.report_queue = queue.Queue()
+
+            # Time variable initialization
+        var_start = time.time()
         self.initialize_variables()
+        var_time = time.time() - var_start
+        print(f"TIMING: initialize_variables took: {var_time:.3f}s")
+        main.log_timing_checkpoint("Variables initialized")
+
+            # Time UI configuration
+        ui_start = time.time()
         self.configure_ui()
+        ui_time = time.time() - ui_start
+        print(f"TIMING: configure_ui took: {ui_time:.3f}s")
+        main.log_timing_checkpoint("UI configured")
+
+        menu_start = time.time()
         self.show_startup_menu()
+        menu_time = time.time() - menu_start
+        print(f"TIMING: show_startup_menu took: {menu_time:.3f}s")
+        main.log_timing_checkpoint("Startup menu displayed")
+
         self.image_loader = None # Initialize ImageLoader placeholder
         # Bind the window close event
         self.root.protocol("WM_DELETE_WINDOW", self.on_app_close)
+
+        init_time = time.time() - init_start
+        print(f"TIMING: Total TestingGUI.__init__ took: {init_time:.3f}s")
+        main.log_timing_checkpoint("TestingGUI.__init__ complete")
+
         def check_updates_on_startup(self):
             """Check for updates when app starts."""
             update_manager = UpdateManager()
@@ -87,9 +214,53 @@ class TestingGUI:
                     # Handle update installation
                     pass
 
+        self.display_startup_timing_summary()
+
+    def get_viscosity_calculator(self):
+        """Lazy load viscosity calculator only when needed."""
+        if self.viscosity_calculator is None:
+            print("TIMING: Lazy loading ViscosityCalculator...")
+            import_start = time.time()
+            from viscosity_calculator import ViscosityCalculator
+            self.viscosity_calculator = ViscosityCalculator(self)
+            import_time = time.time() - import_start
+            print(f"TIMING: ViscosityCalculator lazy load took: {import_time:.3f}s")
+        return self.viscosity_calculator
+
+    # Lazy loading methods for the class
+    def get_pandas(self):
+        """Get pandas with lazy loading."""
+        if not hasattr(self, '_pandas'):
+            self._pandas = lazy_import_pandas()
+        return self._pandas
+
+    def get_numpy(self):
+        """Get numpy with lazy loading.""" 
+        if not hasattr(self, '_numpy'):
+            self._numpy = lazy_import_numpy()
+        return self._numpy
+
+    def get_matplotlib(self):
+        """Get matplotlib with lazy loading."""
+        if not hasattr(self, '_matplotlib'):
+            self._matplotlib = lazy_import_matplotlib()
+        return self._matplotlib
+
+    def get_tkintertable(self):
+        """Get tkintertable with lazy loading."""
+        if not hasattr(self, '_tkintertable'):
+            self._tkintertable = lazy_import_tkintertable()
+        return self._tkintertable
+
     # Initialization and Configuration
     def initialize_variables(self) -> None:
         """Initialize variables used throughout the GUI."""
+        pd = self.get_pandas()
+        if not pd:
+            print("ERROR: Could not load pandas")
+            return None
+        # Basic variables - should be very fast
+        basic_start = time.time()
         self.sheets: Dict[str, pd.DataFrame] = {}
         self.filtered_sheets: Dict[str, pd.DataFrame] = {}
         self.all_filtered_sheets: List[Dict[str, Any]] = []
@@ -108,40 +279,139 @@ class TestingGUI:
         self.line_labels = []
         self.original_lines_data = []
         self.checkbox_cid = None
-    
+        self.viscosity_calculator = None # Will be loaded when needed
+
         # Add different plot options for different tests:
         self.standard_plot_options = ["TPM", "Draw Pressure", "Resistance", "Power Efficiency", "TPM (Bar)"]
         self.user_test_simulation_plot_options = ["TPM", "Draw Pressure", "Power Efficiency", "TPM (Bar)"]  # No Resistance
         self.plot_options = self.standard_plot_options  # Default to standard
-    
+
         self.check_buttons = None
         self.previous_window_geometry = None
         self.is_user_test_simulation = False  
         self.num_columns_per_sample = 12 
 
         self.crop_enable = tk.BooleanVar(value = False)
+        basic_time = time.time() - basic_start
+        print(f"TIMING: Basic variable initialization took: {basic_time:.3f}s")
+
+        # Manager class instantiation - this is likely the slow part
+        managers_start = time.time()
     
-        # Instantiate manager classes
+        file_manager_start = time.time()
         self.file_manager = FileManager(self)
+        file_manager_time = time.time() - file_manager_start
+        print(f"TIMING: FileManager creation took: {file_manager_time:.3f}s")
+    
+        plot_manager_start = time.time()
         self.plot_manager = PlotManager(self)
+        plot_manager_time = time.time() - plot_manager_start
+        print(f"TIMING: PlotManager creation took: {plot_manager_time:.3f}s")
+    
+        report_generator_start = time.time()
         self.report_generator = ReportGenerator(self)
+        report_generator_time = time.time() - report_generator_start
+        print(f"TIMING: ReportGenerator creation took: {report_generator_time:.3f}s")
+    
+        progress_dialog_start = time.time()
         self.progress_dialog = ProgressDialog(self.root)
-        self.viscosity_calculator = ViscosityCalculator(self)
+        progress_dialog_time = time.time() - progress_dialog_start
+        print(f"TIMING: ProgressDialog creation took: {progress_dialog_time:.3f}s")
+    
+        viscosity_calc_start = time.time()
+        self.viscosity_calculator = self.get_viscosity_calculator()
+        viscosity_calc_time = time.time() - viscosity_calc_start
+        print(f"TIMING: ViscosityCalculator creation took: {viscosity_calc_time:.3f}s")
+    
+        managers_time = time.time() - managers_start
+        print(f"TIMING: All manager classes creation took: {managers_time:.3f}s")
+    
         # (TrendAnalysisGUI will be created when needed)
 
     def configure_ui(self) -> None:
         """Configure the UI appearance and set application properties."""
+        import time
+        # Time icon loading
+        icon_start = time.time()
         icon_path = get_resource_path('resources/ccell_icon.png')
         self.root.iconphoto(False, tk.PhotoImage(file=icon_path))
+        icon_time = time.time() - icon_start
+        print(f"TIMING: Icon loading took: {icon_time:.3f}s")
+    
+        # Time UI setup
+        ui_setup_start = time.time()
         self.set_app_colors()
         self.set_window_size(0.8, 0.8)
         self.root.minsize(1200,800)
         self.center_window(self.root)
-        #self.root.bind("<Configure>", lambda e: self.on_window_resize(e))
+        ui_setup_time = time.time() - ui_setup_start
+        print(f"TIMING: Basic UI setup took: {ui_setup_time:.3f}s")
+    
+        # Time frame creation
+        frames_start = time.time()
         self.create_static_frames()
+        frames_time = time.time() - frames_start
+        print(f"TIMING: Static frames creation took: {frames_time:.3f}s")
+    
+        # Time menu creation
+        menu_start = time.time()
         self.add_menu()
+        menu_time = time.time() - menu_start
+        print(f"TIMING: Menu creation took: {menu_time:.3f}s")
+    
+        # Time dropdown setup
+        dropdown_start = time.time()
         self.file_manager.add_or_update_file_dropdown()
+        dropdown_time = time.time() - dropdown_start
+        print(f"TIMING: File dropdown setup took: {dropdown_time:.3f}s")
+    
+        # Time static controls
+        controls_start = time.time()
         self.add_static_controls()
+        controls_time = time.time() - controls_start
+        print(f"TIMING: Static controls creation took: {controls_time:.3f}s")
+
+    def display_startup_timing_summary(self):
+        """Display a summary of startup timing for performance analysis."""
+        import main
+        
+        if hasattr(main, 'startup_timer'):
+            total_time = time.time() - main.startup_timer['start_time']
+        
+            print("\n" + "="*60)
+            print("DETAILED STARTUP TIMING ANALYSIS")
+            print("="*60)
+        
+            for i, (checkpoint, elapsed) in enumerate(main.startup_timer['checkpoints']):
+                if i == 0:
+                    interval = elapsed
+                else:
+                    interval = elapsed - main.startup_timer['checkpoints'][i-1][1]
+                print(f"{checkpoint:<30}: {elapsed:>7.3f}s (Δ{interval:>6.3f}s)")
+        
+            print("-" * 60)
+            print(f"{'TOTAL STARTUP TIME':<30}: {total_time:>7.3f}s")
+            print("="*60)
+        
+            # Identify the slowest components
+            if len(main.startup_timer['checkpoints']) > 1:
+                intervals = []
+                for i in range(len(main.startup_timer['checkpoints'])):
+                    if i == 0:
+                        interval = main.startup_timer['checkpoints'][i][1]
+                        name = main.startup_timer['checkpoints'][i][0]
+                    else:
+                        interval = (main.startup_timer['checkpoints'][i][1] - 
+                                  main.startup_timer['checkpoints'][i-1][1])
+                        name = main.startup_timer['checkpoints'][i][0]
+                    intervals.append((name, interval))
+            
+                # Sort by time taken
+                intervals.sort(key=lambda x: x[1], reverse=True)
+            
+                print("\nSLOWEST COMPONENTS:")
+                for i, (name, interval) in enumerate(intervals[:5]):
+                    print(f"{i+1}. {name}: {interval:.3f}s")
 
     # === New Centralized Frame Creation Methods ===
     def add_static_controls(self) -> None:
@@ -628,7 +898,10 @@ class TestingGUI:
         Enhanced to handle empty sheets for data collection.
         """
         debug_print(f"DEBUG: [update_displayed_sheet] START for sheet: {sheet_name}")
-
+        pd = self.get_pandas()
+        if not pd:
+            print("ERROR: Could not load pandas in plot_all_samples")
+            return None
         # Ensure bottom_frame maintains its fixed height
         if hasattr(self, 'bottom_frame') and self.bottom_frame.winfo_exists():
             self.bottom_frame.configure(height=150)
@@ -983,7 +1256,18 @@ class TestingGUI:
     def display_table(self, frame, data, sheet_name, is_plotting_sheet=False):
             """Display table with enhanced handling for empty/minimal data."""
             debug_print(f"DEBUG: display_table called for sheet: {sheet_name}, data_shape: {data.shape}, is_plotting_sheet: {is_plotting_sheet}")
-
+            pd = self.get_pandas()
+            np = self.get_numpy()
+            TableCanvas, TableModel = self.get_tkintertable()
+            if not TableCanvas or not TableModel:
+                print("ERROR: Could not load tkintertable components")
+                return
+            if not np:
+                print("ERROR: Could not load numpy")
+                return None
+            if not pd:
+                print("ERROR: Could not load pandas in plot_all_samples")
+                return None
             if not frame or not frame.winfo_exists():
                 print(f"ERROR: Frame {frame} does not exist! Aborting display_table.")
                 return
@@ -1232,6 +1516,7 @@ class TestingGUI:
 
     def open_viscosity_calculator(self):
         """Open the viscosity calculator as a standalone window with a proper menubar."""
+        calculator = self.get_viscosity_calculator()
         # Create a new top-level window
         calculator_window = tk.Toplevel(self.root)
         calculator_window.title("Viscosity Calculator")
@@ -1251,7 +1536,7 @@ class TestingGUI:
         calculator_window.config(menu=menubar)
     
         file_menu = tk.Menu(menubar, tearoff=0)
-        file_menu.add_command(label="Upload Viscosity Data", command = self.viscosity_calculator.upload_training_data)
+        file_menu.add_command(label="Upload Viscosity Data", command = calculator.upload_training_data)
         menubar.add_cascade(label="File", menu=file_menu)
 
         # Create Calculate menu with all the viscosity-related functions
@@ -1262,9 +1547,9 @@ class TestingGUI:
         calculate_menu.add_command(label="Train Enhanced Models with Potency", 
                                   command=self.train_models_with_chemistry)
         calculate_menu.add_command(label="Analyze Models", 
-                                  command=self.viscosity_calculator.analyze_models)
+                                  command=calculator.analyze_models)
         calculate_menu.add_command(label="Arrhenius Analysis", 
-                                  command=self.viscosity_calculator.filter_and_analyze_specific_combinations)
+                                  command=calculator.filter_and_analyze_specific_combinations)
           
         
         menubar.add_cascade(label="Model", menu=calculate_menu)
@@ -1278,7 +1563,7 @@ class TestingGUI:
         calculator_frame.pack(fill='both', expand=True)
     
         # Embed the calculator with all its tabs
-        self.viscosity_calculator.embed_in_frame(calculator_frame)
+        calculator.embed_in_frame(calculator_frame)
 
         self.center_window(calculator_window, 550, 500)
 

@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 import pandas as pd
 import processing
-from utils import get_resource_path, debug_print
-
+from utils import debug_print
+from resource_utils import get_resource_path
 # Global constants
 APP_BACKGROUND_COLOR = '#0504AA'
 BUTTON_COLOR = '#4169E1'

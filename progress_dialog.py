@@ -1,7 +1,7 @@
 # progress_dialog.py
 import tkinter as tk
 from tkinter import ttk, Toplevel, Label, Button
-from utils import get_resource_path
+from resource_utils import get_resource_path
 
 class ProgressDialog:
     def __init__(self, root: tk.Tk):

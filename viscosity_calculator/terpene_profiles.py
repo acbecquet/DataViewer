@@ -16,7 +16,7 @@ class TerpeneProfile_Methods:
                 os.makedirs('models', exist_ok=True)
                 with open('models/default_terpene_profiles.pkl', 'wb') as f:
                     pickle.dump(self.default_terpene_profiles, f)
-                debug_print((f"Saved {len(self.default_terpene_profiles)} default terpene profiles")
+                debug_print(f"Saved {len(self.default_terpene_profiles)} default terpene profiles")
                 return True
             except Exception as e:
                 print(f"Error saving default terpene profiles: {e}")
@@ -33,7 +33,7 @@ class TerpeneProfile_Methods:
             try:
                 with open(profile_path, 'rb') as f:
                     self.default_terpene_profiles = pickle.load(f)
-                debug_print((f"Loaded {len(self.default_terpene_profiles)} default terpene profiles")
+                debug_print(f"Loaded {len(self.default_terpene_profiles)} default terpene profiles")
                 return True
             except Exception as e:
                 print(f"Error loading default terpene profiles: {e}")

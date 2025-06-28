@@ -32,9 +32,9 @@ from test_start_menu import TestStartMenu
 from header_data_dialog import HeaderDataDialog
 # Local imports
 import processing
+from resource_utils import get_resource_path
 from utils import (
     is_valid_excel_file,
-    get_resource_path,
     load_excel_file,
     get_save_path,
     is_standard_file,

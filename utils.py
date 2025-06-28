@@ -88,27 +88,6 @@ def get_save_path(self, default_extension: str = ".xlsx") -> Optional[str]:
         filetypes=[("Excel files", "*.xlsx"), ("All files", "*.*")]
     )
 
-def get_resource_path(relative_path: str) -> str:
-    """Get absolute path to resource, works for development and installed package."""
-    try:
-        # PyInstaller creates a temp folder and stores path in _MEIPASS
-        base_path = sys._MEIPASS
-        debug_print(f"DEBUG: Using PyInstaller path: {base_path}")
-    except AttributeError:
-        # Check if running as installed package
-        try:
-            import pkg_resources
-            base_path = pkg_resources.resource_filename(__name__, '.')
-            debug_print(f"DEBUG: Using package resource path: {base_path}")
-        except ImportError:
-            # Development mode
-            base_path = os.path.abspath(".")
-            debug_print(f"DEBUG: Using development path: {base_path}")
-
-    full_path = os.path.join(base_path, relative_path)
-    debug_print(f"DEBUG: Resource path for {relative_path}: {full_path}")
-    return full_path
-
 def generate_temp_image(self, figure):
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
         figure.savefig(tmpfile.name)

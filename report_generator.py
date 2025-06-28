@@ -12,8 +12,8 @@ from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
 from datetime import datetime
 import processing
-from utils import get_resource_path, get_save_path, plotting_sheet_test, get_plot_sheet_names, debug_print
-
+from utils import get_save_path, plotting_sheet_test, get_plot_sheet_names, debug_print
+from resource_utils import get_resource_path
 from tkinter import messagebox  # For showing info/errors
 
 class ReportGenerator:

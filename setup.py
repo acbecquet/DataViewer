@@ -1,33 +1,36 @@
 import os
 from setuptools import setup, find_packages
 
-# Read requirements
 def read_requirements():
-    with open("requirements.txt", "r") as f:
-        return [line.strip() for line in f if line.strip() and not line.startswith('#')]
-
-# Read long description
-def read_long_description():
-    if os.path.exists("README.md"):
-        with open("README.md", "r", encoding="utf-8") as f:
-            return f.read()
-    return "Standardized Testing GUI for Data Analysis"
-
-# Find all resource files
-def find_resource_files():
-    resource_files = []
-    for root, dirs, files in os.walk("resources"):
-        for file in files:
-            resource_files.append(os.path.join(root, file))
-    return resource_files
+    try:
+        with open("requirements.txt", "r") as f:
+            return [line.strip() for line in f if line.strip() and not line.startswith('#')]
+    except FileNotFoundError:
+        # Fallback to minimal requirements
+        return [
+            "matplotlib>=3.9.0",
+            "numpy>=2.0.0", 
+            "pandas>=2.2.0",
+            "openpyxl>=3.1.0",
+            "pillow>=10.4.0",
+            "psutil>=6.0.0",
+            "sqlalchemy>=2.0.0",
+            "requests>=2.25.0",
+            "opencv-python>=4.5.0",
+            "python-pptx>=0.6.0",
+            "XlsxWriter>=3.2.0",
+            "tkintertable>=1.3.0",
+            "python-dateutil>=2.9.0",
+            "pytz>=2024.1",
+            "packaging>=20.0",
+            "scikit-learn>=1.3.0"
+        ]
 
 setup(
     name="standardized-testing-gui",
-    version="3.0.0",
+    version="3.0.0", 
     author="Charlie Becquet",
     description="Standardized Testing GUI for Data Analysis",
-    long_description=read_long_description(),
-    long_description_content_type="text/markdown",
     packages=find_packages(),
     py_modules=[
         'main', 'main_gui', 'file_manager', 'plot_manager', 
@@ -40,30 +43,8 @@ setup(
     entry_points={
         'console_scripts': [
             'testing-gui=main:main',
-            'sdr-testing=main:main',  # Alternative command name
-        ],
-        'gui_scripts': [
-            'testing-gui-windowed=main:main',  # Windows-specific windowed mode
         ],
     },
     include_package_data=True,
-    package_data={
-        '': ['resources/*', 'resources/**/*'],
-    },
-    data_files=[
-        ('resources', find_resource_files()),
-    ],
     python_requires=">=3.8",
-    classifiers=[
-        "Development Status :: 4 - Beta",
-        "Intended Audience :: Science/Research",
-        "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.8",
-        "Programming Language :: Python :: 3.9",
-        "Programming Language :: Python :: 3.10",
-        "Programming Language :: Python :: 3.11",
-        "Operating System :: OS Independent",
-        "Topic :: Scientific/Engineering :: Information Analysis",
-    ],
-    keywords="testing data-analysis gui tkinter excel",
 )
