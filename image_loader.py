@@ -1,10 +1,10 @@
 import os
 from tkinter import filedialog, Canvas, Scrollbar, Frame, Label, PhotoImage
-from PIL import Image, ImageTk
-from PIL import ImageFilter, ImageOps, ImageChops, ImageEnhance
+#from PIL import Image, ImageTk
+#from PIL import ImageFilter, ImageOps, ImageChops, ImageEnhance
 from utils import debug_print
-import cv2
-import numpy as np
+#import cv2
+#import numpy as np
 class ImageLoader:
     def __init__(self, parent, is_plotting_sheet, on_images_selected = None, main_gui = None):
         """
@@ -28,6 +28,36 @@ class ImageLoader:
 
         debug_print("DEBUG: Calling setup_ui()...")
         self.setup_ui()
+
+    def _lazy_import_pil():
+        """Lazy import PIL modules."""
+        try:
+            from PIL import Image, ImageTk, ImageFilter, ImageOps, ImageChops, ImageEnhance
+            print("TIMING: Lazy loaded PIL modules")
+            return Image, ImageTk, ImageFilter, ImageOps, ImageChops, ImageEnhance
+        except ImportError as e:
+            print(f"Error importing PIL: {e}")
+            return None, None, None, None, None, None
+
+    def _lazy_import_cv2():
+        """Lazy import cv2."""
+        try:
+            import cv2
+            print("TIMING: Lazy loaded cv2")
+            return cv2
+        except ImportError as e:
+            print(f"Error importing cv2: {e}")
+            return None
+
+    def _lazy_import_numpy():
+        """Lazy import numpy."""
+        try:
+            import numpy as np
+            print("TIMING: Lazy loaded numpy for ImageLoader")
+            return np
+        except ImportError as e:
+            print(f"Error importing numpy: {e}")
+            return None
 
     def setup_ui(self):
         """Sets up the UI elements only if parent exists"""
@@ -241,6 +271,14 @@ class ImageLoader:
     # Add to ImageLoader class
     def smart_crop(self, img, margin_percent=10):
         """Auto-crop image using adaptive thresholding and contour detection."""
+        # lazy load modules
+        cv2 = _lazy_import_cv2()
+        np = _lazy_import_numpy()
+
+        if cv2 is None or np is None:
+            print("WARNING: cv2 or numpy not available for smart cropping")
+            return img
+
         debug_print(f"DEBUG: Running smart_crop on image. Original size: {img.size}")
 
         # Convert to grayscale
@@ -296,6 +334,11 @@ class ImageLoader:
     def process_image(self, img_path):
         """Load and process image with optional cropping based on toggle."""
         try:
+            # lazy load PIL
+            Image, ImageTK, _,_,_,_ = _lazy_import_pil()
+            if Image is None:
+                print("ERROR: PIL not available")
+                return None
             debug_print(f"DEBUG: Opening image: {img_path}")
             img = Image.open(img_path)
             debug_print(f"DEBUG: Loaded image size: {img.size}")

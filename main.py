@@ -46,17 +46,6 @@ from main_gui import TestingGUI
 import_time = time.time() - import_start
 print(f"TIMING: from main_gui import TestingGUI took: {import_time:.3f}s")
 
-# The rest of these probably aren't used in main.py and can be removed:
-import_start = time.time()
-from image_loader import ImageLoader
-from file_manager import FileManager
-from plot_manager import PlotManager
-from report_generator import ReportGenerator
-from trend_analysis_gui import TrendAnalysisGUI
-from progress_dialog import ProgressDialog
-import_time = time.time() - import_start
-print(f"TIMING: Unused imports in main.py took: {import_time:.3f}s")
-
 def main():
     """Main entry point for the application."""
 

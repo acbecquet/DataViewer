@@ -18,15 +18,15 @@ from utils import debug_print
 # Time each heavy import individually
 print("TIMING: Starting individual import timing...")
 
-import_start = time.time()
-import processing
-import_time = time.time() - import_start
-print(f"TIMING: import processing took: {import_time:.3f}s")
+#import_start = time.time()
+#import processing
+#import_time = time.time() - import_start
+#print(f"TIMING: import processing took: {import_time:.3f}s")
 
-import_start = time.time()
-from processing import get_valid_plot_options
-import_time = time.time() - import_start
-print(f"TIMING: from processing import get_valid_plot_options took: {import_time:.3f}s")
+#import_start = time.time()
+#from processing import get_valid_plot_options
+#import_time = time.time() - import_start
+#print(f"TIMING: from processing import get_valid_plot_options took: {import_time:.3f}s")
 
 import_start = time.time()
 from plot_manager import PlotManager
@@ -128,6 +128,17 @@ def lazy_import_packaging():
     except ImportError as e:
         print(f"Error importing packaging: {e}")
         return None
+
+def _lazy_import_processing():
+    """Lazy import processing module."""
+    try:
+        import processing
+        from processing import get_valid_plot_options
+        print("TIMING: Lazy loaded processing module")
+        return processing, get_valid_plot_options
+    except ImportError as e:
+        print(f"Error importing processing: {e}")
+        return None, None
 
 class UpdateManager:
     def __init__(self, current_version="3.0.0"):
@@ -319,7 +330,7 @@ class TestingGUI:
         print(f"TIMING: ProgressDialog creation took: {progress_dialog_time:.3f}s")
     
         viscosity_calc_start = time.time()
-        self.viscosity_calculator = self.get_viscosity_calculator()
+        self.viscosity_calculator = None
         viscosity_calc_time = time.time() - viscosity_calc_start
         print(f"TIMING: ViscosityCalculator creation took: {viscosity_calc_time:.3f}s")
     
@@ -897,6 +908,8 @@ class TestingGUI:
         Update the displayed sheet and dynamically manage the plot options and plot type dropdown.
         Enhanced to handle empty sheets for data collection.
         """
+        # lazy load Processing
+        processing, get_valid_plot_options = _lazy_import_processing()
         debug_print(f"DEBUG: [update_displayed_sheet] START for sheet: {sheet_name}")
         pd = self.get_pandas()
         if not pd:
