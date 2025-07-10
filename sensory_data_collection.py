@@ -85,19 +85,21 @@ class SensoryDataCollectionWindow:
             "Smoothness",
             "Overall Liking"
         ]
+
+        self.current_mode = "collection"
+        self.all_sessions_data = {}
+        self.average_samples = {}
+        debug_print("Initialized dual-mode functionality")
         
         # Header data fields
         self.header_fields = [
-            "Assessor Name",
-            "Date",
-            "Gender", 
-            "Cartridge Oil Capacity",
-            "Age",
-            "Years of Vaping",
+            "Assessor Name", 
             "Media",
-            "Usage Per Day"
+            "Puff Length",
+            "Date"
         ]
-        
+        debug_print("Updated header fields to 4 essential fields only")
+        debug_print(f"New header fields: {self.header_fields}")
         # SOP text
         self.sop_text = """
 SENSORY EVALUATION STANDARD OPERATING PROCEDURE
@@ -130,12 +132,14 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         self.window = tk.Toplevel(self.parent)
         self.window.title("Sensory Data Collection")
         self.window.resizable(True,True)
-        self.window.minsize(1400,900)
+        self.window.minsize(1000,400)
 
         screen_width = self.window.winfo_screenwidth()
         screen_height = self.window.winfo_screenheight()
-        window_width = min(int(screen_width * 0.9), 1800)  # 90% of screen, max 1800
-        window_height = min(int(screen_height * 0.9), 1200)  # 90% of screen, max 1200
+        # CHANGED: Make window 75% of original size (0.9 * 0.75 = 0.675 of screen)
+        window_width = min(int(screen_width * 0.675), 1350)  # 67.5% of screen, max 1350 (75% of 1800)
+        window_height = min(int(screen_height * 0.675), 900)   # 67.5% of screen, max 900 (75% of 1200)
+
         
         self.window.geometry(f"{window_width}x{window_height}")
         self.window.configure(bg=APP_BACKGROUND_COLOR)
@@ -269,11 +273,18 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         header_frame = ttk.LabelFrame(self.left_frame, text="Session Information", padding=10)
         header_frame.pack(fill='x', padx=5, pady=5)
         
+        # Configure header_frame for centering
+        header_frame.grid_columnconfigure(0, weight=1)
+        header_frame.grid_columnconfigure(1, weight=1) 
+        header_frame.grid_columnconfigure(2, weight=1)
+        print("DEBUG: Configured header_frame for centered layout")
+        
         self.header_vars = {}
         row = 0
         for field in self.header_fields:
             ttk.Label(header_frame, text=f"{field}:", font=FONT).grid(
-                row=row, column=0, sticky='w', padx=5, pady=2)
+                row=row, column=0, sticky='e', padx=5, pady=2)  # CHANGED: sticky='e' for right alignment
+            debug_print(f"DEBUG: Added centered label for field: {field}")
             
             if field == "Date":
                 var = tk.StringVar(value=datetime.now().strftime("%Y-%m-%d"))
@@ -294,13 +305,27 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             self.header_vars[field] = var
             row += 1
             
-        # Sample management section
+        # ADDED: Mode switch button
+        mode_button_frame = ttk.Frame(header_frame)
+        mode_button_frame.grid(row=row, column=0, columnspan=2, pady=10)
+        
+        self.mode_button = ttk.Button(mode_button_frame, text="Switch to Comparison Mode", 
+                                     command=self.toggle_mode, width=25)
+        self.mode_button.pack()
+        debug_print("Added mode switch button to header section")
+
+        # Sample management section - SIMPLE NATURAL CENTERING
         sample_frame = ttk.LabelFrame(self.left_frame, text="Sample Management", padding=10)
         sample_frame.pack(fill='x', padx=5, pady=5)
         
-        # Sample selection
-        sample_select_frame = ttk.Frame(sample_frame)
-        sample_select_frame.pack(fill='x', pady=5)
+        debug_print("Setting up sample management with simple centering")
+        
+        # ROW 1: Sample selection - simple center using expand
+        sample_select_outer = ttk.Frame(sample_frame)
+        sample_select_outer.pack(fill='x', pady=5)
+        
+        sample_select_frame = ttk.Frame(sample_select_outer)
+        sample_select_frame.pack(expand=True)  # This centers it naturally
         
         ttk.Label(sample_select_frame, text="Current Sample:", font=FONT).pack(side='left')
         self.sample_var = tk.StringVar()
@@ -309,9 +334,14 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         self.sample_combo.pack(side='left', padx=5)
         self.sample_combo.bind('<<ComboboxSelected>>', self.on_sample_changed)
         
-        # Sample management buttons
-        button_frame = ttk.Frame(sample_frame)
-        button_frame.pack(fill='x', pady=5)
+        debug_print("Sample selection centered with expand=True")
+        
+        # ROW 2: Buttons - simple center using expand
+        button_outer = ttk.Frame(sample_frame)
+        button_outer.pack(fill='x', pady=5)
+        
+        button_frame = ttk.Frame(button_outer)
+        button_frame.pack(expand=True)  # This centers it naturally
         
         ttk.Button(button_frame, text="Add Sample", 
                   command=self.add_sample).pack(side='left', padx=2)
@@ -319,6 +349,8 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
                   command=self.remove_sample).pack(side='left', padx=2)
         ttk.Button(button_frame, text="Clear Data", 
                   command=self.clear_current_sample).pack(side='left', padx=2)
+        
+        debug_print("Buttons centered with expand=True")
                   
         # Sensory evaluation section
         eval_frame = ttk.LabelFrame(self.left_frame, text="Sensory Evaluation", padding=10)
@@ -328,7 +360,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         self.rating_vars = {}
         for i, metric in enumerate(self.metrics):
             metric_frame = ttk.Frame(eval_frame)
-            metric_frame.pack(fill='x', pady=5)
+            metric_frame.pack(fill='x', pady=4)
             
             # Metric label
             ttk.Label(metric_frame, text=f"{metric}:", font=FONT, width=15).pack(side='left')
@@ -395,11 +427,13 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         """Create the matplotlib canvas for the spider plot with better resizing."""
         print("DEBUG: Setting up enhanced plot canvas")
     
-        # Create figure with responsive sizing
-        self.fig, self.ax = plt.subplots(figsize=(10, 8), subplot_kw=dict(projection='polar'))
+        # Create figure with responsive sizing - REDUCED to 75% of original size
+        self.fig, self.ax = plt.subplots(figsize=(7.5, 6), subplot_kw=dict(projection='polar'))  # CHANGED: from (10, 8) to (7.5, 6)
         self.fig.patch.set_facecolor('white')
+        debug_print("Created spider plot with 75% size: 7.5x6 inches (was 10x8)")
     
-        self.fig.subplots_adjust(left=0.0, right=0.85, top=0.9, bottom=0.1)
+        self.fig.subplots_adjust(left=0.0, right=0.85, top=0.85, bottom=0.08)
+        debug_print("Applied subplot adjustments for smaller plot")
             
         # Create canvas with scrollbars
         canvas_frame = ttk.Frame(parent)
@@ -411,15 +445,215 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         canvas_widget.pack(fill='both', expand=True)
     
         # Add toolbar for additional functionality
-        from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk
-        toolbar = NavigationToolbar2Tk(self.canvas, canvas_frame)
-        toolbar.update()
+        self.setup_plot_context_menu(canvas_widget)
+        debug_print("Plot canvas setup complete with right-click context menu")
     
         print("DEBUG: Plot canvas setup complete with toolbar")
     
         # Initialize empty plot
         self.update_plot()
         
+    def setup_plot_context_menu(self, canvas_widget):
+        """Set up right-click context menu for plot with essential functionality."""
+        from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk
+    
+        # Create a hidden toolbar to access the navigation functions
+        self.hidden_toolbar = NavigationToolbar2Tk(self.canvas, canvas_widget.master)
+        self.hidden_toolbar.pack_forget()  # Hide the toolbar but keep functionality
+    
+        def show_context_menu(event):
+            """Show simplified right-click context menu with essential plot options."""
+            context_menu = tk.Menu(self.window, tearoff=0)
+        
+            # Essential options only
+            context_menu.add_command(label="⚙️ Configure Plot", 
+                                   command=self.hidden_toolbar.configure_subplots)
+            context_menu.add_separator()
+            context_menu.add_command(label="💾 Save Plot...", 
+                                   command=self.hidden_toolbar.save_figure)
+        
+            try:
+                context_menu.tk_popup(event.x_root, event.y_root)
+            finally:
+                context_menu.grab_release()
+    
+        # Bind right-click to show context menu
+        canvas_widget.bind("<Button-3>", show_context_menu)  # Right-click on Windows/Linux
+        canvas_widget.bind("<Button-2>", show_context_menu)  # Right-click on Mac (sometimes)
+    
+        debug_print("Simplified right-click context menu set up for plot canvas")
+        
+    def toggle_mode(self):
+        """Toggle between collection mode and comparison mode."""
+        if self.current_mode == "collection":
+            # Switch to comparison mode
+            self.switch_to_comparison_mode()
+        else:
+            # Switch to collection mode
+            self.switch_to_collection_mode()
+            
+    def switch_to_comparison_mode(self):
+        """Switch to comparison mode - show averages across users."""
+        self.current_mode = "comparison"
+        self.mode_button.config(text="Switch to Collection Mode")
+        
+        # Gray out sensory evaluation panel
+        self.disable_sensory_evaluation()
+        
+        # Load multiple sessions if not already loaded
+        if not self.all_sessions_data:
+            self.load_multiple_sessions()
+        
+        # Calculate averages
+        self.calculate_sample_averages()
+        
+        # Update plot with averages
+        self.update_comparison_plot()
+        
+        debug_print("Switched to comparison mode - showing averaged data across users")
+        messagebox.showinfo("Comparison Mode", "Now showing averaged data across multiple users.\nSensory evaluation is disabled in this mode.")
+        
+    def switch_to_collection_mode(self):
+        """Switch to collection mode - normal single user operation."""
+        self.current_mode = "collection" 
+        self.mode_button.config(text="Switch to Comparison Mode")
+        
+        # Re-enable sensory evaluation panel
+        self.enable_sensory_evaluation()
+        
+        # Update plot with current user's data
+        self.update_plot()
+        
+        debug_print("Switched to collection mode - showing single user data")
+        messagebox.showinfo("Collection Mode", "Now showing single user data collection mode.\nSensory evaluation is enabled.")
+
+    def disable_sensory_evaluation(self):
+        """Gray out and disable all sensory evaluation controls."""
+        # Find the sensory evaluation frame and disable all children
+        for widget in self.left_frame.winfo_children():
+            if isinstance(widget, ttk.LabelFrame) and widget.cget('text') == 'Sensory Evaluation':
+                self.set_widget_state(widget, 'disabled')
+                widget.configure(style='Disabled.TLabelframe')
+        debug_print("Disabled sensory evaluation panel for comparison mode")
+        
+    def enable_sensory_evaluation(self):
+        """Re-enable all sensory evaluation controls."""
+        # Find the sensory evaluation frame and enable all children
+        for widget in self.left_frame.winfo_children():
+            if isinstance(widget, ttk.LabelFrame) and widget.cget('text') == 'Sensory Evaluation':
+                self.set_widget_state(widget, 'normal')
+                widget.configure(style='TLabelframe')
+        debug_print("Enabled sensory evaluation panel for collection mode")
+
+    def set_widget_state(self, parent, state):
+        """Recursively set state of all child widgets."""
+        try:
+            parent.configure(state=state)
+        except:
+            pass  # Some widgets don't support state
+            
+        for child in parent.winfo_children():
+            self.set_widget_state(child, state)
+
+    def load_multiple_sessions(self):
+        """Load multiple session files to calculate averages."""
+        filenames = filedialog.askopenfilenames(
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            title="Select Multiple Session Files for Comparison"
+        )
+        
+        if not filenames:
+            return
+            
+        self.all_sessions_data = {}
+        
+        for filename in filenames:
+            try:
+                with open(filename, 'r') as f:
+                    session_data = json.load(f)
+                    
+                # Extract assessor name for identification
+                assessor_name = session_data.get('header', {}).get('Assessor Name', 'Unknown')
+                if not assessor_name.strip():
+                    assessor_name = f"User_{len(self.all_sessions_data) + 1}"
+                    
+                self.all_sessions_data[assessor_name] = session_data
+                debug_print(f"Loaded session data for assessor: {assessor_name}")
+                
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to load {filename}: {e}")
+                
+        if self.all_sessions_data:
+            messagebox.showinfo("Success", f"Loaded {len(self.all_sessions_data)} session(s) for comparison")
+            debug_print(f"Successfully loaded {len(self.all_sessions_data)} sessions for comparison")
+        else:
+            messagebox.showwarning("Warning", "No valid session files were loaded")
+            
+    def calculate_sample_averages(self):
+        """Calculate average ratings for each sample across all users."""
+        if not self.all_sessions_data:
+            return
+            
+        sample_totals = {}  # {sample_name: {metric: [values], 'count': n}}
+        
+        # Collect all values for each sample/metric combination
+        for assessor, session_data in self.all_sessions_data.items():
+            samples = session_data.get('samples', {})
+            for sample_name, sample_data in samples.items():
+                if sample_name not in sample_totals:
+                    sample_totals[sample_name] = {metric: [] for metric in self.metrics}
+                    sample_totals[sample_name]['comments'] = []
+                    
+                for metric in self.metrics:
+                    if metric in sample_data:
+                        sample_totals[sample_name][metric].append(sample_data[metric])
+                        
+                # Collect comments
+                if 'comments' in sample_data and sample_data['comments'].strip():
+                    sample_totals[sample_name]['comments'].append(f"{assessor}: {sample_data['comments']}")
+        
+        # Calculate averages
+        self.average_samples = {}
+        for sample_name, data in sample_totals.items():
+            self.average_samples[sample_name] = {}
+            for metric in self.metrics:
+                if data[metric]:  # If we have values
+                    avg_value = sum(data[metric]) / len(data[metric])
+                    self.average_samples[sample_name][metric] = round(avg_value, 1)
+                else:
+                    self.average_samples[sample_name][metric] = 5  # Default
+                    
+            # Combine comments
+            self.average_samples[sample_name]['comments'] = '\n'.join(data['comments'])
+            
+        debug_print(f"Calculated averages for {len(self.average_samples)} samples")
+        
+    def update_comparison_plot(self):
+        """Update plot to show averaged data across users."""
+        if not self.average_samples:
+            return
+            
+        # Temporarily replace samples with averages for plotting
+        original_samples = self.samples.copy()
+        original_checkboxes = self.sample_checkboxes.copy()
+        
+        # Set up average samples for plotting
+        self.samples = self.average_samples.copy()
+        
+        # Update sample checkboxes to show average samples
+        self.sample_checkboxes = {}
+        for sample_name in self.average_samples.keys():
+            var = tk.BooleanVar(value=True)  # Show all by default
+            self.sample_checkboxes[sample_name] = var
+            
+        # Update the checkbox display
+        self.update_sample_checkboxes()
+        
+        # Update the plot
+        self.create_spider_plot()
+        
+        debug_print("Updated plot with averaged comparison data")
+
     def rename_current_sample(self):
         """Rename the currently selected sample."""
         current_sample = self.sample_var.get()
@@ -767,7 +1001,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             self.ax.legend(loc='upper right', bbox_to_anchor=(1.2, 1.0), fontsize=10)
             
         # Set title
-        self.ax.set_title('Sensory Profile Comparison', fontsize=14, fontweight='bold', pad=20)
+        self.ax.set_title('Sensory Profile Comparison', fontsize=14, fontweight='bold', pad=20, ha = 'center', y = 1.08)
         
         # Force canvas update
         self.canvas.draw_idle()
@@ -841,6 +1075,18 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         # Clear existing checkboxes
         for widget in self.checkbox_frame.winfo_children():
             widget.destroy()
+
+        # ADDED: Show different header based on mode
+        if self.current_mode == "comparison":
+            header_text = "Select Averaged Samples to Display:"
+        else:
+            header_text = "Select Samples to Display:"
+            
+        # Update the header label
+        for widget in self.checkbox_frame.master.winfo_children():
+            if isinstance(widget, ttk.Label):
+                widget.config(text=header_text)
+                break
             
         self.sample_checkboxes = {}
         
@@ -1163,7 +1409,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
                         ax_ppt.fill(angles, values, alpha=0.1, color=color)
                 
                     # FIXED: Better legend positioning - inside the plot area
-                    ax_ppt.legend(loc='upper right', bbox_to_anchor=(0.95, 1.0), fontsize=9)
+                    ax_ppt.legend(loc='upper right', bbox_to_anchor=(1.1, 1.1), fontsize=9)
                 
                     # Set title
                     ax_ppt.set_title('Sensory Profile Comparison', fontsize=12, fontweight='bold', pad=15)

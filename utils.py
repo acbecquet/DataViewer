@@ -21,7 +21,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 # =============================================================================
 
 # Global debug flag - change this to control ALL debug output across the app
-DEBUG_ENABLED = False  # Set to True when you need debugging
+DEBUG_ENABLED = True  # Set to True when you need debugging
 
 def debug_print(*args, **kwargs):
     """
