@@ -173,6 +173,9 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         sample_menu.add_command(label="Add Sample", command=self.add_sample)
         sample_menu.add_command(label="Remove Sample", command=self.remove_sample)
         sample_menu.add_command(label="Clear Sample Data", command=self.clear_current_sample)
+        sample_menu.add_separator()  # NEW
+        sample_menu.add_command(label="Rename Current Sample", command=self.rename_current_sample)  # NEW
+        sample_menu.add_command(label="Batch Rename Samples", command=self.batch_rename_samples)  # NEW
         menubar.add_cascade(label="Sample", menu=sample_menu)
         
         # View menu
@@ -188,7 +191,6 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         ml_menu.add_command(label="Check Data Balance", command=self.check_training_data_balance)
         ml_menu.add_separator()
         ml_menu.add_command(label="Train Model", command=self.train_ml_model)
-        ml_menu.add_command(label="Test Model", command=self.test_ml_model)
         menubar.add_cascade(label="ML", menu=ml_menu)
 
     def setup_layout(self):
@@ -345,6 +347,198 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         # Initialize empty plot
         self.update_plot()
         
+    def rename_current_sample(self):
+        """Rename the currently selected sample."""
+        current_sample = self.sample_var.get()
+        if not current_sample:
+            messagebox.showwarning("No Sample Selected", "Please select a sample to rename.")
+            return
+    
+        if current_sample not in self.samples:
+            messagebox.showwarning("Sample Not Found", f"Sample '{current_sample}' not found.")
+            return
+    
+        # Get new name from user
+        new_name = tk.simpledialog.askstring(
+            "Rename Sample", 
+            f"Current name: {current_sample}\n\nEnter new name:",
+            initialvalue=current_sample
+        )
+    
+        if not new_name or new_name.strip() == "":
+            return  # User cancelled or entered empty name
+    
+        new_name = new_name.strip()
+    
+        # Check if new name already exists
+        if new_name in self.samples and new_name != current_sample:
+            messagebox.showerror("Name Conflict", 
+                               f"A sample named '{new_name}' already exists.\n"
+                               f"Please choose a different name.")
+            return
+    
+        # Perform the rename
+        if new_name != current_sample:
+            # Copy data to new key
+            self.samples[new_name] = self.samples[current_sample]
+        
+            # Remove old key
+            del self.samples[current_sample]
+        
+            # Update UI components
+            self.update_sample_combo()
+            self.update_sample_checkboxes()
+        
+            # Select the renamed sample
+            self.sample_var.set(new_name)
+            self.load_sample_data(new_name)
+        
+            # Update plot
+            self.update_plot()
+        
+            debug_print(f"Renamed sample '{current_sample}' to '{new_name}'")
+            messagebox.showinfo("Success", f"Sample renamed to '{new_name}'")
+
+    def batch_rename_samples(self):
+        """Rename multiple samples at once."""
+        if not self.samples:
+            messagebox.showwarning("No Samples", "No samples available to rename.")
+            return
+    
+        # Create batch rename dialog
+        rename_window = tk.Toplevel(self.window)
+        rename_window.title("Batch Rename Samples")
+        rename_window.geometry("600x400")
+        rename_window.transient(self.window)
+        rename_window.grab_set()
+    
+        # Center the window
+        rename_window.update_idletasks()
+        x = (rename_window.winfo_screenwidth() // 2) - (300)
+        y = (rename_window.winfo_screenheight() // 2) - (200)
+        rename_window.geometry(f"600x400+{x}+{y}")
+    
+        main_frame = ttk.Frame(rename_window, padding=10)
+        main_frame.pack(fill='both', expand=True)
+    
+        ttk.Label(main_frame, text="Batch Rename Samples", font=('Arial', 14, 'bold')).pack(pady=5)
+        ttk.Label(main_frame, text="Edit the names below, then click Apply Changes", font=('Arial', 10)).pack(pady=2)
+    
+        # Create scrollable frame for sample entries
+        canvas = tk.Canvas(main_frame)
+        scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+    
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.bind('<Configure>', lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+    
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+    
+        # Store the name variables
+        name_vars = {}
+        original_names = list(self.samples.keys())
+    
+        # Create entry fields for each sample
+        for i, sample_name in enumerate(original_names):
+            row_frame = ttk.Frame(scrollable_frame)
+            row_frame.pack(fill='x', pady=2, padx=5)
+        
+            ttk.Label(row_frame, text=f"Sample {i+1}:", width=10).pack(side='left')
+        
+            name_var = tk.StringVar(value=sample_name)
+            name_vars[sample_name] = name_var
+        
+            entry = ttk.Entry(row_frame, textvariable=name_var, width=40)
+            entry.pack(side='left', padx=5, fill='x', expand=True)
+    
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+    
+        # Quick action buttons
+        quick_frame = ttk.Frame(main_frame)
+        quick_frame.pack(fill='x', pady=10)
+    
+        def apply_prefix():
+            prefix = tk.simpledialog.askstring("Add Prefix", "Enter prefix to add:")
+            if prefix:
+                for sample_name in original_names:
+                    current = name_vars[sample_name].get()
+                    name_vars[sample_name].set(f"{prefix}{current}")
+    
+        def apply_suffix():
+            suffix = tk.simpledialog.askstring("Add Suffix", "Enter suffix to add:")
+            if suffix:
+                for sample_name in original_names:
+                    current = name_vars[sample_name].get()
+                    name_vars[sample_name].set(f"{current}{suffix}")
+    
+        def number_samples():
+            base = tk.simpledialog.askstring("Number Samples", "Enter base name (e.g., 'Test'):")
+            if base:
+                for i, sample_name in enumerate(original_names):
+                    name_vars[sample_name].set(f"{base} {i+1}")
+    
+        ttk.Button(quick_frame, text="Add Prefix", command=apply_prefix).pack(side='left', padx=5)
+        ttk.Button(quick_frame, text="Add Suffix", command=apply_suffix).pack(side='left', padx=5)
+        ttk.Button(quick_frame, text="Number Samples", command=number_samples).pack(side='left', padx=5)
+    
+        # Apply/Cancel buttons
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill='x', pady=10)
+    
+        def apply_changes():
+            # Collect all new names
+            new_names = {}
+            for original_name in original_names:
+                new_name = name_vars[original_name].get().strip()
+                if not new_name:
+                    messagebox.showerror("Empty Name", "All samples must have names.")
+                    return
+                new_names[original_name] = new_name
+        
+            # Check for duplicates
+            name_counts = {}
+            for new_name in new_names.values():
+                name_counts[new_name] = name_counts.get(new_name, 0) + 1
+        
+            duplicates = [name for name, count in name_counts.items() if count > 1]
+            if duplicates:
+                messagebox.showerror("Duplicate Names", 
+                                   f"The following names are used more than once:\n{', '.join(duplicates)}\n\n"
+                                   f"Please ensure all names are unique.")
+                return
+        
+            # Apply the changes
+            new_samples = {}
+            for original_name in original_names:
+                new_name = new_names[original_name]
+                new_samples[new_name] = self.samples[original_name]
+        
+            self.samples = new_samples
+        
+            # Update UI
+            current_selection = self.sample_var.get()
+            if current_selection in new_names:
+                new_selection = new_names[current_selection]
+            else:
+                new_selection = list(self.samples.keys())[0] if self.samples else ""
+        
+            self.update_sample_combo()
+            self.update_sample_checkboxes()
+        
+            if new_selection:
+                self.sample_var.set(new_selection)
+                self.load_sample_data(new_selection)
+        
+            self.update_plot()
+        
+            rename_window.destroy()
+            messagebox.showinfo("Success", f"Successfully renamed {len(original_names)} samples.")
+    
+        ttk.Button(button_frame, text="Apply Changes", command=apply_changes).pack(side='left', padx=5)
+        ttk.Button(button_frame, text="Cancel", command=rename_window.destroy).pack(side='right', padx=5)
+
+
     def create_training_structure(self):
         """Create training data folder structure."""
         try:
@@ -941,10 +1135,10 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             debug_print(f"AI processing error: {e}")
 
     def show_ai_extraction_preview(self, extracted_data, filename):
-        """Show a preview of AI-extracted data before loading."""
+        """Show a preview of AI-extracted data with editable sample names before loading."""
         preview_window = tk.Toplevel(self.window)
         preview_window.title("AI Extraction Results")
-        preview_window.geometry("800x600")
+        preview_window.geometry("900x650")
         preview_window.transient(self.window)
         preview_window.grab_set()
     
@@ -960,29 +1154,95 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
     
         # Confidence indicator
         confidence_label = ttk.Label(main_frame, 
-                                   text="✓ AI Processing Complete - Review data below", 
+                                   text="✓ AI Processing Complete - Review and edit data below", 
                                    font=('Arial', 10),
                                    foreground='green')
         confidence_label.pack(pady=2)
     
+        # Sample name editing frame
+        name_edit_frame = ttk.LabelFrame(main_frame, text="Edit Sample Names", padding=10)
+        name_edit_frame.pack(fill='x', pady=5)
+    
+        # Store the sample name variables
+        sample_name_vars = {}
+        original_names = list(extracted_data.keys())
+    
+        # Create editable fields for sample names
+        name_grid_frame = ttk.Frame(name_edit_frame)
+        name_grid_frame.pack(fill='x')
+    
+        ttk.Label(name_grid_frame, text="Current Names → New Names:", font=('Arial', 10, 'bold')).grid(row=0, column=0, columnspan=4, pady=5)
+    
+        for i, original_name in enumerate(original_names):
+            row = (i // 2) + 1  # 2 samples per row
+            col = (i % 2) * 2
+        
+            # Original name label
+            ttk.Label(name_grid_frame, text=f"{original_name}:").grid(row=row, column=col, sticky='w', padx=5, pady=2)
+        
+            # Editable name entry
+            name_var = tk.StringVar(value=original_name)
+            sample_name_vars[original_name] = name_var
+        
+            name_entry = ttk.Entry(name_grid_frame, textvariable=name_var, width=20)
+            name_entry.grid(row=row, column=col+1, sticky='w', padx=5, pady=2)
+    
+        # Quick rename buttons
+        quick_rename_frame = ttk.Frame(name_edit_frame)
+        quick_rename_frame.pack(fill='x', pady=5)
+    
+        def auto_increment_names():
+            """Auto-generate sequential sample names."""
+            base_name = tk.simpledialog.askstring("Base Name", "Enter base name (e.g., 'Sample'):")
+            if base_name:
+                for i, original_name in enumerate(original_names):
+                    sample_name_vars[original_name].set(f"{base_name} {i+1}")
+    
+        def clear_sample_numbers():
+            """Remove 'Sample X' and leave just numbers."""
+            for original_name in original_names:
+                current = sample_name_vars[original_name].get()
+                if current.startswith('Sample '):
+                    number = current.replace('Sample ', '')
+                    sample_name_vars[original_name].set(number)
+    
+        ttk.Button(quick_rename_frame, text="Auto-Increment Names", command=auto_increment_names).pack(side='left', padx=5)
+        ttk.Button(quick_rename_frame, text="Remove 'Sample' Prefix", command=clear_sample_numbers).pack(side='left', padx=5)
+    
         # Data preview
-        data_frame = ttk.LabelFrame(main_frame, text="Extracted Ratings", padding=10)
+        data_frame = ttk.LabelFrame(main_frame, text="Extracted Ratings (Live Preview)", padding=10)
         data_frame.pack(fill='both', expand=True, pady=5)
     
         # Create tree view for data
         columns = ['Sample'] + self.metrics
-        tree = ttk.Treeview(data_frame, columns=columns, show='headings', height=12)
+        tree = ttk.Treeview(data_frame, columns=columns, show='headings', height=8)
     
         for col in columns:
             tree.heading(col, text=col)
             tree.column(col, width=120)
+    
+        # Function to update the tree view when names change
+        def update_preview():
+            # Clear existing items
+            for item in tree.get_children():
+                tree.delete(item)
         
-        # Populate tree with extracted data
-        for sample_name, sample_data in extracted_data.items():
-            values = [sample_name]
-            for metric in self.metrics:
-                values.append(sample_data.get(metric, 'N/A'))
-            tree.insert('', 'end', values=values)
+            # Repopulate with current names
+            for original_name in original_names:
+                current_name = sample_name_vars[original_name].get()
+                sample_data = extracted_data[original_name]
+            
+                values = [current_name]
+                for metric in self.metrics:
+                    values.append(sample_data.get(metric, 'N/A'))
+                tree.insert('', 'end', values=values)
+    
+        # Bind name changes to update preview
+        for name_var in sample_name_vars.values():
+            name_var.trace('w', lambda *args: update_preview())
+    
+        # Initial population
+        update_preview()
         
         # Add scrollbar to tree
         tree_scroll = ttk.Scrollbar(data_frame, orient='vertical', command=tree.yview)
@@ -997,18 +1257,35 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             comments_frame = ttk.LabelFrame(main_frame, text="Additional Comments", padding=5)
             comments_frame.pack(fill='x', pady=5)
         
-            for sample_name, sample_data in extracted_data.items():
+            for original_name, sample_data in extracted_data.items():
                 if sample_data.get('comments'):
-                    comment_text = f"{sample_name}: {sample_data['comments']}"
-                    ttk.Label(comments_frame, text=comment_text, font=('Arial', 9)).pack(anchor='w')
+                    comment_text = f"{sample_name_vars[original_name].get()}: {sample_data['comments']}"
+                    comment_label = ttk.Label(comments_frame, text=comment_text, font=('Arial', 9))
+                    comment_label.pack(anchor='w')
     
         # Buttons
         button_frame = ttk.Frame(main_frame)
         button_frame.pack(fill='x', pady=10)
     
         def load_ai_data():
-            # Load the AI-extracted data into the interface
-            for sample_name, sample_data in extracted_data.items():
+            # Create new data structure with updated names
+            final_data = {}
+            for original_name in original_names:
+                new_name = sample_name_vars[original_name].get().strip()
+                if not new_name:  # If empty, use original name
+                    new_name = original_name
+            
+                # Check for duplicate names
+                if new_name in final_data:
+                    messagebox.showerror("Duplicate Names", 
+                                       f"Sample name '{new_name}' is used more than once.\n"
+                                       f"Please ensure all sample names are unique.")
+                    return
+            
+                final_data[new_name] = extracted_data[original_name]
+        
+            # Load the AI-extracted data with new names into the interface
+            for sample_name, sample_data in final_data.items():
                 self.samples[sample_name] = sample_data
             
             # Update UI
@@ -1025,7 +1302,8 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             preview_window.destroy()
         
             messagebox.showinfo("Success", 
-                              f"Loaded {len(extracted_data)} samples from AI analysis!\n\n"
+                              f"Loaded {len(final_data)} samples from AI analysis!\n\n"
+                              f"Sample names have been updated as specified.\n"
                               f"You can now review and adjust the ratings as needed.")
         
         def manual_edit():
@@ -1033,7 +1311,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             load_ai_data()
             # Don't close preview window so user can reference it
         
-        ttk.Button(button_frame, text="Load Data", command=load_ai_data).pack(side='left', padx=5)
+        ttk.Button(button_frame, text="Load Data with New Names", command=load_ai_data).pack(side='left', padx=5)
         ttk.Button(button_frame, text="Load & Keep Preview", command=manual_edit).pack(side='left', padx=5)
         ttk.Button(button_frame, text="Cancel", command=preview_window.destroy).pack(side='right', padx=5)
 

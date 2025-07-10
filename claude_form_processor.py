@@ -158,13 +158,13 @@ FORM STRUCTURE:
 - Look for circled numbers, checkmarks, or other clear markings indicating the selected rating
 
 EXTRACTION INSTRUCTIONS:
-1. Identify each sample section (should be 4 total: Sample 1, Sample 2, Sample 3, Sample 4)
+1. Identify each sample section (should be 4 total: Sample 1, Sample 2, Sample 3, Sample 4). Sample 1 is in the top left quadrant, sample 2 is in the top right quadrant, sample 3 is in the bottom left quadrant, sample 4 is in the bottom right quadrant.
 2. For each sample, find the rating for each of the 5 attributes
 3. Look for circled numbers, heavy marks, checkmarks, or other clear indicators
 4. If a rating is unclear or unmarked, use null
 
 RESPONSE FORMAT:
-Return the data as a JSON object with this exact structure:
+Return the data as a JSON object with this exact structure (replacing these sample values with the actual values in the image):
 
 {{
     "Sample 1": {{
