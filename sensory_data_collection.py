@@ -129,7 +129,15 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         """Create and display the sensory data collection window."""
         self.window = tk.Toplevel(self.parent)
         self.window.title("Sensory Data Collection")
-        self.window.geometry("1200x800")
+        self.window.resizable(True,True)
+        self.window.minsize(1400,900)
+
+        screen_width = self.window.winfo_screenwidth()
+        screen_height = self.window.winfo_screenheight()
+        window_width = min(int(screen_width * 0.9), 1800)  # 90% of screen, max 1800
+        window_height = min(int(screen_height * 0.9), 1200)  # 90% of screen, max 1200
+        
+        self.window.geometry(f"{window_width}x{window_height}")
         self.window.configure(bg=APP_BACKGROUND_COLOR)
         self.window.transient(self.parent)
         
@@ -177,6 +185,14 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         sample_menu.add_command(label="Rename Current Sample", command=self.rename_current_sample)  # NEW
         sample_menu.add_command(label="Batch Rename Samples", command=self.batch_rename_samples)  # NEW
         menubar.add_cascade(label="Sample", menu=sample_menu)
+
+        # Export menu (NEW)
+        export_menu = tk.Menu(menubar, tearoff=0)
+        export_menu.add_command(label="Save Plot as Image", command=self.save_plot_as_image)
+        export_menu.add_command(label="Save Table as Image", command=self.save_table_as_image)
+        export_menu.add_separator()
+        export_menu.add_command(label="Generate PowerPoint Report", command=self.generate_powerpoint_report)
+        menubar.add_cascade(label="Export", menu=export_menu)
         
         # View menu
         view_menu = tk.Menu(menubar, tearoff=0)
@@ -194,19 +210,55 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         menubar.add_cascade(label="ML", menu=ml_menu)
 
     def setup_layout(self):
-        """Create the main layout with three panels."""
+        """Create the main layout with scrollable panels."""
+        print("DEBUG: Setting up main layout with scrollable areas")
+    
         # Create main paned window (horizontal split)
         main_paned = ttk.PanedWindow(self.window, orient='horizontal')
         main_paned.pack(fill='both', expand=True, padx=5, pady=5)
-        
-        # Left panel for data entry (40% width)
-        self.left_frame = ttk.Frame(main_paned)
-        main_paned.add(self.left_frame, weight=40)
-        
-        # Right panel for plot (60% width)  
-        self.right_frame = ttk.Frame(main_paned)
-        main_paned.add(self.right_frame, weight=60)
-        
+    
+        # Left panel with scrollable frame for data entry (40% width)
+        left_canvas = tk.Canvas(main_paned, bg=APP_BACKGROUND_COLOR)
+        left_scrollbar = ttk.Scrollbar(main_paned, orient="vertical", command=left_canvas.yview)
+        self.left_frame = ttk.Frame(left_canvas)
+    
+        self.left_frame.bind(
+            "<Configure>",
+            lambda e: left_canvas.configure(scrollregion=left_canvas.bbox("all"))
+        )
+    
+        left_canvas.create_window((0, 0), window=self.left_frame, anchor="nw")
+        left_canvas.configure(yscrollcommand=left_scrollbar.set)
+    
+        # Add mouse wheel scrolling
+        def _on_mousewheel_left(event):
+            left_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        left_canvas.bind("<MouseWheel>", _on_mousewheel_left)
+    
+        main_paned.add(left_canvas, weight=40)
+    
+        # Right panel for plot (60% width) - also scrollable
+        right_canvas = tk.Canvas(main_paned, bg=APP_BACKGROUND_COLOR)
+        right_scrollbar = ttk.Scrollbar(main_paned, orient="vertical", command=right_canvas.yview)
+        self.right_frame = ttk.Frame(right_canvas)
+    
+        self.right_frame.bind(
+            "<Configure>",
+            lambda e: right_canvas.configure(scrollregion=right_canvas.bbox("all"))
+        )
+    
+        right_canvas.create_window((0, 0), window=self.right_frame, anchor="nw")
+        right_canvas.configure(yscrollcommand=right_scrollbar.set)
+    
+        # Add mouse wheel scrolling
+        def _on_mousewheel_right(event):
+            right_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        right_canvas.bind("<MouseWheel>", _on_mousewheel_right)
+    
+        main_paned.add(right_canvas, weight=60)
+    
+        print("DEBUG: Scrollable layout configured")
+    
         # Setup each panel
         self.setup_data_entry_panel()
         self.setup_plot_panel()
@@ -305,14 +357,19 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         self.comments_text = tk.Text(comments_frame, height=4, font=FONT)
         self.comments_text.pack(fill='x', pady=2)
         
-        # Save button
-        save_frame = ttk.Frame(eval_frame)
-        save_frame.pack(fill='x', pady=10)
-        
-        ttk.Button(save_frame, text="Save Current Sample", 
-                  command=self.save_current_sample).pack(side='left', padx=5)
-        ttk.Button(save_frame, text="Update Plot", 
-                  command=self.update_plot).pack(side='left', padx=5)
+       # Auto-save comments when user types
+        def on_comment_change(event=None):
+            """Auto-save comments when user types."""
+            current_sample = self.sample_var.get()
+            if current_sample and current_sample in self.samples:
+                comments = self.comments_text.get('1.0', tk.END).strip()
+                self.samples[current_sample]['comments'] = comments
+                print(f"DEBUG: Auto-saved comments for {current_sample}: '{comments[:50]}...'")
+
+        # Bind to text change events
+        self.comments_text.bind('<KeyRelease>', on_comment_change)
+        self.comments_text.bind('<FocusOut>', on_comment_change)
+        self.comments_text.bind('<Button-1>', lambda e: self.window.after(100, on_comment_change))
                   
     def setup_plot_panel(self):
         """Setup the right panel for spider plot visualization."""
@@ -335,15 +392,31 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         self.setup_plot_canvas(plot_frame)
         
     def setup_plot_canvas(self, parent):
-        """Create the matplotlib canvas for the spider plot."""
-        # Create figure and axis
-        self.fig, self.ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(projection='polar'))
+        """Create the matplotlib canvas for the spider plot with better resizing."""
+        print("DEBUG: Setting up enhanced plot canvas")
+    
+        # Create figure with responsive sizing
+        self.fig, self.ax = plt.subplots(figsize=(10, 8), subplot_kw=dict(projection='polar'))
         self.fig.patch.set_facecolor('white')
-        
+    
+        self.fig.subplots_adjust(left=0.0, right=0.85, top=0.9, bottom=0.1)
+            
+        # Create canvas with scrollbars
+        canvas_frame = ttk.Frame(parent)
+        canvas_frame.pack(fill='both', expand=True)
+    
         # Create canvas
-        self.canvas = FigureCanvasTkAgg(self.fig, parent)
-        self.canvas.get_tk_widget().pack(fill='both', expand=True)
-        
+        self.canvas = FigureCanvasTkAgg(self.fig, canvas_frame)
+        canvas_widget = self.canvas.get_tk_widget()
+        canvas_widget.pack(fill='both', expand=True)
+    
+        # Add toolbar for additional functionality
+        from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk
+        toolbar = NavigationToolbar2Tk(self.canvas, canvas_frame)
+        toolbar.update()
+    
+        print("DEBUG: Plot canvas setup complete with toolbar")
+    
         # Initialize empty plot
         self.update_plot()
         
@@ -684,7 +757,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             line_style = line_styles[i % len(line_styles)]
             
             # Plot the line and markers
-            self.ax.plot(angles, values, 'o-', linewidth=2.5, label=sample_name, 
+            self.ax.plot(angles, values, 'o', linewidth=2.5, label=sample_name, 
                         color=color, linestyle=line_style, markersize=8, alpha=0.8)
             # Fill the area
             self.ax.fill(angles, values, alpha=0.1, color=color)
@@ -799,7 +872,341 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             comments = sample_data.get('comments', '')
             self.comments_text.delete('1.0', tk.END)
             self.comments_text.insert('1.0', comments)
+         
+    def save_plot_as_image(self):
+        """Save the current spider plot as an image file."""
+        print("DEBUG: Starting plot image save")
+    
+        if not self.samples:
+            messagebox.showwarning("Warning", "No samples to save! Please add samples first.")
+            return
+        
+        try:
+            filename = filedialog.asksaveasfilename(
+                title="Save Plot as Image",
+                defaultextension=".png",
+                filetypes=[
+                    ("PNG files", "*.png"),
+                    ("JPG files", "*.jpg"),
+                    ("PDF files", "*.pdf"),
+                    ("SVG files", "*.svg"),
+                    ("All files", "*.*")
+                ]
+            )
+        
+            if filename:
+                # Ensure we have the latest plot
+                self.update_plot()
             
+                # Save the figure with high DPI for quality
+                self.fig.savefig(filename, dpi=300, bbox_inches='tight', 
+                               facecolor='white', edgecolor='none')
+            
+                print(f"DEBUG: Plot saved successfully to {filename}")
+                messagebox.showinfo("Success", f"Plot saved successfully as {os.path.basename(filename)}")
+            
+        except Exception as e:
+            print(f"DEBUG: Error saving plot: {e}")
+            messagebox.showerror("Error", f"Failed to save plot: {str(e)}")
+
+    def save_table_as_image(self):
+        """Save the sensory data table as an image."""
+        print("DEBUG: Starting table image save with comments")
+    
+        if not self.samples:
+            messagebox.showwarning("Warning", "No data to save! Please add samples first.")
+            return
+        
+        try:
+            filename = filedialog.asksaveasfilename(
+                title="Save Table as Image",
+                defaultextension=".png",
+                filetypes=[
+                    ("PNG files", "*.png"),
+                    ("JPG files", "*.jpg"),
+                    ("PDF files", "*.pdf"),
+                    ("All files", "*.*")
+                ]
+            )
+        
+            if filename:
+                # Create table data with attributes as headers and samples as rows
+                table_data = []
+            
+                # Header row with attributes + comments
+                headers = ["Sample"] + self.metrics + ["Additional Comments"]
+                table_data.append(headers)
+            
+                # Data rows - one per sample
+                for sample_name, sample_data in self.samples.items():
+                    row = [sample_name]
+                    for metric in self.metrics:
+                        row.append(str(sample_data.get(metric, "N/A")))
+                    # Add comments - get from sample data or leave blank if empty
+                    comments = sample_data.get("comments", "").strip()
+                    row.append(comments if comments else "")
+                    table_data.append(row)
+            
+                # Create figure for table with wider width to accommodate comments
+                fig, ax = plt.subplots(figsize=(16, max(6, len(self.samples) * 0.5)))
+                ax.axis('tight')
+                ax.axis('off')
+            
+                # Create table
+                table = ax.table(cellText=table_data[1:], colLabels=table_data[0],
+                               cellLoc='center', loc='center')
+                table.auto_set_font_size(False)
+                table.set_fontsize(9)  # Slightly smaller font to fit more content
+                table.scale(1.4, 2.2)  # Wider scale to accommodate comments
+            
+                # Style the table
+                for i in range(len(headers)):
+                    table[(0, i)].set_facecolor('#4CAF50')
+                    table[(0, i)].set_text_props(weight='bold', color='white')
+            
+                # Make comments column wider and left-aligned
+                comments_col_idx = len(headers) - 1
+                for row_idx in range(len(table_data)):
+                    if row_idx == 0:  # Header
+                        continue
+                    cell = table[(row_idx, comments_col_idx)]
+                    cell.set_width(0.3)  # Make comments column wider
+                    cell.set_text_props(ha='left', va='top', wrap=True)  # Left align and wrap text
+            
+                # Add title
+                ax.set_title("Sensory Evaluation Results", fontsize=16, fontweight='bold', pad=20)
+            
+                # Save with high quality
+                fig.savefig(filename, dpi=300, bbox_inches='tight', 
+                           facecolor='white', edgecolor='none')
+                plt.close(fig)
+            
+                print(f"DEBUG: Table with comments saved successfully to {filename}")
+                messagebox.showinfo("Success", f"Table saved successfully as {os.path.basename(filename)}")
+            
+        except Exception as e:
+            print(f"DEBUG: Error saving table: {e}")
+            import traceback
+            traceback.print_exc()
+            messagebox.showerror("Error", f"Failed to save table: {str(e)}")
+
+    def generate_powerpoint_report(self):
+        """Generate a PowerPoint report using the same template as generate_test_report."""
+        print("DEBUG: Starting PowerPoint report generation")
+
+        if not self.samples:
+            messagebox.showwarning("Warning", "No data to export! Please add samples first.")
+            return
+    
+        try:
+            # Get save location
+            filename = filedialog.asksaveasfilename(
+                title="Save PowerPoint Report",
+                defaultextension=".pptx",
+                filetypes=[("PowerPoint files", "*.pptx"), ("All files", "*.*")]
+            )
+    
+            if not filename:
+                return
+        
+            print(f"DEBUG: Creating PowerPoint report at {filename}")
+    
+            # Import required modules for PowerPoint generation
+            from pptx import Presentation
+            from pptx.util import Inches, Pt
+            from pptx.enum.text import PP_ALIGN
+            from pptx.dml.color import RGBColor
+            from datetime import datetime
+            import tempfile
+    
+            # Create presentation with same template structure as existing reports
+            prs = Presentation()
+            prs.slide_width = Inches(13.33)
+            prs.slide_height = Inches(7.5)
+    
+            # Create main content slide
+            main_slide = prs.slides.add_slide(prs.slide_layouts[6])
+    
+            # Add background and logo using existing template structure
+            from resource_utils import get_resource_path
+    
+            background_path = get_resource_path("resources/ccell_background.png")
+            if os.path.exists(background_path):
+                main_slide.shapes.add_picture(background_path, Inches(0), Inches(0),
+                                            width=prs.slide_width, height=prs.slide_height)
+                print("DEBUG: Background added successfully")
+            else:
+                print("DEBUG: Background not found, using plain slide")
+        
+            logo_path = get_resource_path("resources/ccell_logo_full.png")
+            if os.path.exists(logo_path):
+                main_slide.shapes.add_picture(logo_path, Inches(11.21), Inches(0.43),
+                                            width=Inches(1.57), height=Inches(0.53))
+                print("DEBUG: Logo added successfully")
+    
+            # Add title
+            title_shape = main_slide.shapes.add_textbox(Inches(0.45), Inches(-0.04), 
+                                                       Inches(10.72), Inches(0.64))
+            text_frame = title_shape.text_frame
+            text_frame.clear()
+    
+            p = text_frame.add_paragraph()
+            p.text = "Sensory Evaluation Report"
+            p.font.name = "Montserrat"
+            p.font.size = Pt(32)
+            p.font.bold = True
+    
+            # Create table data with proper structure (attributes as headers + comments)
+            table_data = []
+            headers = ["Sample"] + self.metrics + ["Additional Comments"]
+    
+            # Add header data if available
+            header_info = []
+            for field in self.header_fields:
+                if field in self.header_vars and self.header_vars[field].get():
+                    header_info.append(f"{field}: {self.header_vars[field].get()}")
+    
+            # Add data rows with current comments (including any just typed)
+            for sample_name, sample_data in self.samples.items():
+                row = [sample_name]
+                for metric in self.metrics:
+                    row.append(str(sample_data.get(metric, "N/A")))
+                # Include current comments
+                comments = sample_data.get("comments", "").strip()
+                row.append(comments if comments else "")
+                table_data.append(row)
+    
+            # FIXED: Better layout - smaller table, larger plot area for legend
+            if table_data:
+                table_shape = main_slide.shapes.add_table(
+                    len(table_data) + 1, len(headers),  # +1 for header row
+                    Inches(0.45), Inches(1.5),
+                    Inches(6.5), Inches(4.5)  # REDUCED: Smaller table width
+                )
+                table = table_shape.table
+        
+                # Set header row
+                for col_idx, header in enumerate(headers):
+                    cell = table.cell(0, col_idx)
+                    cell.text = header
+                    cell.text_frame.paragraphs[0].font.bold = True
+                    cell.text_frame.paragraphs[0].font.size = Pt(10)  # Slightly smaller
+        
+                # Set data rows
+                for row_idx, row_data in enumerate(table_data, 1):
+                    for col_idx, cell_value in enumerate(row_data):
+                        cell = table.cell(row_idx, col_idx)
+                        cell.text = str(cell_value)
+                    
+                        # Special formatting for comments column
+                        if col_idx == len(headers) - 1:  # Comments column
+                            cell.text_frame.paragraphs[0].font.size = Pt(8)
+                            # Set text alignment for comments
+                            for paragraph in cell.text_frame.paragraphs:
+                                paragraph.alignment = PP_ALIGN.LEFT
+                        else:
+                            cell.text_frame.paragraphs[0].font.size = Pt(9)
+        
+                print(f"DEBUG: Table with comments added - {len(table_data)} rows and {len(headers)} columns")
+    
+            # FIXED: Create plot with better legend positioning
+            with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
+                plot_image_path = tmp_file.name
+        
+            try:
+                # Create a special figure for PowerPoint with better legend handling
+                fig_ppt, ax_ppt = plt.subplots(figsize=(8, 6), subplot_kw=dict(projection='polar'))
+                fig_ppt.patch.set_facecolor('white')
+            
+                # Get selected samples for plotting
+                selected_samples = []
+                for sample_name, checkbox_var in self.sample_checkboxes.items():
+                    if checkbox_var.get() and sample_name in self.samples:
+                        selected_samples.append(sample_name)
+            
+                # If no samples selected, select all
+                if not selected_samples:
+                    selected_samples = list(self.samples.keys())
+            
+                if selected_samples:
+                    # Setup the spider plot
+                    num_metrics = len(self.metrics)
+                    angles = np.linspace(0, 2 * np.pi, num_metrics, endpoint=False).tolist()
+                    angles += angles[:1]  # Complete the circle
+                
+                    # Set up the plot
+                    ax_ppt.set_theta_offset(np.pi / 2)
+                    ax_ppt.set_theta_direction(-1)
+                    ax_ppt.set_thetagrids(np.degrees(angles[:-1]), self.metrics, fontsize=10)
+                    ax_ppt.set_ylim(0, 9)
+                    ax_ppt.set_yticks(range(1, 10))
+                    ax_ppt.set_yticklabels(range(1, 10))
+                    ax_ppt.grid(True, alpha=0.3)
+                
+                    # Colors for different samples
+                    colors = ['red', 'green', 'blue', 'orange', 'purple', 'brown', 'pink', 'cyan', 'magenta', 'lime']
+                    line_styles = ['-', '--', '-.', ':']
+                
+                    # Plot each selected sample
+                    for i, sample_name in enumerate(selected_samples):
+                        sample_data = self.samples[sample_name]
+                        values = [sample_data.get(metric, 5) for metric in self.metrics]
+                        values += values[:1]  # Complete the circle
+                    
+                        color = colors[i % len(colors)]
+                        line_style = line_styles[i % len(line_styles)]
+                    
+                        # Plot the line and markers
+                        ax_ppt.plot(angles, values, 'o', linewidth=2.5, label=sample_name, 
+                                   color=color, linestyle=line_style, markersize=8, alpha=0.8)
+                        # Fill the area
+                        ax_ppt.fill(angles, values, alpha=0.1, color=color)
+                
+                    # FIXED: Better legend positioning - inside the plot area
+                    ax_ppt.legend(loc='upper right', bbox_to_anchor=(0.95, 1.0), fontsize=9)
+                
+                    # Set title
+                    ax_ppt.set_title('Sensory Profile Comparison', fontsize=12, fontweight='bold', pad=15)
+            
+                # Save the PowerPoint-specific plot
+                fig_ppt.savefig(plot_image_path, dpi=300, bbox_inches='tight',
+                               facecolor='white', edgecolor='none')
+                plt.close(fig_ppt)
+        
+                # FIXED: Better plot positioning and sizing - more space, legend won't be cut off
+                main_slide.shapes.add_picture(plot_image_path, 
+                                            Inches(7.2), Inches(1.5),    # MOVED: Further left
+                                            Inches(5.8), Inches(4.5))    # INCREASED: Wider plot
+                print("DEBUG: Plot with proper legend positioning added to PowerPoint slide")
+        
+            finally:
+                # Clean up temporary file
+                if os.path.exists(plot_image_path):
+                    os.remove(plot_image_path)
+    
+            # Add header information as text box if available
+            if header_info:
+                info_shape = main_slide.shapes.add_textbox(Inches(0.45), Inches(6.2),
+                                                         Inches(12.0), Inches(1.0))
+                info_frame = info_shape.text_frame
+                info_frame.clear()
+        
+                p = info_frame.add_paragraph()
+                p.text = " | ".join(header_info)
+                p.font.size = Pt(10)
+                p.font.name = "Montserrat"
+    
+            # Save the presentation
+            prs.save(filename)
+            print(f"DEBUG: PowerPoint report with auto-saved comments and proper legend saved successfully to {filename}")
+            messagebox.showinfo("Success", f"PowerPoint report saved successfully as {os.path.basename(filename)}")
+    
+        except Exception as e:
+            print(f"DEBUG: Error generating PowerPoint report: {e}")
+            import traceback
+            traceback.print_exc()
+            messagebox.showerror("Error", f"Failed to generate PowerPoint report: {str(e)}")
+
     def save_current_sample(self):
         """Save the current form data to the selected sample."""
         current_sample = self.sample_var.get()
@@ -991,12 +1398,18 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         """Automatically save current sample data and update plot."""
         current_sample = self.sample_var.get()
         if current_sample and current_sample in self.samples:
-            # Auto-save ratings (don't save comments automatically)
+            # Auto-save ratings
             for metric in self.metrics:
                 self.samples[current_sample][metric] = self.rating_vars[metric].get()
-            
+        
+            # FIXED: Also auto-save comments
+            comments = self.comments_text.get('1.0', tk.END).strip()
+            self.samples[current_sample]['comments'] = comments
+        
             # Update plot immediately
             self.update_plot()
+        
+            print(f"DEBUG: Auto-saved all data for {current_sample}")
 
     def load_from_image(self):
         """Load sensory data from a scanned form image using ML."""
