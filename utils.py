@@ -62,7 +62,7 @@ def is_debug_enabled():
 
 FONT = ('Arial', 12)
 # Global constants
-APP_BACKGROUND_COLOR = '#0504AA'
+APP_BACKGROUND_COLOR = '#D3D3D3'
 BUTTON_COLOR = '#4169E1'
 PLOT_CHECKBOX_TITLE = "Click Checkbox to \nAdd/Remove Item \nFrom Plot"
 

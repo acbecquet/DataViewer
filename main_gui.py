@@ -595,7 +595,7 @@ class TestingGUI:
         startup_menu.transient(self.root)
         startup_menu.grab_set()  # Make the window modal
 
-        label = ttk.Label(startup_menu, text="Welcome to DataViewer by SDR!", font=FONT,background=APP_BACKGROUND_COLOR, foreground="white")
+        label = ttk.Label(startup_menu, text="Welcome to DataViewer by SDR!", font=FONT,background=APP_BACKGROUND_COLOR)
         label.pack(pady=10)
 
         # New Button
@@ -647,7 +647,7 @@ class TestingGUI:
         """Populate or update the dropdown for sheet selection."""
         if not hasattr(self, 'drop_down_menu') or not self.drop_down_menu:
             # Create a dropdown for sheet selection
-            sheet_label = ttk.Label(self.top_frame, text = "Select Test:", font=FONT, foreground='white', background = APP_BACKGROUND_COLOR)
+            sheet_label = ttk.Label(self.top_frame, text = "Select Test:", font=FONT, background = APP_BACKGROUND_COLOR)
             sheet_label.pack(side = "left", padx = (0,5))
             self.drop_down_menu = ttk.Combobox(
                 self.top_frame,
@@ -725,7 +725,8 @@ class TestingGUI:
                              command=lambda: self.file_manager.open_raw_data_in_excel(self.selected_sheet.get()))
         viewmenu.add_command(label="Trend Analysis", command=self.open_trend_analysis_window)
         viewmenu.add_separator()
-        viewmenu.add_command(label="Collect Data", command=self.open_data_collection)
+        viewmenu.add_command(label="Collect TPM Data", command=self.open_data_collection)
+        viewmenu.add_command(label="Collect Sensory Data", command=self.open_sensory_data_collection)
         menubar.add_cascade(label="View", menu=viewmenu)
 
         # Database menu
@@ -1128,6 +1129,12 @@ class TestingGUI:
             debug_print(f"DEBUG: File already loaded ({self.file_path}) - opening test start menu")
             self.file_manager.show_test_start_menu(self.file_path)
 
+    def open_sensory_data_collection(self):
+        """Open the sensory data collection window."""
+        from sensory_data_collection import SensoryDataCollectionWindow
+        sensory_window = SensoryDataCollectionWindow(self.root)
+        sensory_window.show()
+
     def show_data_collection_startup_dialog(self):
         """Show a startup dialog for data collection when no file is loaded."""
         debug_print("DEBUG: Creating data collection startup dialog")
@@ -1144,7 +1151,6 @@ class TestingGUI:
             startup_dialog, 
             text="Start Data Collection", 
             font=("Arial", 16, "bold"),
-            foreground="white",
             background=APP_BACKGROUND_COLOR
         )
         header_label.pack(pady=(20, 10))
@@ -1154,7 +1160,6 @@ class TestingGUI:
             startup_dialog,
             text="Choose an option to begin collecting data:",
             font=FONT,
-            foreground="white",
             background=APP_BACKGROUND_COLOR
         )
         instruction_label.pack(pady=(0, 20))

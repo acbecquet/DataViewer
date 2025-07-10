@@ -1406,7 +1406,7 @@ class FileManager:
         if not hasattr(self.gui, 'file_dropdown') or not self.gui.file_dropdown:
             dropdown_frame = ttk.Frame(self.gui.top_frame, width=1400, height=40)
             dropdown_frame.pack(side="left", pady=2, padx=5)
-            file_label = ttk.Label(dropdown_frame, text="Select File:", font=FONT, foreground="white", background=APP_BACKGROUND_COLOR)
+            file_label = ttk.Label(dropdown_frame, text="Select File:", font=FONT, background=APP_BACKGROUND_COLOR)
             file_label.pack(side="left", padx=(0, 0))
             self.gui.file_dropdown_var = tk.StringVar()
             self.gui.file_dropdown = ttk.Combobox(
