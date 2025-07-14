@@ -193,155 +193,244 @@ class ImprovedAttributeDetectionExtractor:
     def find_attribute_boundaries_with_ocr(self, image, center_x, center_y):
         """
         Use minimal_2x preprocessing with tighter grouping to preserve clean attribute names.
+        NO FALLBACK - if OCR fails, the method fails clearly.
         """
-
+    
         height, width = image.shape
         print(f"  Using MINIMAL_2X preprocessing with tighter grouping...")
-
-        # Use slightly wider search area (35% width)
-        left_column_width = int(width * 0.35)
-        left_column = image[:, 0:left_column_width]
+    
+        search_width = int(width * 0.26) 
+        left_column = image[:,0:search_width]
 
         # Create debug directory
         debug_dir = "training_data/debug_regions"
         os.makedirs(debug_dir, exist_ok=True)
-    
-        # MINIMAL PREPROCESSING (the winning approach)
-        minimal_processed = cv2.resize(left_column, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
-        cv2.imwrite(os.path.join(debug_dir, "debug_minimal_2x_final.png"), minimal_processed)
 
-        try:
-            # Run OCR with minimal preprocessing
-            ocr_data = pytesseract.image_to_data(minimal_processed, output_type=pytesseract.Output.DICT)
+        # Preprocess image with minimal approach
+        preprocessed = cv2.resize(left_column, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+        cv2.imwrite(os.path.join(debug_dir, "debug_minimal_1x_final.png"), preprocessed)
+        search_region = preprocessed[:, :search_width*2]  # Account for 2x scaling
         
-            # Collect all meaningful text with positions
-            all_texts = []
-            for i, text in enumerate(ocr_data['text']):
-                if text.strip() and int(ocr_data['conf'][i]) >= 10:
-                    y_pos = int(ocr_data['top'][i] / 2)  # Scale back from 2x
-                    all_texts.append({
-                        'text': text.strip(),
-                        'y': y_pos,
-                        'conf': int(ocr_data['conf'][i])
+        region_planes = cv2.split(search_region)
+
+        result_planes = []
+        result_norm_planes = []
+        for plane in region_planes:
+            dilated_img = cv2.dilate(plane, np.ones((7,7), np.uint8))
+            bg_img = cv2.medianBlur(dilated_img, 21)
+            diff_img = 255 - cv2.absdiff(plane, bg_img)
+            norm_img = cv2.normalize(diff_img,None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8UC1)
+            result_planes.append(diff_img)
+            result_norm_planes.append(norm_img)
+
+        search_region = cv2.merge(result_planes)
+        search_region_norm = cv2.merge(result_norm_planes)
+        cv2.imwrite(os.path.join(debug_dir, "debug_minimal_1x_shadows_removed.png"), search_region)
+        print(f"  Search area: {search_width}px wide ({search_width/width*100:.1f}% of image width)")
+    
+        try:
+            # Get OCR data
+            ocr_data = pytesseract.image_to_data(search_region, output_type=pytesseract.Output.DICT)
+        
+            # Extract text items with coordinates (adjust for 2x scaling)
+            text_items = []
+            for i in range(len(ocr_data['text'])):
+                text = ocr_data['text'][i].strip().lower()
+                if text and len(text) > 1 and ocr_data['conf'][i] > 20:
+                    y = ocr_data['top'][i] // 2  # Scale back from 2x
+                    text_items.append({
+                        'text': text,
+                        'y': y,
+                        'confidence': ocr_data['conf'][i]
                     })
         
-            # Sort by Y position
-            all_texts.sort(key=lambda x: x['y'])
+            print(f"  Found {len(text_items)} text items with expanded search area")
         
-            print(f"  Found {len(all_texts)} text items with minimal preprocessing")
+            # Group nearby text items (TIGHTER TOLERANCE to preserve clean attribute names)
+            grouped_lines = []
+            text_items.sort(key=lambda x: x['y'])
         
-            # TIGHTER GROUPING - use smaller Y tolerance to keep clean attribute names separate
-            text_lines = []
             current_line = []
-            last_y = -1
-            GROUP_TOLERANCE = 10  # Reduced from 20 to 10 pixels
-        
-            for item in all_texts:
-                if last_y == -1 or abs(item['y'] - last_y) <= GROUP_TOLERANCE:
+            for item in text_items:
+                if not current_line or abs(item['y'] - current_line[-1]['y']) <= 10:  # TIGHT 10px grouping
                     current_line.append(item)
                 else:
                     if current_line:
-                        text_lines.append(current_line)
+                        # Combine text from current line
+                        combined_text = ' '.join([t['text'] for t in current_line])
+                        avg_y = sum([t['y'] for t in current_line]) // len(current_line)
+                        grouped_lines.append({'text': combined_text, 'y': avg_y})
                     current_line = [item]
-                last_y = item['y']
         
             if current_line:
-                text_lines.append(current_line)
+                combined_text = ' '.join([t['text'] for t in current_line])
+                avg_y = sum([t['y'] for t in current_line]) // len(current_line)
+                grouped_lines.append({'text': combined_text, 'y': avg_y})
         
-            print(f"  Grouped into {len(text_lines)} text lines (tolerance={GROUP_TOLERANCE}px)")
+            print(f"  Grouped into {len(grouped_lines)} text lines (tolerance=10px)")
         
-            # FIND PRIMARY ATTRIBUTE INSTANCES with preference for clean/short matches
-            found_attributes = []
+            # Debug: show all grouped lines, especially bottom area
+            for line in grouped_lines:
+                if line['y'] > 1000:  # Bottom sample area
+                    print(f"    ** BOTTOM Y={line['y']}: '{line['text']}'")
+                else:
+                    print(f"    Y={line['y']}: '{line['text']}'")
         
-            for line in text_lines:
-                line_text = ' '.join([item['text'] for item in line]).lower()
-                avg_y = sum([item['y'] for item in line]) // len(line)
-                max_conf = max([item['conf'] for item in line])
+            # EXACT ATTRIBUTE MATCHING 
+            all_detections = []
+        
+            for line in grouped_lines:
+                text = line['text']
+                y = line['y']
             
-                print(f"    Y={avg_y:3d}: '{line_text}'")
-            
-                # PRIORITIZED MATCHING - prefer shorter, cleaner matches
-                detected_attr = None
-                match_quality = 0  # Higher = better match
-            
-                # BURNT TASTE - strongly prefer clean instances
-                if 'burnt' in line_text and 'taste' in line_text:
-                    # Calculate match quality
-                    if line_text.strip() == 'burnt taste':
-                        match_quality = 100  # Perfect clean match
-                        detected_attr = 'burnt_taste'
-                        print(f"      --> PERFECT BURNT TASTE: '{line_text}' at y={avg_y}")
-                    elif '"1"' not in line_text and 'heavy' not in line_text and len(line_text) < 20:
-                        match_quality = 80  # Good clean match
-                        detected_attr = 'burnt_taste'
-                        print(f"      --> CLEAN BURNT TASTE: '{line_text}' at y={avg_y}")
-                    elif '"1"' not in line_text and 'heavy' not in line_text:
-                        match_quality = 60  # Acceptable match
-                        detected_attr = 'burnt_taste'
-                        print(f"      --> BURNT TASTE: '{line_text}' at y={avg_y}")
-                    else:
-                        match_quality = 0  # Skip description text
-                        print(f"      --> Ignoring Burnt Taste description: '{line_text}'")
-            
-                # VAPOR VOLUME
-                elif 'vapor' in line_text and 'volume' in line_text:
-                    if line_text.strip() == 'vapor volume':
-                        match_quality = 100
-                    else:
-                        match_quality = 80
-                    detected_attr = 'vapor_volume'
-                    print(f"      --> VAPOR VOLUME: '{line_text}' at y={avg_y}")
-            
-                # OVERALL FLAVOR
-                elif 'overall' in line_text and 'flavor' in line_text:
-                    if 'overall flavor' in line_text:
-                        match_quality = 90
-                    else:
-                        match_quality = 70
-                    detected_attr = 'overall_flavor'
-                    print(f"      --> OVERALL FLAVOR: '{line_text}' at y={avg_y}")
-            
-                # SMOOTHNESS
-                elif 'smoothness' in line_text:
-                    if line_text.strip() == 'smoothness':
-                        match_quality = 100
-                    else:
-                        match_quality = 80
-                    detected_attr = 'smoothness'
-                    print(f"      --> SMOOTHNESS: '{line_text}' at y={avg_y}")
-            
-                # OVERALL LIKING
-                elif 'overall' in line_text and 'liking' in line_text:
-                    if 'overall liking' in line_text:
-                        match_quality = 90
-                    else:
-                        match_quality = 70
-                    detected_attr = 'overall_liking'
-                    print(f"      --> OVERALL LIKING: '{line_text}' at y={avg_y}")
-            
-                # Store the detected attribute with quality score
-                if detected_attr and match_quality > 0:
-                    found_attributes.append({
-                        'type': detected_attr,
-                        'y': avg_y,
-                        'text': line_text,
-                        'conf': max_conf,
-                        'quality': match_quality
+                # EXACT phrase matching first
+                if 'burnt taste' in text:
+                    all_detections.append({
+                        'type': 'burnt_taste',
+                        'y': y,
+                        'text': text,
+                        'quality': 50
                     })
+                    print(f"      --> BURNT_TASTE: '{text}' at y={y} (exact match)")
+            
+                elif 'vapor volume' in text:
+                    all_detections.append({
+                        'type': 'vapor_volume',
+                        'y': y,
+                        'text': text,
+                        'quality': 50
+                    })
+                    print(f"      --> VAPOR_VOLUME: '{text}' at y={y} (exact match)")
+            
+                elif 'overall flavor' in text:
+                    all_detections.append({
+                        'type': 'overall_flavor',
+                        'y': y,
+                        'text': text,
+                        'quality': 50
+                    })
+                    print(f"      --> OVERALL_FLAVOR: '{text}' at y={y} (exact match)")
+            
+                elif 'overall liking' in text:
+                    all_detections.append({
+                        'type': 'overall_liking',
+                        'y': y,
+                        'text': text,
+                        'quality': 50
+                    })
+                    print(f"      --> OVERALL_LIKING: '{text}' at y={y} (exact match)")
+            
+                elif 'smoothness' in text:
+                    all_detections.append({
+                        'type': 'smoothness',
+                        'y': y,
+                        'text': text,
+                        'quality': 50
+                    })
+                    print(f"      --> SMOOTHNESS: '{text}' at y={y} (exact match)")
+            
+                # Partial matches as backup
+                elif 'burnt' in text and 'taste' in text:
+                    all_detections.append({
+                        'type': 'burnt_taste',
+                        'y': y,
+                        'text': text,
+                        'quality': 70
+                    })
+                    print(f"      --> BURNT_TASTE: '{text}' at y={y} (partial match)")
+            
+                elif 'vapor' in text and 'volume' in text:
+                    all_detections.append({
+                        'type': 'vapor_volume',
+                        'y': y,
+                        'text': text,
+                        'quality': 70
+                    })
+                    print(f"      --> VAPOR_VOLUME: '{text}' at y={y} (partial match)")
+            
+                elif 'flavor' in text and 'overall' not in text:
+                    all_detections.append({
+                        'type': 'overall_flavor',
+                        'y': y,
+                        'text': text,
+                        'quality': 50
+                    })
+                    print(f"      --> OVERALL_FLAVOR: '{text}' at y={y} (partial match)")
+            
+                elif 'liking' in text and 'overall' not in text:
+                    all_detections.append({
+                        'type': 'overall_liking',
+                        'y': y,
+                        'text': text,
+                        'quality': 50
+                    })
+                    print(f"      --> OVERALL_LIKING: '{text}' at y={y} (partial match)")
+            
+                elif any(word in text for word in ['smooth', 'ness', 'smoothne']):
+                    all_detections.append({
+                        'type': 'smoothness',
+                        'y': y,
+                        'text': text,
+                        'quality': 30
+                    })
+                    print(f"      --> SMOOTHNESS: '{text}' at y={y} (partial match)")
         
-            print(f"  Raw detections: {len(found_attributes)} instances")
-            for attr in found_attributes:
-                print(f"    {attr['type']} at y={attr['y']} (quality={attr['quality']})")
+            print(f"  Raw detections: {len(all_detections)} instances")
+            for det in all_detections:
+                sample_type = "BOTTOM" if det['y'] > 1000 else "TOP"
+                print(f"    {sample_type} {det['type']} at y={det['y']} (quality={det['quality']})")
         
-            # DEDUPLICATE - keep the BEST QUALITY instance of each attribute per sample
-            print(f"  Center Y: {center_y} (divides top/bottom samples)")
+            # Check what we found
+            found_types = set([det['type'] for det in all_detections])
+            required_attributes = ['burnt_taste', 'vapor_volume', 'overall_flavor', 'smoothness', 'overall_liking']
+            missing_attributes = [attr for attr in required_attributes if attr not in found_types]
         
+            if missing_attributes:
+                print(f"  ❌ MISSING REQUIRED ATTRIBUTES: {missing_attributes}")
+                print(f"  Found: {list(found_types)}")
+                print(f"  Required: {required_attributes}")
+            
+                # Show what we found in each area
+                top_found = [det['type'] for det in all_detections if det['y'] < 1000]
+                bottom_found = [det['type'] for det in all_detections if det['y'] >= 1000]
+                print(f"  TOP sample found: {list(set(top_found))}")
+                print(f"  BOTTOM sample found: {list(set(bottom_found))}")
+            
+                raise Exception(f"OCR failed to find required attributes: {missing_attributes}")
+        
+            # Rest of the method remains the same...
+            # OCR-based center detection
+            if len(all_detections) >= 2:
+                sorted_dets = sorted(all_detections, key=lambda x: x['y'])
+            
+                max_gap = 0
+                best_split_y = center_y
+            
+                for i in range(len(sorted_dets) - 1):
+                    gap = sorted_dets[i+1]['y'] - sorted_dets[i]['y']
+                    if gap > max_gap:
+                        max_gap = gap
+                        best_split_y = (sorted_dets[i]['y'] + sorted_dets[i+1]['y']) // 2
+            
+                print(f"  Center Y: {center_y} (original cross line detection)")
+                print(f"  OCR-based split Y: {best_split_y} (largest gap={max_gap}px)")
+            
+                if max_gap > 100:
+                    effective_center_y = best_split_y
+                    print(f"  Using OCR-based split: y={effective_center_y}")
+                else:
+                    effective_center_y = center_y
+                    print(f"  Using original center: y={effective_center_y}")
+            else:
+                effective_center_y = center_y
+                print(f"  Using original center: y={effective_center_y}")
+        
+            # Separate top and bottom using the effective center
             top_attributes = {}
             bottom_attributes = {}
         
-            for attr in found_attributes:
-                if attr['y'] < center_y:
-                    # Top sample
+            for attr in all_detections:
+                if attr['y'] < effective_center_y:
                     if attr['type'] not in top_attributes or attr['quality'] > top_attributes[attr['type']]['quality']:
                         if attr['type'] in top_attributes:
                             old_y = top_attributes[attr['type']]['y']
@@ -350,7 +439,6 @@ class ImprovedAttributeDetectionExtractor:
                             print(f"    TOP {attr['type']}: y={attr['y']} (quality={attr['quality']})")
                         top_attributes[attr['type']] = attr
                 else:
-                    # Bottom sample
                     if attr['type'] not in bottom_attributes or attr['quality'] > bottom_attributes[attr['type']]['quality']:
                         if attr['type'] in bottom_attributes:
                             old_y = bottom_attributes[attr['type']]['y']
@@ -362,98 +450,58 @@ class ImprovedAttributeDetectionExtractor:
             print(f"  Final top attributes: {list(top_attributes.keys())}")
             print(f"  Final bottom attributes: {list(bottom_attributes.keys())}")
         
+            # VALIDATION: Ensure we have complete sets for both top and bottom
+            if len(top_attributes) < 3:
+                print(f"  ❌ INSUFFICIENT TOP ATTRIBUTES: {list(top_attributes.keys())}")
+                raise Exception(f"Top sample only has {len(top_attributes)} attributes, need at least 3")
+        
+            if len(bottom_attributes) < 3:
+                print(f"  ❌ INSUFFICIENT BOTTOM ATTRIBUTES: {list(bottom_attributes.keys())}")
+                raise Exception(f"Bottom sample only has {len(bottom_attributes)} attributes, need at least 3")
+        
             # CALCULATE PRECISE BOUNDARIES
             boundaries = {}
         
-            # TOP SAMPLE: Burnt Taste (start) to Overall Liking (end)
-            if 'burnt_taste' in top_attributes and 'overall_liking' in top_attributes:
-                top_start_y = top_attributes['burnt_taste']['y']
-                top_end_y = top_attributes['overall_liking']['y']
-            
-                buffer = 20
-                boundaries['top_start'] = max(0, top_start_y - buffer)
-                boundaries['top_end'] = min(height, top_end_y + buffer + 30)
-            
-                print(f"  ✓ TOP BOUNDARIES CALCULATED:")
-                print(f"    Start: Burnt Taste at y={top_start_y} -> boundary={boundaries['top_start']}")
-                print(f"    End: Overall Liking at y={top_end_y} -> boundary={boundaries['top_end']}")
-                print(f"    Height: {boundaries['top_end'] - boundaries['top_start']} pixels")
-            else:
-                print(f"  ⚠️  Top sample missing Burnt Taste or Overall Liking")
-                print(f"      Available: {list(top_attributes.keys())}")
+            # TOP SAMPLE: Use first and last detected attributes
+            top_ys = [attr['y'] for attr in top_attributes.values()]
+            top_start_y = min(top_ys)
+            top_end_y = max(top_ys)
         
-            # BOTTOM SAMPLE: Burnt Taste (start) to Overall Liking (end)  
-            if 'burnt_taste' in bottom_attributes:
-                bottom_start_y = bottom_attributes['burnt_taste']['y']
-            
-                # Look for Overall Liking, or use last available attribute
-                if 'overall_liking' in bottom_attributes:
-                    bottom_end_y = bottom_attributes['overall_liking']['y']
-                    print(f"    Bottom end: Overall Liking at y={bottom_end_y}")
-                else:
-                    # Find the last attribute
-                    bottom_end_y = bottom_start_y
-                    for attr_type in ['smoothness', 'overall_flavor', 'vapor_volume']:
-                        if attr_type in bottom_attributes and bottom_attributes[attr_type]['y'] > bottom_end_y:
-                            bottom_end_y = bottom_attributes[attr_type]['y']
-                    print(f"    Bottom end: Last available attribute at y={bottom_end_y}")
-            
-                buffer = 20
-                boundaries['bottom_start'] = max(0, bottom_start_y - buffer)
-                boundaries['bottom_end'] = min(height, bottom_end_y + buffer + 30)
-            
-                print(f"  ✓ BOTTOM BOUNDARIES CALCULATED:")
-                print(f"    Start: Burnt Taste at y={bottom_start_y} -> boundary={boundaries['bottom_start']}")
-                print(f"    End: Last attribute at y={bottom_end_y} -> boundary={boundaries['bottom_end']}")
-                print(f"    Height: {boundaries['bottom_end'] - boundaries['bottom_start']} pixels")
-            else:
-                print(f"  ⚠️  Bottom sample missing Burnt Taste")
-                print(f"      Available: {list(bottom_attributes.keys())}")
+            buffer = 20
+            boundaries['top_start'] = max(0, top_start_y - buffer)
+            boundaries['top_end'] = min(height, top_end_y + buffer + 30)
         
-            # CHECK SUCCESS
+            print(f"  ✓ TOP BOUNDARIES CALCULATED:")
+            print(f"    Start: y={top_start_y} -> boundary={boundaries['top_start']}")
+            print(f"    End: y={top_end_y} -> boundary={boundaries['top_end']}")
+            print(f"    Height: {boundaries['top_end'] - boundaries['top_start']} pixels")
+        
+            # BOTTOM SAMPLE: Use first and last detected attributes
+            bottom_ys = [attr['y'] for attr in bottom_attributes.values()]
+            bottom_start_y = min(bottom_ys)
+            bottom_end_y = max(bottom_ys)
+        
+            boundaries['bottom_start'] = max(0, bottom_start_y - buffer)
+            boundaries['bottom_end'] = min(height, bottom_end_y + buffer + 30)
+        
+            print(f"  ✓ BOTTOM BOUNDARIES CALCULATED:")
+            print(f"    Start: y={bottom_start_y} -> boundary={boundaries['bottom_start']}")
+            print(f"    End: y={bottom_end_y} -> boundary={boundaries['bottom_end']}")
+            print(f"    Height: {boundaries['bottom_end'] - boundaries['bottom_start']} pixels")
+        
+            # FINAL VALIDATION
             if len(boundaries) == 4:
-                print(f"  🎉 QUALITY-BASED BOUNDARY DETECTION SUCCESSFUL!")
+                print(f"  ✓ OCR BOUNDARY DETECTION SUCCESSFUL!")
                 return boundaries
-            elif len(boundaries) >= 2:
-                print(f"  ⚠️  Partial success ({len(boundaries)}/4 boundaries)")
-                full_boundaries = {
-                    'top_start': boundaries.get('top_start', int(height * 0.26)),
-                    'top_end': boundaries.get('top_end', int(height * 0.50)),
-                    'bottom_start': boundaries.get('bottom_start', int(height * 0.66)),
-                    'bottom_end': boundaries.get('bottom_end', int(height * 0.90))
-                }
-                return full_boundaries
             else:
-                print(f"  ⚠️  No valid boundaries calculated")
+                print(f"  ❌ BOUNDARY CALCULATION FAILED: only {len(boundaries)} boundaries calculated")
+                raise Exception(f"Expected 4 boundaries, got {len(boundaries)}")
             
         except Exception as e:
-            print(f"  ✗ Quality-based boundary detection failed: {e}")
-            import traceback
-            traceback.print_exc()
-    
-        # Fallback
-        print(f"  Using fallback boundaries")
-        return {
-            'top_start': int(height * 0.26),
-            'top_end': int(height * 0.50),
-            'bottom_start': int(height * 0.66),
-            'bottom_end': int(height * 0.90)
-        }
+            print(f"  ❌ OCR BOUNDARY DETECTION FAILED: {e}")
+            raise Exception(f"OCR boundary detection failed: {e}")
 
-    def get_fallback_boundaries(self, height, center_y):
-        """
-        Fallback boundaries if OCR fails.
-        """
     
-        fallback = {
-            'top_start': int(height * 0.22),
-            'top_end': int(height * 0.58),
-            'bottom_start': int(height * 0.64),
-            'bottom_end': int(height * 0.90)
-        }
-    
-        print(f"  Using fallback boundaries: top={fallback['top_start']}-{fallback['top_end']}, bottom={fallback['bottom_start']}-{fallback['bottom_end']}")
-        return fallback
     
     def find_attributes_in_sample(self, image, sample_region):
         """

@@ -6,7 +6,7 @@ Section Division: 5 equal sections within OCR boundaries
 Comments Excluded: True
 OCR Text Found: 'Smoothness'
 OCR Confidence: 96
-Y Position in Sample: 212
+Y Position in Sample: 210
 Final Size: 600x140
 Target Size: 600x140
 
