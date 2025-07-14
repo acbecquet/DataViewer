@@ -1,0 +1,6 @@
+Attribute: Overall Liking
+OCR Text Found: 'Overall'
+OCR Confidence: 96
+Y Position in Sample: 58
+Final Size: 600x140
+Target Size: 600x140

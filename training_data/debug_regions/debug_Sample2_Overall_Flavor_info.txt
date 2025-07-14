@@ -1,0 +1,6 @@
+Attribute: Overall Flavor
+OCR Text Found: 'a'
+OCR Confidence: 93
+Y Position in Sample: 60
+Final Size: 600x140
+Target Size: 600x140

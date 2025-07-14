@@ -1,0 +1,6 @@
+Attribute: Smoothness
+OCR Text Found: 'S'
+OCR Confidence: 65
+Y Position in Sample: 56
+Final Size: 600x140
+Target Size: 600x140

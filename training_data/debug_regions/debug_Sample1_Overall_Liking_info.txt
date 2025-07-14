@@ -1,0 +1,6 @@
+Attribute: Overall Liking
+OCR Text Found: 'r'
+OCR Confidence: 79
+Y Position in Sample: 116
+Final Size: 600x140
+Target Size: 600x140

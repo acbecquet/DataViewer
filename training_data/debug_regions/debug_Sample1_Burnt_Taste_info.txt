@@ -1,0 +1,6 @@
+Attribute: Burnt Taste
+OCR Text Found: 'Burnt'
+OCR Confidence: 96
+Y Position in Sample: 257
+Final Size: 600x140
+Target Size: 600x140
