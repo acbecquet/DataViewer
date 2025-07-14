@@ -1,12 +1,12 @@
-Attribute: Vapor Volume
-Sample ID: 2
+Attribute: Overall Flavor
+Sample ID: 4
 Width Mode: FULL_WIDTH
 Boundary Detection: OCR-based (Burnt Taste -> Overall Liking)
 Section Division: 5 equal sections within OCR boundaries
 Comments Excluded: True
-OCR Text Found: 'section_2'
+OCR Text Found: 'section_3'
 OCR Confidence: 0
-Y Position in Sample: 94
+Y Position in Sample: 230
 Final Size: 600x140
 Target Size: 600x140
 

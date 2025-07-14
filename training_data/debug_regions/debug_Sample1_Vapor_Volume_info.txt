@@ -1,6 +1,18 @@
 Attribute: Vapor Volume
+Sample ID: 1
+Width Mode: EXTENDED
+Boundary Detection: OCR-based (Burnt Taste -> Overall Liking)
+Section Division: 5 equal sections within OCR boundaries
+Comments Excluded: True
 OCR Text Found: 'Vapor'
-OCR Confidence: 95
-Y Position in Sample: 332
+OCR Confidence: 96
+Y Position in Sample: 97
 Final Size: 600x140
 Target Size: 600x140
+
+Boundary Strategy:
+1. OCR scans leftmost column for 'Burnt Taste' and 'Overall Liking'
+2. Creates precise boundaries excluding headers and comments
+3. Divides content area into 5 equal sections for attributes
+4. Top samples (1,2) share same Y coordinates
+5. Bottom samples (3,4) share same Y coordinates
