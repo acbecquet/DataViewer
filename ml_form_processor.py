@@ -42,7 +42,7 @@ class MLFormProcessor:
         self.is_loaded = False
         
         # These match your training data extractor settings
-        self.target_size = (64, 64)  # Standard input size for our CNN
+        self.target_size = (500,120)  # Standard input size for our CNN
         self.num_classes = 9  # Ratings 1-9
         
         # Form layout parameters (matches your extractor)
@@ -196,32 +196,56 @@ class MLFormProcessor:
                                borderMode=cv2.BORDER_REFLECT)
         return rotated
     
+# ml_form_processor.py - Update these specific sections
+
+class MLFormProcessor:
+    def __init__(self, model_path='models/sensory_rating_classifier.h5'):
+        self.model_path = model_path
+        self.model = None
+        self.is_loaded = False
+        
+        # MUST match the training extractor exactly
+        self.target_size = (500, 120)  # Updated to match training
+        self.num_classes = 9
+        
+        self.attributes = [
+            "Burnt Taste", "Vapor Volume", "Overall Flavor", 
+            "Smoothness", "Overall Liking"
+        ]
+        
+        print("MLFormProcessor initialized with high-resolution support")
+        print(f"Target image size: {self.target_size}")
+
     def extract_regions_for_prediction(self, processed_image):
         """
-        Extract the 20 individual rating regions from the processed image.
-        
-        This method mirrors your training data extractor's region extraction
-        but focuses on preparing regions for prediction rather than labeling.
-        The region boundaries are identical to ensure consistency between
-        training and inference.
+        Extract regions using the EXACT same parameters as training.
+        This must match the improved_training_extractor.py boundaries exactly.
         """
         
         height, width = processed_image.shape
         regions = {}
         
-        # Define sample regions (matches training extractor exactly)
+        # EXACT same boundaries as training extractor
         sample_regions = {
-            1: {"y_start": int(height * 0.22), "y_end": int(height * 0.58), 
-                "x_start": int(width * 0.03), "x_end": int(width * 0.49)},
-            2: {"y_start": int(height * 0.22), "y_end": int(height * 0.58),
-                "x_start": int(width * 0.51), "x_end": int(width * 0.97)},
-            3: {"y_start": int(height * 0.62), "y_end": int(height * 0.94),
-                "x_start": int(width * 0.03), "x_end": int(width * 0.49)},
-            4: {"y_start": int(height * 0.62), "y_end": int(height * 0.94),
-                "x_start": int(width * 0.51), "x_end": int(width * 0.97)}
+            1: {  # Top-left sample
+                "y_start": int(height * 0.28), "y_end": int(height * 0.56), 
+                "x_start": int(width * 0.05), "x_end": int(width * 0.50)  # Extended to 50%
+            },
+            2: {  # Top-right sample  
+                "y_start": int(height * 0.28), "y_end": int(height * 0.56),
+                "x_start": int(width * 0.50), "x_end": int(width * 0.98)  # Extended to 98%
+            },
+            3: {  # Bottom-left sample
+                "y_start": int(height * 0.64), "y_end": int(height * 0.90),
+                "x_start": int(width * 0.05), "x_end": int(width * 0.50)  # Extended to 50%
+            },
+            4: {  # Bottom-right sample
+                "y_start": int(height * 0.64), "y_end": int(height * 0.90),
+                "x_start": int(width * 0.50), "x_end": int(width * 0.98)  # Extended to 98%
+            }
         }
         
-        # Extract regions for each sample and attribute
+        # Extract regions with EXACT same logic as training
         for sample_id, sample_region in sample_regions.items():
             sample_height = sample_region["y_end"] - sample_region["y_start"]
             attr_height = sample_height // len(self.attributes)
@@ -229,24 +253,27 @@ class MLFormProcessor:
             regions[f"Sample {sample_id}"] = {}
             
             for i, attribute in enumerate(self.attributes):
-                # Calculate region boundaries
+                # Calculate boundaries exactly like training
                 y_start = sample_region["y_start"] + i * attr_height
                 y_end = sample_region["y_start"] + (i + 1) * attr_height
                 x_start = sample_region["x_start"]
                 x_end = sample_region["x_end"]
                 
-                # Ensure boundaries are valid
-                y_start = max(0, y_start)
-                y_end = min(height, y_end)
-                x_start = max(0, x_start)
-                x_end = min(width, x_end)
+                # EXACT same padding as training extractor
+                padding_y = int(attr_height * 0.02)  # Very small Y padding
+                padding_x = int((x_end - x_start) * 0.01)  # Minimal X padding
                 
-                # Extract and resize region for model input
+                y_start = max(0, y_start - padding_y)
+                y_end = min(height, y_end + padding_y)
+                x_start = max(0, x_start - padding_x)
+                x_end = min(width, x_end + padding_x)
+                
+                # Extract region
                 region_img = processed_image[y_start:y_end, x_start:x_end]
                 
                 if region_img.size > 0:
-                    # Resize to model input size
-                    resized = cv2.resize(region_img, self.target_size)
+                    # EXACT same resizing as training
+                    resized = cv2.resize(region_img, self.target_size, interpolation=cv2.INTER_CUBIC)
                     regions[f"Sample {sample_id}"][attribute] = resized
                     
         return regions
@@ -366,59 +393,58 @@ class MLTrainingHelper:
     def __init__(self, processor):
         self.processor = processor
         self.model = None
+        self.target_size = (500,120)
         self.training_history = None
         print("MLTrainingHelper initialized")
         print("Ready to train CNN model from your labeled training data")
-    def create_cnn_model(self, input_shape=(64, 64, 1), num_classes=9):
+    def create_cnn_model(self):
         """
-        Create a CNN architecture optimized for rating classification.
+        Build CNN architecture optimized for the new higher resolution.
+        """
+        tf, keras, layers = _lazy_import_tensorflow()
         
-        This architecture is designed specifically for your use case:
-        - Lightweight enough for fast inference
-        - Robust to phone camera image variations
-        - Focused on the visual patterns that distinguish rating marks
-        """
-        tf,keras,layers = _lazy_import_tensorflow()
-
         model = keras.Sequential([
-            # Input layer
-            layers.Input(shape=input_shape),
+            # Input layer - updated dimensions
+            layers.Input(shape=(self.target_size[1], self.target_size[0], 1)),  # (120, 500, 1)
             
-            # First convolutional block - detect basic features
-            layers.Conv2D(32, (3, 3), activation='relu', padding='same'),
-            layers.BatchNormalization(),
+            # First conv block - adapted for wider images
             layers.Conv2D(32, (3, 3), activation='relu', padding='same'),
             layers.MaxPooling2D((2, 2)),
-            layers.Dropout(0.25),
-            
-            # Second convolutional block - combine features
-            layers.Conv2D(64, (3, 3), activation='relu', padding='same'),
             layers.BatchNormalization(),
+            
+            # Second conv block
             layers.Conv2D(64, (3, 3), activation='relu', padding='same'),
             layers.MaxPooling2D((2, 2)),
-            layers.Dropout(0.25),
+            layers.BatchNormalization(),
             
-            # Third convolutional block - higher level patterns
+            # Third conv block 
             layers.Conv2D(128, (3, 3), activation='relu', padding='same'),
-            layers.BatchNormalization(),
             layers.MaxPooling2D((2, 2)),
-            layers.Dropout(0.25),
-            
-            # Flatten and classify
-            layers.Flatten(),
-            layers.Dense(512, activation='relu'),
             layers.BatchNormalization(),
+            
+            # Fourth conv block for higher resolution
+            layers.Conv2D(256, (3, 3), activation='relu', padding='same'),
+            layers.MaxPooling2D((2, 2)),
+            layers.BatchNormalization(),
+            
+            # Global average pooling instead of flatten for better generalization
+            layers.GlobalAveragePooling2D(),
+            
+            # Dense layers
+            layers.Dense(512, activation='relu'),
             layers.Dropout(0.5),
             layers.Dense(256, activation='relu'),
             layers.Dropout(0.3),
-            layers.Dense(num_classes, activation='softmax')
+            
+            # Output layer - 9 classes for ratings 1-9
+            layers.Dense(9, activation='softmax')
         ])
         
-        # Compile with appropriate settings for multi-class classification
+        # Compile with appropriate optimizer for higher resolution
         model.compile(
             optimizer=keras.optimizers.Adam(learning_rate=0.001),
             loss='categorical_crossentropy',
-            metrics=['accuracy', 'top_3_accuracy']  # Top-3 helps assess near-miss performance
+            metrics=['accuracy', 'top_2_accuracy']
         )
         
         return model

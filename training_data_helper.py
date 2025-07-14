@@ -859,10 +859,10 @@ def main():
         start_processing = messagebox.askyesno(
             "Start Training Data Extraction",
             "This process will:\n\n"
-            "• Show you individual regions from each form\n"
-            "• Ask you to rate each region (1-9)\n"
-            "• Create augmented versions automatically\n"
-            "• Build a robust training dataset\n\n"
+            "- Show you individual regions from each form\n"
+            "- Ask you to rate each region (1-9)\n"
+            "- Create augmented versions automatically\n"
+            "- Build a robust training dataset\n\n"
             "The process can be stopped and resumed at any time.\n\n"
             "Ready to begin?"
         )
