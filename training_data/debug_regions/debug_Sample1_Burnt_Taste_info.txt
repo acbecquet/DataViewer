@@ -5,8 +5,8 @@ Boundary Detection: OCR-based (Burnt Taste -> Overall Liking)
 Section Division: 5 equal sections within OCR boundaries
 Comments Excluded: True
 OCR Text Found: 'Burnt'
-OCR Confidence: 96
-Y Position in Sample: 20
+OCR Confidence: 93
+Y Position in Sample: 16
 Final Size: 600x140
 Target Size: 600x140
 

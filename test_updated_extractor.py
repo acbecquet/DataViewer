@@ -42,7 +42,7 @@ if __name__ == "__main__":
     print("="*50)
     
     # Your test image path
-    test_image_path = r"C:\Users\Alexander Becquet\Documents\Python\Python\TPM Data Processing Python Scripts\Standardized Testing GUI\git testing\DataViewer\tests\test_sensory\test.jpg"
+    test_image_path = r"C:\Users\Alexander Becquet\Documents\Python\Python\TPM Data Processing Python Scripts\Standardized Testing GUI\git testing\DataViewer\tests\test_sensory\james 1.jpg"
     
     if os.path.exists(test_image_path):
         print(f"✓ Test image found!")

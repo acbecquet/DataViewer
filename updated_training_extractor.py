@@ -192,316 +192,192 @@ class ImprovedAttributeDetectionExtractor:
 
     def find_attribute_boundaries_with_ocr(self, image, center_x, center_y):
         """
-        Use minimal_2x preprocessing with tighter grouping to preserve clean attribute names.
-        NO FALLBACK - if OCR fails, the method fails clearly.
+        Find burnt_taste and overall_liking from the SAME sample region,
+        then calculate region height from their difference.
         """
-    
+
         height, width = image.shape
-        print(f"  Using MINIMAL_2X preprocessing with tighter grouping...")
-    
-        search_width = int(width * 0.26) 
+        print(f"  Using SAME-REGION approach: find burnt_taste + overall_liking from same sample...")
+        print(f"  Dynamic threshold: center_y={center_y}")
+
+        search_width = int(width * 0.30)
         left_column = image[:,0:search_width]
 
         # Create debug directory
         debug_dir = "training_data/debug_regions"
         os.makedirs(debug_dir, exist_ok=True)
 
-        # Preprocess image with minimal approach
+        # Preprocess image with shadow removal
         preprocessed = cv2.resize(left_column, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
-        cv2.imwrite(os.path.join(debug_dir, "debug_minimal_1x_final.png"), preprocessed)
-        search_region = preprocessed[:, :search_width*2]  # Account for 2x scaling
-        
+        search_region = preprocessed[:, :search_width*2]
+    
+        # Shadow removal pipeline
         region_planes = cv2.split(search_region)
-
         result_planes = []
-        result_norm_planes = []
         for plane in region_planes:
             dilated_img = cv2.dilate(plane, np.ones((7,7), np.uint8))
             bg_img = cv2.medianBlur(dilated_img, 21)
             diff_img = 255 - cv2.absdiff(plane, bg_img)
-            norm_img = cv2.normalize(diff_img,None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8UC1)
             result_planes.append(diff_img)
-            result_norm_planes.append(norm_img)
 
         search_region = cv2.merge(result_planes)
-        search_region_norm = cv2.merge(result_norm_planes)
         cv2.imwrite(os.path.join(debug_dir, "debug_minimal_1x_shadows_removed.png"), search_region)
-        print(f"  Search area: {search_width}px wide ({search_width/width*100:.1f}% of image width)")
-    
+
         try:
-            # Get OCR data
+            # Get OCR data and group lines
             ocr_data = pytesseract.image_to_data(search_region, output_type=pytesseract.Output.DICT)
         
-            # Extract text items with coordinates (adjust for 2x scaling)
             text_items = []
             for i in range(len(ocr_data['text'])):
                 text = ocr_data['text'][i].strip().lower()
                 if text and len(text) > 1 and ocr_data['conf'][i] > 20:
-                    y = ocr_data['top'][i] // 2  # Scale back from 2x
-                    text_items.append({
-                        'text': text,
-                        'y': y,
-                        'confidence': ocr_data['conf'][i]
-                    })
+                    y = ocr_data['top'][i] // 2
+                    text_items.append({'text': text, 'y': y, 'confidence': ocr_data['conf'][i]})
         
-            print(f"  Found {len(text_items)} text items with expanded search area")
-        
-            # Group nearby text items (TIGHTER TOLERANCE to preserve clean attribute names)
+            # Group nearby text items
             grouped_lines = []
             text_items.sort(key=lambda x: x['y'])
-        
             current_line = []
             for item in text_items:
-                if not current_line or abs(item['y'] - current_line[-1]['y']) <= 10:  # TIGHT 10px grouping
+                if not current_line or abs(item['y'] - current_line[-1]['y']) <= 10:
                     current_line.append(item)
                 else:
                     if current_line:
-                        # Combine text from current line
                         combined_text = ' '.join([t['text'] for t in current_line])
                         avg_y = sum([t['y'] for t in current_line]) // len(current_line)
                         grouped_lines.append({'text': combined_text, 'y': avg_y})
                     current_line = [item]
-        
             if current_line:
                 combined_text = ' '.join([t['text'] for t in current_line])
                 avg_y = sum([t['y'] for t in current_line]) // len(current_line)
                 grouped_lines.append({'text': combined_text, 'y': avg_y})
-        
-            print(f"  Grouped into {len(grouped_lines)} text lines (tolerance=10px)")
-        
-            # Debug: show all grouped lines, especially bottom area
-            for line in grouped_lines:
-                if line['y'] > 1000:  # Bottom sample area
-                    print(f"    ** BOTTOM Y={line['y']}: '{line['text']}'")
-                else:
-                    print(f"    Y={line['y']}: '{line['text']}'")
-        
-            # EXACT ATTRIBUTE MATCHING 
-            all_detections = []
-        
+
+            print(f"  Grouped into {len(grouped_lines)} text lines")
+
+            # FIND ALL burnt_taste and overall_liking positions
+            all_burnt_taste = []
+            all_overall_liking = []
+
             for line in grouped_lines:
                 text = line['text']
                 y = line['y']
             
-                # EXACT phrase matching first
-                if 'burnt taste' in text:
-                    all_detections.append({
-                        'type': 'burnt_taste',
-                        'y': y,
-                        'text': text,
-                        'quality': 50
-                    })
-                    print(f"      --> BURNT_TASTE: '{text}' at y={y} (exact match)")
+                # Find ALL burnt_taste occurrences
+                if any(variant in text for variant in [
+                    'burnt taste', 'surnt taste', 'gumt taste', 'burnt tase', 'surmt taste'
+                ]):
+                    sample_region = "TOP" if y < center_y else "BOTTOM"
+                    all_burnt_taste.append({'y': y, 'text': text, 'region': sample_region})
+                    print(f"  Found BURNT_TASTE in {sample_region}: y={y} '{text}'")
             
-                elif 'vapor volume' in text:
-                    all_detections.append({
-                        'type': 'vapor_volume',
-                        'y': y,
-                        'text': text,
-                        'quality': 50
-                    })
-                    print(f"      --> VAPOR_VOLUME: '{text}' at y={y} (exact match)")
-            
-                elif 'overall flavor' in text:
-                    all_detections.append({
-                        'type': 'overall_flavor',
-                        'y': y,
-                        'text': text,
-                        'quality': 50
-                    })
-                    print(f"      --> OVERALL_FLAVOR: '{text}' at y={y} (exact match)")
-            
-                elif 'overall liking' in text:
-                    all_detections.append({
-                        'type': 'overall_liking',
-                        'y': y,
-                        'text': text,
-                        'quality': 50
-                    })
-                    print(f"      --> OVERALL_LIKING: '{text}' at y={y} (exact match)")
-            
-                elif 'smoothness' in text:
-                    all_detections.append({
-                        'type': 'smoothness',
-                        'y': y,
-                        'text': text,
-                        'quality': 50
-                    })
-                    print(f"      --> SMOOTHNESS: '{text}' at y={y} (exact match)")
-            
-                # Partial matches as backup
-                elif 'burnt' in text and 'taste' in text:
-                    all_detections.append({
-                        'type': 'burnt_taste',
-                        'y': y,
-                        'text': text,
-                        'quality': 70
-                    })
-                    print(f"      --> BURNT_TASTE: '{text}' at y={y} (partial match)")
-            
-                elif 'vapor' in text and 'volume' in text:
-                    all_detections.append({
-                        'type': 'vapor_volume',
-                        'y': y,
-                        'text': text,
-                        'quality': 70
-                    })
-                    print(f"      --> VAPOR_VOLUME: '{text}' at y={y} (partial match)")
-            
-                elif 'flavor' in text and 'overall' not in text:
-                    all_detections.append({
-                        'type': 'overall_flavor',
-                        'y': y,
-                        'text': text,
-                        'quality': 50
-                    })
-                    print(f"      --> OVERALL_FLAVOR: '{text}' at y={y} (partial match)")
-            
-                elif 'liking' in text and 'overall' not in text:
-                    all_detections.append({
-                        'type': 'overall_liking',
-                        'y': y,
-                        'text': text,
-                        'quality': 50
-                    })
-                    print(f"      --> OVERALL_LIKING: '{text}' at y={y} (partial match)")
-            
-                elif any(word in text for word in ['smooth', 'ness', 'smoothne']):
-                    all_detections.append({
-                        'type': 'smoothness',
-                        'y': y,
-                        'text': text,
-                        'quality': 30
-                    })
-                    print(f"      --> SMOOTHNESS: '{text}' at y={y} (partial match)")
-        
-            print(f"  Raw detections: {len(all_detections)} instances")
-            for det in all_detections:
-                sample_type = "BOTTOM" if det['y'] > 1000 else "TOP"
-                print(f"    {sample_type} {det['type']} at y={det['y']} (quality={det['quality']})")
-        
-            # Check what we found
-            found_types = set([det['type'] for det in all_detections])
-            required_attributes = ['burnt_taste', 'vapor_volume', 'overall_flavor', 'smoothness', 'overall_liking']
-            missing_attributes = [attr for attr in required_attributes if attr not in found_types]
-        
-            if missing_attributes:
-                print(f"  ❌ MISSING REQUIRED ATTRIBUTES: {missing_attributes}")
-                print(f"  Found: {list(found_types)}")
-                print(f"  Required: {required_attributes}")
-            
-                # Show what we found in each area
-                top_found = [det['type'] for det in all_detections if det['y'] < 1000]
-                bottom_found = [det['type'] for det in all_detections if det['y'] >= 1000]
-                print(f"  TOP sample found: {list(set(top_found))}")
-                print(f"  BOTTOM sample found: {list(set(bottom_found))}")
-            
-                raise Exception(f"OCR failed to find required attributes: {missing_attributes}")
-        
-            # Rest of the method remains the same...
-            # OCR-based center detection
-            if len(all_detections) >= 2:
-                sorted_dets = sorted(all_detections, key=lambda x: x['y'])
-            
-                max_gap = 0
-                best_split_y = center_y
-            
-                for i in range(len(sorted_dets) - 1):
-                    gap = sorted_dets[i+1]['y'] - sorted_dets[i]['y']
-                    if gap > max_gap:
-                        max_gap = gap
-                        best_split_y = (sorted_dets[i]['y'] + sorted_dets[i+1]['y']) // 2
-            
-                print(f"  Center Y: {center_y} (original cross line detection)")
-                print(f"  OCR-based split Y: {best_split_y} (largest gap={max_gap}px)")
-            
-                if max_gap > 100:
-                    effective_center_y = best_split_y
-                    print(f"  Using OCR-based split: y={effective_center_y}")
-                else:
-                    effective_center_y = center_y
-                    print(f"  Using original center: y={effective_center_y}")
-            else:
-                effective_center_y = center_y
-                print(f"  Using original center: y={effective_center_y}")
-        
-            # Separate top and bottom using the effective center
-            top_attributes = {}
-            bottom_attributes = {}
-        
-            for attr in all_detections:
-                if attr['y'] < effective_center_y:
-                    if attr['type'] not in top_attributes or attr['quality'] > top_attributes[attr['type']]['quality']:
-                        if attr['type'] in top_attributes:
-                            old_y = top_attributes[attr['type']]['y']
-                            print(f"    TOP {attr['type']}: replacing y={old_y} (quality={top_attributes[attr['type']]['quality']}) with y={attr['y']} (quality={attr['quality']})")
-                        else:
-                            print(f"    TOP {attr['type']}: y={attr['y']} (quality={attr['quality']})")
-                        top_attributes[attr['type']] = attr
-                else:
-                    if attr['type'] not in bottom_attributes or attr['quality'] > bottom_attributes[attr['type']]['quality']:
-                        if attr['type'] in bottom_attributes:
-                            old_y = bottom_attributes[attr['type']]['y']
-                            print(f"    BOTTOM {attr['type']}: replacing y={old_y} (quality={bottom_attributes[attr['type']]['quality']}) with y={attr['y']} (quality={attr['quality']})")
-                        else:
-                            print(f"    BOTTOM {attr['type']}: y={attr['y']} (quality={attr['quality']})")
-                        bottom_attributes[attr['type']] = attr
-        
-            print(f"  Final top attributes: {list(top_attributes.keys())}")
-            print(f"  Final bottom attributes: {list(bottom_attributes.keys())}")
-        
-            # VALIDATION: Ensure we have complete sets for both top and bottom
-            if len(top_attributes) < 3:
-                print(f"  ❌ INSUFFICIENT TOP ATTRIBUTES: {list(top_attributes.keys())}")
-                raise Exception(f"Top sample only has {len(top_attributes)} attributes, need at least 3")
-        
-            if len(bottom_attributes) < 3:
-                print(f"  ❌ INSUFFICIENT BOTTOM ATTRIBUTES: {list(bottom_attributes.keys())}")
-                raise Exception(f"Bottom sample only has {len(bottom_attributes)} attributes, need at least 3")
-        
-            # CALCULATE PRECISE BOUNDARIES
-            boundaries = {}
-        
-            # TOP SAMPLE: Use first and last detected attributes
-            top_ys = [attr['y'] for attr in top_attributes.values()]
-            top_start_y = min(top_ys)
-            top_end_y = max(top_ys)
-        
-            buffer = 20
-            boundaries['top_start'] = max(0, top_start_y - buffer)
-            boundaries['top_end'] = min(height, top_end_y + buffer + 30)
-        
-            print(f"  ✓ TOP BOUNDARIES CALCULATED:")
-            print(f"    Start: y={top_start_y} -> boundary={boundaries['top_start']}")
-            print(f"    End: y={top_end_y} -> boundary={boundaries['top_end']}")
-            print(f"    Height: {boundaries['top_end'] - boundaries['top_start']} pixels")
-        
-            # BOTTOM SAMPLE: Use first and last detected attributes
-            bottom_ys = [attr['y'] for attr in bottom_attributes.values()]
-            bottom_start_y = min(bottom_ys)
-            bottom_end_y = max(bottom_ys)
-        
-            boundaries['bottom_start'] = max(0, bottom_start_y - buffer)
-            boundaries['bottom_end'] = min(height, bottom_end_y + buffer + 30)
-        
-            print(f"  ✓ BOTTOM BOUNDARIES CALCULATED:")
-            print(f"    Start: y={bottom_start_y} -> boundary={boundaries['bottom_start']}")
-            print(f"    End: y={bottom_end_y} -> boundary={boundaries['bottom_end']}")
-            print(f"    Height: {boundaries['bottom_end'] - boundaries['bottom_start']} pixels")
-        
-            # FINAL VALIDATION
-            if len(boundaries) == 4:
-                print(f"  ✓ OCR BOUNDARY DETECTION SUCCESSFUL!")
-                return boundaries
-            else:
-                print(f"  ❌ BOUNDARY CALCULATION FAILED: only {len(boundaries)} boundaries calculated")
-                raise Exception(f"Expected 4 boundaries, got {len(boundaries)}")
-            
-        except Exception as e:
-            print(f"  ❌ OCR BOUNDARY DETECTION FAILED: {e}")
-            raise Exception(f"OCR boundary detection failed: {e}")
+                # Find ALL overall_liking occurrences
+                elif (any(liking_word in text for liking_word in ['liking', 'iking', 'linking']) and 
+                      not any(flavor_word in text for flavor_word in ['flavor', 'flavour'])) or \
+                     (any(word in text for word in ['uldne', 'qyeral']) and 
+                      not any(flavor_word in text for flavor_word in ['flavor', 'flavour'])):
+                    sample_region = "TOP" if y < center_y else "BOTTOM"
+                    all_overall_liking.append({'y': y, 'text': text, 'region': sample_region})
+                    print(f"  Found OVERALL_LIKING in {sample_region}: y={y} '{text}'")
 
+            # STRATEGY: Try to find a complete pair from the same region
+            print(f"  Found {len(all_burnt_taste)} burnt_taste and {len(all_overall_liking)} overall_liking")
+        
+            region_height = None
+            source_region = None
+            burnt_taste_y = None
+            overall_liking_y = None
+
+            # Try TOP region first
+            top_burnt = [bt for bt in all_burnt_taste if bt['region'] == 'TOP']
+            top_liking = [ol for ol in all_overall_liking if ol['region'] == 'TOP']
+        
+            if top_burnt and top_liking:
+                burnt_taste_y = top_burnt[0]['y']  # Take first occurrence
+                overall_liking_y = top_liking[0]['y']  # Take first occurrence
+                region_height = abs(overall_liking_y - burnt_taste_y)
+                source_region = "TOP"
+                print(f"  ✓ Using TOP region: burnt_taste={burnt_taste_y}, overall_liking={overall_liking_y}")
+                print(f"  ✓ Calculated region height: {region_height}px from TOP sample")
+        
+            # Try BOTTOM region if TOP didn't work
+            if region_height is None:
+                bottom_burnt = [bt for bt in all_burnt_taste if bt['region'] == 'BOTTOM']
+                bottom_liking = [ol for ol in all_overall_liking if ol['region'] == 'BOTTOM']
+            
+                if bottom_burnt and bottom_liking:
+                    burnt_taste_y = bottom_burnt[0]['y']  # Take first occurrence
+                    overall_liking_y = bottom_liking[0]['y']  # Take first occurrence  
+                    region_height = abs(overall_liking_y - burnt_taste_y)
+                    source_region = "BOTTOM"
+                    print(f"  ✓ Using BOTTOM region: burnt_taste={burnt_taste_y}, overall_liking={overall_liking_y}")
+                    print(f"  ✓ Calculated region height: {region_height}px from BOTTOM sample")
+
+            # VALIDATION: Check if region height makes sense
+            if region_height is None:
+                raise Exception("Could not find burnt_taste and overall_liking in the same region")
+        
+            max_reasonable_height = height * 0.4  # No more than 40% of image height
+            if region_height > max_reasonable_height:
+                print(f"  ⚠️ WARNING: Calculated region height {region_height}px seems too large (>{max_reasonable_height:.0f}px)")
+                print(f"  This might indicate attributes from different regions were matched")
+                raise Exception(f"Calculated region height {region_height}px is too large, probably mixed regions")
+
+            print(f"  📏 VALIDATED REGION HEIGHT: {region_height}px from {source_region} sample")
+
+            # Calculate boundaries using the validated region height
+            buffer = 20
+        
+            # Apply the region height but USE ACTUAL POSITIONS when available
+            if source_region == "TOP":
+                # Use the actual top positions we found
+                top_start_y = max(0, burnt_taste_y - buffer)
+                top_end_y = min(height, overall_liking_y + buffer + 30)
     
+                # Estimate bottom region with same height, but check if we have bottom positions
+                bottom_burnt = [bt for bt in all_burnt_taste if bt['region'] == 'BOTTOM']
+                if bottom_burnt:
+                    # Use actual bottom burnt_taste position
+                    bottom_start_y = max(0, bottom_burnt[0]['y'] - buffer)
+                    bottom_end_y = min(height, bottom_start_y + region_height + 2*buffer)
+                else:
+                    # Estimate bottom region
+                    bottom_start_y = max(center_y + 50, 0)
+                    bottom_end_y = min(height, bottom_start_y + region_height + 2*buffer)
+        
+            else:  # source_region == "BOTTOM"
+                # Use the actual bottom positions we found
+                bottom_start_y = max(0, burnt_taste_y - buffer)
+                bottom_end_y = min(height, overall_liking_y + buffer + 30)
+    
+                # Use actual TOP positions if available (don't just estimate!)
+                top_burnt = [bt for bt in all_burnt_taste if bt['region'] == 'TOP']
+                if top_burnt:
+                    # Use actual top burnt_taste position with calculated height
+                    top_start_y = max(0, top_burnt[0]['y'] - buffer)
+                    top_end_y = min(height, top_start_y + region_height + 2*buffer)
+                    print(f"  Using actual TOP burnt_taste at y={top_burnt[0]['y']} for TOP region")
+                else:
+                    # Estimate top region only if no TOP positions found
+                    top_end_y = min(center_y - 50, height)
+                    top_start_y = max(0, top_end_y - region_height - 2*buffer)
+                    print(f"  Estimating TOP region (no TOP attributes found)")
+
+            boundaries = {
+                'top_start': top_start_y,
+                'top_end': top_end_y,
+                'bottom_start': bottom_start_y,
+                'bottom_end': bottom_end_y
+            }
+
+            print(f"  ✓ CONSISTENT BOUNDARIES using {source_region}-derived height {region_height}px:")
+            print(f"    TOP: y={top_start_y}-{top_end_y} (height={top_end_y - top_start_y})")
+            print(f"    BOTTOM: y={bottom_start_y}-{bottom_end_y} (height={bottom_end_y - bottom_start_y})")
+
+            return boundaries
+        
+        except Exception as e:
+            print(f"  ❌ SAME-REGION OCR BOUNDARY DETECTION FAILED: {e}")
+            raise Exception(f"OCR boundary detection failed: {e}")
     
     def find_attributes_in_sample(self, image, sample_region):
         """
@@ -574,7 +450,7 @@ class ImprovedAttributeDetectionExtractor:
             _, binary = cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         
             # Get OCR data
-            ocr_data = pytesseract.image_to_data(binary, output_type=pytesseract.Output.DICT)
+            ocr_data = pytesseract.image_to_data(binary, output_type=pytesseract.Output.DICT,config='--psm 6')
         
             best_match = None
             best_score = 0
@@ -655,45 +531,74 @@ class ImprovedAttributeDetectionExtractor:
     
     def extract_attribute_row(self, image, sample_region, attribute_info, sample_id=None):
         """
-        Extract the complete row with full width for right-side samples.
+        Extract the complete row with text CENTERED in the extracted image.
+        Adjust buffer for right samples due to aspect ratio scaling.
         """
-    
+
         # Get sample region boundaries
         sample_y_start = sample_region["y_start"]
         sample_x_start = sample_region["x_start"]
         sample_x_end = sample_region["x_end"]
+
+        # Calculate actual image coordinates - this is where the text starts
+        text_y_start = sample_y_start + attribute_info['y']
+        text_height = attribute_info.get('height', 30)
     
-        # Calculate actual image coordinates
-        attr_y_center = sample_y_start + attribute_info['y'] + attribute_info['height'] // 2
+        # Calculate the CENTER of the text
+        text_y_center = text_y_start + text_height // 2
     
-        # FIXED HEIGHT CALCULATION - back to smaller, more precise height
-        row_height = max(35, int(attribute_info['height'] * 1.2))
-        row_y_start = max(0, attr_y_center - row_height // 2)
-        row_y_end = min(image.shape[0], attr_y_center + row_height // 2)
+        print(f"DEBUG: Text starts at y={text_y_start}, height={text_height}, center={text_y_center}")
+
+        # ASPECT RATIO ADJUSTED ROW HEIGHT CALCULATION
+        base_row_height = max(80, int(text_height * 3))
     
-        # SPECIAL WIDTH HANDLING FOR RIGHT-SIDE SAMPLES
+        if sample_id in [2, 4]:  # Right-side samples with full width
+            # Divide buffer by 4 for aspect ratio scaling compensation
+            row_height = base_row_height // 2
+            print(f"DEBUG: Sample {sample_id} (RIGHT): Reduced row height {base_row_height} -> {row_height} (÷4 for aspect ratio)")
+        else:  # Left-side samples with partial width
+            row_height = base_row_height
+            print(f"DEBUG: Sample {sample_id} (LEFT): Standard row height {row_height}")
+    
+        # CENTER the row around the text center
+        row_y_start = max(0, text_y_center - row_height // 2)
+        row_y_end = min(image.shape[0], text_y_center + row_height // 2)
+    
+        # Adjust if we hit boundaries
+        actual_row_height = row_y_end - row_y_start
+        if actual_row_height < row_height:
+            # If we hit a boundary, try to expand the other direction
+            if row_y_start == 0:
+                # Hit top boundary, expand down more
+                row_y_end = min(image.shape[0], row_y_start + row_height)
+            elif row_y_end == image.shape[0]:
+                # Hit bottom boundary, expand up more  
+                row_y_start = max(0, row_y_end - row_height)
+
+        # WIDTH HANDLING
         image_width = image.shape[1]
-    
+
         if sample_id in [2, 4]:  # Right-side samples - show FULL WIDTH
-            # For right samples, show entire width so user can see attribute names + ratings
             row_x_start = int(image_width * 0.02)  # Start from left margin
             row_x_end = int(image_width * 0.98)    # Go to right margin
             print(f"DEBUG: Sample {sample_id} (RIGHT): Using FULL WIDTH x={row_x_start}-{row_x_end}")
             print(f"DEBUG: This will show attribute name on left + full rating scale on right")
-        else:  # Left-side samples - use extended width as before
+            print(f"DEBUG: Aspect ratio compensation: {base_row_height} -> {row_height} height")
+        else:  # Left-side samples - use extended width
             row_x_start = sample_x_start
             extension_pixels = int(image_width * 0.15)
             row_x_end = min(image_width, sample_x_end + extension_pixels)
             print(f"DEBUG: Sample {sample_id} (LEFT): Using extended width x={row_x_start}-{row_x_end}")
-    
-        print(f"DEBUG: Row boundaries: x={row_x_start}-{row_x_end}, y={row_y_start}-{row_y_end}")
+
+        print(f"DEBUG: CENTERED Row boundaries: x={row_x_start}-{row_x_end}, y={row_y_start}-{row_y_end}")
+        print(f"DEBUG: Text center y={text_y_center} should be at middle of {row_y_start}-{row_y_end}")
         print(f"DEBUG: Y span: {row_y_end - row_y_start} pixels, X span: {row_x_end - row_x_start} pixels")
-    
+
         # Extract the row
         row_img = image[row_y_start:row_y_end, row_x_start:row_x_end]
-    
-        print(f"    Extracted row: {row_img.shape[1]}x{row_img.shape[0]} at y={row_y_start}-{row_y_end}")
-    
+
+        print(f"    Extracted CENTERED row: {row_img.shape[1]}x{row_img.shape[0]} at y={row_y_start}-{row_y_end}")
+
         return row_img
 
     def calculate_attribute_match_score(self, ocr_text, target_attribute):
@@ -991,7 +896,7 @@ if __name__ == "__main__":
     print("="*50)
     
     # Test with your image path
-    test_image_path = r"C:\Users\Alexander Becquet\Documents\Python\Python\TPM Data Processing Python Scripts\Standardized Testing GUI\git testing\DataViewer\tests\test_sensory\test.jpg"
+    test_image_path = r"C:\Users\Alexander Becquet\Documents\Python\Python\TPM Data Processing Python Scripts\Standardized Testing GUI\git testing\DataViewer\tests\test_sensory\james 1.jpg"
     
     print(f"Testing OCR-based attribute detection...")
     

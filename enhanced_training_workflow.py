@@ -1,78 +1,216 @@
-# enhanced_training_workflow.py
+﻿# enhanced_training_workflow.py
 """
-Complete workflow for Claude-enhanced training data generation
+Enhanced training workflow that directly utilizes the shadow removal functionality
+in find_attribute_boundaries_with_ocr from updated_training_extractor.py
 """
 
 import os
-import sys
-from claude_enhanced_training_assistant import ClaudeEnhancedTrainingAssistant
-from enhanced_ml_processor_updater import MLProcessorUpdater
+import cv2
+import numpy as np
+from datetime import datetime
+import traceback
 
-def run_enhanced_training_workflow():
+# Direct import of the extractor with shadow removal capabilities
+from updated_training_extractor import ImprovedAttributeDetectionExtractor
+
+def test_shadow_removal_on_image(image_path):
     """
-    Complete workflow that combines Claude's vision with my ML training pipeline.
+    Test the shadow removal functionality on a single image
     """
-    
+    print(f"Testing shadow removal on: {os.path.basename(image_path)}")
     print("="*60)
-    print("CLAUDE-ENHANCED TRAINING WORKFLOW")
-    print("="*60)
-    print("This workflow will:")
-    print("1. Use Claude to detect precise sample boundaries")
-    print("2. Extract training data with improved accuracy") 
-    print("3. Generate configuration for your ML processor")
-    print("4. Optionally update your ML processor code")
-    print()
     
-    # Get training images folder
-    training_folder = input("Enter path to folder with training form images: ").strip()
-    
-    if not os.path.exists(training_folder):
-        print(f"Error: Folder {training_folder} not found")
-        return
+    # Initialize the extractor
+    extractor = ImprovedAttributeDetectionExtractor()
     
     try:
-        # Step 1: Run Claude-enhanced training extraction
-        print("\nStep 1: Running Claude-enhanced boundary detection and training extraction...")
-        assistant = ClaudeEnhancedTrainingAssistant()
-        assistant.process_training_images_with_claude(training_folder)
+        # Load and preprocess the image
+        print("DEBUG: Step 1 - Loading and preprocessing image...")
+        processed_image = extractor.preprocess_image_for_extraction(image_path)
+        print(f"DEBUG: Image loaded: {processed_image.shape[1]}x{processed_image.shape[0]} pixels")
         
-        print("\nStep 2: Training data extraction complete!")
+        # Detect form cross lines for center coordinates
+        print("DEBUG: Step 2 - Detecting form structure...")
+        center_x, center_y = extractor.detect_form_cross_lines(processed_image)
+        print(f"DEBUG: Form center detected at: ({center_x}, {center_y})")
         
-        # Step 3: Ask if user wants to update ML processor
-        update_choice = input("\nDo you want to update your ML processor with the improved boundaries? (y/n): ").strip().lower()
+        # Use the shadow removal function directly
+        print("DEBUG: Step 3 - Applying shadow removal with find_attribute_boundaries_with_ocr...")
+        print("DEBUG: This will apply:")
+        print("DEBUG:   - 26% search width (leftmost column)")
+        print("DEBUG:   - 2x scaling preprocessing")  
+        print("DEBUG:   - Shadow removal: dilate(7x7) -> medianBlur(21x21) -> absdiff -> normalize")
+        print("DEBUG:   - OCR on shadow-free image")
+        print("DEBUG:   - Tighter grouping (10px tolerance)")
         
-        if update_choice == 'y':
-            # Find the most recent boundaries file
-            claude_analysis_dir = "training_data/claude_analysis"
-            if os.path.exists(claude_analysis_dir):
-                boundary_files = [f for f in os.listdir(claude_analysis_dir) if f.startswith('improved_boundaries')]
-                if boundary_files:
-                    latest_file = max(boundary_files)
-                    full_path = os.path.join(claude_analysis_dir, latest_file)
-                    
-                    print(f"\nStep 3: Updating ML processor with {latest_file}...")
-                    updater = MLProcessorUpdater()
-                    updater.update_ml_processor_boundaries(full_path)
-                    
-                    print("\nWorkflow complete! Your ML processor has been enhanced with Claude's intelligence.")
-                    print("Next steps:")
-                    print("1. Train your ML model using the new training data")
-                    print("2. Test the improved accuracy on new forms")
-                    print("3. Compare performance with the original hardcoded boundaries")
-                else:
-                    print("No boundary files found to update with")
-            else:
-                print("Claude analysis directory not found")
-        else:
-            print("\nWorkflow complete! Training data extracted with Claude-enhanced boundaries.")
-            print("You can manually update your ML processor later if desired.")
-            
+        # Call the shadow removal function directly
+        attribute_boundaries = extractor.find_attribute_boundaries_with_ocr(
+            processed_image, center_x, center_y
+        )
+        
+        print("DEBUG: Step 4 - Shadow removal OCR successful!")
+        print(f"DEBUG: Boundaries found: {list(attribute_boundaries.keys())}")
+        for key, value in attribute_boundaries.items():
+            print(f"DEBUG:   {key}: {value}")
+        
+        # Now get sample regions using the shadow-removal detected boundaries
+        print("DEBUG: Step 5 - Getting sample regions from shadow-removal boundaries...")
+        sample_regions = extractor.get_sample_regions(processed_image)
+        
+        print(f"DEBUG: Sample regions calculated: {len(sample_regions)} regions")
+        for sample_id, region in sample_regions.items():
+            height = region['y_end'] - region['y_start']
+            width = region['x_end'] - region['x_start']
+            print(f"DEBUG:   Sample {sample_id}: {width}x{height} at ({region['x_start']},{region['y_start']})")
+        
+        # Extract training data using the complete workflow
+        print("DEBUG: Step 6 - Extracting complete training data...")
+        extracted_regions = extractor.get_improved_form_regions(processed_image)
+        
+        # Summary
+        print("\nDEBUG: SHADOW REMOVAL EXTRACTION COMPLETE")
+        print("="*60)
+        total_extracted = sum(len(sample_data) for sample_data in extracted_regions.values())
+        print(f"DEBUG: Total samples: {len(extracted_regions)}")
+        print(f"DEBUG: Total attributes: {total_extracted}")
+        
+        for sample_name, sample_data in extracted_regions.items():
+            print(f"DEBUG: {sample_name}: {len(sample_data)} attributes")
+            for attribute in sample_data.keys():
+                print(f"DEBUG:   - {attribute}")
+        
+        print(f"\nDEBUG: Debug images saved to: training_data/debug_regions/")
+        print(f"DEBUG: Shadow removal images saved to: training_data/debug_regions/debug_minimal_1x_shadows_removed.png")
+        print(f"DEBUG: Check debug files ending with '_info.txt' for detailed extraction info")
+        
+        return True, extracted_regions
+        
     except Exception as e:
-        print(f"Error in workflow: {e}")
-        print("Check that:")
-        print("1. ANTHROPIC_API_KEY environment variable is set")
-        print("2. Training images are in the specified folder")
-        print("3. You have write permissions in the current directory")
+        print(f"DEBUG: Shadow removal failed: {e}")
+        print("DEBUG: Full error traceback:")
+        traceback.print_exc()
+        print("\nDEBUG: Error analysis:")
+        error_str = str(e)
+        if "OCR failed to find required attributes" in error_str:
+            print("DEBUG: Issue: OCR could not detect all required attribute names")
+            print("DEBUG: Possible causes:")
+            print("DEBUG:   1. Image quality too poor for OCR")
+            print("DEBUG:   2. Attribute names are different than expected")
+            print("DEBUG:   3. Shadow removal preprocessing didn't work well enough")
+            print("DEBUG: Check the shadow removal debug image: debug_minimal_1x_shadows_removed.png")
+        elif "Tesseract" in error_str:
+            print("DEBUG: Issue: Tesseract OCR not properly installed")
+            print("DEBUG: Install with: pip install pytesseract")
+            print("DEBUG: Download from: https://github.com/UB-Mannheim/tesseract/wiki")
+        return False, None
+
+def process_training_folder_with_shadow_removal(training_folder):
+    """
+    Process entire folder using shadow removal
+    """
+    print("ENHANCED TRAINING WORKFLOW - SHADOW REMOVAL")
+    print("="*80)
+    print(f"Training folder: {training_folder}")
+    print(f"Shadow removal method: find_attribute_boundaries_with_ocr")
+    print()
+    
+    if not os.path.exists(training_folder):
+        print(f"ERROR: Training folder not found: {training_folder}")
+        return False
+    
+    # Find image files
+    image_files = [f for f in os.listdir(training_folder) 
+                  if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.tiff'))]
+    
+    if not image_files:
+        print(f"ERROR: No image files found in {training_folder}")
+        return False
+    
+    print(f"Found {len(image_files)} images to process with shadow removal")
+    
+    # Initialize extractor once
+    extractor = ImprovedAttributeDetectionExtractor()
+    
+    # Process each image
+    successful_count = 0
+    failed_count = 0
+    
+    for i, image_file in enumerate(image_files, 1):
+        image_path = os.path.join(training_folder, image_file)
+        print(f"\n[{i}/{len(image_files)}] Processing: {image_file}")
+        print("-" * 50)
+        
+        try:
+            # Direct call to the complete extraction with shadow removal
+            processed_image = extractor.preprocess_image_for_extraction(image_path)
+            extracted_regions = extractor.get_improved_form_regions(processed_image)
+            
+            if extracted_regions:
+                total_attributes = sum(len(sample_data) for sample_data in extracted_regions.values())
+                print(f"SUCCESS: {len(extracted_regions)} samples, {total_attributes} attributes extracted")
+                successful_count += 1
+            else:
+                print("FAILED: No regions extracted")
+                failed_count += 1
+                
+        except Exception as e:
+            print(f"FAILED: {e}")
+            failed_count += 1
+            continue
+    
+    # Final summary
+    print(f"\n{'='*80}")
+    print("SHADOW REMOVAL PROCESSING COMPLETE")
+    print(f"{'='*80}")
+    print(f"Total images: {len(image_files)}")
+    print(f"Successful: {successful_count}")
+    print(f"Failed: {failed_count}")
+    print(f"Success rate: {(successful_count/len(image_files)*100):.1f}%")
+    
+    if successful_count > 0:
+        print(f"\nResults available in:")
+        print(f"  - training_data/debug_regions/ (extracted training images)")
+        print(f"  - Look for debug_minimal_1x_shadows_removed.png (shadow removal results)")
+        print(f"  - Check *_info.txt files for detailed extraction information")
+        return True
+    else:
+        print(f"\nNo successful extractions. Check error messages above.")
+        return False
+
+def main():
+    """
+    Main function - choose single image test or full folder processing
+    """
+    print("Enhanced Training Workflow - Direct Shadow Removal Usage")
+    print("="*60)
+    print("Options:")
+    print("1. Test shadow removal on single image")
+    print("2. Process entire folder with shadow removal")
+    print()
+    
+    choice = input("Enter choice (1 or 2): ").strip()
+    
+    if choice == "1":
+        image_path = input("Enter path to test image: ").strip()
+        if os.path.exists(image_path):
+            success, extracted_data = test_shadow_removal_on_image(image_path)
+            if success:
+                print("\nShadow removal test completed successfully!")
+            else:
+                print("\nShadow removal test failed. Check debug output above.")
+        else:
+            print(f"Image not found: {image_path}")
+    
+    elif choice == "2":
+        training_folder = input("Enter path to training folder: ").strip()
+        success = process_training_folder_with_shadow_removal(training_folder)
+        if success:
+            print("\nFolder processing completed!")
+        else:
+            print("\nFolder processing failed. Check debug output above.")
+    
+    else:
+        print("Invalid choice. Please enter 1 or 2.")
 
 if __name__ == "__main__":
-    run_enhanced_training_workflow()
+    main()

@@ -1,0 +1,20 @@
+ENHANCED TRAINING WORKFLOW DEBUG INFO
+==================================================
+Image: 17.jpg
+Processed at: 2025-07-14 14:26:50.901704
+Shadow removal method: find_attribute_boundaries_with_ocr
+Preprocessing: minimal_2x with shadow removal
+
+SHADOW REMOVAL STEPS APPLIED:
+1. Search area: 26% of image width (leftmost column)
+2. Preprocessing: 2x scaling with cv2.INTER_CUBIC
+3. Shadow removal pipeline:
+   a. cv2.dilate with 7x7 kernel to expand text
+   b. cv2.medianBlur with 21x21 kernel for background estimation
+   c. cv2.absdiff to remove background shadows
+   d. cv2.normalize to enhance contrast
+4. OCR performed on shadow-free preprocessed image
+5. Tighter grouping tolerance (10px) to preserve clean attribute names
+6. NO FALLBACK - method fails clearly if OCR unsuccessful
+
+EXTRACTION FAILED - No data extracted

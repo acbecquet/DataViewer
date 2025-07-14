@@ -1,0 +1,24 @@
+ENHANCED TRAINING WORKFLOW REPORT
+==================================================
+Session started: 2025-07-14 14:25:38.348578
+Session ended: 2025-07-14 14:28:35.058097
+Duration: 0:02:56.709519
+
+SHADOW REMOVAL STATISTICS:
+Total images: 24
+Successful extractions: 3
+Failed extractions: 21
+Shadow removal applied: 3
+OCR boundary successes: 3
+Fallback used: 0
+
+SHADOW REMOVAL METHOD DETAILS:
+Method: find_attribute_boundaries_with_ocr
+Preprocessing: minimal_2x with shadow removal
+Steps: dilate(7x7) -> medianBlur(21x21) -> absdiff -> normalize
+Search area: 26% of image width (leftmost column)
+Grouping: Tighter tolerance (10px) for clean attribute names
+Fallback: NO FALLBACK - fails clearly if OCR unsuccessful
+
+PROCESSED IMAGES:
+  1.jpg: 4 samples, 20 attributes, 
