@@ -217,34 +217,6 @@ class SimpleTrainingAssistant:
         print(f"DEBUG:   Saved {len(filenames)} training images for rating {rating}")
         return filenames
     
-    def apply_augmentation(self, image, config):
-        """
-        Apply realistic augmentation that simulates natural variations in phone camera images.
-        """
-        
-        result = image.copy()
-        
-        # Apply rotation
-        if config['rotation'] != 0:
-            h, w = result.shape[:2] if len(result.shape) == 3 else result.shape
-            center = (w // 2, h // 2)
-            M = cv2.getRotationMatrix2D(center, config['rotation'], 1.0)
-            result = cv2.warpAffine(result, M, (w, h), borderMode=cv2.BORDER_REFLECT)
-        
-        # Add realistic noise
-        if config['noise'] > 0:
-            noise = np.random.normal(0, config['noise'] * 255, result.shape).astype(np.float32)
-            result = result.astype(np.float32) + noise
-            result = np.clip(result, 0, 255).astype(np.uint8)
-        
-        # Adjust brightness
-        if config['brightness'] != 0:
-            result = result.astype(np.float32)
-            result = result * (1 + config['brightness'])
-            result = np.clip(result, 0, 255).astype(np.uint8)
-        
-        return result
-    
     def process_training_images(self, image_folder):
         """
         Main method to process a folder of training images.

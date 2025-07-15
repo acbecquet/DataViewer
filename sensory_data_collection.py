@@ -943,19 +943,6 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         except Exception as e:
             messagebox.showerror("Update Error", f"Failed to update enhanced processor: {e}")
 
-    def compare_model_versions(self):
-        """Compare different model versions and configurations."""
-        messagebox.showinfo("Model Comparison", 
-                          "Enhanced Model Version Comparison\n\n"
-                          "Features to be implemented:\n\n"
-                          "• Accuracy comparison across versions\n"
-                          "• Resolution impact analysis\n"
-                          "• Training data quality assessment\n"
-                          "• Inference speed benchmarking\n"
-                          "• Model size optimization analysis\n\n"
-                          "This comparison tool will help optimize\n"
-                          "model selection for production deployment.")
-
 
 
     # Enhanced image loading function for File menu
@@ -1758,53 +1745,6 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
     
         ttk.Button(button_frame, text="Apply Changes", command=apply_changes).pack(side='left', padx=5)
         ttk.Button(button_frame, text="Cancel", command=rename_window.destroy).pack(side='right', padx=5)
-
-
-    def create_training_structure(self):
-        """Create training data folder structure."""
-        try:
-            from ml_form_processor import MLFormProcessor, MLTrainingHelper
-            processor = MLFormProcessor()
-            trainer = MLTrainingHelper(processor)
-            trainer.create_training_data_structure()
-            messagebox.showinfo("Success", "Training data structure created!\nSee console for instructions.")
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to create structure: {e}")
-
-    def train_ml_model(self):
-        """Train the ML model."""
-        try:
-            from ml_form_processor import MLFormProcessor, MLTrainingHelper
-            processor = MLFormProcessor()
-            trainer = MLTrainingHelper(processor)
-        
-            # Show training dialog
-            result = messagebox.askyesno("Train Model", 
-                                       "This will train the ML model using data in training_data/sensory_ratings/\n\n"
-                                       "Make sure you have added training images first.\n\n"
-                                       "Continue?")
-            if result:
-                model, history = trainer.train_model()
-                messagebox.showinfo("Success", "Model training completed!")
-            
-        except Exception as e:
-            messagebox.showerror("Error", f"Training failed: {e}")
-
-    def create_training_structure(self):
-        """Create training data folder structure using the helper tool."""
-        try:
-            from training_data_helper import TrainingDataExtractor
-            extractor = TrainingDataExtractor()
-            extractor.create_training_data_structure()
-            messagebox.showinfo("Success", 
-                              "Training data structure created!\n\n"
-                              "Next steps:\n"
-                              "1. Place your scanned forms in a folder\n"
-                              "2. Run the training data extractor\n"
-                              "3. Label the regions when prompted\n"
-                              "4. Train the model")
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to create structure: {e}")
 
     def extract_training_data(self):
         """Launch the training data extraction tool."""
