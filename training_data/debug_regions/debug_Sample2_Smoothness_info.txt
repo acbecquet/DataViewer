@@ -6,7 +6,7 @@ Section Division: 5 equal sections within OCR boundaries
 Comments Excluded: True
 OCR Text Found: 'section_4'
 OCR Confidence: 0
-Y Position in Sample: 378
+Y Position in Sample: 427
 Final Size: 600x140
 Target Size: 600x140
 
