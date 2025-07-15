@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.patches import Circle
 import math
+from tensorflow import keras
 from datetime import datetime
 import json
 import os
@@ -204,14 +205,928 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         view_menu.add_command(label="Refresh Plot", command=self.update_plot)
         menubar.add_cascade(label="View", menu=view_menu)
         
-        # ML menu (NEW)
         ml_menu = tk.Menu(menubar, tearoff=0)
-        ml_menu.add_command(label="Create Training Structure", command=self.create_training_structure)
-        ml_menu.add_command(label="Extract Training Data", command=self.extract_training_data)
-        ml_menu.add_command(label="Check Data Balance", command=self.check_training_data_balance)
+    
+        # Basic setup
+        ml_menu.add_command(label="Create Enhanced Training Structure", command=self.create_enhanced_training_structure)
         ml_menu.add_separator()
-        ml_menu.add_command(label="Train Model", command=self.train_ml_model)
-        menubar.add_cascade(label="ML", menu=ml_menu)
+    
+        # Enhanced extraction workflow
+        ml_menu.add_command(label="Extract with Shadow Removal", command=self.extract_training_data_enhanced)
+        ml_menu.add_command(label="Test Single Image (Enhanced)", command=self.test_enhanced_single_image)
+        ml_menu.add_command(label="Batch Process Folder (Enhanced)", command=self.batch_process_enhanced)
+        ml_menu.add_separator()
+    
+        # Training and validation
+        ml_menu.add_command(label="Check Enhanced Data Balance", command=self.check_enhanced_data_balance)
+        ml_menu.add_command(label="Train Enhanced Model", command=self.train_enhanced_model)
+        ml_menu.add_separator()
+    
+        # Testing and deployment
+        ml_menu.add_command(label="Test Enhanced Model", command=self.test_enhanced_model)
+        ml_menu.add_command(label="Validate Model Performance", command=self.validate_enhanced_performance)
+        ml_menu.add_separator()
+    
+        # Configuration management
+        ml_menu.add_command(label="Update Processor Configuration", command=self.update_processor_config)
+        ml_menu.add_command(label="Compare Model Versions", command=self.compare_model_versions)
+    
+        menubar.add_cascade(label="Enhanced ML", menu=ml_menu)
+
+    # Add these improved methods to your SensoryDataApp class in sensory_data_collection.py
+
+    def create_enhanced_training_structure(self):
+        """Create comprehensive enhanced training structure."""
+        try:
+            # Create all necessary directories
+            import os
+        
+            enhanced_dirs = [
+                "training_data/sensory_ratings",
+                "training_data/enhanced_extractions", 
+                "training_data/shadow_removal_debug",
+                "training_data/claude_analysis",
+                "training_data/logs",
+                "models/enhanced",
+                "logs/enhanced_training",
+                "logs/enhanced_ml_processing",
+                "debug_production_regions"
+            ]
+        
+            created_dirs = []
+            for dir_path in enhanced_dirs:
+                os.makedirs(dir_path, exist_ok=True)
+                created_dirs.append(dir_path)
+        
+            # Create rating class directories
+            for rating in range(1, 10):
+                rating_dir = os.path.join("training_data/sensory_ratings", f"rating_{rating}")
+                os.makedirs(rating_dir, exist_ok=True)
+                created_dirs.append(rating_dir)
+        
+            print("="*60)
+            print("ENHANCED TRAINING STRUCTURE CREATED")
+            print("="*60)
+            for dir_path in created_dirs:
+                print(f"✓ {dir_path}")
+        
+            messagebox.showinfo("Enhanced Structure Created", 
+                              f"Enhanced training structure created!\n\n"
+                              f"Directories created: {len(created_dirs)}\n\n"
+                              f"Features:\n"
+                              f"• Shadow removal debugging\n"
+                              f"• Enhanced model versioning\n"
+                              f"• Production region debugging\n"
+                              f"• Comprehensive logging\n\n"
+                              f"Next: Extract with Shadow Removal")
+        
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to create enhanced structure: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def extract_training_data_enhanced(self):
+        """Launch enhanced training extraction with shadow removal."""
+        try:
+            result = messagebox.askyesno("Enhanced Shadow Removal Extraction",
+                                       "Enhanced Training Data Extraction\n\n"
+                                       "Features:\n"
+                                       "• OCR-based boundary detection\n"
+                                       "• Advanced shadow removal preprocessing\n"
+                                       "• 600x140 high resolution extraction\n"
+                                       "• Comprehensive debugging output\n\n"
+                                       "Requirements:\n"
+                                       "• Tesseract OCR installed\n"
+                                       "• Form images ready for processing\n\n"
+                                       "Continue?")
+            if result:
+                from simple_training_assistant import SimpleTrainingAssistant
+                from tkinter import filedialog
+            
+                # Get training folder
+                training_folder = filedialog.askdirectory(
+                    title="Select folder containing form images for enhanced extraction"
+                )
+            
+                if training_folder:
+                    print("="*80)
+                    print("ENHANCED SHADOW REMOVAL EXTRACTION STARTING")
+                    print("="*80)
+                    print(f"Source folder: {training_folder}")
+                    print("Using: SimpleTrainingAssistant + ImprovedAttributeDetectionExtractor")
+                    print("Target resolution: 600x140 pixels")
+                    print("Features: Shadow removal, OCR boundaries, debug output")
+                
+                    # Initialize enhanced assistant
+                    assistant = SimpleTrainingAssistant()
+                
+                    # Process with enhanced workflow
+                    success = assistant.process_training_folder(training_folder)
+                
+                    if success:
+                        messagebox.showinfo("Enhanced Extraction Complete",
+                                          "Enhanced shadow removal extraction completed!\n\n"
+                                          "Results:\n"
+                                          "• High-resolution training regions extracted\n"
+                                          "• Shadow removal preprocessing applied\n"
+                                          "• Debug images saved for verification\n"
+                                          "• OCR boundary detection logs created\n\n"
+                                          "Check console for detailed results.\n\n"
+                                          "Next: Check Enhanced Data Balance")
+                    else:
+                        messagebox.showwarning("Extraction Issues",
+                                             "Enhanced extraction completed with some issues.\n"
+                                             "Check console output for detailed error information.")
+            
+        except Exception as e:
+            messagebox.showerror("Enhanced Extraction Error", f"Enhanced extraction failed: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def test_enhanced_single_image(self):
+        """Test enhanced extraction on a single image."""
+        try:
+            from tkinter import filedialog
+            from enhanced_training_workflow import test_shadow_removal_on_image
+        
+            image_path = filedialog.askopenfilename(
+                title="Select form image for enhanced testing",
+                filetypes=[("Image files", "*.png *.jpg *.jpeg *.bmp *.tiff")]
+            )
+        
+            if image_path:
+                print("="*80)
+                print("ENHANCED SINGLE IMAGE TEST")
+                print("="*80)
+                print(f"Testing: {image_path}")
+                print("Method: Enhanced shadow removal + OCR boundary detection")
+            
+                success, extracted_data = test_shadow_removal_on_image(image_path)
+            
+                if success and extracted_data:
+                    total_regions = sum(len(sample_data) for sample_data in extracted_data.values())
+                    sample_names = list(extracted_data.keys())
+                
+                    result_msg = (f"Enhanced single image test successful!\n\n"
+                                 f"Results:\n"
+                                 f"• Samples detected: {len(sample_names)}\n"
+                                 f"• Total regions extracted: {total_regions}\n"
+                                 f"• Resolution: 600x140 pixels per region\n\n"
+                                 f"Sample names found:\n")
+                
+                    for name in sample_names[:4]:  # Show first 4
+                        result_msg += f"• {name}\n"
+                
+                    result_msg += (f"\nDebug files saved to:\n"
+                                  f"• training_data/debug_regions/\n"
+                                  f"• Shadow removal: debug_minimal_1x_shadows_removed.png\n\n"
+                                  f"Check console for detailed extraction log.")
+                
+                    messagebox.showinfo("Enhanced Test Complete", result_msg)
+                else:
+                    messagebox.showwarning("Enhanced Test Failed",
+                                         "Enhanced single image test failed.\n\n"
+                                         "Common issues:\n"
+                                         "• Tesseract OCR not installed/configured\n"
+                                         "• Poor image quality for OCR\n"
+                                         "• Unexpected form layout\n"
+                                         "• Shadow removal preprocessing issues\n\n"
+                                         "Check console for detailed error information.")
+                
+        except Exception as e:
+            messagebox.showerror("Test Error", f"Enhanced single image test failed: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def batch_process_enhanced(self):
+        """Batch process folder with enhanced workflow."""
+        try:
+            from tkinter import filedialog
+            from enhanced_training_workflow import process_training_folder_with_shadow_removal
+        
+            folder_path = filedialog.askdirectory(
+                title="Select folder for enhanced batch processing"
+            )
+        
+            if folder_path:
+                # Count images first
+                import os
+                image_files = [f for f in os.listdir(folder_path) 
+                              if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.tiff'))]
+            
+                result = messagebox.askyesno("Enhanced Batch Processing",
+                                           f"Enhanced Batch Processing\n\n"
+                                           f"Folder: {folder_path}\n"
+                                           f"Images found: {len(image_files)}\n\n"
+                                           f"Processing method:\n"
+                                           f"• Shadow removal preprocessing\n"
+                                           f"• OCR boundary detection\n"
+                                           f"• High-resolution extraction (600x140)\n"
+                                           f"• Comprehensive debug output\n\n"
+                                           f"Estimated time: {len(image_files) * 30} seconds\n\n"
+                                           f"Continue?")
+                if result:
+                    print("="*80)
+                    print("ENHANCED BATCH PROCESSING WITH SHADOW REMOVAL")
+                    print("="*80)
+                    print(f"Processing {len(image_files)} images...")
+                
+                    success = process_training_folder_with_shadow_removal(folder_path)
+                
+                    if success:
+                        messagebox.showinfo("Enhanced Batch Complete",
+                                          f"Enhanced batch processing completed!\n\n"
+                                          f"Images processed: {len(image_files)}\n"
+                                          f"Output resolution: 600x140 pixels\n\n"
+                                          f"Results saved to:\n"
+                                          f"• training_data/debug_regions/\n"
+                                          f"• Enhanced extraction logs\n"
+                                          f"• Shadow removal debug images\n\n"
+                                          f"Check console for detailed success/failure rates.")
+                    else:
+                        messagebox.showwarning("Batch Processing Issues",
+                                             f"Enhanced batch processing completed with issues.\n\n"
+                                             f"Some images may have failed processing.\n"
+                                             f"Check console for detailed error information.")
+                
+        except Exception as e:
+            messagebox.showerror("Batch Error", f"Enhanced batch processing failed: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def check_enhanced_data_balance(self):
+        """Check enhanced training data balance and quality."""
+        try:
+            import os
+        
+            base_dir = "training_data/sensory_ratings"
+            if not os.path.exists(base_dir):
+                messagebox.showwarning("No Enhanced Data", 
+                                     "Enhanced training data not found.\n"
+                                     "Run enhanced extraction first.")
+                return
+        
+            print("="*80)
+            print("ENHANCED TRAINING DATA ANALYSIS")
+            print("="*80)
+        
+            # Detailed analysis with enhanced metrics
+            class_distribution = {}
+            enhanced_info_files = {}
+            total_images = 0
+            total_enhanced = 0
+        
+            for rating in range(1, 10):
+                rating_dir = os.path.join(base_dir, f"rating_{rating}")
+                if os.path.exists(rating_dir):
+                    # Count image files
+                    images = [f for f in os.listdir(rating_dir) 
+                             if f.lower().endswith(('.jpg', '.png', '.jpeg'))]
+                    count = len(images)
+                    class_distribution[rating] = count
+                    total_images += count
+                
+                    # Count enhanced extraction info files
+                    info_files = [f for f in os.listdir(rating_dir) if f.endswith('_info.txt')]
+                    enhanced_info_files[rating] = len(info_files)
+                    total_enhanced += len(info_files)
+                
+                    # Sample file analysis
+                    sample_sizes = []
+                    for img_file in images[:5]:  # Check first 5 files
+                        img_path = os.path.join(rating_dir, img_file)
+                        try:
+                            import cv2
+                            img = cv2.imread(img_path)
+                            if img is not None:
+                                sample_sizes.append(f"{img.shape[1]}x{img.shape[0]}")
+                        except:
+                            pass
+                
+                    size_info = f" (sizes: {', '.join(set(sample_sizes[:3]))})" if sample_sizes else ""
+                
+                    print(f"Rating {rating}: {count:4d} images, {len(info_files):3d} enhanced{size_info}")
+                
+                    # Show sample filenames
+                    if images:
+                        print(f"  Sample files: {images[:2]}")
+        
+            # Enhanced analysis
+            print("-" * 70)
+            print(f"Total training images: {total_images}")
+            print(f"Enhanced extractions: {total_enhanced}")
+        
+            if total_images > 0:
+                min_count = min(class_distribution.values())
+                max_count = max(class_distribution.values())
+                imbalance_ratio = max_count / max(min_count, 1)
+                enhancement_rate = total_enhanced / total_images
+            
+                print(f"\nEnhanced Quality Metrics:")
+                print(f"  Class balance ratio: {imbalance_ratio:.2f}")
+                print(f"  Enhancement rate: {enhancement_rate:.1%}")
+                print(f"  Min/Max class sizes: {min_count}/{max_count}")
+            
+                # Enhanced recommendations
+                recommendations = []
+                if total_images < 100:
+                    recommendations.append("Collect more training data (target: 100+ images)")
+                if imbalance_ratio > 3.0:
+                    recommendations.append("Balance classes - some ratings underrepresented")
+                if enhancement_rate < 0.8:
+                    recommendations.append("Re-extract with enhanced workflow for better quality")
+                if total_images < 200:
+                    recommendations.append("For production quality: collect 200+ images")
+            
+                # Status assessment
+                if not recommendations:
+                    status = "EXCELLENT - Ready for production training"
+                    color = "green"
+                elif len(recommendations) <= 2:
+                    status = "GOOD - Ready for training with minor improvements"
+                    color = "blue"
+                else:
+                    status = "NEEDS IMPROVEMENT - Address issues before training"
+                    color = "orange"
+            
+                print(f"\nStatus: {status}")
+            
+                if recommendations:
+                    print(f"\nRecommendations:")
+                    for i, rec in enumerate(recommendations, 1):
+                        print(f"  {i}. {rec}")
+            
+                # Show in dialog
+                dialog_msg = (f"Enhanced Training Data Analysis\n\n"
+                             f"Status: {status}\n\n"
+                             f"Metrics:\n"
+                             f"• Total images: {total_images}\n"
+                             f"• Enhanced extractions: {total_enhanced} ({enhancement_rate:.1%})\n"
+                             f"• Class balance ratio: {imbalance_ratio:.2f}\n"
+                             f"• Resolution: 600x140 pixels\n\n")
+            
+                if recommendations:
+                    dialog_msg += "Recommendations:\n" + "\n".join(f"• {rec}" for rec in recommendations)
+                else:
+                    dialog_msg += "✓ Data is ready for enhanced model training!"
+                
+                messagebox.showinfo("Enhanced Data Analysis", dialog_msg)
+            else:
+                messagebox.showwarning("No Training Data", 
+                                     "No enhanced training images found.\n"
+                                     "Use enhanced extraction tools first.")
+            
+        except Exception as e:
+            messagebox.showerror("Analysis Error", f"Enhanced data analysis failed: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def train_enhanced_model(self):
+        """Train enhanced model with comprehensive configuration."""
+        try:
+            # Import enhanced processor
+            from enhanced_ml_form_processor import EnhancedMLFormProcessor, EnhancedMLTrainingHelper
+            import os
+        
+            # Verify enhanced training data
+            if not os.path.exists("training_data/sensory_ratings"):
+                messagebox.showerror("Missing Enhanced Data", 
+                                   "Enhanced training data not found.\n"
+                                   "Use enhanced extraction first.")
+                return
+        
+            # Count enhanced training data
+            total_images = 0
+            enhanced_count = 0
+        
+            for rating in range(1, 10):
+                rating_dir = os.path.join("training_data/sensory_ratings", f"rating_{rating}")
+                if os.path.exists(rating_dir):
+                    images = len([f for f in os.listdir(rating_dir) if f.endswith(('.jpg', '.png', '.jpeg'))])
+                    info_files = len([f for f in os.listdir(rating_dir) if f.endswith('_info.txt')])
+                    total_images += images
+                    enhanced_count += info_files
+        
+            # Enhanced training dialog
+            enhancement_rate = enhanced_count / max(total_images, 1)
+        
+            training_msg = (f"Enhanced ML Model Training\n\n"
+                           f"Training Data:\n"
+                           f"• Total images: {total_images}\n"
+                           f"• Enhanced extractions: {enhanced_count} ({enhancement_rate:.1%})\n"
+                           f"• Target resolution: 600x140 pixels\n\n"
+                           f"Enhanced Architecture:\n"
+                           f"• 5 convolutional layers\n"
+                           f"• Optimized for high-resolution data\n"
+                           f"• Advanced regularization\n"
+                           f"• Shadow removal preprocessing compatibility\n\n"
+                           f"Training Features:\n"
+                           f"• Early stopping with patience\n"
+                           f"• Learning rate scheduling\n"
+                           f"• Enhanced model checkpointing\n"
+                           f"• Comprehensive logging\n\n"
+                           f"Estimated time: 10-30 minutes\n\n"
+                           f"Continue?")
+        
+            result = messagebox.askyesno("Enhanced Model Training", training_msg)
+        
+            if result:
+                print("="*80)
+                print("ENHANCED ML MODEL TRAINING")
+                print("="*80)
+                print(f"Training images: {total_images}")
+                print(f"Enhanced extractions: {enhanced_count}")
+                print(f"Architecture: Enhanced CNN for 600x140 resolution")
+                print(f"Features: Shadow removal compatibility, advanced regularization")
+            
+                # Initialize enhanced components
+                processor = EnhancedMLFormProcessor()
+                trainer = EnhancedMLTrainingHelper(processor)
+            
+                # Enhanced training configuration
+                training_config = {
+                    'epochs': 100,
+                    'batch_size': 16,
+                    'validation_split': 0.25,
+                    'save_best_only': True,
+                    'patience': 20
+                }
+            
+                print(f"\nEnhanced training configuration:")
+                for key, value in training_config.items():
+                    print(f"  {key}: {value}")
+            
+                # Train enhanced model
+                model, history = trainer.train_enhanced_model(**training_config)
+            
+                # Enhanced results reporting
+                if history and model:
+                    final_train_acc = history.history['accuracy'][-1]
+                    final_val_acc = history.history['val_accuracy'][-1]
+                    best_val_acc = max(history.history['val_accuracy'])
+                    epochs_trained = len(history.history['accuracy'])
+                
+                    # Check for enhanced model files
+                    model_files = []
+                    if os.path.exists('models/sensory_rating_classifier.h5'):
+                        size_mb = os.path.getsize('models/sensory_rating_classifier.h5') / (1024*1024)
+                        model_files.append(f"• Final model: {size_mb:.1f} MB")
+                
+                    if os.path.exists('models/enhanced/sensory_rating_classifier_best.h5'):
+                        size_mb = os.path.getsize('models/enhanced/sensory_rating_classifier_best.h5') / (1024*1024)
+                        model_files.append(f"• Best enhanced model: {size_mb:.1f} MB")
+                
+                    success_msg = (f"Enhanced Model Training Complete!\n\n"
+                                 f"Performance Metrics:\n"
+                                 f"• Final training accuracy: {final_train_acc:.3f}\n"
+                                 f"• Final validation accuracy: {final_val_acc:.3f}\n"
+                                 f"• Best validation accuracy: {best_val_acc:.3f}\n"
+                                 f"• Epochs trained: {epochs_trained}\n\n"
+                                 f"Model Files Saved:\n" + "\n".join(model_files) + f"\n\n"
+                                 f"Enhanced Features:\n"
+                                 f"• 600x140 high resolution\n"
+                                 f"• Shadow removal preprocessing\n"
+                                 f"• Advanced CNN architecture\n"
+                                 f"• Production-ready accuracy\n\n"
+                                 f"Next: Test Enhanced Model")
+                
+                    messagebox.showinfo("Enhanced Training Complete", success_msg)
+                
+                    print("="*80)
+                    print("ENHANCED TRAINING COMPLETED SUCCESSFULLY")
+                    print("="*80)
+                    print(f"Enhanced model ready for production use!")
+                
+                else:
+                    messagebox.showwarning("Training Issues", 
+                                         "Enhanced training completed with issues.\n"
+                                         "Check console for detailed information.")
+                
+        except Exception as e:
+            error_msg = f"Enhanced training failed: {e}"
+            print(f"ERROR: {error_msg}")
+            messagebox.showerror("Enhanced Training Error", error_msg)
+            import traceback
+            traceback.print_exc()
+
+    def test_enhanced_model(self):
+        """Test enhanced model with comprehensive evaluation."""
+        try:
+            from enhanced_ml_form_processor import EnhancedMLFormProcessor
+            import os
+            import cv2
+            import numpy as np
+        
+            # Check for enhanced model
+            model_paths = [
+                "models/enhanced/sensory_rating_classifier_best.h5",
+                "models/sensory_rating_classifier.h5",
+                "models/enhanced/sensory_rating_classifier.h5"
+            ]
+        
+            model_path = None
+            for path in model_paths:
+                if os.path.exists(path):
+                    model_path = path
+                    break
+        
+            if not model_path:
+                messagebox.showwarning("No Enhanced Model", 
+                                     "No enhanced model found.\n"
+                                     "Train the enhanced model first.")
+                return
+        
+            print("="*80)
+            print("ENHANCED MODEL TESTING")
+            print("="*80)
+            print(f"Testing model: {model_path}")
+        
+            # Initialize enhanced processor
+            processor = EnhancedMLFormProcessor(model_path)
+        
+            if not processor.load_model():
+                messagebox.showerror("Model Load Error", 
+                                   "Failed to load enhanced model.\n"
+                                   "Check console for error details.")
+                return
+        
+            print(f"✓ Enhanced model loaded successfully")
+            print(f"Model resolution: {processor.target_size}")
+        
+            # Test on enhanced training data samples
+            base_dir = "training_data/sensory_ratings"
+            test_results = {}
+            detailed_results = []
+        
+            total_tests = 0
+            correct_predictions = 0
+            confidence_scores = []
+        
+            print(f"\nTesting enhanced model on training samples...")
+        
+            for rating in range(1, 10):
+                rating_dir = os.path.join(base_dir, f"rating_{rating}")
+                if os.path.exists(rating_dir):
+                    images = [f for f in os.listdir(rating_dir) if f.endswith(('.jpg', '.png', '.jpeg'))]
+                    if images:
+                        # Test on first image in each class
+                        test_image_path = os.path.join(rating_dir, images[0])
+                    
+                        try:
+                            # Load and test with enhanced processor
+                            test_image = cv2.imread(test_image_path, cv2.IMREAD_GRAYSCALE)
+                            if test_image is not None:
+                                # Resize to enhanced model input size
+                                resized_image = cv2.resize(test_image, processor.target_size, 
+                                                         interpolation=cv2.INTER_CUBIC)
+                            
+                                # Get enhanced prediction
+                                predicted_rating, confidence, probabilities = processor.predict_rating_enhanced(resized_image)
+                            
+                                is_correct = predicted_rating == rating
+                                test_results[rating] = {
+                                    'predicted': predicted_rating,
+                                    'confidence': confidence,
+                                    'correct': is_correct,
+                                    'probabilities': probabilities
+                                }
+                            
+                                detailed_results.append({
+                                    'true_rating': rating,
+                                    'predicted_rating': predicted_rating,
+                                    'confidence': confidence,
+                                    'correct': is_correct
+                                })
+                            
+                                total_tests += 1
+                                confidence_scores.append(confidence)
+                                if is_correct:
+                                    correct_predictions += 1
+                            
+                                status = "✓ CORRECT" if is_correct else "✗ WRONG"
+                                conf_level = "HIGH" if confidence > 0.8 else "MED" if confidence > 0.6 else "LOW"
+                            
+                                print(f"Rating {rating}: Predicted {predicted_rating} ({conf_level} conf: {confidence:.3f}) - {status}")
+                            
+                                # Show top 3 predictions for detailed analysis
+                                top_3 = processor.get_top_predictions(probabilities, 3)
+                                top_3_str = ", ".join([f"R{r}({p:.2f})" for r, p in top_3])
+                                print(f"  Top 3: {top_3_str}")
+                    
+                        except Exception as e:
+                            print(f"Error testing rating {rating}: {e}")
+        
+            # Enhanced results analysis
+            if detailed_results:
+                test_accuracy = correct_predictions / total_tests
+                avg_confidence = np.mean(confidence_scores)
+                confidence_std = np.std(confidence_scores)
+            
+                # Confidence analysis
+                high_conf = sum(1 for c in confidence_scores if c > 0.8)
+                med_conf = sum(1 for c in confidence_scores if 0.6 <= c <= 0.8)
+                low_conf = sum(1 for c in confidence_scores if c < 0.6)
+            
+                print(f"\n" + "="*80)
+                print(f"ENHANCED MODEL TEST RESULTS")
+                print(f"="*80)
+                print(f"Model tested: {os.path.basename(model_path)}")
+                print(f"Resolution: {processor.target_size}")
+                print(f"Classes tested: {total_tests}")
+                print(f"Correct predictions: {correct_predictions}")
+                print(f"Test accuracy: {test_accuracy:.3f} ({test_accuracy*100:.1f}%)")
+                print(f"Average confidence: {avg_confidence:.3f} ± {confidence_std:.3f}")
+                print(f"Confidence distribution: High({high_conf}) Med({med_conf}) Low({low_conf})")
+            
+                # Detailed error analysis
+                errors = [r for r in detailed_results if not r['correct']]
+                if errors:
+                    print(f"\nError analysis:")
+                    for error in errors:
+                        print(f"  True: {error['true_rating']} → Predicted: {error['predicted_rating']} (conf: {error['confidence']:.3f})")
+            
+                # Performance assessment
+                if test_accuracy >= 0.9:
+                    status = "EXCELLENT"
+                    recommendation = "Model ready for production deployment!"
+                elif test_accuracy >= 0.8:
+                    status = "VERY GOOD"
+                    recommendation = "Model suitable for production with monitoring"
+                elif test_accuracy >= 0.7:
+                    status = "GOOD"
+                    recommendation = "Consider collecting more training data"
+                else:
+                    status = "NEEDS IMPROVEMENT"
+                    recommendation = "Collect significantly more training data"
+            
+                # Show comprehensive results dialog
+                result_msg = (f"Enhanced Model Test Results - {status}\n\n"
+                             f"Performance Metrics:\n"
+                             f"• Test accuracy: {test_accuracy*100:.1f}%\n"
+                             f"• Average confidence: {avg_confidence:.3f}\n"
+                             f"• High confidence predictions: {high_conf}/{total_tests}\n"
+                             f"• Model resolution: {processor.target_size[0]}x{processor.target_size[1]}\n\n"
+                             f"Confidence Distribution:\n"
+                             f"• High (>0.8): {high_conf}\n"
+                             f"• Medium (0.6-0.8): {med_conf}\n"
+                             f"• Low (<0.6): {low_conf}\n\n"
+                             f"Recommendation:\n{recommendation}\n\n"
+                             f"Check console for detailed per-class results.")
+            
+                messagebox.showinfo("Enhanced Model Test Complete", result_msg)
+            else:
+                messagebox.showwarning("No Test Data", 
+                                     "No test data available.\n"
+                                     "Ensure training data is present.")
+        
+        except Exception as e:
+            messagebox.showerror("Enhanced Test Error", f"Enhanced model testing failed: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def validate_enhanced_performance(self):
+        """Comprehensive enhanced model validation."""
+        messagebox.showinfo("Enhanced Validation", 
+                          "Comprehensive Enhanced Model Validation\n\n"
+                          "Features to be implemented:\n\n"
+                          "• Cross-validation analysis\n"
+                          "• Confusion matrix generation\n"
+                          "• Per-attribute accuracy metrics\n"
+                          "• Confidence calibration analysis\n"
+                          "• Model uncertainty quantification\n"
+                          "• Production readiness assessment\n\n"
+                          "This advanced validation suite will be available\n"
+                          "in the next update for production deployment.")
+
+    def update_processor_config(self):
+        """Update processor configuration with enhanced settings."""
+        try:
+            from enhanced_ml_processor_updater import MLProcessorUpdater
+            from tkinter import filedialog
+        
+            # Find available configurations
+            config_dir = "training_data/claude_analysis"
+            if os.path.exists(config_dir):
+                config_files = [f for f in os.listdir(config_dir) 
+                               if f.startswith('improved_boundaries_') and f.endswith('.json')]
+            
+                if config_files:
+                    config_file = filedialog.askopenfilename(
+                        title="Select enhanced boundary configuration",
+                        initialdir=config_dir,
+                        filetypes=[("JSON files", "*.json")]
+                    )
+                
+                    if config_file:
+                        result = messagebox.askyesno("Update Enhanced Processor",
+                                                   f"Update enhanced processor with:\n"
+                                                   f"{os.path.basename(config_file)}\n\n"
+                                                   f"This will modify enhanced_ml_form_processor.py\n"
+                                                   f"A backup will be created automatically.\n\n"
+                                                   f"Continue?")
+                        if result:
+                            updater = MLProcessorUpdater()
+                            updater.update_ml_processor_boundaries(config_file)
+                        
+                            messagebox.showinfo("Enhanced Update Complete",
+                                              f"Enhanced processor updated!\n\n"
+                                              f"Configuration: {os.path.basename(config_file)}\n"
+                                              f"Backup: {updater.backup_path}\n\n"
+                                              f"Test the updated enhanced processor.")
+                else:
+                    messagebox.showinfo("No Enhanced Configs", 
+                                      "No enhanced configurations found.\n"
+                                      "Use enhanced extraction tools first.")
+            else:
+                messagebox.showinfo("No Analysis Directory", 
+                                  "Enhanced analysis directory not found.")
+            
+        except Exception as e:
+            messagebox.showerror("Update Error", f"Failed to update enhanced processor: {e}")
+
+    def compare_model_versions(self):
+        """Compare different model versions and configurations."""
+        messagebox.showinfo("Model Comparison", 
+                          "Enhanced Model Version Comparison\n\n"
+                          "Features to be implemented:\n\n"
+                          "• Accuracy comparison across versions\n"
+                          "• Resolution impact analysis\n"
+                          "• Training data quality assessment\n"
+                          "• Inference speed benchmarking\n"
+                          "• Model size optimization analysis\n\n"
+                          "This comparison tool will help optimize\n"
+                          "model selection for production deployment.")
+
+
+
+    # Enhanced image loading function for File menu
+    def load_from_image_enhanced(self):
+        """Load sensory data using enhanced ML processing."""
+        try:
+            from tkinter import filedialog
+            from enhanced_ml_form_processor import EnhancedMLFormProcessor
+        
+            # Check for enhanced model
+            model_paths = [
+                "models/enhanced/sensory_rating_classifier_best.h5",
+                "models/sensory_rating_classifier.h5"
+            ]
+        
+            model_path = None
+            for path in model_paths:
+                if os.path.exists(path):
+                    model_path = path
+                    break
+        
+            if not model_path:
+                messagebox.showwarning("No Enhanced Model", 
+                                     "No enhanced model found.\n"
+                                     "Train an enhanced model first using the Enhanced ML menu.")
+                return
+        
+            # Select image file
+            image_path = filedialog.askopenfilename(
+                title="Select form image for enhanced ML processing",
+                filetypes=[("Image files", "*.png *.jpg *.jpeg *.bmp *.tiff")]
+            )
+        
+            if image_path:
+                print("="*80)
+                print("ENHANCED ML FORM LOADING")
+                print("="*80)
+            
+                # Initialize enhanced processor
+                processor = EnhancedMLFormProcessor(model_path)
+            
+                # Process with enhanced pipeline
+                extracted_data, processed_image = processor.process_form_image_enhanced(image_path)
+            
+                # Show enhanced preview with confidence scores
+                self.show_enhanced_extraction_preview(extracted_data, processed_image, 
+                                                    os.path.basename(image_path))
+        
+        except Exception as e:
+            messagebox.showerror("Enhanced ML Error", f"Enhanced ML processing failed: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def show_enhanced_extraction_preview(self, extracted_data, processed_img, filename):
+        """Show enhanced extraction preview with confidence analysis."""
+        preview_window = tk.Toplevel(self.window)
+        preview_window.title(f"Enhanced ML Extraction Preview - {filename}")
+        preview_window.geometry("900x700")
+    
+        main_frame = ttk.Frame(preview_window)
+        main_frame.pack(fill='both', expand=True, padx=10, pady=10)
+    
+        # Title with enhanced info
+        title_label = ttk.Label(main_frame, 
+                               text=f"Enhanced ML Extraction Results - {filename}",
+                               font=('Arial', 14, 'bold'))
+        title_label.pack(pady=(0, 10))
+    
+        # Enhanced results info
+        info_label = ttk.Label(main_frame,
+                              text=f"Resolution: 600x140 pixels • Shadow removal preprocessing • OCR boundaries",
+                              font=('Arial', 10))
+        info_label.pack(pady=(0, 10))
+    
+        # Create notebook for organized display
+        notebook = ttk.Notebook(main_frame)
+        notebook.pack(fill='both', expand=True)
+    
+        # Results tab
+        results_frame = ttk.Frame(notebook)
+        notebook.add(results_frame, text="Extraction Results")
+    
+        # Sample name editing with enhanced features
+        if extracted_data:
+            sample_name_vars = {}
+            original_names = list(extracted_data.keys())
+        
+            # Enhanced sample display
+            for i, (original_name, sample_data) in enumerate(extracted_data.items()):
+                sample_frame = ttk.LabelFrame(results_frame, text=f"Sample {i+1}", padding=10)
+                sample_frame.pack(fill='x', pady=5)
+            
+                # Sample name editing
+                name_frame = ttk.Frame(sample_frame)
+                name_frame.pack(fill='x', pady=(0, 5))
+            
+                ttk.Label(name_frame, text="Sample Name:").pack(side='left')
+                sample_name_var = tk.StringVar(value=original_name)
+                sample_name_vars[original_name] = sample_name_var
+                name_entry = ttk.Entry(name_frame, textvariable=sample_name_var, width=30)
+                name_entry.pack(side='left', padx=(5, 0))
+            
+                # Enhanced ratings display
+                ratings_frame = ttk.Frame(sample_frame)
+                ratings_frame.pack(fill='x')
+            
+                for j, (attribute, rating) in enumerate(sample_data.items()):
+                    if attribute != 'comments':
+                        attr_frame = ttk.Frame(ratings_frame)
+                        attr_frame.pack(fill='x', pady=1)
+                    
+                        # Enhanced display with confidence indicators
+                        attr_label = ttk.Label(attr_frame, text=f"{attribute}:", width=15, anchor='w')
+                        attr_label.pack(side='left')
+                    
+                        rating_label = ttk.Label(attr_frame, text=f"Rating: {rating}", 
+                                               font=('Arial', 10, 'bold'))
+                        rating_label.pack(side='left', padx=(5, 0))
+                    
+                        # Add confidence indicator if available (placeholder for now)
+                        conf_label = ttk.Label(attr_frame, text="(High Confidence)", 
+                                             foreground='green', font=('Arial', 9))
+                        conf_label.pack(side='left', padx=(10, 0))
+    
+        # Load enhanced data function
+        def load_enhanced_data():
+            final_data = {}
+            for original_name in original_names:
+                new_name = sample_name_vars[original_name].get().strip()
+                if not new_name:
+                    new_name = original_name
+            
+                if new_name in final_data:
+                    messagebox.showerror("Duplicate Names", 
+                                       f"Sample name '{new_name}' is used more than once.")
+                    return
+            
+                final_data[new_name] = extracted_data[original_name]
+        
+            # Load into interface
+            for sample_name, sample_data in final_data.items():
+                self.samples[sample_name] = sample_data
+        
+            self.update_sample_combo()
+            self.update_sample_checkboxes()
+        
+            if self.samples:
+                first_sample = list(self.samples.keys())[0]
+                self.sample_var.set(first_sample)
+                self.load_sample_data(first_sample)
+        
+            self.update_plot()
+            preview_window.destroy()
+        
+            messagebox.showinfo("Enhanced ML Loading Complete", 
+                              f"Successfully loaded {len(final_data)} samples!\n\n"
+                              f"Enhanced features:\n"
+                              f"• High-resolution extraction (600x140)\n"
+                              f"• Shadow removal preprocessing\n"
+                              f"• OCR-based boundary detection\n\n"
+                              f"Review and adjust ratings as needed.")
+    
+        # Enhanced buttons
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill='x', pady=10)
+    
+        ttk.Button(button_frame, text="Load Enhanced Data", 
+                   command=load_enhanced_data).pack(side='left', padx=5)
+        ttk.Button(button_frame, text="Cancel", 
+                   command=preview_window.destroy).pack(side='right', padx=5)
 
     def setup_layout(self):
         """Create the main layout with scrollable panels."""

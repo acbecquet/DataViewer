@@ -670,6 +670,7 @@ class EnhancedMLTrainingHelper:
         callbacks = []
         
         # Enhanced model checkpointing
+        from tensorflow import keras
         if save_best_only:
             checkpoint_callback = keras.callbacks.ModelCheckpoint(
                 'models/enhanced/sensory_rating_classifier_best.h5',
