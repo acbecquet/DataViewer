@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.patches import Circle
 import math
-from tensorflow import keras
 from datetime import datetime
 import json
 import os
