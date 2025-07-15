@@ -4,9 +4,9 @@ Width Mode: EXTENDED
 Boundary Detection: OCR-based (Burnt Taste -> Overall Liking)
 Section Division: 5 equal sections within OCR boundaries
 Comments Excluded: True
-OCR Text Found: 'taste.'
-OCR Confidence: 95
-Y Position in Sample: 64
+OCR Text Found: 'Burnt'
+OCR Confidence: 92
+Y Position in Sample: 20
 Final Size: 600x140
 Target Size: 600x140
 

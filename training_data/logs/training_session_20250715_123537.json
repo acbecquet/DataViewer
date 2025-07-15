@@ -1,0 +1,2077 @@
+{
+  "extraction_timestamp": "20250715_123537",
+  "extraction_method": "ImprovedAttributeDetectionExtractor",
+  "forms_processed": 10,
+  "total_regions_processed": 200,
+  "total_regions_labeled": 159,
+  "success_rate_percent": 79.5,
+  "detailed_extractions": [
+    {
+      "image": "training-1.jpg",
+      "sample": "Sample 1",
+      "attribute": "Burnt Taste",
+      "rating": 9,
+      "filenames": [
+        "Sample_1_Burnt_Taste_20250715_121526_542_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-1.jpg",
+      "sample": "Sample 1",
+      "attribute": "Vapor Volume",
+      "rating": 5,
+      "filenames": [
+        "Sample_1_Vapor_Volume_20250715_121530_542_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-1.jpg",
+      "sample": "Sample 1",
+      "attribute": "Overall Flavor",
+      "rating": 5,
+      "filenames": [
+        "Sample_1_Overall_Flavor_20250715_121534_150_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-1.jpg",
+      "sample": "Sample 1",
+      "attribute": "Smoothness",
+      "rating": 5,
+      "filenames": [
+        "Sample_1_Smoothness_20250715_121536_542_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-1.jpg",
+      "sample": "Sample 1",
+      "attribute": "Overall Liking",
+      "rating": 5,
+      "filenames": [
+        "Sample_1_Overall_Liking_20250715_121540_567_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-1.jpg",
+      "sample": "Sample 2",
+      "attribute": "Burnt Taste",
+      "rating": 9,
+      "filenames": [
+        "Sample_2_Burnt_Taste_20250715_121544_163_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-1.jpg",
+      "sample": "Sample 2",
+      "attribute": "Vapor Volume",
+      "rating": 8,
+      "filenames": [
+        "Sample_2_Vapor_Volume_20250715_121548_015_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-1.jpg",
+      "sample": "Sample 2",
+      "attribute": "Overall Flavor",
+      "rating": 8,
+      "filenames": [
+        "Sample_2_Overall_Flavor_20250715_121551_226_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-1.jpg",
+      "sample": "Sample 2",
+      "attribute": "Smoothness",
+      "rating": 7,
+      "filenames": [
+        "Sample_2_Smoothness_20250715_121554_878_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-1.jpg",
+      "sample": "Sample 2",
+      "attribute": "Overall Liking",
+      "rating": 8,
+      "filenames": [
+        "Sample_2_Overall_Liking_20250715_121558_369_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-11.jpg",
+      "sample": "Sample 1",
+      "attribute": "Burnt Taste",
+      "rating": 9,
+      "filenames": [
+        "Sample_1_Burnt_Taste_20250715_121732_408_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-11.jpg",
+      "sample": "Sample 1",
+      "attribute": "Vapor Volume",
+      "rating": 3,
+      "filenames": [
+        "Sample_1_Vapor_Volume_20250715_121737_378_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-11.jpg",
+      "sample": "Sample 1",
+      "attribute": "Overall Flavor",
+      "rating": 6,
+      "filenames": [
+        "Sample_1_Overall_Flavor_20250715_121742_161_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-11.jpg",
+      "sample": "Sample 1",
+      "attribute": "Smoothness",
+      "rating": 6,
+      "filenames": [
+        "Sample_1_Smoothness_20250715_121745_678_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-11.jpg",
+      "sample": "Sample 1",
+      "attribute": "Overall Liking",
+      "rating": 4,
+      "filenames": [
+        "Sample_1_Overall_Liking_20250715_121757_061_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-11.jpg",
+      "sample": "Sample 2",
+      "attribute": "Burnt Taste",
+      "rating": 9,
+      "filenames": [
+        "Sample_2_Burnt_Taste_20250715_121800_633_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-11.jpg",
+      "sample": "Sample 2",
+      "attribute": "Vapor Volume",
+      "rating": 5,
+      "filenames": [
+        "Sample_2_Vapor_Volume_20250715_121803_587_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-11.jpg",
+      "sample": "Sample 2",
+      "attribute": "Overall Flavor",
+      "rating": 6,
+      "filenames": [
+        "Sample_2_Overall_Flavor_20250715_121805_964_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-11.jpg",
+      "sample": "Sample 2",
+      "attribute": "Smoothness",
+      "rating": 6,
+      "filenames": [
+        "Sample_2_Smoothness_20250715_121808_648_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-11.jpg",
+      "sample": "Sample 2",
+      "attribute": "Overall Liking",
+      "rating": 5,
+      "filenames": [
+        "Sample_2_Overall_Liking_20250715_121811_524_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-11.jpg",
+      "sample": "Sample 3",
+      "attribute": "Burnt Taste",
+      "rating": 9,
+      "filenames": [
+        "Sample_3_Burnt_Taste_20250715_121815_771_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-11.jpg",
+      "sample": "Sample 3",
+      "attribute": "Vapor Volume",
+      "rating": 6,
+      "filenames": [
+        "Sample_3_Vapor_Volume_20250715_121818_859_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-11.jpg",
+      "sample": "Sample 3",
+      "attribute": "Overall Flavor",
+      "rating": 6,
+      "filenames": [
+        "Sample_3_Overall_Flavor_20250715_121822_072_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-11.jpg",
+      "sample": "Sample 3",
+      "attribute": "Smoothness",
+      "rating": 6,
+      "filenames": [
+        "Sample_3_Smoothness_20250715_121824_490_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-11.jpg",
+      "sample": "Sample 3",
+      "attribute": "Overall Liking",
+      "rating": 6,
+      "filenames": [
+        "Sample_3_Overall_Liking_20250715_121827_205_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-11.jpg",
+      "sample": "Sample 4",
+      "attribute": "Burnt Taste",
+      "rating": 9,
+      "filenames": [
+        "Sample_4_Burnt_Taste_20250715_121831_271_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-11.jpg",
+      "sample": "Sample 4",
+      "attribute": "Vapor Volume",
+      "rating": 7,
+      "filenames": [
+        "Sample_4_Vapor_Volume_20250715_121834_354_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-11.jpg",
+      "sample": "Sample 4",
+      "attribute": "Overall Flavor",
+      "rating": 7,
+      "filenames": [
+        "Sample_4_Overall_Flavor_20250715_121836_558_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-11.jpg",
+      "sample": "Sample 4",
+      "attribute": "Smoothness",
+      "rating": 5,
+      "filenames": [
+        "Sample_4_Smoothness_20250715_121839_378_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-11.jpg",
+      "sample": "Sample 4",
+      "attribute": "Overall Liking",
+      "rating": 6,
+      "filenames": [
+        "Sample_4_Overall_Liking_20250715_121841_478_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-2.jpg",
+      "sample": "Sample 1",
+      "attribute": "Burnt Taste",
+      "rating": 9,
+      "filenames": [
+        "Sample_1_Burnt_Taste_20250715_121939_407_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-2.jpg",
+      "sample": "Sample 1",
+      "attribute": "Vapor Volume",
+      "rating": 5,
+      "filenames": [
+        "Sample_1_Vapor_Volume_20250715_121944_466_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-2.jpg",
+      "sample": "Sample 1",
+      "attribute": "Overall Flavor",
+      "rating": 5,
+      "filenames": [
+        "Sample_1_Overall_Flavor_20250715_121948_189_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-2.jpg",
+      "sample": "Sample 1",
+      "attribute": "Smoothness",
+      "rating": 5,
+      "filenames": [
+        "Sample_1_Smoothness_20250715_121950_742_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-2.jpg",
+      "sample": "Sample 1",
+      "attribute": "Overall Liking",
+      "rating": 5,
+      "filenames": [
+        "Sample_1_Overall_Liking_20250715_121953_349_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-2.jpg",
+      "sample": "Sample 2",
+      "attribute": "Vapor Volume",
+      "rating": 4,
+      "filenames": [
+        "Sample_2_Vapor_Volume_20250715_122009_297_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-2.jpg",
+      "sample": "Sample 2",
+      "attribute": "Overall Flavor",
+      "rating": 7,
+      "filenames": [
+        "Sample_2_Overall_Flavor_20250715_122012_585_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-2.jpg",
+      "sample": "Sample 2",
+      "attribute": "Smoothness",
+      "rating": 6,
+      "filenames": [
+        "Sample_2_Smoothness_20250715_122015_059_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-2.jpg",
+      "sample": "Sample 2",
+      "attribute": "Overall Liking",
+      "rating": 7,
+      "filenames": [
+        "Sample_2_Overall_Liking_20250715_122018_015_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-3.jpg",
+      "sample": "Sample 1",
+      "attribute": "Burnt Taste",
+      "rating": 9,
+      "filenames": [
+        "Sample_1_Burnt_Taste_20250715_122120_480_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-3.jpg",
+      "sample": "Sample 1",
+      "attribute": "Vapor Volume",
+      "rating": 5,
+      "filenames": [
+        "Sample_1_Vapor_Volume_20250715_122123_074_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-3.jpg",
+      "sample": "Sample 1",
+      "attribute": "Overall Flavor",
+      "rating": 5,
+      "filenames": [
+        "Sample_1_Overall_Flavor_20250715_122136_384_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-3.jpg",
+      "sample": "Sample 1",
+      "attribute": "Smoothness",
+      "rating": 5,
+      "filenames": [
+        "Sample_1_Smoothness_20250715_122142_686_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-3.jpg",
+      "sample": "Sample 1",
+      "attribute": "Overall Liking",
+      "rating": 5,
+      "filenames": [
+        "Sample_1_Overall_Liking_20250715_122145_090_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-3.jpg",
+      "sample": "Sample 2",
+      "attribute": "Burnt Taste",
+      "rating": 5,
+      "filenames": [
+        "Sample_2_Burnt_Taste_20250715_122150_903_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-3.jpg",
+      "sample": "Sample 2",
+      "attribute": "Vapor Volume",
+      "rating": 5,
+      "filenames": [
+        "Sample_2_Vapor_Volume_20250715_122154_740_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-3.jpg",
+      "sample": "Sample 2",
+      "attribute": "Overall Flavor",
+      "rating": 5,
+      "filenames": [
+        "Sample_2_Overall_Flavor_20250715_122157_791_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-3.jpg",
+      "sample": "Sample 2",
+      "attribute": "Smoothness",
+      "rating": 5,
+      "filenames": [
+        "Sample_2_Smoothness_20250715_122201_252_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-3.jpg",
+      "sample": "Sample 2",
+      "attribute": "Overall Liking",
+      "rating": 5,
+      "filenames": [
+        "Sample_2_Overall_Liking_20250715_122204_246_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-4.jpg",
+      "sample": "Sample 1",
+      "attribute": "Burnt Taste",
+      "rating": 9,
+      "filenames": [
+        "Sample_1_Burnt_Taste_20250715_122312_235_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-4.jpg",
+      "sample": "Sample 1",
+      "attribute": "Vapor Volume",
+      "rating": 5,
+      "filenames": [
+        "Sample_1_Vapor_Volume_20250715_122315_351_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-4.jpg",
+      "sample": "Sample 1",
+      "attribute": "Overall Flavor",
+      "rating": 5,
+      "filenames": [
+        "Sample_1_Overall_Flavor_20250715_122321_209_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-4.jpg",
+      "sample": "Sample 1",
+      "attribute": "Smoothness",
+      "rating": 5,
+      "filenames": [
+        "Sample_1_Smoothness_20250715_122323_709_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-4.jpg",
+      "sample": "Sample 1",
+      "attribute": "Overall Liking",
+      "rating": 5,
+      "filenames": [
+        "Sample_1_Overall_Liking_20250715_122326_412_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-4.jpg",
+      "sample": "Sample 2",
+      "attribute": "Burnt Taste",
+      "rating": 9,
+      "filenames": [
+        "Sample_2_Burnt_Taste_20250715_122329_820_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-4.jpg",
+      "sample": "Sample 2",
+      "attribute": "Vapor Volume",
+      "rating": 6,
+      "filenames": [
+        "Sample_2_Vapor_Volume_20250715_122334_766_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-4.jpg",
+      "sample": "Sample 2",
+      "attribute": "Overall Flavor",
+      "rating": 5,
+      "filenames": [
+        "Sample_2_Overall_Flavor_20250715_122338_080_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-4.jpg",
+      "sample": "Sample 2",
+      "attribute": "Smoothness",
+      "rating": 5,
+      "filenames": [
+        "Sample_2_Smoothness_20250715_122340_674_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-4.jpg",
+      "sample": "Sample 2",
+      "attribute": "Overall Liking",
+      "rating": 5,
+      "filenames": [
+        "Sample_2_Overall_Liking_20250715_122342_951_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-4.jpg",
+      "sample": "Sample 3",
+      "attribute": "Burnt Taste",
+      "rating": 9,
+      "filenames": [
+        "Sample_3_Burnt_Taste_20250715_122346_125_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-4.jpg",
+      "sample": "Sample 3",
+      "attribute": "Vapor Volume",
+      "rating": 6,
+      "filenames": [
+        "Sample_3_Vapor_Volume_20250715_122349_556_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-4.jpg",
+      "sample": "Sample 3",
+      "attribute": "Overall Flavor",
+      "rating": 4,
+      "filenames": [
+        "Sample_3_Overall_Flavor_20250715_122351_969_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-4.jpg",
+      "sample": "Sample 3",
+      "attribute": "Smoothness",
+      "rating": 4,
+      "filenames": [
+        "Sample_3_Smoothness_20250715_122355_219_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-4.jpg",
+      "sample": "Sample 3",
+      "attribute": "Overall Liking",
+      "rating": 4,
+      "filenames": [
+        "Sample_3_Overall_Liking_20250715_122359_917_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-4.jpg",
+      "sample": "Sample 4",
+      "attribute": "Burnt Taste",
+      "rating": 7,
+      "filenames": [
+        "Sample_4_Burnt_Taste_20250715_122403_784_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-4.jpg",
+      "sample": "Sample 4",
+      "attribute": "Vapor Volume",
+      "rating": 5,
+      "filenames": [
+        "Sample_4_Vapor_Volume_20250715_122405_715_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-4.jpg",
+      "sample": "Sample 4",
+      "attribute": "Overall Flavor",
+      "rating": 3,
+      "filenames": [
+        "Sample_4_Overall_Flavor_20250715_122407_693_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-4.jpg",
+      "sample": "Sample 4",
+      "attribute": "Smoothness",
+      "rating": 3,
+      "filenames": [
+        "Sample_4_Smoothness_20250715_122411_650_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-4.jpg",
+      "sample": "Sample 4",
+      "attribute": "Overall Liking",
+      "rating": 3,
+      "filenames": [
+        "Sample_4_Overall_Liking_20250715_122415_331_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-5.jpg",
+      "sample": "Sample 1",
+      "attribute": "Burnt Taste",
+      "rating": 9,
+      "filenames": [
+        "Sample_1_Burnt_Taste_20250715_122506_686_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-5.jpg",
+      "sample": "Sample 1",
+      "attribute": "Vapor Volume",
+      "rating": 5,
+      "filenames": [
+        "Sample_1_Vapor_Volume_20250715_122509_015_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-5.jpg",
+      "sample": "Sample 1",
+      "attribute": "Overall Flavor",
+      "rating": 5,
+      "filenames": [
+        "Sample_1_Overall_Flavor_20250715_122511_293_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-5.jpg",
+      "sample": "Sample 1",
+      "attribute": "Smoothness",
+      "rating": 5,
+      "filenames": [
+        "Sample_1_Smoothness_20250715_122513_365_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-5.jpg",
+      "sample": "Sample 1",
+      "attribute": "Overall Liking",
+      "rating": 5,
+      "filenames": [
+        "Sample_1_Overall_Liking_20250715_122515_281_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-5.jpg",
+      "sample": "Sample 2",
+      "attribute": "Burnt Taste",
+      "rating": 9,
+      "filenames": [
+        "Sample_2_Burnt_Taste_20250715_122518_861_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-5.jpg",
+      "sample": "Sample 2",
+      "attribute": "Vapor Volume",
+      "rating": 5,
+      "filenames": [
+        "Sample_2_Vapor_Volume_20250715_122521_327_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-5.jpg",
+      "sample": "Sample 2",
+      "attribute": "Overall Flavor",
+      "rating": 6,
+      "filenames": [
+        "Sample_2_Overall_Flavor_20250715_122524_280_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-5.jpg",
+      "sample": "Sample 2",
+      "attribute": "Smoothness",
+      "rating": 6,
+      "filenames": [
+        "Sample_2_Smoothness_20250715_122527_017_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-5.jpg",
+      "sample": "Sample 2",
+      "attribute": "Overall Liking",
+      "rating": 6,
+      "filenames": [
+        "Sample_2_Overall_Liking_20250715_122529_091_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-5.jpg",
+      "sample": "Sample 3",
+      "attribute": "Burnt Taste",
+      "rating": 9,
+      "filenames": [
+        "Sample_3_Burnt_Taste_20250715_122531_506_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-5.jpg",
+      "sample": "Sample 3",
+      "attribute": "Vapor Volume",
+      "rating": 5,
+      "filenames": [
+        "Sample_3_Vapor_Volume_20250715_122533_902_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-5.jpg",
+      "sample": "Sample 3",
+      "attribute": "Overall Flavor",
+      "rating": 6,
+      "filenames": [
+        "Sample_3_Overall_Flavor_20250715_122536_561_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-5.jpg",
+      "sample": "Sample 3",
+      "attribute": "Smoothness",
+      "rating": 5,
+      "filenames": [
+        "Sample_3_Smoothness_20250715_122539_767_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-5.jpg",
+      "sample": "Sample 3",
+      "attribute": "Overall Liking",
+      "rating": 5,
+      "filenames": [
+        "Sample_3_Overall_Liking_20250715_122542_737_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-5.jpg",
+      "sample": "Sample 4",
+      "attribute": "Burnt Taste",
+      "rating": 5,
+      "filenames": [
+        "Sample_4_Burnt_Taste_20250715_122547_541_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-5.jpg",
+      "sample": "Sample 4",
+      "attribute": "Vapor Volume",
+      "rating": 5,
+      "filenames": [
+        "Sample_4_Vapor_Volume_20250715_122551_186_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-5.jpg",
+      "sample": "Sample 4",
+      "attribute": "Overall Flavor",
+      "rating": 5,
+      "filenames": [
+        "Sample_4_Overall_Flavor_20250715_122553_389_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-5.jpg",
+      "sample": "Sample 4",
+      "attribute": "Smoothness",
+      "rating": 5,
+      "filenames": [
+        "Sample_4_Smoothness_20250715_122555_671_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-5.jpg",
+      "sample": "Sample 4",
+      "attribute": "Overall Liking",
+      "rating": 5,
+      "filenames": [
+        "Sample_4_Overall_Liking_20250715_122558_372_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-6.jpg",
+      "sample": "Sample 1",
+      "attribute": "Burnt Taste",
+      "rating": 9,
+      "filenames": [
+        "Sample_1_Burnt_Taste_20250715_122653_481_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-6.jpg",
+      "sample": "Sample 1",
+      "attribute": "Vapor Volume",
+      "rating": 5,
+      "filenames": [
+        "Sample_1_Vapor_Volume_20250715_122656_522_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-6.jpg",
+      "sample": "Sample 1",
+      "attribute": "Overall Flavor",
+      "rating": 5,
+      "filenames": [
+        "Sample_1_Overall_Flavor_20250715_122659_625_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-6.jpg",
+      "sample": "Sample 1",
+      "attribute": "Smoothness",
+      "rating": 5,
+      "filenames": [
+        "Sample_1_Smoothness_20250715_122702_070_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-6.jpg",
+      "sample": "Sample 1",
+      "attribute": "Overall Liking",
+      "rating": 5,
+      "filenames": [
+        "Sample_1_Overall_Liking_20250715_122703_911_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-6.jpg",
+      "sample": "Sample 2",
+      "attribute": "Burnt Taste",
+      "rating": 9,
+      "filenames": [
+        "Sample_2_Burnt_Taste_20250715_122706_691_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-6.jpg",
+      "sample": "Sample 2",
+      "attribute": "Vapor Volume",
+      "rating": 7,
+      "filenames": [
+        "Sample_2_Vapor_Volume_20250715_122708_992_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-6.jpg",
+      "sample": "Sample 2",
+      "attribute": "Overall Flavor",
+      "rating": 8,
+      "filenames": [
+        "Sample_2_Overall_Flavor_20250715_122710_939_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-6.jpg",
+      "sample": "Sample 2",
+      "attribute": "Smoothness",
+      "rating": 8,
+      "filenames": [
+        "Sample_2_Smoothness_20250715_122713_943_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-6.jpg",
+      "sample": "Sample 2",
+      "attribute": "Overall Liking",
+      "rating": 8,
+      "filenames": [
+        "Sample_2_Overall_Liking_20250715_122716_512_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-6.jpg",
+      "sample": "Sample 3",
+      "attribute": "Burnt Taste",
+      "rating": 9,
+      "filenames": [
+        "Sample_3_Burnt_Taste_20250715_122718_470_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-6.jpg",
+      "sample": "Sample 3",
+      "attribute": "Vapor Volume",
+      "rating": 5,
+      "filenames": [
+        "Sample_3_Vapor_Volume_20250715_122722_005_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-6.jpg",
+      "sample": "Sample 3",
+      "attribute": "Overall Flavor",
+      "rating": 6,
+      "filenames": [
+        "Sample_3_Overall_Flavor_20250715_122724_029_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-6.jpg",
+      "sample": "Sample 3",
+      "attribute": "Smoothness",
+      "rating": 6,
+      "filenames": [
+        "Sample_3_Smoothness_20250715_122728_618_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-6.jpg",
+      "sample": "Sample 3",
+      "attribute": "Overall Liking",
+      "rating": 6,
+      "filenames": [
+        "Sample_3_Overall_Liking_20250715_122731_107_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-6.jpg",
+      "sample": "Sample 4",
+      "attribute": "Burnt Taste",
+      "rating": 9,
+      "filenames": [
+        "Sample_4_Burnt_Taste_20250715_122734_423_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-6.jpg",
+      "sample": "Sample 4",
+      "attribute": "Vapor Volume",
+      "rating": 7,
+      "filenames": [
+        "Sample_4_Vapor_Volume_20250715_122738_179_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-6.jpg",
+      "sample": "Sample 4",
+      "attribute": "Overall Flavor",
+      "rating": 8,
+      "filenames": [
+        "Sample_4_Overall_Flavor_20250715_122740_984_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-6.jpg",
+      "sample": "Sample 4",
+      "attribute": "Smoothness",
+      "rating": 7,
+      "filenames": [
+        "Sample_4_Smoothness_20250715_122743_252_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-6.jpg",
+      "sample": "Sample 4",
+      "attribute": "Overall Liking",
+      "rating": 8,
+      "filenames": [
+        "Sample_4_Overall_Liking_20250715_122745_624_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-7.jpg",
+      "sample": "Sample 1",
+      "attribute": "Burnt Taste",
+      "rating": 9,
+      "filenames": [
+        "Sample_1_Burnt_Taste_20250715_122842_065_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-7.jpg",
+      "sample": "Sample 1",
+      "attribute": "Vapor Volume",
+      "rating": 5,
+      "filenames": [
+        "Sample_1_Vapor_Volume_20250715_122844_148_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-7.jpg",
+      "sample": "Sample 1",
+      "attribute": "Overall Flavor",
+      "rating": 5,
+      "filenames": [
+        "Sample_1_Overall_Flavor_20250715_122846_537_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-7.jpg",
+      "sample": "Sample 1",
+      "attribute": "Smoothness",
+      "rating": 5,
+      "filenames": [
+        "Sample_1_Smoothness_20250715_122848_531_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-7.jpg",
+      "sample": "Sample 1",
+      "attribute": "Overall Liking",
+      "rating": 5,
+      "filenames": [
+        "Sample_1_Overall_Liking_20250715_122850_199_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-7.jpg",
+      "sample": "Sample 2",
+      "attribute": "Burnt Taste",
+      "rating": 9,
+      "filenames": [
+        "Sample_2_Burnt_Taste_20250715_122853_579_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-7.jpg",
+      "sample": "Sample 2",
+      "attribute": "Vapor Volume",
+      "rating": 8,
+      "filenames": [
+        "Sample_2_Vapor_Volume_20250715_122855_898_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-7.jpg",
+      "sample": "Sample 2",
+      "attribute": "Overall Flavor",
+      "rating": 7,
+      "filenames": [
+        "Sample_2_Overall_Flavor_20250715_122858_440_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-7.jpg",
+      "sample": "Sample 2",
+      "attribute": "Smoothness",
+      "rating": 7,
+      "filenames": [
+        "Sample_2_Smoothness_20250715_122900_714_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-7.jpg",
+      "sample": "Sample 2",
+      "attribute": "Overall Liking",
+      "rating": 7,
+      "filenames": [
+        "Sample_2_Overall_Liking_20250715_122903_813_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-7.jpg",
+      "sample": "Sample 3",
+      "attribute": "Burnt Taste",
+      "rating": 9,
+      "filenames": [
+        "Sample_3_Burnt_Taste_20250715_122906_222_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-7.jpg",
+      "sample": "Sample 3",
+      "attribute": "Vapor Volume",
+      "rating": 9,
+      "filenames": [
+        "Sample_3_Vapor_Volume_20250715_122910_387_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-7.jpg",
+      "sample": "Sample 3",
+      "attribute": "Overall Flavor",
+      "rating": 8,
+      "filenames": [
+        "Sample_3_Overall_Flavor_20250715_122912_504_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-7.jpg",
+      "sample": "Sample 3",
+      "attribute": "Smoothness",
+      "rating": 8,
+      "filenames": [
+        "Sample_3_Smoothness_20250715_122914_727_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-7.jpg",
+      "sample": "Sample 3",
+      "attribute": "Overall Liking",
+      "rating": 8,
+      "filenames": [
+        "Sample_3_Overall_Liking_20250715_122920_176_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-7.jpg",
+      "sample": "Sample 4",
+      "attribute": "Burnt Taste",
+      "rating": 5,
+      "filenames": [
+        "Sample_4_Burnt_Taste_20250715_122924_507_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-7.jpg",
+      "sample": "Sample 4",
+      "attribute": "Vapor Volume",
+      "rating": 5,
+      "filenames": [
+        "Sample_4_Vapor_Volume_20250715_122926_415_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-7.jpg",
+      "sample": "Sample 4",
+      "attribute": "Overall Flavor",
+      "rating": 5,
+      "filenames": [
+        "Sample_4_Overall_Flavor_20250715_122928_474_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-7.jpg",
+      "sample": "Sample 4",
+      "attribute": "Smoothness",
+      "rating": 5,
+      "filenames": [
+        "Sample_4_Smoothness_20250715_122930_631_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-7.jpg",
+      "sample": "Sample 4",
+      "attribute": "Overall Liking",
+      "rating": 5,
+      "filenames": [
+        "Sample_4_Overall_Liking_20250715_122934_542_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-8.jpg",
+      "sample": "Sample 1",
+      "attribute": "Burnt Taste",
+      "rating": 9,
+      "filenames": [
+        "Sample_1_Burnt_Taste_20250715_123018_762_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-8.jpg",
+      "sample": "Sample 1",
+      "attribute": "Vapor Volume",
+      "rating": 5,
+      "filenames": [
+        "Sample_1_Vapor_Volume_20250715_123021_162_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-8.jpg",
+      "sample": "Sample 1",
+      "attribute": "Overall Flavor",
+      "rating": 5,
+      "filenames": [
+        "Sample_1_Overall_Flavor_20250715_123024_740_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-8.jpg",
+      "sample": "Sample 1",
+      "attribute": "Smoothness",
+      "rating": 5,
+      "filenames": [
+        "Sample_1_Smoothness_20250715_123027_480_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-8.jpg",
+      "sample": "Sample 1",
+      "attribute": "Overall Liking",
+      "rating": 5,
+      "filenames": [
+        "Sample_1_Overall_Liking_20250715_123030_001_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-8.jpg",
+      "sample": "Sample 2",
+      "attribute": "Burnt Taste",
+      "rating": 9,
+      "filenames": [
+        "Sample_2_Burnt_Taste_20250715_123033_817_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-8.jpg",
+      "sample": "Sample 2",
+      "attribute": "Vapor Volume",
+      "rating": 8,
+      "filenames": [
+        "Sample_2_Vapor_Volume_20250715_123036_894_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-8.jpg",
+      "sample": "Sample 2",
+      "attribute": "Overall Flavor",
+      "rating": 6,
+      "filenames": [
+        "Sample_2_Overall_Flavor_20250715_123039_674_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-8.jpg",
+      "sample": "Sample 2",
+      "attribute": "Smoothness",
+      "rating": 8,
+      "filenames": [
+        "Sample_2_Smoothness_20250715_123041_905_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-8.jpg",
+      "sample": "Sample 2",
+      "attribute": "Overall Liking",
+      "rating": 7,
+      "filenames": [
+        "Sample_2_Overall_Liking_20250715_123044_774_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-9.jpg",
+      "sample": "Sample 1",
+      "attribute": "Burnt Taste",
+      "rating": 9,
+      "filenames": [
+        "Sample_1_Burnt_Taste_20250715_123148_025_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-9.jpg",
+      "sample": "Sample 1",
+      "attribute": "Vapor Volume",
+      "rating": 3,
+      "filenames": [
+        "Sample_1_Vapor_Volume_20250715_123150_978_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-9.jpg",
+      "sample": "Sample 1",
+      "attribute": "Overall Flavor",
+      "rating": 8,
+      "filenames": [
+        "Sample_1_Overall_Flavor_20250715_123153_414_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-9.jpg",
+      "sample": "Sample 1",
+      "attribute": "Smoothness",
+      "rating": 8,
+      "filenames": [
+        "Sample_1_Smoothness_20250715_123156_355_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-9.jpg",
+      "sample": "Sample 1",
+      "attribute": "Overall Liking",
+      "rating": 6,
+      "filenames": [
+        "Sample_1_Overall_Liking_20250715_123159_147_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-9.jpg",
+      "sample": "Sample 2",
+      "attribute": "Burnt Taste",
+      "rating": 9,
+      "filenames": [
+        "Sample_2_Burnt_Taste_20250715_123202_353_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-9.jpg",
+      "sample": "Sample 2",
+      "attribute": "Vapor Volume",
+      "rating": 5,
+      "filenames": [
+        "Sample_2_Vapor_Volume_20250715_123205_869_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-9.jpg",
+      "sample": "Sample 2",
+      "attribute": "Overall Flavor",
+      "rating": 5,
+      "filenames": [
+        "Sample_2_Overall_Flavor_20250715_123209_085_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-9.jpg",
+      "sample": "Sample 2",
+      "attribute": "Smoothness",
+      "rating": 5,
+      "filenames": [
+        "Sample_2_Smoothness_20250715_123212_184_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-9.jpg",
+      "sample": "Sample 2",
+      "attribute": "Overall Liking",
+      "rating": 5,
+      "filenames": [
+        "Sample_2_Overall_Liking_20250715_123214_875_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-9.jpg",
+      "sample": "Sample 3",
+      "attribute": "Burnt Taste",
+      "rating": 9,
+      "filenames": [
+        "Sample_3_Burnt_Taste_20250715_123217_897_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-9.jpg",
+      "sample": "Sample 3",
+      "attribute": "Vapor Volume",
+      "rating": 6,
+      "filenames": [
+        "Sample_3_Vapor_Volume_20250715_123220_379_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-9.jpg",
+      "sample": "Sample 3",
+      "attribute": "Overall Flavor",
+      "rating": 3,
+      "filenames": [
+        "Sample_3_Overall_Flavor_20250715_123516_490_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-9.jpg",
+      "sample": "Sample 3",
+      "attribute": "Smoothness",
+      "rating": 3,
+      "filenames": [
+        "Sample_3_Smoothness_20250715_123518_930_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-9.jpg",
+      "sample": "Sample 3",
+      "attribute": "Overall Liking",
+      "rating": 3,
+      "filenames": [
+        "Sample_3_Overall_Liking_20250715_123522_001_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-9.jpg",
+      "sample": "Sample 4",
+      "attribute": "Burnt Taste",
+      "rating": 9,
+      "filenames": [
+        "Sample_4_Burnt_Taste_20250715_123527_292_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-9.jpg",
+      "sample": "Sample 4",
+      "attribute": "Vapor Volume",
+      "rating": 4,
+      "filenames": [
+        "Sample_4_Vapor_Volume_20250715_123530_963_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-9.jpg",
+      "sample": "Sample 4",
+      "attribute": "Overall Flavor",
+      "rating": 6,
+      "filenames": [
+        "Sample_4_Overall_Flavor_20250715_123533_129_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-9.jpg",
+      "sample": "Sample 4",
+      "attribute": "Smoothness",
+      "rating": 6,
+      "filenames": [
+        "Sample_4_Smoothness_20250715_123535_142_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    },
+    {
+      "image": "training-9.jpg",
+      "sample": "Sample 4",
+      "attribute": "Overall Liking",
+      "rating": 5,
+      "filenames": [
+        "Sample_4_Overall_Liking_20250715_123537_494_original.png"
+      ],
+      "region_shape": [
+        140,
+        600
+      ]
+    }
+  ]
+}

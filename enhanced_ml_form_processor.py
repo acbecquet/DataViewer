@@ -6,13 +6,14 @@ Integrates with enhanced training workflow including shadow removal and OCR boun
 
 import cv2
 import numpy as np
-import tensorflow as tf
 import os
 import pickle
 from datetime import datetime
 import json
 
 # Lazy imports for TensorFlow to avoid startup delays
+
+
 def _lazy_import_tensorflow():
     """Lazy import TensorFlow to avoid loading it unless actually needed."""
     try:
@@ -25,6 +26,32 @@ def _lazy_import_tensorflow():
         print(f"Error importing TensorFlow: {e}")
         raise ImportError("TensorFlow is required for ML functionality. Install with: pip install tensorflow")
 
+# CPU optimization configuration - ADD THIS FIRST
+def configure_cpu_optimization():
+    """Configure TensorFlow for optimal CPU usage."""
+    print("TIMING: Configuring CPU optimization...")
+    tf, keras,layers = _lazy_import_tensorflow()
+    # Get CPU core count
+    cpu_count = os.cpu_count()
+    print(f"TIMING: Found {cpu_count} CPU cores")
+    
+    # Configure threading for maximum CPU usage
+    tf.config.threading.set_inter_op_parallelism_threads(cpu_count)
+    tf.config.threading.set_intra_op_parallelism_threads(cpu_count)
+    
+    # Enable CPU optimizations
+    os.environ['OMP_NUM_THREADS'] = str(cpu_count)
+    os.environ['TF_NUM_INTEROP_THREADS'] = str(cpu_count)
+    os.environ['TF_NUM_INTRAOP_THREADS'] = str(cpu_count)
+    
+    # Enable optimized CPU operations
+    tf.config.optimizer.set_experimental_options({'layout_optimizer': True})
+    
+    print(f"TIMING: CPU optimization enabled - using all {cpu_count} cores")
+    return cpu_count
+
+# Call this before any TensorFlow operations
+CPU_CORES = configure_cpu_optimization()
 
 class EnhancedMLFormProcessor:
     """
@@ -35,12 +62,14 @@ class EnhancedMLFormProcessor:
     """
     
     def __init__(self, model_path='models/sensory_rating_classifier.h5'):
+        print("DEBUG: EnhancedMLFormProcessor.__init__ started (no TF loading yet)")
         self.model_path = model_path
         self.model = None
         self.is_loaded = False
         
         # MUST match enhanced training extractor exactly
         self.target_size = (600, 140)  # Updated to match enhanced training
+        self.model_input_shape = (140,600,1)
         self.num_classes = 9  # Ratings 1-9
         
         # EXACT same attributes as enhanced training extractor
@@ -483,6 +512,7 @@ class EnhancedMLTrainingHelper:
     """
     
     def __init__(self, processor):
+        print("DEBUG: EnhancedMLTrainingHelper.__init__ started (no TF loading)")
         self.processor = processor
         self.model = None
         self.target_size = (600, 140)  # Enhanced resolution
@@ -494,66 +524,70 @@ class EnhancedMLTrainingHelper:
     
     def create_enhanced_cnn_model(self):
         """
-        Build enhanced CNN architecture optimized for the new higher resolution and shadow removal data.
+        Build enhanced CNN architecture optimized for CPU training with better accuracy.
         """
         tf, keras, layers = _lazy_import_tensorflow()
         
-        print("Creating enhanced CNN architecture...")
-        print(f"Input shape: ({self.target_size[1]}, {self.target_size[0]}, 1)")
+        print("Creating improved CPU-optimized CNN architecture...")
+        print(f"Input shape: ({self.target_size[1]}, {self.target_size[0]}, 1)")  # (height, width, channels)
         
+        # Improved model for better accuracy while still CPU-efficient
         model = keras.Sequential([
-            # Input layer - enhanced dimensions
-            layers.Input(shape=(self.target_size[1], self.target_size[0], 1)),  # (140, 600, 1)
+            # Input layer - FIXED: proper height/width order
+            layers.Input(shape=(self.target_size[1], self.target_size[0], 1)),  # (100, 400, 1)
             
-            # First conv block - optimized for wider, higher-res images
-            layers.Conv2D(32, (3, 5), activation='relu', padding='same'),  # Wider kernel for text features
+            # First conv block - wider kernels for text features
+            layers.Conv2D(32, (3, 5), activation='relu', padding='same'),
             layers.MaxPooling2D((2, 2)),
             layers.BatchNormalization(),
+            layers.Dropout(0.1),
             
-            # Second conv block - capture fine details
+            # Second conv block
             layers.Conv2D(64, (3, 3), activation='relu', padding='same'),
             layers.MaxPooling2D((2, 2)),
             layers.BatchNormalization(),
+            layers.Dropout(0.15),
             
-            # Third conv block - pattern recognition
+            # Third conv block
             layers.Conv2D(128, (3, 3), activation='relu', padding='same'),
             layers.MaxPooling2D((2, 2)),
             layers.BatchNormalization(),
+            layers.Dropout(0.2),
             
-            # Fourth conv block - high-level features
+            # Fourth conv block for better feature extraction
             layers.Conv2D(256, (3, 3), activation='relu', padding='same'),
-            layers.MaxPooling2D((2, 2)),
-            layers.BatchNormalization(),
-            
-            # Fifth conv block - for enhanced resolution
-            layers.Conv2D(512, (3, 3), activation='relu', padding='same'),
-            layers.GlobalAveragePooling2D(),  # Replace pooling + flatten
-            
-            # Enhanced dense layers with better regularization
-            layers.Dense(1024, activation='relu'),
-            layers.Dropout(0.5),
-            layers.Dense(512, activation='relu'),
-            layers.Dropout(0.4),
-            layers.Dense(256, activation='relu'),
+            layers.GlobalAveragePooling2D(),
             layers.Dropout(0.3),
             
-            # Output layer - 9 classes for ratings 1-9
+            # Dense layers with better regularization
+            layers.Dense(512, activation='relu'),
+            layers.BatchNormalization(),
+            layers.Dropout(0.4),
+            
+            layers.Dense(256, activation='relu'),
+            layers.BatchNormalization(),
+            layers.Dropout(0.3),
+            
+            layers.Dense(128, activation='relu'),
+            layers.Dropout(0.2),
+            
+            # Output layer
             layers.Dense(9, activation='softmax')
         ])
         
-        # Enhanced compilation with better optimizer settings
+        # Better optimizer settings for this task
         model.compile(
             optimizer=keras.optimizers.Adam(
-                learning_rate=0.0005,  # Lower learning rate for stability
+                learning_rate=0.0003,  # Lower learning rate for better convergence
                 beta_1=0.9,
                 beta_2=0.999,
-                epsilon=1e-7
+                weight_decay=0.0001  # L2 regularization
             ),
             loss='categorical_crossentropy',
-            metrics=['accuracy', 'top_2_accuracy', 'top_3_accuracy']
+            metrics=['accuracy']
         )
         
-        print("Enhanced model architecture created")
+        print("Improved CPU-optimized model architecture created")
         return model
     
     def load_enhanced_training_data(self, batch_size=16, validation_split=0.25):
@@ -591,23 +625,22 @@ class EnhancedMLTrainingHelper:
         print(f"Total enhanced training samples: {total_samples}")
         print(f"Enhanced extractions: {enhanced_extractions}")
         
-        # Enhanced data generators with optimized augmentation
+        # FIXED: Simplified data generators without excessive augmentation
         train_datagen = keras.preprocessing.image.ImageDataGenerator(
             rescale=1./255,
             validation_split=validation_split,
             
-            # Enhanced augmentation for shadow removal data
-            rotation_range=2,  # Very small rotations
-            width_shift_range=0.03,  # Minimal shifts
-            height_shift_range=0.02,
-            zoom_range=0.03,  # Slight zoom variations
-            shear_range=0.02,  # Minor shear for perspective variation
-            brightness_range=[0.95, 1.05],  # Minimal brightness variation
+            # REDUCED augmentation to prevent data issues
+            rotation_range=1,  # Very minimal rotation
+            width_shift_range=0.02,  # Minimal shifts
+            height_shift_range=0.01,
+            zoom_range=0.02,  # Very slight zoom
+            brightness_range=[0.98, 1.02],  # Minimal brightness variation
             horizontal_flip=False,  # Don't flip rating scales
             fill_mode='nearest'
         )
         
-        # Enhanced training generator
+        # FIXED: Enhanced training generator with proper configuration
         train_generator = train_datagen.flow_from_directory(
             train_dir,
             target_size=self.target_size,
@@ -619,7 +652,7 @@ class EnhancedMLTrainingHelper:
             seed=42
         )
         
-        # Enhanced validation generator
+        # FIXED: Enhanced validation generator
         validation_generator = train_datagen.flow_from_directory(
             train_dir,
             target_size=self.target_size,
@@ -639,37 +672,53 @@ class EnhancedMLTrainingHelper:
         
         return train_generator, validation_generator
     
-    def train_enhanced_model(self, epochs=100, batch_size=16, validation_split=0.25, 
-                           save_best_only=True, patience=20):
+    def train_enhanced_model(self, epochs=150, batch_size=16, validation_split=0.25, 
+                           save_best_only=True, patience=25):
         """
-        Train the enhanced CNN model using shadow removal training data.
+        Train the enhanced CNN model with improved settings for accuracy.
         """
         
         print("="*80)
         print("ENHANCED CNN TRAINING FOR SENSORY RATING CLASSIFICATION")
         print("="*80)
-        print("Features: Higher resolution, shadow removal data, enhanced architecture")
+        print("Features: Fixed shapes, improved architecture, better regularization")
         
-        # Load enhanced training data
+        # Load enhanced training data with smaller batch size for stability
         print("Loading enhanced training data...")
         train_gen, val_gen = self.load_enhanced_training_data(batch_size, validation_split)
         
+        # Use smaller batch sizes for better gradient updates
+        optimal_batch_sizes = [16, 12, 8]  # Smaller batches for better learning
+        
+        for test_batch in optimal_batch_sizes:
+            try:
+                print(f"TIMING: Testing CPU batch size {test_batch}...")
+                if train_gen.samples >= test_batch * 4:  # Need more samples per batch
+                    batch_size = test_batch
+                    print(f"TIMING: Using CPU-optimized batch size: {batch_size}")
+                    break
+            except Exception as e:
+                continue
+        
+        # Recreate generators with optimized batch size
+        train_gen, val_gen = self.load_enhanced_training_data(batch_size, validation_split)
+        
         # Create enhanced model architecture
-        print("Creating enhanced model architecture...")
+        print("Creating improved model architecture...")
         self.model = self.create_enhanced_cnn_model()
         
         # Display model summary
-        print("\nEnhanced Model Architecture Summary:")
+        print("\nImproved Model Architecture Summary:")
         self.model.summary()
         
         # Create enhanced models directory
         os.makedirs('models/enhanced', exist_ok=True)
         os.makedirs('logs/enhanced_training', exist_ok=True)
         
-        # Enhanced training callbacks
+        # Enhanced training callbacks with better settings
         callbacks = []
         
-        # Enhanced model checkpointing
+        # Model checkpointing
         from tensorflow import keras
         if save_best_only:
             checkpoint_callback = keras.callbacks.ModelCheckpoint(
@@ -682,47 +731,69 @@ class EnhancedMLTrainingHelper:
             )
             callbacks.append(checkpoint_callback)
         
-        # Enhanced early stopping
+        # Early stopping with more patience
         early_stopping = keras.callbacks.EarlyStopping(
             monitor='val_accuracy',
             patience=patience,
             restore_best_weights=True,
             verbose=1,
-            min_delta=0.0005  # Smaller delta for enhanced precision
+            min_delta=0.001  # Slightly larger delta for stability
         )
         callbacks.append(early_stopping)
         
-        # Enhanced learning rate scheduling
+        # More conservative learning rate scheduling
         lr_reduction = keras.callbacks.ReduceLROnPlateau(
             monitor='val_loss',
-            factor=0.3,  # More aggressive reduction
-            patience=patience//2,
-            min_lr=1e-8,
+            factor=0.5,  # Less aggressive reduction
+            patience=patience//3,
+            min_lr=1e-7,
             verbose=1
         )
         callbacks.append(lr_reduction)
         
-        # Enhanced logging
+        # Enhanced logging with timing
         csv_logger = keras.callbacks.CSVLogger(
             'logs/enhanced_training/training_log.csv',
             append=True
         )
         callbacks.append(csv_logger)
         
-        # Calculate enhanced training parameters
-        steps_per_epoch = max(1, train_gen.samples // train_gen.batch_size)
-        validation_steps = max(1, val_gen.samples // val_gen.batch_size)
+        # Add timing callback
+        class TimingCallback(keras.callbacks.Callback):
+            def on_epoch_begin(self, epoch, logs=None):
+                import time
+                self.epoch_start = time.time()
+                
+            def on_epoch_end(self, epoch, logs=None):
+                import time
+                epoch_time = time.time() - self.epoch_start
+                steps_time = epoch_time / max(1, self.params['steps'])
+                print(f"TIMING: Epoch {epoch+1} - {epoch_time:.1f}s total, {steps_time:.2f}s/step")
         
-        print(f"\nEnhanced Training Configuration:")
+        callbacks.append(TimingCallback())
+        
+        # Calculate enhanced training parameters
+        # Calculate enhanced training parameters - FIXED CALCULATION
+        steps_per_epoch = train_gen.samples // train_gen.batch_size
+        validation_steps = val_gen.samples // val_gen.batch_size
+        
+        # ENSURE we have valid steps
+        if steps_per_epoch == 0:
+            steps_per_epoch = 1
+        if validation_steps == 0:
+            validation_steps = 1
+        
+        print(f"\nImproved Training Configuration:")
         print(f"  Epochs: {epochs}")
         print(f"  Batch size: {batch_size}")
         print(f"  Steps per epoch: {steps_per_epoch}")
         print(f"  Validation steps: {validation_steps}")
         print(f"  Early stopping patience: {patience}")
+        print(f"  Target shape: {self.target_size} -> Model input: ({self.target_size[1]}, {self.target_size[0]}, 1)")
         
-        print(f"\nStarting enhanced training...")
+        print(f"\nStarting improved training...")
         
-        # Train the enhanced model
+        # Train with proper step configuration
         self.training_history = self.model.fit(
             train_gen,
             epochs=epochs,
@@ -732,7 +803,6 @@ class EnhancedMLTrainingHelper:
             callbacks=callbacks,
             verbose=1
         )
-        
         # Save enhanced final model
         final_model_path = 'models/sensory_rating_classifier.h5'
         enhanced_model_path = 'models/enhanced/sensory_rating_classifier.h5'
@@ -740,11 +810,12 @@ class EnhancedMLTrainingHelper:
         self.model.save(final_model_path)
         self.model.save(enhanced_model_path)
         
-        # Enhanced results analysis
+        # Enhanced results analysis with error handling
         final_train_acc = self.training_history.history['accuracy'][-1]
         final_val_acc = self.training_history.history['val_accuracy'][-1]
         best_val_acc = max(self.training_history.history['val_accuracy'])
-        final_top2_acc = self.training_history.history['top_2_accuracy'][-1]
+
+        
         
         print("="*80)
         print("ENHANCED TRAINING COMPLETED!")
@@ -752,7 +823,7 @@ class EnhancedMLTrainingHelper:
         print(f"Final training accuracy: {final_train_acc:.4f}")
         print(f"Final validation accuracy: {final_val_acc:.4f}")
         print(f"Best validation accuracy: {best_val_acc:.4f}")
-        print(f"Final top-2 accuracy: {final_top2_acc:.4f}")
+       
         
         # Enhanced overfitting analysis
         acc_diff = final_train_acc - final_val_acc
@@ -771,7 +842,37 @@ class EnhancedMLTrainingHelper:
         
         return self.model, self.training_history
 
+def check_training_data_quality():
+    """Check the quality and balance of training data."""
+    print("CHECKING TRAINING DATA QUALITY")
+    print("="*50)
+    
+    base_dir = "training_data/sensory_ratings"
+    
+    for rating in range(1, 10):
+        rating_dir = os.path.join(base_dir, f"rating_{rating}")
+        if os.path.exists(rating_dir):
+            images = [f for f in os.listdir(rating_dir) if f.endswith(('.jpg', '.png', '.jpeg'))]
+            print(f"Rating {rating}: {len(images)} images")
+            
+            # Check a few sample images
+            if images:
+                sample_img_path = os.path.join(rating_dir, images[0])
+                sample_img = cv2.imread(sample_img_path, cv2.IMREAD_GRAYSCALE)
+                if sample_img is not None:
+                    print(f"  Sample image shape: {sample_img.shape}")
+                else:
+                    print(f"  WARNING: Could not load sample image!")
+        else:
+            print(f"Rating {rating}: No directory found")
 
 # Maintain backward compatibility
 MLFormProcessor = EnhancedMLFormProcessor
 MLTrainingHelper = EnhancedMLTrainingHelper
+
+# Run data quality check when module is imported
+if __name__ == "__main__":
+    check_training_data_quality()
+    
+
+

@@ -1,0 +1,373 @@
+{
+  "training-1.jpg": {
+    "EVO": {
+      "sample_name": "EVO",
+      "Burnt Taste": 9,
+      "Vapor Volume": 5,
+      "Overall Flavor": 5,
+      "Smoothness": 5,
+      "Overall Liking": 5,
+      "comments": ""
+    },
+    "TS1 Start": {
+      "sample_name": "TS1 Start",
+      "Burnt Taste": 9,
+      "Vapor Volume": 8,
+      "Overall Flavor": 8,
+      "Smoothness": 7,
+      "Overall Liking": 8,
+      "comments": "Good Volume, very smooth, good flavor (compared to EVO)"
+    },
+    "TS1 Mid": {
+      "sample_name": "TS1 Mid",
+      "Burnt Taste": 9,
+      "Vapor Volume": 6,
+      "Overall Flavor": 6,
+      "Smoothness": 8,
+      "Overall Liking": 6,
+      "comments": "Flavor is slightly worse, TPM lower, cart is leaking"
+    },
+    "TS1 End": {
+      "sample_name": "TS1 End",
+      "Burnt Taste": 9,
+      "Vapor Volume": 1,
+      "Overall Flavor": 1,
+      "Smoothness": 1,
+      "Overall Liking": 1,
+      "comments": "Cartridge leaked to the point of clog, unable to perform test"
+    }
+  },
+  "training-11.jpg": {
+    "TPK 2 V": {
+      "sample_name": "TPK 2 V",
+      "Burnt Taste": 9,
+      "Vapor Volume": 3,
+      "Overall Flavor": 6,
+      "Smoothness": 6,
+      "Overall Liking": 4,
+      "comments": ""
+    },
+    "TPK 3 V": {
+      "sample_name": "TPK 3 V",
+      "Burnt Taste": 9,
+      "Vapor Volume": 5,
+      "Overall Flavor": 6,
+      "Smoothness": 6,
+      "Overall Liking": 5,
+      "comments": ""
+    },
+    "TPK 3 2 V": {
+      "sample_name": "TPK 3 2 V",
+      "Burnt Taste": 9,
+      "Vapor Volume": 6,
+      "Overall Flavor": 6,
+      "Smoothness": 6,
+      "Overall Liking": 6,
+      "comments": ""
+    },
+    "TPK 3 4 V": {
+      "sample_name": "TPK 3 4 V",
+      "Burnt Taste": 9,
+      "Vapor Volume": 7,
+      "Overall Flavor": 7,
+      "Smoothness": 5,
+      "Overall Liking": 6,
+      "comments": ""
+    }
+  },
+  "training-2.jpg": {
+    "END": {
+      "sample_name": "END",
+      "Burnt Taste": 9,
+      "Vapor Volume": 5,
+      "Overall Flavor": 5,
+      "Smoothness": 5,
+      "Overall Liking": 5,
+      "comments": ""
+    },
+    "T51": {
+      "sample_name": "T51",
+      "Burnt Taste": 9,
+      "Vapor Volume": 4,
+      "Overall Flavor": 7,
+      "Smoothness": 6,
+      "Overall Liking": 7,
+      "comments": "Good flavor"
+    },
+    "T526": {
+      "sample_name": "T58G",
+      "Burnt Taste": 9,
+      "Vapor Volume": 6,
+      "Overall Flavor": 7,
+      "Smoothness": 4,
+      "Overall Liking": 6,
+      "comments": "Slightly better flavor than END (less burnt off)"
+    },
+    "C99": {
+      "sample_name": "C99",
+      "Burnt Taste": 9,
+      "Vapor Volume": 5,
+      "Overall Flavor": 4,
+      "Smoothness": 5,
+      "Overall Liking": 5,
+      "comments": "Slightly less flavor than END but pretty similar"
+    }
+  },
+  "training-3.jpg": {
+    "EVO": {
+      "sample_name": "EVO",
+      "Burnt Taste": 9,
+      "Vapor Volume": 5,
+      "Overall Flavor": 5,
+      "Smoothness": 5,
+      "Overall Liking": 5,
+      "comments": ""
+    },
+    "T6": {
+      "sample_name": "T6",
+      "Burnt Taste": 5,
+      "Vapor Volume": null,
+      "Overall Flavor": null,
+      "Smoothness": null,
+      "Overall Liking": null,
+      "comments": ""
+    },
+    "T2": {
+      "sample_name": "T2",
+      "Burnt Taste": 9,
+      "Vapor Volume": 7,
+      "Overall Flavor": 7,
+      "Smoothness": 4,
+      "Overall Liking": 7,
+      "comments": "Slightly clogged on first puff"
+    }
+  },
+  "training-4.jpg": {
+    "EVD": {
+      "sample_name": "EVO",
+      "Burnt Taste": 9,
+      "Vapor Volume": 5,
+      "Overall Flavor": 5,
+      "Smoothness": 5,
+      "Overall Liking": 5,
+      "comments": ""
+    },
+    "T51": {
+      "sample_name": "T51",
+      "Burnt Taste": 9,
+      "Vapor Volume": 6,
+      "Overall Flavor": 5,
+      "Smoothness": 5,
+      "Overall Liking": 5,
+      "comments": ""
+    },
+    "T586": {
+      "sample_name": "T586",
+      "Burnt Taste": 9,
+      "Vapor Volume": 6,
+      "Overall Flavor": 4,
+      "Smoothness": 4,
+      "Overall Liking": 4,
+      "comments": ""
+    },
+    "C99": {
+      "sample_name": "C99",
+      "Burnt Taste": 7,
+      "Vapor Volume": 5,
+      "Overall Flavor": 3,
+      "Smoothness": 3,
+      "Overall Liking": 3,
+      "comments": ""
+    }
+  },
+  "training-5.jpg": {
+    "F00": {
+      "sample_name": "F00",
+      "Burnt Taste": 9,
+      "Vapor Volume": 5,
+      "Overall Flavor": 5,
+      "Smoothness": 5,
+      "Overall Liking": 5,
+      "comments": ""
+    },
+    "T6": {
+      "sample_name": "T6",
+      "Burnt Taste": 9,
+      "Vapor Volume": 5,
+      "Overall Flavor": 6,
+      "Smoothness": 5,
+      "Overall Liking": 6,
+      "comments": ""
+    },
+    "T7": {
+      "sample_name": "T7",
+      "Burnt Taste": 9,
+      "Vapor Volume": 5,
+      "Overall Flavor": 6,
+      "Smoothness": 5,
+      "Overall Liking": 5,
+      "comments": "so high draw res"
+    },
+    "Sample 4": {
+      "sample_name": "Sample 4",
+      "Burnt Taste": null,
+      "Vapor Volume": null,
+      "Overall Flavor": null,
+      "Smoothness": null,
+      "Overall Liking": null,
+      "comments": ""
+    }
+  },
+  "training-6.jpg": {
+    "EVD": {
+      "sample_name": "EVD",
+      "Burnt Taste": 9,
+      "Vapor Volume": 5,
+      "Overall Flavor": 5,
+      "Smoothness": 5,
+      "Overall Liking": 5,
+      "comments": ""
+    },
+    "T51": {
+      "sample_name": "T51",
+      "Burnt Taste": 9,
+      "Vapor Volume": 7,
+      "Overall Flavor": 8,
+      "Smoothness": 8,
+      "Overall Liking": 8,
+      "comments": ""
+    },
+    "T586": {
+      "sample_name": "T586",
+      "Burnt Taste": 9,
+      "Vapor Volume": 6,
+      "Overall Flavor": 6,
+      "Smoothness": 6,
+      "Overall Liking": 6,
+      "comments": ""
+    },
+    "C99": {
+      "sample_name": "C99",
+      "Burnt Taste": 9,
+      "Vapor Volume": 7,
+      "Overall Flavor": 8,
+      "Smoothness": 7,
+      "Overall Liking": 8,
+      "comments": ""
+    }
+  },
+  "training-7.jpg": {
+    "EVO": {
+      "sample_name": "EVO",
+      "Burnt Taste": 9,
+      "Vapor Volume": 5,
+      "Overall Flavor": 5,
+      "Smoothness": 5,
+      "Overall Liking": 5,
+      "comments": ""
+    },
+    "T6": {
+      "sample_name": "T6",
+      "Burnt Taste": 9,
+      "Vapor Volume": 8,
+      "Overall Flavor": 7,
+      "Smoothness": 7,
+      "Overall Liking": 7,
+      "comments": ""
+    },
+    "T2": {
+      "sample_name": "T2",
+      "Burnt Taste": 9,
+      "Vapor Volume": 9,
+      "Overall Flavor": 8,
+      "Smoothness": 8,
+      "Overall Liking": 8,
+      "comments": ""
+    },
+    "Sample D": {
+      "sample_name": "Sample D",
+      "Burnt Taste": null,
+      "Vapor Volume": null,
+      "Overall Flavor": null,
+      "Smoothness": null,
+      "Overall Liking": null,
+      "comments": ""
+    }
+  },
+  "training-8.jpg": {
+    "EVD": {
+      "sample_name": "EVO",
+      "Burnt Taste": 9,
+      "Vapor Volume": 5,
+      "Overall Flavor": 5,
+      "Smoothness": 5,
+      "Overall Liking": 5,
+      "comments": ""
+    },
+    "TS1": {
+      "sample_name": "TS1",
+      "Burnt Taste": 9,
+      "Vapor Volume": 7,
+      "Overall Flavor": 6,
+      "Smoothness": 8,
+      "Overall Liking": 7,
+      "comments": "good moved tank very smooth"
+    },
+    "TS8C": {
+      "sample_name": "TS8C",
+      "Burnt Taste": 9,
+      "Vapor Volume": 7,
+      "Overall Flavor": 5,
+      "Smoothness": 5,
+      "Overall Liking": 3,
+      "comments": "high citron resistants finished"
+    },
+    "C99": {
+      "sample_name": "C99",
+      "Burnt Taste": 8,
+      "Vapor Volume": 8,
+      "Overall Flavor": 7,
+      "Smoothness": 7,
+      "Overall Liking": 7,
+      "comments": "Very good oil turned But in this demo"
+    }
+  },
+  "training-9.jpg": {
+    "TPK 28V": {
+      "sample_name": "TPK 28V",
+      "Burnt Taste": 9,
+      "Vapor Volume": 3,
+      "Overall Flavor": 8,
+      "Smoothness": 8,
+      "Overall Liking": 6,
+      "comments": "Winner!"
+    },
+    "32V": {
+      "sample_name": "32V",
+      "Burnt Taste": 9,
+      "Vapor Volume": 5,
+      "Overall Flavor": 5,
+      "Smoothness": 5,
+      "Overall Liking": 5,
+      "comments": ""
+    },
+    "TPK 34": {
+      "sample_name": "TPK 34",
+      "Burnt Taste": 9,
+      "Vapor Volume": 6,
+      "Overall Flavor": 3,
+      "Smoothness": 3,
+      "Overall Liking": 3,
+      "comments": ""
+    },
+    "TPK 32V": {
+      "sample_name": "TPK 32V",
+      "Burnt Taste": 9,
+      "Vapor Volume": 4,
+      "Overall Flavor": 6,
+      "Smoothness": 6,
+      "Overall Liking": 5,
+      "comments": ""
+    }
+  }
+}

@@ -363,6 +363,36 @@ class SimpleTrainingAssistant:
         
         print(f"DEBUG: Session log saved to {log_filename}")
 
+    def apply_augmentation(self, image, config):
+            """
+            Apply augmentation based on configuration.
+            """
+            augmented = image.copy().astype(np.float32)
+        
+            # Apply rotation
+            if config.get('rotation', 0) != 0:
+                angle = config['rotation']
+                h, w = augmented.shape
+                center = (w // 2, h // 2)
+                rotation_matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
+                augmented = cv2.warpAffine(augmented, rotation_matrix, (w, h), 
+                                         borderMode=cv2.BORDER_REFLECT)
+        
+            # Apply noise
+            if config.get('noise', 0) > 0:
+                noise_level = config['noise']
+                noise = np.random.normal(0, noise_level * 255, augmented.shape)
+                augmented = augmented + noise
+                augmented = np.clip(augmented, 0, 255)
+        
+            # Apply brightness adjustment
+            if config.get('brightness', 0) != 0:
+                brightness_factor = 1.0 + config['brightness']
+                augmented = augmented * brightness_factor
+                augmented = np.clip(augmented, 0, 255)
+        
+            return augmented.astype(np.uint8)
+
 # Example usage
 if __name__ == "__main__":
     print("Simple Training Assistant")
@@ -376,6 +406,6 @@ if __name__ == "__main__":
         print()
         print("Usage:")
         print("  assistant.process_training_images('path/to/your/images')")
-        assistant.process_training_images(r"C:\Users\Alexander Becquet\Documents\Python\Python\TPM Data Processing Python Scripts\Standardized Testing GUI\git testing\DataViewer\scanned_forms")
+        assistant.process_training_images(r"C:\Users\Alexander Becquet\Documents\Python\Python\TPM Data Processing Python Scripts\Standardized Testing GUI\git testing\DataViewer\scanned_forms\July 15 Training")
     except Exception as e:
         print(f"Error initializing assistant: {e}")

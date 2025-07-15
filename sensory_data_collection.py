@@ -16,7 +16,7 @@ from datetime import datetime
 import json
 import os
 from utils import APP_BACKGROUND_COLOR, BUTTON_COLOR, FONT, debug_print
-from claude_form_processor import ClaudeFormProcessor
+from enhanced_claude_form_processor import EnhancedClaudeFormProcessor
 
 def _lazy_import_cv2():
     """Lazy import opencv."""
@@ -172,8 +172,9 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         file_menu.add_command(label="Load Session", command=self.load_session)
         file_menu.add_command(label="Save Session", command=self.save_session)
         file_menu.add_separator()
-        file_menu.add_command(label="Load from Image (ML)", command=self.load_from_image)
+        file_menu.add_command(label="Load from Image (ML)", command=self.load_from_image_enhanced) #add this back once new function added
         file_menu.add_command(label="Load with AI (Claude)", command=self.load_from_image_with_ai)
+        file_menu.add_command(label="Batch Process with AI", command=self.batch_process_with_ai)
         file_menu.add_separator()
         file_menu.add_command(label="Export to Excel", command=self.export_to_excel)
         file_menu.add_separator()
@@ -206,252 +207,20 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         
         ml_menu = tk.Menu(menubar, tearoff=0)
     
-        # Basic setup
-        ml_menu.add_command(label="Create Enhanced Training Structure", command=self.create_enhanced_training_structure)
-        ml_menu.add_separator()
-    
-        # Enhanced extraction workflow
-        ml_menu.add_command(label="Extract with Shadow Removal", command=self.extract_training_data_enhanced)
-        ml_menu.add_command(label="Test Single Image (Enhanced)", command=self.test_enhanced_single_image)
-        ml_menu.add_command(label="Batch Process Folder (Enhanced)", command=self.batch_process_enhanced)
-        ml_menu.add_separator()
-    
-        # Training and validation
+       # Core ML workflow - no training structure creation (separate scripts handle this)
         ml_menu.add_command(label="Check Enhanced Data Balance", command=self.check_enhanced_data_balance)
         ml_menu.add_command(label="Train Enhanced Model", command=self.train_enhanced_model)
         ml_menu.add_separator()
-    
-        # Testing and deployment
+
+        # Testing and validation
         ml_menu.add_command(label="Test Enhanced Model", command=self.test_enhanced_model)
         ml_menu.add_command(label="Validate Model Performance", command=self.validate_enhanced_performance)
         ml_menu.add_separator()
-    
+
         # Configuration management
         ml_menu.add_command(label="Update Processor Configuration", command=self.update_processor_config)
-        ml_menu.add_command(label="Compare Model Versions", command=self.compare_model_versions)
-    
+
         menubar.add_cascade(label="Enhanced ML", menu=ml_menu)
-
-    # Add these improved methods to your SensoryDataApp class in sensory_data_collection.py
-
-    def create_enhanced_training_structure(self):
-        """Create comprehensive enhanced training structure."""
-        try:
-            # Create all necessary directories
-            import os
-        
-            enhanced_dirs = [
-                "training_data/sensory_ratings",
-                "training_data/enhanced_extractions", 
-                "training_data/shadow_removal_debug",
-                "training_data/claude_analysis",
-                "training_data/logs",
-                "models/enhanced",
-                "logs/enhanced_training",
-                "logs/enhanced_ml_processing",
-                "debug_production_regions"
-            ]
-        
-            created_dirs = []
-            for dir_path in enhanced_dirs:
-                os.makedirs(dir_path, exist_ok=True)
-                created_dirs.append(dir_path)
-        
-            # Create rating class directories
-            for rating in range(1, 10):
-                rating_dir = os.path.join("training_data/sensory_ratings", f"rating_{rating}")
-                os.makedirs(rating_dir, exist_ok=True)
-                created_dirs.append(rating_dir)
-        
-            print("="*60)
-            print("ENHANCED TRAINING STRUCTURE CREATED")
-            print("="*60)
-            for dir_path in created_dirs:
-                print(f"✓ {dir_path}")
-        
-            messagebox.showinfo("Enhanced Structure Created", 
-                              f"Enhanced training structure created!\n\n"
-                              f"Directories created: {len(created_dirs)}\n\n"
-                              f"Features:\n"
-                              f"• Shadow removal debugging\n"
-                              f"• Enhanced model versioning\n"
-                              f"• Production region debugging\n"
-                              f"• Comprehensive logging\n\n"
-                              f"Next: Extract with Shadow Removal")
-        
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to create enhanced structure: {e}")
-            import traceback
-            traceback.print_exc()
-
-    def extract_training_data_enhanced(self):
-        """Launch enhanced training extraction with shadow removal."""
-        try:
-            result = messagebox.askyesno("Enhanced Shadow Removal Extraction",
-                                       "Enhanced Training Data Extraction\n\n"
-                                       "Features:\n"
-                                       "• OCR-based boundary detection\n"
-                                       "• Advanced shadow removal preprocessing\n"
-                                       "• 600x140 high resolution extraction\n"
-                                       "• Comprehensive debugging output\n\n"
-                                       "Requirements:\n"
-                                       "• Tesseract OCR installed\n"
-                                       "• Form images ready for processing\n\n"
-                                       "Continue?")
-            if result:
-                from simple_training_assistant import SimpleTrainingAssistant
-                from tkinter import filedialog
-            
-                # Get training folder
-                training_folder = filedialog.askdirectory(
-                    title="Select folder containing form images for enhanced extraction"
-                )
-            
-                if training_folder:
-                    print("="*80)
-                    print("ENHANCED SHADOW REMOVAL EXTRACTION STARTING")
-                    print("="*80)
-                    print(f"Source folder: {training_folder}")
-                    print("Using: SimpleTrainingAssistant + ImprovedAttributeDetectionExtractor")
-                    print("Target resolution: 600x140 pixels")
-                    print("Features: Shadow removal, OCR boundaries, debug output")
-                
-                    # Initialize enhanced assistant
-                    assistant = SimpleTrainingAssistant()
-                
-                    # Process with enhanced workflow
-                    success = assistant.process_training_folder(training_folder)
-                
-                    if success:
-                        messagebox.showinfo("Enhanced Extraction Complete",
-                                          "Enhanced shadow removal extraction completed!\n\n"
-                                          "Results:\n"
-                                          "• High-resolution training regions extracted\n"
-                                          "• Shadow removal preprocessing applied\n"
-                                          "• Debug images saved for verification\n"
-                                          "• OCR boundary detection logs created\n\n"
-                                          "Check console for detailed results.\n\n"
-                                          "Next: Check Enhanced Data Balance")
-                    else:
-                        messagebox.showwarning("Extraction Issues",
-                                             "Enhanced extraction completed with some issues.\n"
-                                             "Check console output for detailed error information.")
-            
-        except Exception as e:
-            messagebox.showerror("Enhanced Extraction Error", f"Enhanced extraction failed: {e}")
-            import traceback
-            traceback.print_exc()
-
-    def test_enhanced_single_image(self):
-        """Test enhanced extraction on a single image."""
-        try:
-            from tkinter import filedialog
-            from enhanced_training_workflow import test_shadow_removal_on_image
-        
-            image_path = filedialog.askopenfilename(
-                title="Select form image for enhanced testing",
-                filetypes=[("Image files", "*.png *.jpg *.jpeg *.bmp *.tiff")]
-            )
-        
-            if image_path:
-                print("="*80)
-                print("ENHANCED SINGLE IMAGE TEST")
-                print("="*80)
-                print(f"Testing: {image_path}")
-                print("Method: Enhanced shadow removal + OCR boundary detection")
-            
-                success, extracted_data = test_shadow_removal_on_image(image_path)
-            
-                if success and extracted_data:
-                    total_regions = sum(len(sample_data) for sample_data in extracted_data.values())
-                    sample_names = list(extracted_data.keys())
-                
-                    result_msg = (f"Enhanced single image test successful!\n\n"
-                                 f"Results:\n"
-                                 f"• Samples detected: {len(sample_names)}\n"
-                                 f"• Total regions extracted: {total_regions}\n"
-                                 f"• Resolution: 600x140 pixels per region\n\n"
-                                 f"Sample names found:\n")
-                
-                    for name in sample_names[:4]:  # Show first 4
-                        result_msg += f"• {name}\n"
-                
-                    result_msg += (f"\nDebug files saved to:\n"
-                                  f"• training_data/debug_regions/\n"
-                                  f"• Shadow removal: debug_minimal_1x_shadows_removed.png\n\n"
-                                  f"Check console for detailed extraction log.")
-                
-                    messagebox.showinfo("Enhanced Test Complete", result_msg)
-                else:
-                    messagebox.showwarning("Enhanced Test Failed",
-                                         "Enhanced single image test failed.\n\n"
-                                         "Common issues:\n"
-                                         "• Tesseract OCR not installed/configured\n"
-                                         "• Poor image quality for OCR\n"
-                                         "• Unexpected form layout\n"
-                                         "• Shadow removal preprocessing issues\n\n"
-                                         "Check console for detailed error information.")
-                
-        except Exception as e:
-            messagebox.showerror("Test Error", f"Enhanced single image test failed: {e}")
-            import traceback
-            traceback.print_exc()
-
-    def batch_process_enhanced(self):
-        """Batch process folder with enhanced workflow."""
-        try:
-            from tkinter import filedialog
-            from enhanced_training_workflow import process_training_folder_with_shadow_removal
-        
-            folder_path = filedialog.askdirectory(
-                title="Select folder for enhanced batch processing"
-            )
-        
-            if folder_path:
-                # Count images first
-                import os
-                image_files = [f for f in os.listdir(folder_path) 
-                              if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.tiff'))]
-            
-                result = messagebox.askyesno("Enhanced Batch Processing",
-                                           f"Enhanced Batch Processing\n\n"
-                                           f"Folder: {folder_path}\n"
-                                           f"Images found: {len(image_files)}\n\n"
-                                           f"Processing method:\n"
-                                           f"• Shadow removal preprocessing\n"
-                                           f"• OCR boundary detection\n"
-                                           f"• High-resolution extraction (600x140)\n"
-                                           f"• Comprehensive debug output\n\n"
-                                           f"Estimated time: {len(image_files) * 30} seconds\n\n"
-                                           f"Continue?")
-                if result:
-                    print("="*80)
-                    print("ENHANCED BATCH PROCESSING WITH SHADOW REMOVAL")
-                    print("="*80)
-                    print(f"Processing {len(image_files)} images...")
-                
-                    success = process_training_folder_with_shadow_removal(folder_path)
-                
-                    if success:
-                        messagebox.showinfo("Enhanced Batch Complete",
-                                          f"Enhanced batch processing completed!\n\n"
-                                          f"Images processed: {len(image_files)}\n"
-                                          f"Output resolution: 600x140 pixels\n\n"
-                                          f"Results saved to:\n"
-                                          f"• training_data/debug_regions/\n"
-                                          f"• Enhanced extraction logs\n"
-                                          f"• Shadow removal debug images\n\n"
-                                          f"Check console for detailed success/failure rates.")
-                    else:
-                        messagebox.showwarning("Batch Processing Issues",
-                                             f"Enhanced batch processing completed with issues.\n\n"
-                                             f"Some images may have failed processing.\n"
-                                             f"Check console for detailed error information.")
-                
-        except Exception as e:
-            messagebox.showerror("Batch Error", f"Enhanced batch processing failed: {e}")
-            import traceback
-            traceback.print_exc()
 
     def check_enhanced_data_balance(self):
         """Check enhanced training data balance and quality."""
@@ -1746,52 +1515,6 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         ttk.Button(button_frame, text="Apply Changes", command=apply_changes).pack(side='left', padx=5)
         ttk.Button(button_frame, text="Cancel", command=rename_window.destroy).pack(side='right', padx=5)
 
-    def extract_training_data(self):
-        """Launch the training data extraction tool."""
-        try:
-            import subprocess
-            import sys
-        
-            # Run the training data helper as a separate process
-            result = messagebox.askyesno("Extract Training Data",
-                                       "This will launch the training data extraction tool.\n\n"
-                                       "Make sure you have your scanned forms ready.\n\n"
-                                       "Continue?")
-            if result:
-                subprocess.run([sys.executable, "training_data_helper.py"])
-            
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to launch extractor: {e}")
-
-    def check_training_data_balance(self):
-        """Check the balance of the current training dataset."""
-        try:
-            from training_data_helper import TrainingDataExtractor
-            extractor = TrainingDataExtractor()
-        
-            # Capture the output and show in a dialog
-            import io
-            import contextlib
-        
-            output = io.StringIO()
-            with contextlib.redirect_stdout(output):
-                extractor.check_dataset_balance()
-            
-            balance_info = output.getvalue()
-        
-            # Show in a scrollable text dialog
-            info_window = tk.Toplevel(self.window)
-            info_window.title("Training Data Balance")
-            info_window.geometry("400x300")
-        
-            text_widget = tk.Text(info_window, font=('Courier', 10))
-            text_widget.pack(fill='both', expand=True, padx=10, pady=10)
-            text_widget.insert('1.0', balance_info)
-            text_widget.config(state='disabled')
-        
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to check balance: {e}")
-
     def create_spider_plot(self):
         """Create a spider/radar plot of sensory data."""
         self.ax.clear()
@@ -2511,77 +2234,9 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         
             print(f"DEBUG: Auto-saved all data for {current_sample}")
 
-    def load_from_image(self):
-        """Load sensory data from a scanned form image using ML."""
-        # Check for ML dependencies
-        try:
-            import importlib.util
-            tf_spec = importlib.util.find_spec('tensorflow')
-            cv2_spec = importlib.util.find_spec('cv2')
-        
-            missing = []
-            if tf_spec is None:
-                missing.append('tensorflow')
-            if cv2_spec is None:
-                missing.append('opencv-python')
-            
-            if missing:
-                missing_str = ', '.join(missing)
-                messagebox.showwarning("Missing Dependencies", 
-                                     f"ML image processing requires: {missing_str}\n\n"
-                                     f"Install with: pip install {' '.join(missing)}")
-                return
-            
-        except Exception as e:
-            debug_print(f"Dependency check failed: {e}")
-    
-        filename = filedialog.askopenfilename(
-            filetypes=[
-                ("Image files", "*.png *.jpg *.jpeg *.tiff *.bmp"),
-                ("All files", "*.*")
-            ],
-            title="Load Sensory Form Image"
-        )
-    
-        if filename:
-            try:
-                # Show processing dialog
-                progress_window = tk.Toplevel(self.window)
-                progress_window.title("Processing Image with ML...")
-                progress_window.geometry("300x100")
-                progress_window.transient(self.window)
-                progress_window.grab_set()
-            
-                progress_label = ttk.Label(progress_window, text="Loading ML model and processing...", font=FONT)
-                progress_label.pack(expand=True)
-            
-                progress_bar = ttk.Progressbar(progress_window, mode='indeterminate')
-                progress_bar.pack(fill='x', padx=20, pady=10)
-                progress_bar.start()
-            
-                self.window.update()
-            
-                # Import and use ML processor (lazy loading)
-                from ml_form_processor import MLFormProcessor
-                processor = MLFormProcessor()
-                extracted_data, processed_img = processor.process_form_image(filename)
-            
-                # Stop progress bar
-                progress_bar.stop()
-                progress_window.destroy()
-            
-                # Show preview dialog
-                self.show_extraction_preview(extracted_data, processed_img, filename)
-            
-            except Exception as e:
-                if 'progress_window' in locals():
-                    progress_window.destroy()
-                messagebox.showerror("Error", f"Failed to process image: {e}")
-                debug_print(f"ML image processing error: {e}")
-               
-                
+                               
     def load_from_image_with_ai(self):
-        """Load sensory data from a scanned form image using Claude AI."""
+        """Load sensory data from a single form image using Enhanced Claude AI."""
     
         # Check for required dependencies
         try:
@@ -2602,7 +2257,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
                 ("Image files", "*.png *.jpg *.jpeg *.tiff *.bmp"),
                 ("All files", "*.*")
             ],
-            title="Load Sensory Form Image for AI Processing"
+            title="Load Sensory Form Image for Enhanced AI Processing"
         )
 
         if not filename:
@@ -2611,196 +2266,155 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         try:
             # Show processing dialog
             progress_window = tk.Toplevel(self.window)
-            progress_window.title("Processing with Claude AI...")
-            progress_window.geometry("350x120")
+            progress_window.title("Processing with Enhanced Claude AI...")
+            progress_window.geometry("400x150")
             progress_window.transient(self.window)
             progress_window.grab_set()
-        
+    
             progress_label = ttk.Label(progress_window, 
-                                     text="Sending image to Claude AI for analysis...", 
+                                     text="Processing image with shadow removal and AI analysis...", 
                                      font=FONT)
             progress_label.pack(expand=True, pady=10)
-        
+    
             progress_bar = ttk.Progressbar(progress_window, mode='indeterminate')
             progress_bar.pack(fill='x', padx=20, pady=10)
             progress_bar.start()
-        
+    
             self.window.update()
+    
+            # Process with Enhanced Claude AI
+            ai_processor = EnhancedClaudeFormProcessor()
         
-            # Process with Claude AI
-            ai_processor = ClaudeFormProcessor()
-            extracted_data = ai_processor.process_form_image(filename)
-        
+            # Process single image (uses shadow removal preprocessing)
+            image_data, processed_image = ai_processor.prepare_image_with_preprocessing(filename)
+            extracted_data = ai_processor.process_single_image_with_claude(image_data, filename)
+    
             # Stop progress bar
             progress_bar.stop()
             progress_window.destroy()
-        
-            # Show results preview
+    
+            # Show enhanced results preview
             if extracted_data:
-                self.show_ai_extraction_preview(extracted_data, filename)
+                self.show_enhanced_ai_extraction_preview(extracted_data, processed_image, filename)
             else:
                 messagebox.showwarning("No Data", "No sensory data could be extracted from the image.")
-            
+        
         except Exception as e:
             if 'progress_window' in locals():
                 progress_window.destroy()
-            messagebox.showerror("AI Processing Error", f"Failed to process image with AI: {e}")
-            debug_print(f"AI processing error: {e}")
+            messagebox.showerror("Enhanced AI Processing Error", f"Failed to process image with AI: {e}")
+            debug_print(f"Enhanced AI processing error: {e}")
 
-    def show_ai_extraction_preview(self, extracted_data, filename):
-        """Show a preview of AI-extracted data with editable sample names before loading."""
-        preview_window = tk.Toplevel(self.window)
-        preview_window.title("AI Extraction Results")
-        preview_window.geometry("900x650")
-        preview_window.transient(self.window)
-        preview_window.grab_set()
+    def batch_process_with_ai(self):
+        """Process a batch of form images using Enhanced Claude AI."""
     
-        # Create layout
-        main_frame = ttk.Frame(preview_window)
-        main_frame.pack(fill='both', expand=True, padx=10, pady=10)
+        # Check for required dependencies
+        try:
+            import anthropic
+        except ImportError as e:
+            messagebox.showerror("Missing Dependencies", 
+                               f"AI batch processing requires additional packages.\n\n"
+                               f"Install with: pip install anthropic pillow opencv-python\n\n"
+                               f"Error: {e}")
+            return
+
+        # Get folder containing images
+        folder_path = filedialog.askdirectory(
+            title="Select Folder Containing Form Images for Batch AI Processing"
+        )
+
+        if not folder_path:
+            return
+
+        try:
+            # Show processing dialog
+            progress_window = tk.Toplevel(self.window)
+            progress_window.title("Batch Processing with Enhanced Claude AI...")
+            progress_window.geometry("450x200")
+            progress_window.transient(self.window)
+            progress_window.grab_set()
     
-        # Title
-        title_label = ttk.Label(main_frame, 
-                               text=f"Claude AI extracted data from: {os.path.basename(filename)}", 
-                               font=('Arial', 12, 'bold'))
-        title_label.pack(pady=5)
-    
-        # Confidence indicator
-        confidence_label = ttk.Label(main_frame, 
-                                   text="✓ AI Processing Complete - Review and edit data below", 
-                                   font=('Arial', 10),
-                                   foreground='green')
-        confidence_label.pack(pady=2)
-    
-        # Sample name editing frame
-        name_edit_frame = ttk.LabelFrame(main_frame, text="Edit Sample Names", padding=10)
-        name_edit_frame.pack(fill='x', pady=5)
-    
-        # Store the sample name variables
-        sample_name_vars = {}
-        original_names = list(extracted_data.keys())
-    
-        # Create editable fields for sample names
-        name_grid_frame = ttk.Frame(name_edit_frame)
-        name_grid_frame.pack(fill='x')
-    
-        ttk.Label(name_grid_frame, text="Current Names → New Names:", font=('Arial', 10, 'bold')).grid(row=0, column=0, columnspan=4, pady=5)
-    
-        for i, original_name in enumerate(original_names):
-            row = (i // 2) + 1  # 2 samples per row
-            col = (i % 2) * 2
+            progress_label = ttk.Label(progress_window, 
+                                     text="Processing batch of images with shadow removal...", 
+                                     font=FONT)
+            progress_label.pack(expand=True, pady=10)
         
-            # Original name label
-            ttk.Label(name_grid_frame, text=f"{original_name}:").grid(row=row, column=col, sticky='w', padx=5, pady=2)
+            detail_label = ttk.Label(progress_window, 
+                                   text="Initializing...", 
+                                   font=('Arial', 9))
+            detail_label.pack(pady=5)
+    
+            progress_bar = ttk.Progressbar(progress_window, mode='indeterminate')
+            progress_bar.pack(fill='x', padx=20, pady=10)
+            progress_bar.start()
+    
+            self.window.update()
+    
+            # Initialize Enhanced Claude AI processor
+            ai_processor = EnhancedClaudeFormProcessor()
         
-            # Editable name entry
-            name_var = tk.StringVar(value=original_name)
-            sample_name_vars[original_name] = name_var
+            # Update progress
+            detail_label.config(text="Processing images with Claude AI...")
+            self.window.update()
         
-            name_entry = ttk.Entry(name_grid_frame, textvariable=name_var, width=20)
-            name_entry.grid(row=row, column=col+1, sticky='w', padx=5, pady=2)
+            # Process batch of images
+            batch_results = ai_processor.process_batch_images(folder_path)
     
-        # Quick rename buttons
-        quick_rename_frame = ttk.Frame(name_edit_frame)
-        quick_rename_frame.pack(fill='x', pady=5)
+            # Stop progress bar
+            progress_bar.stop()
+            progress_window.destroy()
     
-        def auto_increment_names():
-            """Auto-generate sequential sample names."""
-            base_name = tk.simpledialog.askstring("Base Name", "Enter base name (e.g., 'Sample'):")
-            if base_name:
-                for i, original_name in enumerate(original_names):
-                    sample_name_vars[original_name].set(f"{base_name} {i+1}")
-    
-        def clear_sample_numbers():
-            """Remove 'Sample X' and leave just numbers."""
-            for original_name in original_names:
-                current = sample_name_vars[original_name].get()
-                if current.startswith('Sample '):
-                    number = current.replace('Sample ', '')
-                    sample_name_vars[original_name].set(number)
-    
-        ttk.Button(quick_rename_frame, text="Auto-Increment Names", command=auto_increment_names).pack(side='left', padx=5)
-        ttk.Button(quick_rename_frame, text="Remove 'Sample' Prefix", command=clear_sample_numbers).pack(side='left', padx=5)
-    
-        # Data preview
-        data_frame = ttk.LabelFrame(main_frame, text="Extracted Ratings (Live Preview)", padding=10)
-        data_frame.pack(fill='both', expand=True, pady=5)
-    
-        # Create tree view for data
-        columns = ['Sample'] + self.metrics
-        tree = ttk.Treeview(data_frame, columns=columns, show='headings', height=8)
-    
-        for col in columns:
-            tree.heading(col, text=col)
-            tree.column(col, width=120)
-    
-        # Function to update the tree view when names change
-        def update_preview():
-            # Clear existing items
-            for item in tree.get_children():
-                tree.delete(item)
+            # Show batch results summary
+            successful_count = sum(1 for result in batch_results.values() if result['status'] == 'success')
+            total_count = len(batch_results)
         
-            # Repopulate with current names
-            for original_name in original_names:
-                current_name = sample_name_vars[original_name].get()
-                sample_data = extracted_data[original_name]
+            if successful_count > 0:
+                # Store the processor and results for review interface
+                self.ai_processor = ai_processor
             
-                values = [current_name]
-                for metric in self.metrics:
-                    values.append(sample_data.get(metric, 'N/A'))
-                tree.insert('', 'end', values=values)
-    
-        # Bind name changes to update preview
-        for name_var in sample_name_vars.values():
-            name_var.trace('w', lambda *args: update_preview())
-    
-        # Initial population
-        update_preview()
-        
-        # Add scrollbar to tree
-        tree_scroll = ttk.Scrollbar(data_frame, orient='vertical', command=tree.yview)
-        tree.configure(yscrollcommand=tree_scroll.set)
-    
-        tree.pack(side='left', fill='both', expand=True)
-        tree_scroll.pack(side='right', fill='y')
-    
-        # Show any additional comments or notes
-        if any('comments' in sample_data and sample_data['comments'] 
-               for sample_data in extracted_data.values()):
-            comments_frame = ttk.LabelFrame(main_frame, text="Additional Comments", padding=5)
-            comments_frame.pack(fill='x', pady=5)
-        
-            for original_name, sample_data in extracted_data.items():
-                if sample_data.get('comments'):
-                    comment_text = f"{sample_name_vars[original_name].get()}: {sample_data['comments']}"
-                    comment_label = ttk.Label(comments_frame, text=comment_text, font=('Arial', 9))
-                    comment_label.pack(anchor='w')
-    
-        # Buttons
-        button_frame = ttk.Frame(main_frame)
-        button_frame.pack(fill='x', pady=10)
-    
-        def load_ai_data():
-            # Create new data structure with updated names
-            final_data = {}
-            for original_name in original_names:
-                new_name = sample_name_vars[original_name].get().strip()
-                if not new_name:  # If empty, use original name
-                    new_name = original_name
+                result_msg = (f"Enhanced Batch Processing Complete!\n\n"
+                             f"Successfully processed: {successful_count}/{total_count} images\n"
+                             f"Features used:\n"
+                             f"• Shadow removal preprocessing\n"
+                             f"• Sample name extraction\n"
+                             f"• Enhanced AI analysis\n\n"
+                             f"Launch interactive review to verify and edit results?")
             
-                # Check for duplicate names
-                if new_name in final_data:
-                    messagebox.showerror("Duplicate Names", 
-                                       f"Sample name '{new_name}' is used more than once.\n"
-                                       f"Please ensure all sample names are unique.")
-                    return
-            
-                final_data[new_name] = extracted_data[original_name]
+                if messagebox.askyesno("Batch Processing Complete", result_msg):
+                    # Launch the interactive review interface
+                    ai_processor.launch_review_interface()
+                else:
+                    # Auto-load all successful results
+                    self.load_batch_results_directly(batch_results)
+            else:
+                messagebox.showerror("Batch Processing Failed", 
+                                   f"No images could be processed successfully.\n"
+                                   f"Check that images contain readable sensory evaluation forms.")
         
-            # Load the AI-extracted data with new names into the interface
-            for sample_name, sample_data in final_data.items():
-                self.samples[sample_name] = sample_data
+        except Exception as e:
+            if 'progress_window' in locals():
+                progress_window.destroy()
+            messagebox.showerror("Batch AI Processing Error", f"Failed to process batch: {e}")
+            debug_print(f"Batch AI processing error: {e}")
+
+    def load_batch_results_directly(self, batch_results):
+        """Load successful batch results directly without review interface."""
+        loaded_count = 0
+    
+        for image_path, result in batch_results.items():
+            if result['status'] == 'success':
+                extracted_data = result['extracted_data']
             
+                # Load each sample from this image
+                for sample_key, sample_data in extracted_data.items():
+                    # Create unique sample name with image identifier
+                    image_name = os.path.splitext(os.path.basename(image_path))[0]
+                    unique_sample_name = f"{image_name}_{sample_key}"
+                
+                    self.samples[unique_sample_name] = sample_data
+                    loaded_count += 1
+    
+        if loaded_count > 0:
             # Update UI
             self.update_sample_combo()
             self.update_sample_checkboxes()
@@ -2810,23 +2424,197 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
                 first_sample = list(self.samples.keys())[0]
                 self.sample_var.set(first_sample)
                 self.load_sample_data(first_sample)
+        
+            self.update_plot()
+        
+            messagebox.showinfo("Batch Load Complete", 
+                              f"Loaded {loaded_count} samples from batch processing!\n"
+                              f"You can now review and adjust the data as needed.")
+
+    def show_enhanced_ai_extraction_preview(self, extracted_data, processed_image, filename):
+        """Show enhanced AI extraction preview with shadow removal visualization."""
+        preview_window = tk.Toplevel(self.window)
+        preview_window.title("Enhanced AI Extraction Results")
+        preview_window.geometry("1200x800")
+        preview_window.transient(self.window)
+    
+        # Create main layout
+        main_frame = ttk.Frame(preview_window)
+        main_frame.pack(fill='both', expand=True, padx=10, pady=10)
+
+        # Title with enhanced info
+        title_label = ttk.Label(main_frame, 
+                               text=f"Enhanced Claude AI Results: {os.path.basename(filename)}", 
+                               font=('Arial', 14, 'bold'))
+        title_label.pack(pady=5)
+
+        # Feature info
+        info_label = ttk.Label(main_frame, 
+                              text="✓ Shadow removal preprocessing ✓ Sample name extraction ✓ Enhanced AI analysis", 
+                              font=('Arial', 10),
+                              foreground='green')
+        info_label.pack(pady=2)
+
+        # Create horizontal layout
+        content_frame = ttk.Frame(main_frame)
+        content_frame.pack(fill='both', expand=True, pady=10)
+
+        # Left side - Processed image
+        image_frame = ttk.LabelFrame(content_frame, text="Shadow-Removed Image", padding=10)
+        image_frame.pack(side='left', fill='both', expand=True, padx=(0, 10))
+
+        # Display processed image
+        try:
+            Image, ImageTk = _lazy_import_pil()
+            if Image and ImageTk:
+                # Convert processed image to PIL
+                pil_image = Image.fromarray(processed_image)
             
+                # Resize for display
+                display_width = 500
+                aspect_ratio = pil_image.height / pil_image.width
+                display_height = int(display_width * aspect_ratio)
+            
+                if display_height > 600:
+                    display_height = 600
+                    display_width = int(display_height / aspect_ratio)
+            
+                pil_image = pil_image.resize((display_width, display_height), Image.Resampling.LANCZOS)
+                photo = ImageTk.PhotoImage(pil_image)
+            
+                image_label = tk.Label(image_frame, image=photo)
+                image_label.image = photo  # Keep reference
+                image_label.pack()
+            else:
+                tk.Label(image_frame, text="Processed image\n(PIL not available for display)").pack()
+        except Exception as e:
+            tk.Label(image_frame, text=f"Error displaying image:\n{e}").pack()
+
+        # Right side - Data editing
+        data_frame = ttk.LabelFrame(content_frame, text="Extracted Data (Editable)", padding=10)
+        data_frame.pack(side='right', fill='both', expand=True)
+
+        # Sample name editing with enhanced features
+        sample_name_vars = {}
+        original_names = list(extracted_data.keys())
+
+        # Scrollable frame for data
+        canvas = tk.Canvas(data_frame)
+        scrollbar = ttk.Scrollbar(data_frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Enhanced sample display with better organization
+        for i, (original_name, sample_data) in enumerate(extracted_data.items()):
+            sample_frame = ttk.LabelFrame(scrollable_frame, text=f"Sample {i+1}", padding=10)
+            sample_frame.pack(fill='x', pady=5, padx=5)
+
+            # Sample name editing (enhanced to show extracted name)
+            name_frame = ttk.Frame(sample_frame)
+            name_frame.pack(fill='x', pady=(0, 5))
+
+            ttk.Label(name_frame, text="Sample Name:", font=('Arial', 10, 'bold')).pack(side='left')
+            sample_name_var = tk.StringVar(value=sample_data.get('sample_name', original_name))
+            sample_name_vars[original_name] = sample_name_var
+            name_entry = ttk.Entry(name_frame, textvariable=sample_name_var, width=25, font=('Arial', 10))
+            name_entry.pack(side='left', padx=(5, 0))
+
+            # Show if name was extracted vs. default
+            extracted_name = sample_data.get('sample_name', '')
+            if extracted_name and extracted_name != original_name:
+                ttk.Label(name_frame, text="✓ Extracted", foreground='green', font=('Arial', 8)).pack(side='left', padx=(5, 0))
+
+            # Enhanced ratings display with confidence indicators
+            ratings_frame = ttk.Frame(sample_frame)
+            ratings_frame.pack(fill='x')
+
+            for j, (attribute, rating) in enumerate(sample_data.items()):
+                if attribute not in ['comments', 'sample_name']:
+                    attr_frame = ttk.Frame(ratings_frame)
+                    attr_frame.pack(fill='x', pady=1)
+
+                    attr_label = ttk.Label(attr_frame, text=f"{attribute}:", width=15, anchor='w', font=('Arial', 9))
+                    attr_label.pack(side='left')
+
+                    rating_label = ttk.Label(attr_frame, text=f"Rating: {rating}", 
+                                           font=('Arial', 9, 'bold'))
+                    rating_label.pack(side='left', padx=(5, 0))
+
+                    # Add confidence indicator (placeholder - could be enhanced with actual confidence data)
+                    if rating is not None:
+                        conf_label = ttk.Label(attr_frame, text="✓ Detected", 
+                                             foreground='green', font=('Arial', 8))
+                    else:
+                        conf_label = ttk.Label(attr_frame, text="? Unclear", 
+                                             foreground='orange', font=('Arial', 8))
+                    conf_label.pack(side='left', padx=(10, 0))
+
+            # Comments section
+            if sample_data.get('comments'):
+                comments_frame = ttk.Frame(sample_frame)
+                comments_frame.pack(fill='x', pady=(5, 0))
+                ttk.Label(comments_frame, text="Comments:", font=('Arial', 9, 'bold')).pack(anchor='w')
+                ttk.Label(comments_frame, text=sample_data['comments'], 
+                         font=('Arial', 9), wraplength=300).pack(anchor='w', padx=(10, 0))
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # Enhanced buttons
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill='x', pady=10)
+
+        def load_enhanced_data():
+            final_data = {}
+            for original_name in original_names:
+                new_name = sample_name_vars[original_name].get().strip()
+                if not new_name:
+                    new_name = original_name
+
+                if new_name in final_data:
+                    messagebox.showerror("Duplicate Names", 
+                                       f"Sample name '{new_name}' is used more than once.")
+                    return
+
+                # Copy data and update sample name
+                final_data[new_name] = extracted_data[original_name].copy()
+                final_data[new_name]['sample_name'] = new_name
+
+            # Load into interface
+            for sample_name, sample_data in final_data.items():
+                self.samples[sample_name] = sample_data
+
+            self.update_sample_combo()
+            self.update_sample_checkboxes()
+
+            if self.samples:
+                first_sample = list(self.samples.keys())[0]
+                self.sample_var.set(first_sample)
+                self.load_sample_data(first_sample)
+
             self.update_plot()
             preview_window.destroy()
-        
-            messagebox.showinfo("Success", 
-                              f"Loaded {len(final_data)} samples from AI analysis!\n\n"
-                              f"Sample names have been updated as specified.\n"
-                              f"You can now review and adjust the ratings as needed.")
-        
-        def manual_edit():
-            # Load data and keep preview open for comparison
-            load_ai_data()
-            # Don't close preview window so user can reference it
-        
-        ttk.Button(button_frame, text="Load Data with New Names", command=load_ai_data).pack(side='left', padx=5)
-        ttk.Button(button_frame, text="Load & Keep Preview", command=manual_edit).pack(side='left', padx=5)
-        ttk.Button(button_frame, text="Cancel", command=preview_window.destroy).pack(side='right', padx=5)
+
+            messagebox.showinfo("Enhanced AI Loading Complete", 
+                              f"Successfully loaded {len(final_data)} samples!\n\n"
+                              f"Enhanced features used:\n"
+                              f"• Shadow removal preprocessing\n"
+                              f"• AI sample name extraction\n"
+                              f"• High-accuracy rating detection\n\n"
+                              f"Review and adjust ratings as needed.")
+
+        ttk.Button(button_frame, text="Load Enhanced Data", 
+                   command=load_enhanced_data, 
+                   style='Accent.TButton').pack(side='left', padx=5)
+        ttk.Button(button_frame, text="Cancel", 
+                   command=preview_window.destroy).pack(side='right', padx=5)
 
     def show_extraction_preview(self, extracted_data, processed_img, filename):
         """Show a preview of extracted data before loading."""
