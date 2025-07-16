@@ -1803,22 +1803,91 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         self.comments_text.bind('<FocusOut>', on_comment_change)
         self.comments_text.bind('<Button-1>', lambda e: self.window.after(100, on_comment_change))
          
-    def on_window_resize(self, event=None):
-        """Handle window resize events to maintain optimal layout."""
-        if event and event.widget == self.window:
-            # Only process resize events for the main window
-            current_width = self.window.winfo_width()
-            current_height = self.window.winfo_height()
+    def on_window_resize_plot(self, event):
+        """Handle window resize events to update plot size dynamically - ENHANCED DEBUG VERSION."""
+        print(f"DEBUG: RESIZE EVENT DETECTED - Widget: {event.widget}, Window: {self.window}")
+        print(f"DEBUG: Event widget type: {type(event.widget)}")
+        print(f"DEBUG: Window type: {type(self.window)}")
+        print(f"DEBUG: Event widget == window? {event.widget == self.window}")
+        print(f"DEBUG: Event widget is window? {event.widget is self.window}")
+    
+        # Only handle main window resize events, not child widgets
+        if event.widget != self.window:
+            print(f"DEBUG: Ignoring resize event from child widget: {event.widget}")
+            return
         
-            # Check if window is getting too small for content
-            min_safe_width = 900
-            min_safe_height = 500
+        print("DEBUG: MAIN WINDOW RESIZE CONFIRMED - Processing...")
+    
+        # Get current window dimensions for verification
+        current_width = self.window.winfo_width()
+        current_height = self.window.winfo_height()
+        print(f"DEBUG: Current window dimensions: {current_width}x{current_height}")
+    
+        # Debounce rapid resize events
+        if hasattr(self, '_resize_timer'):
+            self.window.after_cancel(self._resize_timer)
+            print("DEBUG: Cancelled previous resize timer")
+    
+        # Schedule plot size update with a small delay to avoid excessive updates
+        self._resize_timer = self.window.after(150, self.update_plot_size_for_resize)
+        print("DEBUG: Scheduled plot resize update in 150ms")
+
+    def on_window_resize_plot(self, event):
+        """Handle window resize events to update plot size dynamically."""
+        # Only handle main window resize events, not child widgets
+        if event.widget != self.window:
+            return
         
-            if current_width < min_safe_width or current_height < min_safe_height:
-                safe_width = max(current_width, min_safe_width)
-                safe_height = max(current_height, min_safe_height)
-                self.window.geometry(f"{safe_width}x{safe_height}")
-                print(f"DEBUG: Window resized to safe dimensions: {safe_width}x{safe_height}")
+        print("DEBUG: Window resize detected, checking if plot size update needed")
+    
+        # Debounce rapid resize events
+        if hasattr(self, '_resize_timer'):
+            self.window.after_cancel(self._resize_timer)
+    
+        # Schedule plot size update with a small delay to avoid excessive updates
+        self._resize_timer = self.window.after(150, self.update_plot_size_for_resize)
+
+    def update_plot_size_for_resize(self):
+        """Update plot size after window resize with proper error handling."""
+        try:
+            print("DEBUG: Executing delayed plot size update after window resize")
+        
+            # Check if we have the necessary components
+            if not hasattr(self, 'canvas_frame') or not self.canvas_frame.winfo_exists():
+                print("DEBUG: Canvas frame not available, skipping resize update")
+                return
+            
+            if not hasattr(self, 'fig') or not self.fig:
+                print("DEBUG: Figure not available, skipping resize update")
+                return
+        
+            # Get the parent frame for size calculation (plot_frame from setup_plot_panel)
+            plot_panel_frame = self.canvas_frame.master
+        
+            # Calculate new optimal size
+            new_width, new_height = self.calculate_dynamic_plot_size(plot_panel_frame)
+        
+            # Get current figure size
+            current_width, current_height = self.fig.get_size_inches()
+        
+            # Only update if size change is significant (avoid tiny adjustments)
+            width_diff = abs(new_width - current_width)
+            height_diff = abs(new_height - current_height)
+        
+            if width_diff > 0.2 or height_diff > 0.1:  # 0.1 inch threshold
+                print(f"DEBUG: Significant size change detected, updating plot from {current_width:.2f}x{current_height:.2f} to {new_width:.2f}x{new_height:.2f}")
+            
+                # Update figure size
+                self.fig.set_size_inches(new_width, new_height)
+            
+                # Redraw the canvas
+                self.canvas.draw()
+                print("DEBUG: Plot size updated and redrawn successfully")
+            else:
+                print("DEBUG: Size change too small, skipping plot update")
+            
+        except Exception as e:
+            print(f"DEBUG: Error during plot resize update: {str(e)}")
 
     def setup_plot_panel(self):
         """Setup the right panel for spider plot visualization."""
@@ -1841,20 +1910,26 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         self.setup_plot_canvas(plot_frame)
         
     def setup_plot_canvas(self, parent):
-        """Create the matplotlib canvas for the spider plot with better resizing."""
-        print("DEBUG: Setting up enhanced plot canvas")
+        """Create the matplotlib canvas for the spider plot with dynamic responsive sizing."""
+        print("DEBUG: Setting up enhanced plot canvas with dynamic sizing")
     
-        # Create figure with responsive sizing - REDUCED to 75% of original size
-        self.fig, self.ax = plt.subplots(figsize=(6, 4.8), subplot_kw=dict(projection='polar'))  # CHANGED: from (10, 8) to (6,4.8)
+        # Calculate dynamic plot size based on available space
+        dynamic_width, dynamic_height = self.calculate_dynamic_plot_size(parent)
+    
+        # Create figure with calculated responsive sizing
+        self.fig, self.ax = plt.subplots(figsize=(dynamic_width, dynamic_height), subplot_kw=dict(projection='polar'))
         self.fig.patch.set_facecolor('white')
-        debug_print("Created spider plot with 75% size: 7.5x6 inches (was 10x8)")
+        print(f"DEBUG: Created spider plot with dynamic size: {dynamic_width:.2f}x{dynamic_height:.2f} inches")
     
         self.fig.subplots_adjust(left=0.15, right=0.8, top=0.8, bottom=0.08)
-        debug_print("Applied subplot adjustments for smaller plot")
-            
+        print("DEBUG: Applied subplot adjustments for dynamic plot")
+        
         # Create canvas with scrollbars
         canvas_frame = ttk.Frame(parent)
         canvas_frame.pack(fill='both', expand=True)
+    
+        # Store reference to canvas_frame for resize handling
+        self.canvas_frame = canvas_frame
     
         # Create canvas
         self.canvas = FigureCanvasTkAgg(self.fig, canvas_frame)
@@ -1863,13 +1938,15 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
     
         # Add toolbar for additional functionality
         self.setup_plot_context_menu(canvas_widget)
-        debug_print("Plot canvas setup complete with right-click context menu")
-    
-        print("DEBUG: Plot canvas setup complete with toolbar")
+        print("DEBUG: Plot canvas setup complete with dynamic sizing and right-click context menu")
     
         # Initialize empty plot
         self.update_plot()
-        
+    
+        # Bind window resize events to update plot size
+        self.window.bind('<Configure>', self.on_window_resize_plot, add=True)
+        print("DEBUG: Window resize binding added for dynamic plot updates")
+
     def setup_plot_context_menu(self, canvas_widget):
         """Set up right-click context menu for plot with essential functionality."""
         from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk
@@ -2261,6 +2338,80 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
     
         ttk.Button(button_frame, text="Apply Changes", command=apply_changes).pack(side='left', padx=5)
         ttk.Button(button_frame, text="Cancel", command=rename_window.destroy).pack(side='right', padx=5)
+
+    def calculate_dynamic_plot_size(self, parent_frame):
+        """Calculate optimal plot size based on available canvas space with aspect ratio preservation."""
+        print("DEBUG: Starting dynamic plot size calculation")
+    
+        # Update geometry to get current dimensions
+        self.window.update_idletasks()
+    
+        # Get the parent frame dimensions (this is the plot_frame from setup_plot_panel)
+        parent_frame.update_idletasks()
+        available_width = parent_frame.winfo_width()
+        available_height = parent_frame.winfo_height()
+    
+        print(f"DEBUG: Available canvas space - Width: {available_width}px, Height: {available_height}px")
+    
+        # Ensure we have reasonable minimum dimensions
+        if available_width < 100 or available_height < 100:
+            print("DEBUG: Canvas too small, using fallback dimensions")
+            return (6, 4.8)  # Original fallback size
+    
+        # Reserve space for controls and padding (checkbox frame, labels, margins)
+        control_height_reserve = 80  # Space for checkboxes and labels
+        padding_reserve = 40  # General padding around plot
+    
+        # Calculate usable space for the actual plot
+        usable_width = available_width - 10  # 10 pixels less than canvas width as requested
+        usable_height = available_height - control_height_reserve - padding_reserve
+    
+        print(f"DEBUG: Usable plot space - Width: {usable_width}px, Height: {usable_height}px")
+    
+        # Convert pixels to inches (matplotlib figsize uses inches)
+        # Standard DPI is typically 100, but we'll use 100 for consistent sizing
+        plot_dpi = 100
+        max_width_inches = usable_width / plot_dpi
+        max_height_inches = usable_height / plot_dpi
+    
+        # Define preferred aspect ratio (width:height) for spider plots
+        preferred_aspect_ratio = 1.25  # 5:4 ratio works well for circular spider plots
+    
+        # Calculate dimensions while maintaining aspect ratio
+        # Try width-constrained first
+        width_constrained_width = max_width_inches
+        width_constrained_height = width_constrained_width / preferred_aspect_ratio
+    
+        # Try height-constrained
+        height_constrained_height = max_height_inches
+        height_constrained_width = height_constrained_height * preferred_aspect_ratio
+    
+        # Choose the constraint that fits within both limits
+        if width_constrained_height <= max_height_inches:
+            # Width constraint works
+            final_width = width_constrained_width
+            final_height = width_constrained_height
+            constraint_type = "width"
+        else:
+            # Height constraint needed
+            final_width = height_constrained_width
+            final_height = height_constrained_height
+            constraint_type = "height"
+    
+        # Apply reasonable bounds
+        min_size = 2.0  # Minimum 3 inches
+        max_size = 12.0  # Maximum 12 inches
+    
+        final_width = max(min_size, min(final_width, max_size))
+        final_height = max(min_size, min(final_height, max_size))
+    
+        print(f"DEBUG: Calculated plot size - {final_width:.2f}x{final_height:.2f} inches")
+        print(f"DEBUG: Constraint applied: {constraint_type}, Aspect ratio: {final_width/final_height:.2f}")
+        print(f"DEBUG: Final plot will be approximately {int(final_width*plot_dpi)}x{int(final_height*plot_dpi)} pixels")
+    
+        return (final_width, final_height)
+
+
 
     def create_spider_plot(self):
         """Create a spider/radar plot of sensory data."""
