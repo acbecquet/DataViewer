@@ -74,9 +74,15 @@ class SensoryDataCollectionWindow:
         self.parent = parent
         self.window = None
         self.data = {}
+        self.sessions = {}  # {'session_id': {'header': {}, 'samples': {}, 'timestamp': '', 'source_image': ''}}
+        self.current_session_id = None
+        self.session_counter = 1
         self.samples = {}
         self.current_sample = None
-        
+        print("DEBUG: Initialized session-based data structure")
+        print(f"DEBUG: self.sessions = {self.sessions}")
+        print(f"DEBUG: self.current_session_id = {self.current_session_id}")
+        print(f"DEBUG: self.session_counter = {self.session_counter}")
         # Sensory metrics (5 attributes)
         self.metrics = [
             "Burnt Taste",
@@ -137,8 +143,8 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         screen_width = self.window.winfo_screenwidth()
         screen_height = self.window.winfo_screenheight()
         # CHANGED: Make window 75% of original size (0.9 * 0.75 = 0.675 of screen)
-        window_width = min(int(screen_width * 0.675), 1350)  # 67.5% of screen, max 1350 (75% of 1800)
-        window_height = min(int(screen_height * 0.675), 900)   # 67.5% of screen, max 900 (75% of 1200)
+        window_width = min(int(screen_width * 0.66), 1600)   # 88% of screen, max 1600 pixels
+        window_height = min(int(screen_height * 0.78), 1000)  # 78% of screen, max 1000 pixels
 
         
         self.window.geometry(f"{window_width}x{window_height}")
@@ -171,6 +177,8 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         file_menu.add_command(label="New Session", command=self.new_session)
         file_menu.add_command(label="Load Session", command=self.load_session)
         file_menu.add_command(label="Save Session", command=self.save_session)
+        file_menu.add_separator()
+        file_menu.add_command(label="Merge Sessions from Files", command=self.merge_sessions_from_files)
         file_menu.add_separator()
         file_menu.add_command(label="Load from Image (ML)", command=self.load_from_image_enhanced) #add this back once new function added
         file_menu.add_command(label="Load with AI (Claude)", command=self.load_from_image_with_ai)
@@ -221,6 +229,527 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         ml_menu.add_command(label="Update Processor Configuration", command=self.update_processor_config)
 
         menubar.add_cascade(label="Enhanced ML", menu=ml_menu)
+
+    def merge_sessions_from_files(self):
+        """Merge multiple session JSON files into a new session."""
+    
+        print("DEBUG: Starting merge sessions from files")
+    
+        # Select multiple JSON files
+        filenames = filedialog.askopenfilenames(
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            title="Select Session Files to Merge (Hold Ctrl to select multiple)"
+        )
+    
+        if not filenames or len(filenames) < 2:
+            messagebox.showinfo("Insufficient Files", 
+                              "Please select at least 2 session files to merge.")
+            return
+    
+        print(f"DEBUG: Selected {len(filenames)} files for merging")
+    
+        # Load and validate all session files
+        loaded_sessions = {}
+        failed_files = []
+    
+        for filename in filenames:
+            try:
+                with open(filename, 'r') as f:
+                    session_data = json.load(f)
+            
+                # Validate session data structure
+                if self.validate_session_data(session_data):
+                    session_name = os.path.splitext(os.path.basename(filename))[0]
+                    loaded_sessions[session_name] = {
+                        'file_path': filename,
+                        'data': session_data
+                    }
+                    print(f"DEBUG: Successfully loaded session from {filename}")
+                else:
+                    failed_files.append(filename)
+                    print(f"DEBUG: Invalid session format in {filename}")
+                
+            except Exception as e:
+                failed_files.append(filename)
+                print(f"DEBUG: Failed to load {filename}: {e}")
+    
+        if not loaded_sessions:
+            messagebox.showerror("Load Error", 
+                               "No valid session files could be loaded.\n"
+                               "Ensure files are in the correct JSON format.")
+            return
+    
+        if failed_files:
+            failed_list = '\n'.join([os.path.basename(f) for f in failed_files])
+            messagebox.showwarning("Some Files Failed", 
+                                 f"Failed to load {len(failed_files)} files:\n{failed_list}\n\n"
+                                 f"Continuing with {len(loaded_sessions)} valid files.")
+    
+        # Show merge configuration dialog
+        self.show_merge_sessions_dialog(loaded_sessions)
+
+    def validate_session_data(self, session_data):
+        """Validate that the JSON file has the correct session format."""
+    
+        print("DEBUG: Validating session data structure")
+    
+        if not isinstance(session_data, dict):
+            print("DEBUG: Session data is not a dictionary")
+            return False
+    
+        # Check for required top-level keys
+        required_keys = ['samples']
+        if not all(key in session_data for key in required_keys):
+            print(f"DEBUG: Missing required keys. Found: {list(session_data.keys())}")
+            return False
+    
+        # Check samples structure
+        samples = session_data.get('samples', {})
+        if not isinstance(samples, dict):
+            print("DEBUG: Samples is not a dictionary")
+            return False
+    
+        # Validate sample data structure
+        for sample_name, sample_data in samples.items():
+            if not isinstance(sample_data, dict):
+                print(f"DEBUG: Sample {sample_name} data is not a dictionary")
+                return False
+        
+            # Check for expected metrics (at least some should be present)
+            metrics_found = sum(1 for metric in self.metrics if metric in sample_data)
+            if metrics_found == 0:
+                print(f"DEBUG: No valid metrics found in sample {sample_name}")
+                return False
+    
+        print("DEBUG: Session data validation passed")
+        return True
+
+    def show_merge_sessions_dialog(self, loaded_sessions):
+        """Show dialog to configure session merging."""
+    
+        print(f"DEBUG: Showing merge dialog for {len(loaded_sessions)} sessions")
+    
+        # Create dialog window
+        merge_window = tk.Toplevel(self.window)
+        merge_window.title("Merge Session Files")
+        merge_window.geometry("600x500")
+        merge_window.transient(self.window)
+        merge_window.grab_set()
+    
+        # Main frame
+        main_frame = ttk.Frame(merge_window)
+        main_frame.pack(fill='both', expand=True, padx=10, pady=10)
+    
+        # Title
+        title_label = ttk.Label(main_frame, 
+                               text="Configure Session Merge", 
+                               font=('Arial', 14, 'bold'))
+        title_label.pack(pady=(0, 10))
+    
+        # Instructions
+        instructions = ("Select which sessions to include in the merge.\n"
+                       "Conflicting sample names will be automatically renamed.\n"
+                       "Header information will be merged where possible.")
+    
+        ttk.Label(main_frame, text=instructions, 
+                 font=('Arial', 9), justify='left').pack(pady=(0, 15))
+    
+        # Session selection frame with scrollbar
+        selection_frame = ttk.LabelFrame(main_frame, text="Sessions to Merge", padding=10)
+        selection_frame.pack(fill='both', expand=True, pady=(0, 10))
+    
+        # Create scrollable frame
+        canvas = tk.Canvas(selection_frame, height=200)
+        scrollbar = ttk.Scrollbar(selection_frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+    
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+    
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+    
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+    
+        # Session checkboxes with details
+        session_vars = {}
+    
+        for session_name, session_info in loaded_sessions.items():
+            session_data = session_info['data']
+            sample_count = len(session_data.get('samples', {}))
+        
+            # Extract some header info for display
+            header = session_data.get('header', {})
+            assessor = header.get('Assessor Name', 'Unknown')
+            date = header.get('Date', 'Unknown')
+        
+            var = tk.BooleanVar(value=True)  # Default to checked
+            session_vars[session_name] = {
+                'var': var,
+                'data': session_data,
+                'file_path': session_info['file_path']
+            }
+        
+            # Create session info frame
+            session_frame = ttk.Frame(scrollable_frame)
+            session_frame.pack(fill='x', pady=2)
+        
+            # Checkbox and main info
+            info_text = f"{session_name} ({sample_count} samples)"
+            ttk.Checkbutton(session_frame, text=info_text, 
+                       variable=var).pack(anchor='w')
+        
+            # Additional details
+            details = f"   Assessor: {assessor} | Date: {date} | File: {os.path.basename(session_info['file_path'])}"
+            ttk.Label(session_frame, text=details, 
+                     font=('Arial', 8), foreground='gray').pack(anchor='w', padx=(20, 0))
+    
+        # Merge options frame
+        options_frame = ttk.LabelFrame(main_frame, text="Merge Options", padding=10)
+        options_frame.pack(fill='x', pady=(0, 10))
+    
+        # New session name
+        name_frame = ttk.Frame(options_frame)
+        name_frame.pack(fill='x', pady=(0, 5))
+    
+        ttk.Label(name_frame, text="Merged session name:").pack(side='left')
+        default_name = f"Merged_Session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        name_var = tk.StringVar(value=default_name)
+        name_entry = ttk.Entry(name_frame, textvariable=name_var, width=30)
+        name_entry.pack(side='right')
+    
+        # Header merge strategy
+        header_frame = ttk.Frame(options_frame)
+        header_frame.pack(fill='x', pady=5)
+    
+        ttk.Label(header_frame, text="Header merge strategy:").pack(side='left')
+        header_strategy = tk.StringVar(value="first")
+        header_combo = ttk.Combobox(header_frame, textvariable=header_strategy, 
+                                   values=["first", "most_recent", "manual"], 
+                                   state='readonly', width=15)
+        header_combo.pack(side='right')
+    
+        # Sample naming strategy
+        naming_frame = ttk.Frame(options_frame)
+        naming_frame.pack(fill='x', pady=5)
+    
+        ttk.Label(naming_frame, text="Duplicate sample naming:").pack(side='left')
+        naming_strategy = tk.StringVar(value="auto_rename")
+        naming_combo = ttk.Combobox(naming_frame, textvariable=naming_strategy,
+                                   values=["auto_rename", "prefix_session", "skip_duplicates"],
+                                   state='readonly', width=15)
+        naming_combo.pack(side='right')
+    
+        # Buttons frame
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill='x', pady=(10, 0))
+    
+        def perform_merge():
+            print("DEBUG: Starting merge process")
+        
+            # Get selected sessions
+            selected_sessions = {}
+            for session_name, session_info in session_vars.items():
+                if session_info['var'].get():
+                    selected_sessions[session_name] = session_info
+        
+            if len(selected_sessions) < 2:
+                messagebox.showwarning("Insufficient Selection", 
+                                     "Please select at least 2 sessions to merge.")
+                return
+        
+            new_session_name = name_var.get().strip()
+            if not new_session_name:
+                messagebox.showwarning("Invalid Name", "Please enter a name for the merged session.")
+                return
+        
+            print(f"DEBUG: Merging {len(selected_sessions)} sessions into '{new_session_name}'")
+        
+            # Perform the merge
+            success = self.execute_session_merge(
+                selected_sessions, 
+                new_session_name, 
+                header_strategy.get(), 
+                naming_strategy.get()
+            )
+        
+            if success:
+                merge_window.destroy()
+                messagebox.showinfo("Merge Complete", 
+                                  f"Successfully merged {len(selected_sessions)} sessions!\n"
+                                  f"New session: {new_session_name}")
+        
+        def select_all():
+            for session_info in session_vars.values():
+                session_info['var'].set(True)
+    
+        def select_none():
+            for session_info in session_vars.values():
+                session_info['var'].set(False)
+    
+        # Selection buttons
+        select_frame = ttk.Frame(button_frame)
+        select_frame.pack(side='left')
+    
+        ttk.Button(select_frame, text="Select All", command=select_all).pack(side='left', padx=2)
+        ttk.Button(select_frame, text="Select None", command=select_none).pack(side='left', padx=2)
+    
+        # Action buttons  
+        action_frame = ttk.Frame(button_frame)
+        action_frame.pack(side='right')
+    
+        ttk.Button(action_frame, text="Cancel", 
+                   command=merge_window.destroy).pack(side='left', padx=5)
+        ttk.Button(action_frame, text="Merge Sessions", 
+                   command=perform_merge).pack(side='left', padx=5)
+    
+        print("DEBUG: Merge dialog created successfully")
+
+    def execute_session_merge(self, selected_sessions, new_session_name, header_strategy, naming_strategy):
+        """Execute the actual merging of sessions."""
+    
+        print(f"DEBUG: Executing merge with strategy - header: {header_strategy}, naming: {naming_strategy}")
+    
+        try:
+            # Initialize merged session structure
+            merged_session = {
+                'header': {},
+                'samples': {},
+                'timestamp': datetime.now().isoformat(),
+                'merge_info': {
+                    'source_sessions': list(selected_sessions.keys()),
+                    'merge_date': datetime.now().isoformat(),
+                    'header_strategy': header_strategy,
+                    'naming_strategy': naming_strategy
+                }
+            }
+        
+            # Merge headers based on strategy
+            merged_session['header'] = self.merge_headers(selected_sessions, header_strategy)
+        
+            # Merge samples with conflict resolution
+            merged_samples, conflicts_resolved = self.merge_samples(selected_sessions, naming_strategy)
+            merged_session['samples'] = merged_samples
+        
+            # Create the new session in memory
+            if hasattr(self, 'sessions'):
+                # Using session-based structure
+                self.sessions[new_session_name] = merged_session
+                self.switch_to_session(new_session_name)
+                if hasattr(self, 'session_var'):
+                    self.session_var.set(new_session_name)
+                self.update_session_combo()
+            else:
+                # Fallback to old structure
+                self.samples = merged_samples
+            
+                # Update header fields
+                for field, value in merged_session['header'].items():
+                    if field in self.header_vars:
+                        self.header_vars[field].set(value)
+        
+            # Update UI
+            self.update_sample_combo()
+            self.update_sample_checkboxes()
+        
+            # Select first sample if available
+            if merged_samples:
+                first_sample = list(merged_samples.keys())[0]
+                self.sample_var.set(first_sample)
+                self.load_sample_data(first_sample)
+        
+            self.update_plot()
+        
+            # Log merge details
+            total_samples = len(merged_samples)
+            total_sessions = len(selected_sessions)
+        
+            print(f"DEBUG: Merge completed successfully")
+            print(f"DEBUG: Total samples: {total_samples}")
+            print(f"DEBUG: Conflicts resolved: {conflicts_resolved}")
+            print(f"DEBUG: Sessions merged: {total_sessions}")
+        
+            return True
+        
+        except Exception as e:
+            print(f"DEBUG: Merge execution failed: {e}")
+            messagebox.showerror("Merge Error", f"Failed to merge sessions: {e}")
+            return False
+
+    def merge_headers(self, selected_sessions, strategy):
+        """Merge header information based on the selected strategy."""
+    
+        print(f"DEBUG: Merging headers with strategy: {strategy}")
+    
+        all_headers = []
+        for session_name, session_info in selected_sessions.items():
+            header = session_info['data'].get('header', {})
+            if header:
+                all_headers.append((session_name, header))
+    
+        if not all_headers:
+            return {}
+    
+        if strategy == "first":
+            return all_headers[0][1].copy()
+    
+        elif strategy == "most_recent":
+            # Find header with most recent timestamp
+            most_recent = None
+            most_recent_time = None
+        
+            for session_name, header in all_headers:
+                session_data = selected_sessions[session_name]['data']
+                timestamp_str = session_data.get('timestamp', '')
+            
+                try:
+                    if timestamp_str:
+                        timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                        if most_recent_time is None or timestamp > most_recent_time:
+                            most_recent_time = timestamp
+                            most_recent = header
+                except:
+                    pass
+        
+            return most_recent.copy() if most_recent else all_headers[0][1].copy()
+    
+        elif strategy == "manual":
+            # For now, return first header - could be extended to show manual selection dialog
+            return all_headers[0][1].copy()
+    
+        return {}
+
+    def merge_samples(self, selected_sessions, naming_strategy):
+        """Merge samples with conflict resolution."""
+    
+        print(f"DEBUG: Merging samples with naming strategy: {naming_strategy}")
+    
+        merged_samples = {}
+        conflicts_resolved = 0
+    
+        for session_name, session_info in selected_sessions.items():
+            session_samples = session_info['data'].get('samples', {})
+        
+            for original_sample_name, sample_data in session_samples.items():
+                final_sample_name = original_sample_name
+            
+                # Handle naming conflicts
+                if final_sample_name in merged_samples:
+                    conflicts_resolved += 1
+                
+                    if naming_strategy == "auto_rename":
+                        counter = 1
+                        while f"{original_sample_name}_{counter}" in merged_samples:
+                            counter += 1
+                        final_sample_name = f"{original_sample_name}_{counter}"
+                
+                    elif naming_strategy == "prefix_session":
+                        final_sample_name = f"{session_name}_{original_sample_name}"
+                        counter = 1
+                        while final_sample_name in merged_samples:
+                            final_sample_name = f"{session_name}_{original_sample_name}_{counter}"
+                            counter += 1
+                
+                    elif naming_strategy == "skip_duplicates":
+                        print(f"DEBUG: Skipping duplicate sample: {original_sample_name}")
+                        continue
+            
+                # Copy sample data
+                merged_samples[final_sample_name] = sample_data.copy()
+            
+                print(f"DEBUG: Added sample {original_sample_name} as {final_sample_name}")
+    
+        print(f"DEBUG: Sample merge complete - {len(merged_samples)} total samples, {conflicts_resolved} conflicts resolved")
+    
+        return merged_samples, conflicts_resolved
+
+    def create_new_session(self, session_name=None, source_image=None):
+        """Create a new session for data collection."""
+        if session_name is None:
+            session_name = f"Session_{self.session_counter}"
+            self.session_counter += 1
+    
+        print(f"DEBUG: Creating new session: {session_name}")
+        print(f"DEBUG: Source image: {source_image}")
+    
+        # Create new session structure
+        self.sessions[session_name] = {
+            'header': {field: var.get() for field, var in self.header_vars.items()},
+            'samples': {},
+            'timestamp': datetime.now().isoformat(),
+            'source_image': source_image or ''
+        }
+    
+        # Switch to new session
+        self.current_session_id = session_name
+        self.samples = self.sessions[session_name]['samples']
+    
+        print(f"DEBUG: Session created successfully")
+        print(f"DEBUG: Current session ID: {self.current_session_id}")
+        print(f"DEBUG: Session structure: {self.sessions[session_name]}")
+    
+        self.update_session_combo()
+        self.update_sample_combo()
+        self.update_sample_checkboxes()
+    
+        return session_name
+
+    def switch_to_session(self, session_id):
+        """Switch to a specific session."""
+        if session_id not in self.sessions:
+            print(f"DEBUG: Session {session_id} not found")
+            return False
+
+        print(f"DEBUG: Switching from session {self.current_session_id} to {session_id}")
+
+        # Save current session data before switching
+        if self.current_session_id and self.current_session_id in self.sessions:
+            self.sessions[self.current_session_id]['samples'] = self.samples
+            self.sessions[self.current_session_id]['header'] = {field: var.get() for field, var in self.header_vars.items()}
+            print(f"DEBUG: Saved {len(self.samples)} samples to previous session")
+
+        # Switch to new session
+        self.current_session_id = session_id
+        self.samples = self.sessions[session_id]['samples']
+
+        # Update header fields with session data
+        session_header = self.sessions[session_id]['header']
+        for field, var in self.header_vars.items():
+            if field in session_header:
+                var.set(session_header[field])
+            else:
+                if field == "Date":
+                    var.set(datetime.now().strftime("%Y-%m-%d"))
+                else:
+                    var.set('')
+
+        print(f"DEBUG: Switched to session {session_id} with {len(self.samples)} samples")
+
+        # Update UI components
+        self.update_sample_combo()
+        self.update_sample_checkboxes()
+
+        # Select first sample if available
+        if self.samples:
+            first_sample = list(self.samples.keys())[0]
+            self.sample_var.set(first_sample)
+            self.load_sample_data(first_sample)
+        else:
+            self.sample_var.set('')
+            self.clear_form()
+
+        self.update_plot()
+        return True
+
+    def update_session_combo(self):
+        """Update the session selection combo box."""
+        session_names = list(self.sessions.keys())
+        if hasattr(self, 'session_combo'):
+            self.session_combo['values'] = session_names
+            print(f"DEBUG: Updated session combo with {len(session_names)} sessions")
 
     def check_enhanced_data_balance(self):
         """Check enhanced training data balance and quality."""
@@ -886,56 +1415,64 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
     def setup_layout(self):
         """Create the main layout with scrollable panels."""
         print("DEBUG: Setting up main layout with scrollable areas")
-    
+
         # Create main paned window (horizontal split)
         main_paned = ttk.PanedWindow(self.window, orient='horizontal')
         main_paned.pack(fill='both', expand=True, padx=5, pady=5)
-    
+
         # Left panel with scrollable frame for data entry (40% width)
         left_canvas = tk.Canvas(main_paned, bg=APP_BACKGROUND_COLOR)
         left_scrollbar = ttk.Scrollbar(main_paned, orient="vertical", command=left_canvas.yview)
         self.left_frame = ttk.Frame(left_canvas)
-    
+
         self.left_frame.bind(
             "<Configure>",
             lambda e: left_canvas.configure(scrollregion=left_canvas.bbox("all"))
         )
-    
+
         left_canvas.create_window((0, 0), window=self.left_frame, anchor="nw")
         left_canvas.configure(yscrollcommand=left_scrollbar.set)
-    
+
         # Add mouse wheel scrolling
         def _on_mousewheel_left(event):
             left_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
         left_canvas.bind("<MouseWheel>", _on_mousewheel_left)
-    
-        main_paned.add(left_canvas, weight=40)
-    
+
+        main_paned.add(left_canvas, weight=55)
+
         # Right panel for plot (60% width) - also scrollable
         right_canvas = tk.Canvas(main_paned, bg=APP_BACKGROUND_COLOR)
         right_scrollbar = ttk.Scrollbar(main_paned, orient="vertical", command=right_canvas.yview)
         self.right_frame = ttk.Frame(right_canvas)
-    
+
         self.right_frame.bind(
             "<Configure>",
             lambda e: right_canvas.configure(scrollregion=right_canvas.bbox("all"))
         )
-    
+
         right_canvas.create_window((0, 0), window=self.right_frame, anchor="nw")
         right_canvas.configure(yscrollcommand=right_scrollbar.set)
-    
+
         # Add mouse wheel scrolling
         def _on_mousewheel_right(event):
             right_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
         right_canvas.bind("<MouseWheel>", _on_mousewheel_right)
-    
-        main_paned.add(right_canvas, weight=60)
-    
+
+        main_paned.add(right_canvas, weight=45)
+
         print("DEBUG: Scrollable layout configured")
+
+        # FIXED: Add session management FIRST
+        self.setup_session_selector(self.left_frame)
     
         # Setup each panel
         self.setup_data_entry_panel()
         self.setup_plot_panel()
+    
+        # FIXED: Initialize with default session if none exist
+        if not self.sessions:
+            self.create_new_session("Default_Session")
+            print("DEBUG: Created default session")
         
     def setup_data_entry_panel(self):
         """Setup the left panel for data entry."""
@@ -1033,7 +1570,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             metric_frame.pack(fill='x', pady=4)
             
             # Metric label
-            ttk.Label(metric_frame, text=f"{metric}:", font=FONT, width=15).pack(side='left')
+            ttk.Label(metric_frame, text=f"{metric}:", font=FONT, width=10).pack(side='left')
             
             # Rating scale (1-9)
             self.rating_vars[metric] = tk.IntVar(value=5)
@@ -1098,11 +1635,11 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         print("DEBUG: Setting up enhanced plot canvas")
     
         # Create figure with responsive sizing - REDUCED to 75% of original size
-        self.fig, self.ax = plt.subplots(figsize=(7.5, 6), subplot_kw=dict(projection='polar'))  # CHANGED: from (10, 8) to (7.5, 6)
+        self.fig, self.ax = plt.subplots(figsize=(6, 4.8), subplot_kw=dict(projection='polar'))  # CHANGED: from (10, 8) to (6,4.8)
         self.fig.patch.set_facecolor('white')
         debug_print("Created spider plot with 75% size: 7.5x6 inches (was 10x8)")
     
-        self.fig.subplots_adjust(left=0.0, right=0.85, top=0.85, bottom=0.08)
+        self.fig.subplots_adjust(left=0.15, right=0.8, top=0.8, bottom=0.08)
         debug_print("Applied subplot adjustments for smaller plot")
             
         # Create canvas with scrollbars
@@ -1523,7 +2060,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         if not self.samples:
             self.ax.text(0.5, 0.5, 'No samples to display\nAdd samples to begin evaluation', 
                         transform=self.ax.transAxes, ha='center', va='center', 
-                        fontsize=14, color='gray')
+                        fontsize=12, color='gray')
             self.canvas.draw()
             return
             
@@ -1536,7 +2073,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         if not selected_samples:
             self.ax.text(0.5, 0.5, 'No samples selected\nUse checkboxes to select samples', 
                         transform=self.ax.transAxes, ha='center', va='center', 
-                        fontsize=14, color='gray')
+                        fontsize=12, color='gray')
             self.canvas.draw()
             return
         
@@ -1575,10 +2112,10 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             
         # Add legend
         if selected_samples:
-            self.ax.legend(loc='upper right', bbox_to_anchor=(1.2, 1.0), fontsize=10)
+            self.ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.2), fontsize=10)
             
         # Set title
-        self.ax.set_title('Sensory Profile Comparison', fontsize=14, fontweight='bold', pad=20, ha = 'center', y = 1.08)
+        self.ax.set_title('Sensory Profile Comparison', fontsize=12, fontweight='bold', pad=15, ha = 'center', y = 1.08)
         
         # Force canvas update
         self.canvas.draw_idle()
@@ -2084,90 +2621,197 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         
     def new_session(self):
         """Start a new sensory evaluation session."""
-        if self.samples and messagebox.askyesno("Confirm", "Start new session? Current data will be lost."):
-            self.samples = {}
-            self.sample_checkboxes = {}
-            
-            # Clear header fields
-            for field, var in self.header_vars.items():
-                if field == "Date":
-                    var.set(datetime.now().strftime("%Y-%m-%d"))
-                else:
-                    var.set('')
-                    
-            self.update_sample_combo()
-            self.update_sample_checkboxes()
-            self.sample_var.set('')
-            self.clear_form()
-            self.update_plot()
-            
-            debug_print("Started new sensory evaluation session")
+    
+        # Check if there are unsaved changes
+        if self.samples:
+            result = messagebox.askyesnocancel("Unsaved Changes", 
+                                             "Do you want to save the current session before creating a new one?\n\n"
+                                             "Yes = Save and create new\n"
+                                             "No = Discard and create new\n"
+                                             "Cancel = Return to current session")
+        
+            if result is None:  # Cancel
+                return
+            elif result:  # Yes - save first
+                self.save_session()
+    
+        # Get name for new session
+        session_name = tk.simpledialog.askstring("New Session", 
+                                                "Enter name for new session:",
+                                                initialvalue=f"Session_{datetime.now().strftime('%Y%m%d_%H%M')}")
+    
+        if not session_name or not session_name.strip():
+            return
+    
+        session_name = session_name.strip()
+    
+        # Ensure unique name
+        counter = 1
+        original_name = session_name
+        while session_name in self.sessions:
+            session_name = f"{original_name}_{counter}"
+            counter += 1
+    
+        print(f"DEBUG: Creating new session: {session_name}")
+    
+        # Create the new session
+        self.create_new_session(session_name)
+    
+        # Clear header fields to defaults
+        for field, var in self.header_vars.items():
+            if field == "Date":
+                var.set(datetime.now().strftime("%Y-%m-%d"))
+            else:
+                var.set('')
+    
+        # Update UI
+        if hasattr(self, 'session_var'):
+            self.session_var.set(session_name)
+    
+        self.update_sample_combo()
+        self.update_sample_checkboxes()
+        self.sample_var.set('')
+        self.clear_form()
+        self.update_plot()
+    
+        print(f"DEBUG: New session {session_name} created successfully")
+        messagebox.showinfo("New Session", f"Created new session: {session_name}")
+        debug_print("Started new sensory evaluation session")
             
     def save_session(self):
         """Save the current session to a JSON file."""
-        if not self.samples:
-            messagebox.showwarning("Warning", "No data to save!")
+        if not self.current_session_id or not self.sessions:
+            messagebox.showwarning("Warning", "No session to save!")
             return
-            
+    
+        # Make sure current samples are saved to the session
+        if self.current_session_id in self.sessions:
+            self.sessions[self.current_session_id]['samples'] = self.samples
+            self.sessions[self.current_session_id]['header'] = {field: var.get() for field, var in self.header_vars.items()}
+        
+        current_session = self.sessions[self.current_session_id]
+    
+        if not current_session['samples']:
+            messagebox.showwarning("Warning", "No sample data to save!")
+            return
+        
+        # Default filename based on session name and assessor
+        assessor_name = current_session['header'].get('Assessor Name', 'Unknown')
+        safe_assessor = "".join(c for c in assessor_name if c.isalnum() or c in (' ', '-', '_')).strip()
+        safe_session = "".join(c for c in self.current_session_id if c.isalnum() or c in (' ', '-', '_')).strip()
+    
+        default_filename = f"{safe_assessor}_{safe_session}_sensory_session.json"
+    
         filename = filedialog.asksaveasfilename(
             defaultextension=".json",
             filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
-            title="Save Sensory Session"
+            title="Save Sensory Session",
+            initialvalue=default_filename
         )
-        
+    
         if filename:
             try:
+                # Create session data with updated timestamp
                 session_data = {
-                    'header': {field: var.get() for field, var in self.header_vars.items()},
-                    'samples': self.samples,
-                    'timestamp': datetime.now().isoformat()
+                    'header': current_session['header'],
+                    'samples': current_session['samples'],
+                    'timestamp': datetime.now().isoformat(),
+                    'session_name': self.current_session_id,
+                    'source_file': current_session.get('source_file', ''),
+                    'source_image': current_session.get('source_image', '')
                 }
-                
+            
                 with open(filename, 'w') as f:
                     json.dump(session_data, f, indent=2)
-                    
-                messagebox.showinfo("Success", f"Session saved to {filename}")
-                debug_print(f"Saved sensory session to: {filename}")
                 
+                print(f"DEBUG: Saved session {self.current_session_id} to {filename}")
+                messagebox.showinfo("Success", 
+                                  f"Session '{self.current_session_id}' saved to {os.path.basename(filename)}\n"
+                                  f"Saved {len(current_session['samples'])} samples")
+                debug_print(f"Saved sensory session to: {filename}")
+            
             except Exception as e:
+                print(f"DEBUG: Error saving session: {e}")
                 messagebox.showerror("Error", f"Failed to save session: {e}")
                 
     def load_session(self):
-        """Load a session from a JSON file."""
+        """Load a session from a JSON file as a new session."""
         filename = filedialog.askopenfilename(
             filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
             title="Load Sensory Session"
         )
-        
+    
         if filename:
             try:
                 with open(filename, 'r') as f:
                     session_data = json.load(f)
-                    
-                # Load header data
-                if 'header' in session_data:
-                    for field, value in session_data['header'].items():
-                        if field in self.header_vars:
-                            self.header_vars[field].set(value)
-                            
-                # Load samples
-                if 'samples' in session_data:
-                    self.samples = session_data['samples']
-                    self.update_sample_combo()
-                    self.update_sample_checkboxes()
-                    
-                    # Select first sample
-                    if self.samples:
-                        first_sample = list(self.samples.keys())[0]
-                        self.sample_var.set(first_sample)
-                        self.load_sample_data(first_sample)
-                        
-                    self.update_plot()
-                    
-                messagebox.showinfo("Success", f"Session loaded from {filename}")
-                debug_print(f"Loaded sensory session from: {filename}")
+            
+                print(f"DEBUG: Loading session from {filename}")
+                print(f"DEBUG: Session data keys: {list(session_data.keys())}")
+            
+                # Validate session data
+                if not self.validate_session_data(session_data):
+                    messagebox.showerror("Invalid Session", 
+                                       "The selected file does not contain valid session data.")
+                    return
+            
+                # Create session name from filename
+                base_filename = os.path.splitext(os.path.basename(filename))[0]
+                session_name = base_filename
+            
+                # Ensure unique session name
+                counter = 1
+                original_name = session_name
+                while session_name in self.sessions:
+                    session_name = f"{original_name}_{counter}"
+                    counter += 1
+            
+                print(f"DEBUG: Creating new session: {session_name}")
+            
+                # Create new session with loaded data
+                self.sessions[session_name] = {
+                    'header': session_data.get('header', {}),
+                    'samples': session_data.get('samples', {}),
+                    'timestamp': session_data.get('timestamp', datetime.now().isoformat()),
+                    'source_file': filename
+                }
+            
+                print(f"DEBUG: Session created with {len(self.sessions[session_name]['samples'])} samples")
+            
+                # Switch to the new session
+                self.switch_to_session(session_name)
+            
+                # Update session selector UI
+                self.update_session_combo()
+                if hasattr(self, 'session_var'):
+                    self.session_var.set(session_name)
+            
+                # Update other UI components
+                self.update_sample_combo()
+                self.update_sample_checkboxes()
+            
+                # Select first sample if available
+                if self.samples:
+                    first_sample = list(self.samples.keys())[0]
+                    self.sample_var.set(first_sample)
+                    self.load_sample_data(first_sample)
+                else:
+                    self.sample_var.set('')
+                    self.clear_form()
                 
+                self.update_plot()
+            
+                print(f"DEBUG: Successfully loaded session {session_name}")
+                messagebox.showinfo("Success", 
+                                  f"Session loaded as '{session_name}'\n"
+                                  f"Loaded {len(self.samples)} samples\n"
+                                  f"Use session selector to switch between sessions.")
+                debug_print(f"Loaded sensory session from: {filename}")
+            
             except Exception as e:
+                print(f"DEBUG: Error loading session: {e}")
+                import traceback
+                traceback.print_exc()
                 messagebox.showerror("Error", f"Failed to load session: {e}")
                 
     def export_to_excel(self):
@@ -2307,7 +2951,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
 
     def batch_process_with_ai(self):
         """Process a batch of form images using Enhanced Claude AI."""
-    
+
         # Check for required dependencies
         try:
             import anthropic
@@ -2327,51 +2971,53 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             return
 
         try:
+            print("DEBUG: Starting batch AI processing")
+        
             # Show processing dialog
             progress_window = tk.Toplevel(self.window)
             progress_window.title("Batch Processing with Enhanced Claude AI...")
             progress_window.geometry("450x200")
             progress_window.transient(self.window)
             progress_window.grab_set()
-    
+
             progress_label = ttk.Label(progress_window, 
                                      text="Processing batch of images with shadow removal...", 
                                      font=FONT)
             progress_label.pack(expand=True, pady=10)
-        
+    
             detail_label = ttk.Label(progress_window, 
                                    text="Initializing...", 
                                    font=('Arial', 9))
             detail_label.pack(pady=5)
-    
+
             progress_bar = ttk.Progressbar(progress_window, mode='indeterminate')
             progress_bar.pack(fill='x', padx=20, pady=10)
             progress_bar.start()
-    
+
             self.window.update()
-    
+
             # Initialize Enhanced Claude AI processor
             ai_processor = EnhancedClaudeFormProcessor()
-        
+    
             # Update progress
             detail_label.config(text="Processing images with Claude AI...")
             self.window.update()
-        
+    
             # Process batch of images
             batch_results = ai_processor.process_batch_images(folder_path)
-    
+
             # Stop progress bar
             progress_bar.stop()
             progress_window.destroy()
-    
+
             # Show batch results summary
             successful_count = sum(1 for result in batch_results.values() if result['status'] == 'success')
             total_count = len(batch_results)
-        
+    
             if successful_count > 0:
                 # Store the processor and results for review interface
                 self.ai_processor = ai_processor
-            
+        
                 result_msg = (f"Enhanced Batch Processing Complete!\n\n"
                              f"Successfully processed: {successful_count}/{total_count} images\n"
                              f"Features used:\n"
@@ -2379,65 +3025,387 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
                              f"• Sample name extraction\n"
                              f"• Enhanced AI analysis\n\n"
                              f"Launch interactive review to verify and edit results?")
-            
+        
                 if messagebox.askyesno("Batch Processing Complete", result_msg):
+                    print("DEBUG: Launching review interface")
                     # Launch the interactive review interface
                     ai_processor.launch_review_interface()
+                
+                    # FIXED: Properly monitor for review completion
+                    self.monitor_review_completion(ai_processor)
                 else:
+                    print("DEBUG: Loading results directly without review")
                     # Auto-load all successful results
                     self.load_batch_results_directly(batch_results)
             else:
                 messagebox.showerror("Batch Processing Failed", 
                                    f"No images could be processed successfully.\n"
                                    f"Check that images contain readable sensory evaluation forms.")
-        
+    
         except Exception as e:
             if 'progress_window' in locals():
                 progress_window.destroy()
             messagebox.showerror("Batch AI Processing Error", f"Failed to process batch: {e}")
             debug_print(f"Batch AI processing error: {e}")
 
-    def load_batch_results_directly(self, batch_results):
-        """Load successful batch results directly without review interface."""
-        loaded_count = 0
+    def monitor_review_completion(self, ai_processor):
+        """Monitor the review interface for completion."""
+        def check_completion():
+            print("DEBUG: Checking review completion status")
+        
+            if ai_processor.is_review_complete():
+                print("DEBUG: Review completed, loading results")
+            
+                # Get the reviewed results
+                reviewed_results = ai_processor.get_reviewed_results()
+            
+                if reviewed_results:
+                    print(f"DEBUG: Loading {len(reviewed_results)} reviewed results")
+                
+                    # Load the reviewed results using session-based structure
+                    self.load_batch_results_directly(reviewed_results)
+                
+                    # FIXED: Update session selector UI
+                    if hasattr(self, 'session_var') and self.current_session_id:
+                        self.session_var.set(self.current_session_id)
+                
+                    # Show completion message
+                    total_samples = sum(len(data['extracted_data']) for data in reviewed_results.values() 
+                                      if data['status'] == 'success')
+                
+                    messagebox.showinfo("Review Complete", 
+                                      f"Successfully loaded reviewed data!\n"
+                                      f"Total sessions: {len(reviewed_results)}\n"
+                                      f"Total samples: {total_samples}\n"
+                                      f"Use the session selector to switch between sessions.")
+                else:
+                    print("DEBUG: No reviewed results found")
+                    messagebox.showwarning("No Data", "No reviewed data to load.")
+            
+                return  # Stop monitoring
+        
+            # Continue monitoring if review not complete
+            self.window.after(500, check_completion)  # Check every 500ms
     
+        print("DEBUG: Starting review completion monitoring")
+        # Start monitoring after a short delay to allow review window to open
+        self.window.after(1000, check_completion)
+
+    def handle_reviewed_results(self, results):
+        """Handle results from the review interface."""
+        print(f"DEBUG: Received callback with {len(results)} results")
+        self.load_batch_results_directly(results)
+
+    def load_batch_results_directly(self, batch_results):
+        """Load successful batch results with each image as a separate session."""
+        loaded_sessions = 0
+        loaded_samples = 0
+
+        print("DEBUG: Starting batch results loading with session-per-image structure")
+        print(f"DEBUG: Processing {len(batch_results)} batch results")
+
         for image_path, result in batch_results.items():
             if result['status'] == 'success':
                 extracted_data = result['extracted_data']
+        
+                # Skip empty results
+                if not extracted_data:
+                    print(f"DEBUG: Skipping empty result for {image_path}")
+                    continue
+        
+                # Create session name from image filename
+                image_name = os.path.splitext(os.path.basename(image_path))[0]
+                session_name = f"Batch_AI_{image_name}"
             
-                # Load each sample from this image
+                # Ensure unique session name
+                counter = 1
+                original_session_name = session_name
+                while session_name in self.sessions:
+                    session_name = f"{original_session_name}_{counter}"
+                    counter += 1
+        
+                print(f"DEBUG: Creating session {session_name} from image {image_name}")
+        
+                # Create new session for this image
+                self.sessions[session_name] = {
+                    'header': {field: var.get() for field, var in self.header_vars.items()},
+                    'samples': {},
+                    'timestamp': datetime.now().isoformat(),
+                    'source_image': image_path,
+                    'extraction_method': 'Enhanced_Claude_AI_Batch'
+                }
+        
+                # Load samples into this session (up to 4 samples)
+                sample_count = 0
                 for sample_key, sample_data in extracted_data.items():
-                    # Create unique sample name with image identifier
-                    image_name = os.path.splitext(os.path.basename(image_path))[0]
-                    unique_sample_name = f"{image_name}_{sample_key}"
-                
-                    self.samples[unique_sample_name] = sample_data
-                    loaded_count += 1
+                    if sample_count >= 4:
+                        print(f"DEBUG: Reached maximum 4 samples for session {session_name}")
+                        break
+            
+                    # Skip empty samples
+                    if not sample_data or not any(sample_data.get(metric, None) for metric in self.metrics):
+                        print(f"DEBUG: Skipping empty sample {sample_key}")
+                        continue
+            
+                    # Add sample to this session
+                    self.sessions[session_name]['samples'][sample_key] = sample_data
+                    sample_count += 1
+                    loaded_samples += 1
+            
+                    print(f"DEBUG: Added sample {sample_key} to session {session_name}")
+        
+                if sample_count > 0:
+                    loaded_sessions += 1
+                    print(f"DEBUG: Session {session_name} created with {sample_count} samples")
+                else:
+                    # Remove empty session
+                    del self.sessions[session_name]
+                    print(f"DEBUG: Removed empty session {session_name}")
+
+        # Switch to first session if any were loaded
+        if self.sessions:
+            first_session = list(self.sessions.keys())[0]
+            self.switch_to_session(first_session)
+        
+            # Update session selector UI
+            if hasattr(self, 'session_var'):
+                self.session_var.set(first_session)
     
-        if loaded_count > 0:
+            print(f"DEBUG: Switched to first session: {first_session}")
+
+        # Update UI
+        self.update_session_combo()
+        self.update_sample_combo()
+        self.update_sample_checkboxes()
+        self.update_plot()
+
+        print(f"DEBUG: Batch loading complete")
+        print(f"DEBUG: Loaded {loaded_sessions} sessions with total {loaded_samples} samples")
+
+        if loaded_sessions > 0:
+            messagebox.showinfo("Batch Load Complete", 
+                              f"Loaded {loaded_sessions} sessions with {loaded_samples} total samples!\n"
+                              f"Each image is now a separate session (max 4 samples each).\n"
+                              f"Use the session selector to switch between sessions.")
+        else:
+            messagebox.showwarning("No Data Loaded", 
+                                 "No valid samples found in batch results.")
+
+    def setup_session_selector(self, parent_frame):
+        """Add session selector to the interface."""
+        # Add session selector frame
+        session_frame = ttk.LabelFrame(parent_frame, text="Session Management", padding=10)
+        session_frame.pack(fill='x', padx=5, pady=5)
+    
+        # Session selection
+        session_label = ttk.Label(session_frame, text="Current Session:", font=FONT)
+        session_label.pack(side='left', padx=(0, 5))
+    
+        self.session_var = tk.StringVar()
+        self.session_combo = ttk.Combobox(session_frame, textvariable=self.session_var, 
+                                         font=FONT, state='readonly', width=20)
+        self.session_combo.pack(side='left', padx=(0, 10))
+        self.session_combo.bind('<<ComboboxSelected>>', self.on_session_selected)
+    
+        # Session management buttons
+        ttk.Button(session_frame, text="New Session", 
+                   command=self.add_new_session).pack(side='left', padx=2)
+        ttk.Button(session_frame, text="Combine Sessions", 
+                   command=self.show_combine_sessions_dialog).pack(side='left', padx=2)
+        ttk.Button(session_frame, text="Delete Session", 
+                   command=self.delete_current_session).pack(side='left', padx=2)
+    
+        print("DEBUG: Session selector UI setup complete")
+
+    def on_session_selected(self, event=None):
+        """Handle session selection change."""
+        selected_session = self.session_var.get()
+        if selected_session and selected_session != self.current_session_id:
+            print(f"DEBUG: Session selection changed to: {selected_session}")
+            self.switch_to_session(selected_session)
+
+    def add_new_session(self):
+        """Add a new empty session."""
+        session_name = tk.simpledialog.askstring("New Session", "Enter session name:")
+        if session_name and session_name.strip():
+            session_name = session_name.strip()
+            if session_name in self.sessions:
+                messagebox.showerror("Session Exists", f"Session '{session_name}' already exists.")
+                return
+        
+            print(f"DEBUG: Creating new session: {session_name}")
+            self.create_new_session(session_name)
+            self.session_var.set(session_name)
+            messagebox.showinfo("Success", f"Created new session: {session_name}")
+
+    def delete_current_session(self):
+        """Delete the current session."""
+        if not self.current_session_id:
+            messagebox.showwarning("No Session", "No session selected to delete.")
+            return
+    
+        if len(self.sessions) <= 1:
+            messagebox.showwarning("Cannot Delete", "Cannot delete the last session.")
+            return
+    
+        if messagebox.askyesno("Confirm Delete", 
+                              f"Delete session '{self.current_session_id}'?\n"
+                              f"This will permanently remove all data in this session."):
+        
+            session_to_delete = self.current_session_id
+            print(f"DEBUG: Deleting session: {session_to_delete}")
+        
+            # Switch to another session first
+            remaining_sessions = [s for s in self.sessions.keys() if s != session_to_delete]
+            if remaining_sessions:
+                self.switch_to_session(remaining_sessions[0])
+        
+            # Delete the session
+            del self.sessions[session_to_delete]
+            self.update_session_combo()
+        
+            print(f"DEBUG: Session {session_to_delete} deleted successfully")
+            messagebox.showinfo("Success", f"Session '{session_to_delete}' deleted.")
+
+    def show_combine_sessions_dialog(self):
+        """Show dialog to select and combine multiple sessions."""
+        if len(self.sessions) < 2:
+            messagebox.showinfo("Insufficient Sessions", 
+                              "Need at least 2 sessions to combine.")
+            return
+    
+        # Create dialog window
+        combine_window = tk.Toplevel(self.window)
+        combine_window.title("Combine Sessions")
+        combine_window.geometry("400x300")
+        combine_window.transient(self.window)
+        combine_window.grab_set()
+    
+        # Instructions
+        ttk.Label(combine_window, 
+                 text="Select sessions to combine into a new session:",
+                 font=FONT).pack(pady=10)
+    
+        # Session selection with checkboxes
+        selection_frame = ttk.Frame(combine_window)
+        selection_frame.pack(fill='both', expand=True, padx=20, pady=10)
+    
+        session_vars = {}
+        for session_id in self.sessions.keys():
+            var = tk.BooleanVar()
+            session_vars[session_id] = var
+        
+            # Create checkbox with session info
+            sample_count = len(self.sessions[session_id]['samples'])
+            source_image = self.sessions[session_id].get('source_image', 'Manual')
+            source_name = os.path.basename(source_image) if source_image else 'Manual'
+        
+            checkbox_text = f"{session_id} ({sample_count} samples) - {source_name}"
+            ttk.Checkbutton(selection_frame, text=checkbox_text, 
+                           variable=var).pack(anchor='w', pady=2)
+    
+        # New session name
+        name_frame = ttk.Frame(combine_window)
+        name_frame.pack(fill='x', padx=20, pady=10)
+    
+        ttk.Label(name_frame, text="New session name:").pack(side='left')
+        name_var = tk.StringVar(value=f"Combined_Session_{self.session_counter}")
+        name_entry = ttk.Entry(name_frame, textvariable=name_var, width=20)
+        name_entry.pack(side='right')
+    
+        # Buttons
+        button_frame = ttk.Frame(combine_window)
+        button_frame.pack(fill='x', padx=20, pady=20)
+    
+        def combine_selected_sessions():
+            selected_sessions = [sid for sid, var in session_vars.items() if var.get()]
+            new_session_name = name_var.get().strip()
+        
+            print(f"DEBUG: Combining sessions: {selected_sessions}")
+            print(f"DEBUG: New session name: {new_session_name}")
+        
+            if len(selected_sessions) < 2:
+                messagebox.showwarning("Insufficient Selection", 
+                                     "Select at least 2 sessions to combine.")
+                return
+        
+            if not new_session_name:
+                messagebox.showwarning("Invalid Name", "Enter a name for the new session.")
+                return
+        
+            if new_session_name in self.sessions:
+                messagebox.showerror("Name Exists", 
+                                   f"Session '{new_session_name}' already exists.")
+                return
+        
+            # Combine sessions
+            combined_samples = {}
+            total_sample_count = 0
+        
+            for session_id in selected_sessions:
+                session_samples = self.sessions[session_id]['samples']
+                for sample_name, sample_data in session_samples.items():
+                    # Create unique sample name if conflict
+                    unique_name = sample_name
+                    counter = 1
+                    while unique_name in combined_samples:
+                        unique_name = f"{sample_name}_{counter}"
+                        counter += 1
+                
+                    combined_samples[unique_name] = sample_data
+                    total_sample_count += 1
+                    print(f"DEBUG: Added sample {unique_name} from session {session_id}")
+        
+            # Create new combined session
+            self.create_new_session(new_session_name)
+            self.sessions[new_session_name]['samples'] = combined_samples
+            self.samples = combined_samples
+        
             # Update UI
+            self.session_var.set(new_session_name)
             self.update_sample_combo()
             self.update_sample_checkboxes()
-        
-            # Select first sample
-            if self.samples:
-                first_sample = list(self.samples.keys())[0]
-                self.sample_var.set(first_sample)
-                self.load_sample_data(first_sample)
-        
             self.update_plot()
         
-            messagebox.showinfo("Batch Load Complete", 
-                              f"Loaded {loaded_count} samples from batch processing!\n"
-                              f"You can now review and adjust the data as needed.")
+            combine_window.destroy()
+        
+            print(f"DEBUG: Successfully combined {len(selected_sessions)} sessions")
+            print(f"DEBUG: New session has {total_sample_count} samples")
+        
+            messagebox.showinfo("Success", 
+                              f"Combined {len(selected_sessions)} sessions into '{new_session_name}'!\n"
+                              f"Total samples: {total_sample_count}")
+    
+        ttk.Button(button_frame, text="Combine Sessions", 
+                   command=combine_selected_sessions).pack(side='left', padx=5)
+        ttk.Button(button_frame, text="Cancel", 
+                   command=combine_window.destroy).pack(side='right', padx=5)
+    
+        print("DEBUG: Combine sessions dialog created")
+
+    def setup_interface(self):
+        """Set up the main interface with session management."""
+        # Create main frames
+        main_frame = ttk.Frame(self.window)
+        main_frame.pack(fill='both', expand=True, padx=10, pady=10)
+    
+        # Add session management at the top
+        self.setup_session_selector(main_frame)
+    
+        # Rest of your existing interface setup...
+        # (header section, sample selection, ratings, etc.)
+    
+        # Initialize with default session
+        if not self.sessions:
+            self.create_new_session("Default_Session")
 
     def show_enhanced_ai_extraction_preview(self, extracted_data, processed_image, filename):
-        """Show enhanced AI extraction preview with shadow removal visualization."""
+        """Show enhanced AI extraction preview with editable ratings."""
         preview_window = tk.Toplevel(self.window)
         preview_window.title("Enhanced AI Extraction Results")
         preview_window.geometry("1200x800")
         preview_window.transient(self.window)
-    
+
         # Create main layout
         main_frame = ttk.Frame(preview_window)
         main_frame.pack(fill='both', expand=True, padx=10, pady=10)
@@ -2469,19 +3437,19 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             if Image and ImageTk:
                 # Convert processed image to PIL
                 pil_image = Image.fromarray(processed_image)
-            
+        
                 # Resize for display
                 display_width = 500
                 aspect_ratio = pil_image.height / pil_image.width
                 display_height = int(display_width * aspect_ratio)
-            
+        
                 if display_height > 600:
                     display_height = 600
                     display_width = int(display_height / aspect_ratio)
-            
+        
                 pil_image = pil_image.resize((display_width, display_height), Image.Resampling.LANCZOS)
                 photo = ImageTk.PhotoImage(pil_image)
-            
+        
                 image_label = tk.Label(image_frame, image=photo)
                 image_label.image = photo  # Keep reference
                 image_label.pack()
@@ -2494,8 +3462,10 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         data_frame = ttk.LabelFrame(content_frame, text="Extracted Data (Editable)", padding=10)
         data_frame.pack(side='right', fill='both', expand=True)
 
-        # Sample name editing with enhanced features
+        # Store editing variables
         sample_name_vars = {}
+        rating_vars = {}
+        comments_vars = {}
         original_names = list(extracted_data.keys())
 
         # Scrollable frame for data
@@ -2511,12 +3481,12 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
 
-        # Enhanced sample display with better organization
+        # Enhanced sample display with EDITABLE ratings
         for i, (original_name, sample_data) in enumerate(extracted_data.items()):
             sample_frame = ttk.LabelFrame(scrollable_frame, text=f"Sample {i+1}", padding=10)
             sample_frame.pack(fill='x', pady=5, padx=5)
 
-            # Sample name editing (enhanced to show extracted name)
+            # Sample name editing
             name_frame = ttk.Frame(sample_frame)
             name_frame.pack(fill='x', pady=(0, 5))
 
@@ -2531,38 +3501,47 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             if extracted_name and extracted_name != original_name:
                 ttk.Label(name_frame, text="✓ Extracted", foreground='green', font=('Arial', 8)).pack(side='left', padx=(5, 0))
 
-            # Enhanced ratings display with confidence indicators
+            # EDITABLE ratings display
             ratings_frame = ttk.Frame(sample_frame)
-            ratings_frame.pack(fill='x')
-
-            for j, (attribute, rating) in enumerate(sample_data.items()):
-                if attribute not in ['comments', 'sample_name']:
+            ratings_frame.pack(fill='x', pady=(5, 0))
+        
+            # Initialize rating variables for this sample
+            rating_vars[original_name] = {}
+        
+            for metric in self.metrics:
+                if metric in sample_data and metric not in ['comments', 'sample_name']:
                     attr_frame = ttk.Frame(ratings_frame)
-                    attr_frame.pack(fill='x', pady=1)
+                    attr_frame.pack(fill='x', pady=2)
 
-                    attr_label = ttk.Label(attr_frame, text=f"{attribute}:", width=15, anchor='w', font=('Arial', 9))
+                    # Attribute label
+                    attr_label = ttk.Label(attr_frame, text=f"{metric}:", width=15, anchor='w', font=('Arial', 9))
                     attr_label.pack(side='left')
 
-                    rating_label = ttk.Label(attr_frame, text=f"Rating: {rating}", 
-                                           font=('Arial', 9, 'bold'))
-                    rating_label.pack(side='left', padx=(5, 0))
+                    # EDITABLE rating field
+                    rating_var = tk.IntVar(value=sample_data.get(metric, 5))
+                    rating_vars[original_name][metric] = rating_var
+                
+                    # Use Spinbox for easy editing
+                    rating_spinbox = tk.Spinbox(attr_frame, from_=1, to=9, width=5, 
+                                              textvariable=rating_var, font=('Arial', 9))
+                    rating_spinbox.pack(side='left', padx=(5, 0))
+                
+                    # Show original extracted value for reference
+                    original_value = sample_data.get(metric, 5)
+                    ttk.Label(attr_frame, text=f"(AI: {original_value})", 
+                             font=('Arial', 8), foreground='blue').pack(side='left', padx=(5, 0))
 
-                    # Add confidence indicator (placeholder - could be enhanced with actual confidence data)
-                    if rating is not None:
-                        conf_label = ttk.Label(attr_frame, text="✓ Detected", 
-                                             foreground='green', font=('Arial', 8))
-                    else:
-                        conf_label = ttk.Label(attr_frame, text="? Unclear", 
-                                             foreground='orange', font=('Arial', 8))
-                    conf_label.pack(side='left', padx=(10, 0))
-
-            # Comments section
-            if sample_data.get('comments'):
-                comments_frame = ttk.Frame(sample_frame)
-                comments_frame.pack(fill='x', pady=(5, 0))
-                ttk.Label(comments_frame, text="Comments:", font=('Arial', 9, 'bold')).pack(anchor='w')
-                ttk.Label(comments_frame, text=sample_data['comments'], 
-                         font=('Arial', 9), wraplength=300).pack(anchor='w', padx=(10, 0))
+            # EDITABLE comments section
+            comments_frame = ttk.Frame(sample_frame)
+            comments_frame.pack(fill='x', pady=(5, 0))
+        
+            ttk.Label(comments_frame, text="Comments:", font=('Arial', 9, 'bold')).pack(anchor='w')
+        
+            comments_var = tk.StringVar(value=sample_data.get('comments', ''))
+            comments_vars[original_name] = comments_var
+        
+            comments_entry = ttk.Entry(comments_frame, textvariable=comments_var, width=50)
+            comments_entry.pack(fill='x', pady=(2, 0))
 
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
@@ -2572,6 +3551,8 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         button_frame.pack(fill='x', pady=10)
 
         def load_enhanced_data():
+            print("DEBUG: Loading enhanced data with edited values into NEW SESSION")
+        
             final_data = {}
             for original_name in original_names:
                 new_name = sample_name_vars[original_name].get().strip()
@@ -2583,14 +3564,55 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
                                        f"Sample name '{new_name}' is used more than once.")
                     return
 
-                # Copy data and update sample name
-                final_data[new_name] = extracted_data[original_name].copy()
+                # Copy data with edited values
+                final_data[new_name] = {}
+            
+                # Copy edited ratings
+                for metric in self.metrics:
+                    if metric in rating_vars[original_name]:
+                        final_data[new_name][metric] = rating_vars[original_name][metric].get()
+                    else:
+                        final_data[new_name][metric] = extracted_data[original_name].get(metric, 5)
+            
+                # Copy edited comments
+                final_data[new_name]['comments'] = comments_vars[original_name].get()
                 final_data[new_name]['sample_name'] = new_name
 
-            # Load into interface
-            for sample_name, sample_data in final_data.items():
-                self.samples[sample_name] = sample_data
+            print(f"DEBUG: Final edited data: {final_data}")
 
+            # FIXED: Create a new session instead of adding to current session
+            # Create session name from image filename
+            base_filename = os.path.splitext(os.path.basename(filename))[0]
+            session_name = f"AI_{base_filename}"
+        
+            # Ensure unique session name
+            counter = 1
+            original_session_name = session_name
+            while session_name in self.sessions:
+                session_name = f"{original_session_name}_{counter}"
+                counter += 1
+        
+            print(f"DEBUG: Creating new session for AI extraction: {session_name}")
+        
+            # Create new session
+            self.sessions[session_name] = {
+                'header': {field: var.get() for field, var in self.header_vars.items()},
+                'samples': final_data,
+                'timestamp': datetime.now().isoformat(),
+                'source_image': filename,
+                'extraction_method': 'Enhanced_Claude_AI'
+            }
+        
+            # Switch to the new session
+            self.current_session_id = session_name
+            self.samples = final_data
+        
+            # Update session selector UI
+            self.update_session_combo()
+            if hasattr(self, 'session_var'):
+                self.session_var.set(session_name)
+        
+            # Update other UI components
             self.update_sample_combo()
             self.update_sample_checkboxes()
 
@@ -2602,19 +3624,24 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             self.update_plot()
             preview_window.destroy()
 
+            print(f"DEBUG: Successfully created session {session_name} with {len(final_data)} samples")
             messagebox.showinfo("Enhanced AI Loading Complete", 
-                              f"Successfully loaded {len(final_data)} samples!\n\n"
+                              f"Created new session: '{session_name}'\n"
+                              f"Successfully loaded {len(final_data)} samples with your edits!\n\n"
                               f"Enhanced features used:\n"
                               f"• Shadow removal preprocessing\n"
                               f"• AI sample name extraction\n"
-                              f"• High-accuracy rating detection\n\n"
-                              f"Review and adjust ratings as needed.")
+                              f"• High-accuracy rating detection\n"
+                              f"• Manual corrections applied\n\n"
+                              f"Use session selector to switch between sessions.")
 
-        ttk.Button(button_frame, text="Load Enhanced Data", 
+        ttk.Button(button_frame, text="Load as New Session", 
                    command=load_enhanced_data, 
                    style='Accent.TButton').pack(side='left', padx=5)
         ttk.Button(button_frame, text="Cancel", 
                    command=preview_window.destroy).pack(side='right', padx=5)
+    
+        print("DEBUG: Enhanced AI preview with editable ratings created")
 
     def show_extraction_preview(self, extracted_data, processed_img, filename):
         """Show a preview of extracted data before loading."""

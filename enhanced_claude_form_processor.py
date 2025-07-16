@@ -50,7 +50,26 @@ class EnhancedClaudeFormProcessor:
         # Batch processing results
         self.batch_results = {}
         self.current_review_index = 0
-        
+
+        # NEW: Add callback mechanism and review completion tracking
+        self.final_reviewed_results = {}
+        self.review_complete = False
+        self.main_app_callback = None
+    
+        print("DEBUG: EnhancedClaudeFormProcessor initialized with callback support")
+    def set_main_app_callback(self, callback_function):
+        """Set callback function to communicate with main application."""
+        self.main_app_callback = callback_function
+        print("DEBUG: Main application callback set")
+
+    def get_reviewed_results(self):
+        """Return the final reviewed results."""
+        return self.final_reviewed_results
+
+    def is_review_complete(self):
+        """Check if review process is complete."""
+        return self.review_complete
+
     def apply_shadow_removal(self, image):
         """
         Apply shadow removal preprocessing to improve form readability.
@@ -661,28 +680,45 @@ IMPORTANT:
                     data['extracted_data'][sample_key]['comments'] = widgets['comments'].get()
     
     def save_all_results(self):
-        """Save all results to a JSON file."""
-        self.save_current_edits()  # Save current edits first
-        
-        # Create output data
-        output_data = {}
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        
+        """Save all results and return to main application with data loaded."""
+        print("DEBUG: Starting save_all_results process")
+    
+        # Save current edits first
+        self.save_current_edits()
+        print("DEBUG: Current edits saved")
+    
+        # Prepare the reviewed data for loading into main application
+        reviewed_batch_results = {}
+    
         for image_path, data in self.batch_results.items():
             if data['status'] == 'success':
-                output_data[os.path.basename(image_path)] = data['extracted_data']
-        
-        # Save to file
-        filename = f"claude_extracted_data_{timestamp}.json"
-        try:
-            with open(filename, 'w') as f:
-                json.dump(output_data, f, indent=2)
-            
-            messagebox.showinfo("Success", f"Results saved to {filename}")
-            print(f"\nResults saved to: {filename}")
-            
-        except Exception as e:
-            messagebox.showerror("Save Error", f"Failed to save results: {e}")
+                reviewed_batch_results[image_path] = data
+                print(f"DEBUG: Prepared reviewed data for {image_path}")
+    
+        print(f"DEBUG: Total reviewed results: {len(reviewed_batch_results)}")
+    
+        # Store the reviewed results for the main application to access
+        self.final_reviewed_results = reviewed_batch_results
+    
+        # Signal that review is complete
+        self.review_complete = True
+    
+        # Close the review window
+        if hasattr(self, 'review_window') and self.review_window:
+            print("DEBUG: Closing review window")
+            self.review_window.destroy()
+            self.review_window = None
+    
+        print("DEBUG: Review process completed successfully")
+    
+        # Show success message
+        total_samples = sum(len(data['extracted_data']) for data in reviewed_batch_results.values() 
+                           if data['status'] == 'success')
+    
+        print(f"DEBUG: Total samples to be loaded: {total_samples}")
+    
+        # Don't show the messagebox here since we want seamless transition
+        # The main application will handle the loading and show appropriate messages
 
 
 # Usage example and testing

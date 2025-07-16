@@ -60,7 +60,7 @@ def is_debug_enabled():
 # END DEBUG SYSTEM
 # =============================================================================
 
-FONT = ('Arial', 12)
+FONT = ('Arial', 10)
 # Global constants
 APP_BACKGROUND_COLOR = '#D3D3D3'
 BUTTON_COLOR = '#4169E1'
