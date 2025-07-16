@@ -134,29 +134,27 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
     
 
     def show(self):
-        """Create and display the sensory data collection window."""
+        """Create and display the sensory data collection window with optimized sizing."""
         self.window = tk.Toplevel(self.parent)
         self.window.title("Sensory Data Collection")
-        self.window.resizable(True,True)
-        self.window.minsize(1000,400)
-
-        screen_width = self.window.winfo_screenwidth()
-        screen_height = self.window.winfo_screenheight()
-        # CHANGED: Make window 75% of original size (0.9 * 0.75 = 0.675 of screen)
-        window_width = min(int(screen_width * 0.66), 1600)   # 88% of screen, max 1600 pixels
-        window_height = min(int(screen_height * 0.78), 1000)  # 78% of screen, max 1000 pixels
-
-        
-        self.window.geometry(f"{window_width}x{window_height}")
+        self.window.resizable(True, True)
+    
+        # Start with a reasonable initial size (will be optimized after content loads)
+        initial_width = 1000
+        initial_height = 600
+        self.window.geometry(f"{initial_width}x{initial_height}")
         self.window.configure(bg=APP_BACKGROUND_COLOR)
-        self.window.transient(self.parent)
-        
-        # Create main layout
+        #self.window.transient(self.parent)
+    
+        print(f"DEBUG: Initial window size set to {initial_width}x{initial_height}")
+    
+        # Create main layout (this will trigger size optimization)
         self.setup_layout()
         self.setup_menu()
-        
-        # Center the window
+        self.window.bind('<Configure>', self.on_window_resize)
+
         self.center_window()
+        
         
     def center_window(self):
         """Center the window on screen."""
@@ -1413,66 +1411,237 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
                    command=preview_window.destroy).pack(side='right', padx=5)
 
     def setup_layout(self):
-        """Create the main layout with scrollable panels."""
-        print("DEBUG: Setting up main layout with scrollable areas")
+        """Create the main layout with proper canvas sizing."""
+        print("DEBUG: Setting up layout with enhanced canvas sizing")
 
-        # Create main paned window (horizontal split)
-        main_paned = ttk.PanedWindow(self.window, orient='horizontal')
+        # Create main paned window
+        main_paned = tk.PanedWindow(self.window, orient='horizontal', sashrelief='raised', sashwidth=4)
         main_paned.pack(fill='both', expand=True, padx=5, pady=5)
 
-        # Left panel with scrollable frame for data entry (40% width)
-        left_canvas = tk.Canvas(main_paned, bg=APP_BACKGROUND_COLOR)
+        # === LEFT PANEL SETUP ===
+        left_canvas = tk.Canvas(main_paned, bg=APP_BACKGROUND_COLOR, highlightthickness=0)
+        self.left_canvas = left_canvas
         left_scrollbar = ttk.Scrollbar(main_paned, orient="vertical", command=left_canvas.yview)
         self.left_frame = ttk.Frame(left_canvas)
 
-        self.left_frame.bind(
-            "<Configure>",
-            lambda e: left_canvas.configure(scrollregion=left_canvas.bbox("all"))
-        )
+        # ENHANCED: Better scroll configuration
+        def configure_left_scroll(event=None):
+            """Configure scroll region and handle resizing."""
+            self.left_frame.update_idletasks()
+        
+            # Update scroll region
+            left_canvas.configure(scrollregion=left_canvas.bbox("all"))
+        
+            # Get the current canvas size
+            canvas_width = left_canvas.winfo_width()
+            if canvas_width > 50:  # Valid width
+                # Configure the interior frame to fill the canvas width
+                left_canvas.itemconfig(left_canvas.find_all()[0], width=canvas_width-4)
 
+        self.left_frame.bind("<Configure>", configure_left_scroll)
+
+        # Create the canvas window
         left_canvas.create_window((0, 0), window=self.left_frame, anchor="nw")
         left_canvas.configure(yscrollcommand=left_scrollbar.set)
 
-        # Add mouse wheel scrolling
+        # ENHANCED: Better canvas resize handling
+        def on_left_canvas_configure(event):
+            """Handle left canvas resize events."""
+            if event.widget == left_canvas:
+                # Update scroll region
+                left_canvas.configure(scrollregion=left_canvas.bbox("all"))
+            
+                # Ensure interior frame fills width
+                canvas_width = event.width
+                if canvas_width > 50 and left_canvas.find_all():
+                    left_canvas.itemconfig(left_canvas.find_all()[0], width=canvas_width-4)
+
+        left_canvas.bind('<Configure>', on_left_canvas_configure)
+
+        # Mouse wheel scrolling
         def _on_mousewheel_left(event):
             left_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
         left_canvas.bind("<MouseWheel>", _on_mousewheel_left)
 
-        main_paned.add(left_canvas, weight=55)
+        # Add to paned window
+        main_paned.add(left_canvas, stretch="always")
 
-        # Right panel for plot (60% width) - also scrollable
-        right_canvas = tk.Canvas(main_paned, bg=APP_BACKGROUND_COLOR)
+        # === RIGHT PANEL SETUP ===
+        right_canvas = tk.Canvas(main_paned, bg=APP_BACKGROUND_COLOR, highlightthickness=0)
         right_scrollbar = ttk.Scrollbar(main_paned, orient="vertical", command=right_canvas.yview)
         self.right_frame = ttk.Frame(right_canvas)
 
-        self.right_frame.bind(
-            "<Configure>",
-            lambda e: right_canvas.configure(scrollregion=right_canvas.bbox("all"))
-        )
+        # Right panel configuration
+        def configure_right_scroll(event=None):
+            """Configure right scroll region."""
+            self.right_frame.update_idletasks()
+            bbox = right_canvas.bbox("all")
+            if bbox:
+                right_canvas.configure(scrollregion=bbox)
+
+        self.right_frame.bind("<Configure>", configure_right_scroll)
 
         right_canvas.create_window((0, 0), window=self.right_frame, anchor="nw")
         right_canvas.configure(yscrollcommand=right_scrollbar.set)
 
-        # Add mouse wheel scrolling
+        # Mouse wheel scrolling
         def _on_mousewheel_right(event):
             right_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
         right_canvas.bind("<MouseWheel>", _on_mousewheel_right)
 
-        main_paned.add(right_canvas, weight=45)
+        main_paned.add(right_canvas)
 
-        print("DEBUG: Scrollable layout configured")
+        # Store the sash position function
+        def set_initial_sash_position():
+            try:
+                window_width = self.window.winfo_width()
+                if window_width > 100:
+                    sash_position = int(window_width * 0.55)
+                    main_paned.sash_place(0, sash_position, 0)
+                    print(f"DEBUG: Set sash position to {sash_position}")
+            except Exception as e:
+                print(f"DEBUG: Sash positioning failed: {e}")
 
-        # FIXED: Add session management FIRST
+        self.set_initial_sash_position = set_initial_sash_position
+
+        print("DEBUG: Enhanced layout setup complete")
+
+        # Add session management and panels
         self.setup_session_selector(self.left_frame)
-    
-        # Setup each panel
         self.setup_data_entry_panel()
         self.setup_plot_panel()
-    
-        # FIXED: Initialize with default session if none exist
+
+        # CRITICAL: Apply sizing optimization after content is added
+        self.window.after(100, self.optimize_window_size)
+
+        # Initialize default session
         if not self.sessions:
             self.create_new_session("Default_Session")
-            print("DEBUG: Created default session")
+
+    def optimize_window_size(self):
+        """Calculate window size based on actual frame dimensions after layout."""
+        print("DEBUG: Starting precise window size optimization")
+    
+        # Force complete layout update
+        self.window.update_idletasks()
+        self.window.update()
+    
+        # CRITICAL: Measure what the left_frame actually uses after layout
+        self.left_frame.update_idletasks()
+        actual_left_frame_height = self.left_frame.winfo_reqheight()  # Changed from winfo_height()
+    
+        # Also measure right frame actual height for comparison
+        self.right_frame.update_idletasks()
+        actual_right_frame_height = self.right_frame.winfo_reqheight()  # Changed from winfo_height()
+    
+        print(f"DEBUG: Actual frame heights - Left: {actual_left_frame_height}px, Right: {actual_right_frame_height}px")
+    
+        # Width calculations (existing logic)
+        left_frame_width = self.left_frame.winfo_reqwidth()
+        right_frame_width = self.right_frame.winfo_reqwidth()
+    
+        min_plot_width = 500
+        optimal_left_width = max(left_frame_width + 40, 450)
+        optimal_right_width = max(min_plot_width, right_frame_width + 20)
+        total_optimal_width = optimal_left_width + optimal_right_width + 50
+    
+        # FIXED: Reduce window chrome overhead and use required height instead of actual height
+        governing_content_height = max(actual_left_frame_height, actual_right_frame_height)
+        window_chrome = 10  # REDUCED from 120 to 30 - just enough for title bar and borders
+        total_optimal_height = governing_content_height + window_chrome
+    
+        print(f"DEBUG: Window sized for actual frame height: {governing_content_height}px")
+    
+        # Screen constraints
+        screen_width = self.window.winfo_screenwidth()
+        screen_height = self.window.winfo_screenheight()
+    
+        max_usable_width = int(screen_width * 0.9)
+        max_usable_height = int(screen_height * 0.85)  # REDUCED from 0.9 to leave more screen space
+    
+        final_width = min(total_optimal_width, max_usable_width)
+        final_height = min(total_optimal_height, max_usable_height)
+    
+        final_width = max(final_width, 800)
+        final_height = max(final_height, 500)
+    
+        # ADDITIONAL FIX: Cap the height to avoid excess space
+        if final_height > 900:  # Based on your 1080p screen
+            final_height = 900
+    
+        print(f"DEBUG: Final window size matching actual content: {final_width}x{final_height}")
+    
+        # Apply the sizing
+        self.window.geometry(f"{final_width}x{final_height}")
+    
+        # Pass the actual required height, not the full window height
+        available_height = governing_content_height  # Don't add window_chrome here
+        self.window.after(50, lambda: self.configure_canvas_sizing(available_height))
+    
+        self.center_window()
+    
+        if hasattr(self, 'set_initial_sash_position'):
+            self.window.after(200, self.set_initial_sash_position)
+
+    def configure_canvas_sizing(self, available_content_height):
+        """Configure canvas sizing using the frame's actual rendered size."""
+        print(f"DEBUG: Configuring canvas sizing")
+    
+        self.window.update_idletasks()
+    
+        # Get the required height of the left frame content
+        self.left_frame.update_idletasks()
+        required_frame_height = self.left_frame.winfo_reqheight()
+    
+        print(f"DEBUG: left_frame required height: {required_frame_height}px")
+    
+        # Set canvas to exactly match what the frame requires
+        if hasattr(self, 'left_canvas'):
+            # Add small padding but not excessive
+            canvas_height = required_frame_height  # Just 10px padding instead of full height
+            self.left_canvas.configure(height=canvas_height)
+            print(f"DEBUG: Canvas set to frame's required height + padding: {canvas_height}px")
+        
+            # Update scroll region
+            self.left_canvas.configure(scrollregion=self.left_canvas.bbox("all"))
+    
+        print("DEBUG: Canvas sized to exact frame height - minimal gray space")
+
+    def coordinate_panel_heights(self, final_window_height, window_chrome_height):
+        """Coordinate both panels to work optimally at the chosen window height."""
+        print("DEBUG: Coordinating panel heights for optimal layout")
+    
+        # Calculate available height for panel content
+        available_panel_height = final_window_height - window_chrome_height
+    
+        # Left Panel Strategy: Optimize scrolling behavior
+        # If content fits, disable scrolling; if not, optimize scroll region
+        left_content_height = self.left_frame.winfo_reqheight()
+    
+        if left_content_height <= available_panel_height:
+            # Content fits! Set canvas to exact content height to eliminate gray space
+            optimal_left_height = left_content_height + 5  # Small buffer
+            print(f"DEBUG: Left panel content fits - setting canvas to {optimal_left_height}px")
+        else:
+            # Content is taller - use available height and enable smooth scrolling
+            optimal_left_height = available_panel_height - 10  # Account for scrollbar
+            print(f"DEBUG: Left panel content scrollable - setting canvas to {optimal_left_height}px")
+    
+        # Apply the left panel height optimization
+        if hasattr(self, 'left_canvas'):
+            self.left_canvas.configure(height=optimal_left_height)
+    
+        # Right Panel Strategy: Ensure plot area uses available space efficiently
+        right_content_height = self.right_frame.winfo_reqheight()
+    
+        if right_content_height < available_panel_height:
+            # Right panel has extra space - we could expand plot or center it
+            extra_space = available_panel_height - right_content_height
+            print(f"DEBUG: Right panel has {extra_space}px extra space - content will be naturally centered")
+        else:
+            print(f"DEBUG: Right panel content fits exactly in available space")
+    
+        print(f"DEBUG: Panel coordination complete - both panels optimized for {final_window_height}px window")
         
     def setup_data_entry_panel(self):
         """Setup the left panel for data entry."""
@@ -1480,41 +1649,52 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         header_frame = ttk.LabelFrame(self.left_frame, text="Session Information", padding=10)
         header_frame.pack(fill='x', padx=5, pady=5)
         
-        # Configure header_frame for centering
+        # Configure header_frame for 2x2 + button layout
         header_frame.grid_columnconfigure(0, weight=1)
         header_frame.grid_columnconfigure(1, weight=1) 
         header_frame.grid_columnconfigure(2, weight=1)
-        print("DEBUG: Configured header_frame for centered layout")
+        header_frame.grid_columnconfigure(3, weight=1)
+        print("DEBUG: Configured header_frame for optimized 2x2 layout")
         
         self.header_vars = {}
-        row = 0
-        for field in self.header_fields:
-            ttk.Label(header_frame, text=f"{field}:", font=FONT).grid(
-                row=row, column=0, sticky='e', padx=5, pady=2)  # CHANGED: sticky='e' for right alignment
-            debug_print(f"DEBUG: Added centered label for field: {field}")
+        
+        # Row 0: Assessor Name and Media
+        ttk.Label(header_frame, text="Assessor Name:", font=FONT).grid(
+            row=0, column=0, sticky='e', padx=5, pady=2)
+        assessor_var = tk.StringVar()
+        ttk.Entry(header_frame, textvariable=assessor_var, font=FONT, width=15).grid(
+            row=0, column=1, sticky='w', padx=5, pady=2)
+        self.header_vars["Assessor Name"] = assessor_var
+        print("DEBUG: Added Assessor Name to row 0, column 0-1")
+
+        ttk.Label(header_frame, text="Media:", font=FONT).grid(
+            row=0, column=2, sticky='e', padx=5, pady=2)
+        media_var = tk.StringVar()
+        ttk.Entry(header_frame, textvariable=media_var, font=FONT, width=15).grid(
+            row=0, column=3, sticky='w', padx=5, pady=2)
+        self.header_vars["Media"] = media_var
+        print("DEBUG: Added Media to row 0, column 2-3")
+
+        # Row 1: Puff Length and Date
+        ttk.Label(header_frame, text="Puff Length:", font=FONT).grid(
+            row=1, column=0, sticky='e', padx=5, pady=2)
+        puff_var = tk.StringVar()
+        ttk.Entry(header_frame, textvariable=puff_var, font=FONT, width=15).grid(
+            row=1, column=1, sticky='w', padx=5, pady=2)
+        self.header_vars["Puff Length"] = puff_var
+        print("DEBUG: Added Puff Length to row 1, column 0-1")
+
+        ttk.Label(header_frame, text="Date:", font=FONT).grid(
+            row=1, column=2, sticky='e', padx=5, pady=2)
+        date_var = tk.StringVar(value=datetime.now().strftime("%Y-%m-%d"))
+        ttk.Entry(header_frame, textvariable=date_var, font=FONT, width=15).grid(
+            row=1, column=3, sticky='w', padx=5, pady=2)
+        self.header_vars["Date"] = date_var
+        print("DEBUG: Added Date to row 1, column 2-3")
             
-            if field == "Date":
-                var = tk.StringVar(value=datetime.now().strftime("%Y-%m-%d"))
-            elif field == "Gender":
-                var = tk.StringVar()
-                combo = ttk.Combobox(header_frame, textvariable=var, 
-                                   values=["Male", "Female", "Other", "Prefer not to say"],
-                                   state="readonly", width=20)
-                combo.grid(row=row, column=1, sticky='w', padx=5, pady=2)
-                self.header_vars[field] = var
-                row += 1
-                continue
-            else:
-                var = tk.StringVar()
-                
-            entry = ttk.Entry(header_frame, textvariable=var, font=FONT, width=20)
-            entry.grid(row=row, column=1, sticky='w', padx=5, pady=2)
-            self.header_vars[field] = var
-            row += 1
-            
-        # ADDED: Mode switch button
+        # Row 2: Mode switch button (centered across all columns)
         mode_button_frame = ttk.Frame(header_frame)
-        mode_button_frame.grid(row=row, column=0, columnspan=2, pady=10)
+        mode_button_frame.grid(row=2, column=0, columnspan=4, pady=10)
         
         self.mode_button = ttk.Button(mode_button_frame, text="Switch to Comparison Mode", 
                                      command=self.toggle_mode, width=25)
@@ -1566,27 +1746,40 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         # Create rating scales for each metric
         self.rating_vars = {}
         for i, metric in enumerate(self.metrics):
-            metric_frame = ttk.Frame(eval_frame)
-            metric_frame.pack(fill='x', pady=4)
+            # Create centered container for each metric row
+            metric_container = ttk.Frame(eval_frame)
+            metric_container.pack(fill='x', pady=4)
+    
+            # Center the metric frame within the container
+            metric_frame = ttk.Frame(metric_container)
+            metric_frame.pack(anchor='center')
             
             # Metric label
-            ttk.Label(metric_frame, text=f"{metric}:", font=FONT, width=10).pack(side='left')
+            ttk.Label(metric_frame, text=f"{metric}:", font=FONT, width=12).pack(side='left')
             
-            # Rating scale (1-9)
+            # Container for scale and value with fixed width (50% reduction)
+            scale_container = ttk.Frame(metric_frame)
+            scale_container.pack(side='left', padx=5)
+            
+            # Rating scale (1-9) with reduced length, tickmarks, and smaller slider pointer
             self.rating_vars[metric] = tk.IntVar(value=5)
-            scale = tk.Scale(metric_frame, from_=1, to=9, orient='horizontal',
-                           variable=self.rating_vars[metric], font=FONT)
-            scale.pack(side='left', fill='x', expand=True, padx=5)
+            scale = tk.Scale(scale_container, from_=1, to=9, orient='horizontal',
+                           variable=self.rating_vars[metric], font=FONT, 
+                           length=300, showvalue=0, tickinterval=1,
+                           sliderlength=20, sliderrelief='raised', width=15)  # Smaller pointer: sliderlength=15, width=10
+            scale.pack(side='left')
+            print(f"DEBUG: Created centered scale for {metric} with length=200, smaller pointer (sliderlength=15), and tickmarks every 1 point")
             
             # Current value display
             value_label = ttk.Label(metric_frame, text="5", width=2)
-            value_label.pack(side='right')
+            value_label.pack(side='left', padx=(10, 0))
             
             # Update value display AND plot when scale changes (LIVE UPDATES)
             def update_live(val, label=value_label, var=self.rating_vars[metric], metric_name=metric):
                 label.config(text=str(var.get()))
                 self.auto_save_and_update()  # Add this method call
             scale.config(command=update_live)
+            print(f"DEBUG: Centered scale for {metric} configured with smaller pointer and tickmarks from 1-9")
             
         # Comments section
         comments_frame = ttk.Frame(eval_frame)
@@ -1609,7 +1802,24 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         self.comments_text.bind('<KeyRelease>', on_comment_change)
         self.comments_text.bind('<FocusOut>', on_comment_change)
         self.comments_text.bind('<Button-1>', lambda e: self.window.after(100, on_comment_change))
-                  
+         
+    def on_window_resize(self, event=None):
+        """Handle window resize events to maintain optimal layout."""
+        if event and event.widget == self.window:
+            # Only process resize events for the main window
+            current_width = self.window.winfo_width()
+            current_height = self.window.winfo_height()
+        
+            # Check if window is getting too small for content
+            min_safe_width = 900
+            min_safe_height = 500
+        
+            if current_width < min_safe_width or current_height < min_safe_height:
+                safe_width = max(current_width, min_safe_width)
+                safe_height = max(current_height, min_safe_height)
+                self.window.geometry(f"{safe_width}x{safe_height}")
+                print(f"DEBUG: Window resized to safe dimensions: {safe_width}x{safe_height}")
+
     def setup_plot_panel(self):
         """Setup the right panel for spider plot visualization."""
         plot_frame = ttk.LabelFrame(self.right_frame, text="Sensory Profile Comparison", padding=10)
@@ -3193,29 +3403,42 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
 
     def setup_session_selector(self, parent_frame):
         """Add session selector to the interface."""
-        # Add session selector frame
+        # Add session selector frame with reduced width
         session_frame = ttk.LabelFrame(parent_frame, text="Session Management", padding=10)
         session_frame.pack(fill='x', padx=5, pady=5)
     
-        # Session selection
-        session_label = ttk.Label(session_frame, text="Current Session:", font=FONT)
-        session_label.pack(side='left', padx=(0, 5))
+        # Configure session_frame for centered grid layout
+        session_frame.grid_columnconfigure(0, weight=1)
+        session_frame.grid_columnconfigure(1, weight=1)
+        print("DEBUG: Configured session_frame for centered layout")
+
+        # Top row - Session selection centered
+        top_frame = ttk.Frame(session_frame)
+        top_frame.grid(row=0, column=0, columnspan=2, pady=(0, 5))
     
+        session_label = ttk.Label(top_frame, text="Current Session:", font=FONT)
+        session_label.pack(side='left', padx=(0, 5))
+
         self.session_var = tk.StringVar()
-        self.session_combo = ttk.Combobox(session_frame, textvariable=self.session_var, 
-                                         font=FONT, state='readonly', width=20)
+        self.session_combo = ttk.Combobox(top_frame, textvariable=self.session_var, 
+                                         font=FONT, state='readonly', width=15)
         self.session_combo.pack(side='left', padx=(0, 10))
         self.session_combo.bind('<<ComboboxSelected>>', self.on_session_selected)
+        print("DEBUG: Session dropdown centered on top row")
+
+        # Second row - Session management buttons centered
+        button_frame = ttk.Frame(session_frame)
+        button_frame.grid(row=1, column=0, columnspan=2)
     
-        # Session management buttons
-        ttk.Button(session_frame, text="New Session", 
+        ttk.Button(button_frame, text="New Session", 
                    command=self.add_new_session).pack(side='left', padx=2)
-        ttk.Button(session_frame, text="Combine Sessions", 
+        ttk.Button(button_frame, text="Combine Sessions", 
                    command=self.show_combine_sessions_dialog).pack(side='left', padx=2)
-        ttk.Button(session_frame, text="Delete Session", 
+        ttk.Button(button_frame, text="Delete Session", 
                    command=self.delete_current_session).pack(side='left', padx=2)
-    
-        print("DEBUG: Session selector UI setup complete")
+        print("DEBUG: Session management buttons centered on second row")
+
+        print("DEBUG: Session selector UI setup complete with centered layout")
 
     def on_session_selected(self, event=None):
         """Handle session selection change."""
