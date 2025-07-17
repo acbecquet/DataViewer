@@ -72,8 +72,9 @@ def _lazy_import_pytesseract():
 class SensoryDataCollectionWindow:
     """Main window for sensory data collection and visualization."""
     
-    def __init__(self, parent):
+    def __init__(self, parent, close_callback=None):
         self.parent = parent
+        self.close_callback = close_callback
         self.window = None
         self.data = {}
         self.sessions = {}  # {'session_id': {'header': {}, 'samples': {}, 'timestamp': '', 'source_image': ''}}
@@ -153,12 +154,44 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         #self.window.transient(self.parent)
     
         debug_print(f"DEBUG: Initial window size set to {initial_width}x{initial_height}")
+
+        self.window.protocol("WM_DELETE_WINDOW", self.on_window_close)
     
         # Create main layout (this will trigger size optimization)
         self.setup_layout()
         self.setup_menu()       
         self.center_window()
         
+    def on_window_close(self):
+        """Handle window close event and call the callback if provided."""
+        debug_print("DEBUG: Sensory window close event triggered")
+    
+        # Check for unsaved changes and handle auto-save if needed
+        try:
+            # Your existing save logic here if any
+            debug_print("DEBUG: Performing cleanup before window close")
+        
+            # Close the window
+            self.window.destroy()
+            debug_print("DEBUG: Sensory window destroyed")
+        
+            # Call the callback to restore main window
+            if self.close_callback:
+                debug_print("DEBUG: Calling close callback to restore main window")
+                self.close_callback()
+            else:
+                debug_print("DEBUG: No close callback provided")
+            
+        except Exception as e:
+            debug_print(f"DEBUG: Error during window close: {e}")
+            # Still try to close and call callback even if there's an error
+            try:
+                self.window.destroy()
+                if self.close_callback:
+                    self.close_callback()
+            except:
+                pass
+
     def center_window(self):
         """Center the window on screen."""
         self.window.update_idletasks()
@@ -794,11 +827,14 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             first_sample = list(self.samples.keys())[0]
             self.sample_var.set(first_sample)
             self.load_sample_data(first_sample)
+            # REFRESH DISPLAYS AFTER LOADING DATA
+            self.refresh_value_displays()
         else:
             self.sample_var.set('')
             self.clear_form()
 
         self.update_plot()
+        debug_print("DEBUG: Session switch completed with display refresh")
         return True
 
     def update_session_combo(self):
@@ -1208,6 +1244,8 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         
         # Create rating scales for each metric
         self.rating_vars = {}
+        self.value_labels = {}
+
         for i, metric in enumerate(self.metrics):
             # Create centered container for each metric row
             metric_container = ttk.Frame(eval_frame)
@@ -1237,6 +1275,10 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             value_label = ttk.Label(metric_frame, text="5", width=2)
             value_label.pack(side='left', padx=(10, 0))
             
+            # STORE REFERENCE TO LABEL
+            self.value_labels[metric] = value_label
+            debug_print(f"DEBUG: Stored reference to value label for {metric}")
+
             # Update value display AND plot when scale changes (LIVE UPDATES)
             def update_live(val, label=value_label, var=self.rating_vars[metric], metric_name=metric):
                 label.config(text=str(var.get()))
@@ -2199,18 +2241,50 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             
     def load_sample_data(self, sample_name):
         """Load data for the specified sample into the form."""
+        debug_print(f"DEBUG: Loading sample data for: {sample_name}")
+    
         if sample_name in self.samples:
             sample_data = self.samples[sample_name]
-            
-            # Load ratings
+            debug_print(f"DEBUG: Found sample data: {sample_data}")
+        
+            # Load ratings and update both sliders AND display labels
             for metric in self.metrics:
                 value = sample_data.get(metric, 5)
+                debug_print(f"DEBUG: Setting {metric} to {value}")
+            
+                # Update the slider value
                 self.rating_vars[metric].set(value)
-                
+            
+                # MANUALLY UPDATE THE DISPLAY LABEL
+                if hasattr(self, 'value_labels') and metric in self.value_labels:
+                    self.value_labels[metric].config(text=str(value))
+                    debug_print(f"DEBUG: Updated display label for {metric} to {value}")
+                else:
+                    debug_print(f"DEBUG: No value label found for {metric}")
+            
             # Load comments
             comments = sample_data.get('comments', '')
             self.comments_text.delete('1.0', tk.END)
             self.comments_text.insert('1.0', comments)
+            debug_print(f"DEBUG: Loaded comments: '{comments[:50]}...'")
+        
+            debug_print(f"DEBUG: Successfully loaded all data for {sample_name}")
+        else:
+            debug_print(f"DEBUG: Sample {sample_name} not found in samples")
+
+    def refresh_value_displays(self):
+        """Refresh all value display labels to match current slider values."""
+        debug_print("DEBUG: Refreshing all value displays")
+    
+        if not hasattr(self, 'value_labels'):
+            debug_print("DEBUG: No value labels found, skipping refresh")
+            return
+        
+        for metric in self.metrics:
+            if metric in self.value_labels and metric in self.rating_vars:
+                current_value = self.rating_vars[metric].get()
+                self.value_labels[metric].config(text=str(current_value))
+                debug_print(f"DEBUG: Refreshed {metric} display to {current_value}")
          
     def save_plot_as_image(self):
         """Save the current spider plot as an image file."""
@@ -2571,9 +2645,18 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         
     def clear_form(self):
         """Clear all form fields."""
+        debug_print("DEBUG: Clearing form and refreshing displays")
+    
         for metric in self.metrics:
             self.rating_vars[metric].set(5)
+        
+            # Also update the display labels
+            if hasattr(self, 'value_labels') and metric in self.value_labels:
+                self.value_labels[metric].config(text="5")
+                debug_print(f"DEBUG: Reset {metric} display to 5")
+            
         self.comments_text.delete('1.0', tk.END)
+        debug_print("DEBUG: Form cleared and displays refreshed")
         
     def update_plot(self):
         """Update the spider plot."""
@@ -2658,39 +2741,54 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         self.bring_to_front()
                 
     def load_session(self):
-        """Load a session from a JSON file as a new session."""
-        filename = filedialog.askopenfilename(
-            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
-            title="Load Sensory Session"
-        )
+        """Load one or more sessions from JSON files as new sessions."""
+        debug_print("DEBUG: Starting load session with multiple file selection")
     
-        if filename:
+        # Use askopenfilenames to allow multiple file selection
+        filenames = filedialog.askopenfilenames(
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            title="Load Sensory Sessions (Hold Ctrl to select multiple)"
+        )
+
+        if not filenames:
+            debug_print("DEBUG: No files selected for loading")
+            return
+
+        debug_print(f"DEBUG: Selected {len(filenames)} files for loading")
+    
+        successful_loads = 0
+        failed_loads = []
+        loaded_session_names = []
+
+        for filename in filenames:
             try:
+                debug_print(f"DEBUG: Processing file: {filename}")
+            
                 with open(filename, 'r') as f:
                     session_data = json.load(f)
-            
+
                 debug_print(f"DEBUG: Loading session from {filename}")
                 debug_print(f"DEBUG: Session data keys: {list(session_data.keys())}")
-            
+
                 # Validate session data
                 if not self.validate_session_data(session_data):
-                    messagebox.showerror("Invalid Session", 
-                                       "The selected file does not contain valid session data.")
-                    return
-            
+                    debug_print(f"DEBUG: Invalid session data in {filename}")
+                    failed_loads.append(f"{os.path.basename(filename)} - Invalid format")
+                    continue
+
                 # Create session name from filename
                 base_filename = os.path.splitext(os.path.basename(filename))[0]
                 session_name = base_filename
-            
+
                 # Ensure unique session name
                 counter = 1
                 original_name = session_name
                 while session_name in self.sessions:
                     session_name = f"{original_name}_{counter}"
                     counter += 1
-            
+
                 debug_print(f"DEBUG: Creating new session: {session_name}")
-            
+
                 # Create new session with loaded data
                 self.sessions[session_name] = {
                     'header': session_data.get('header', {}),
@@ -2698,46 +2796,66 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
                     'timestamp': session_data.get('timestamp', datetime.now().isoformat()),
                     'source_file': filename
                 }
-            
+
                 debug_print(f"DEBUG: Session created with {len(self.sessions[session_name]['samples'])} samples")
-            
-                # Switch to the new session
-                self.switch_to_session(session_name)
-            
-                # Update session selector UI
-                self.update_session_combo()
-                if hasattr(self, 'session_var'):
-                    self.session_var.set(session_name)
-            
-                # Update other UI components
-                self.update_sample_combo()
-                self.update_sample_checkboxes()
-            
-                # Select first sample if available
-                if self.samples:
-                    first_sample = list(self.samples.keys())[0]
-                    self.sample_var.set(first_sample)
-                    self.load_sample_data(first_sample)
-                else:
-                    self.sample_var.set('')
-                    self.clear_form()
-                
-                self.update_plot()
-            
-                debug_print(f"DEBUG: Successfully loaded session {session_name}")
-                messagebox.showinfo("Success", 
-                                  f"Session loaded as '{session_name}'\n"
-                                  f"Loaded {len(self.samples)} samples\n"
-                                  f"Use session selector to switch between sessions.")
-                debug_print(f"Loaded sensory session from: {filename}")
-            
+                successful_loads += 1
+                loaded_session_names.append(session_name)
+
             except Exception as e:
-                debug_print(f"DEBUG: Error loading session: {e}")
+                debug_print(f"DEBUG: Error loading session from {filename}: {e}")
                 import traceback
                 traceback.print_exc()
-                messagebox.showerror("Error", f"Failed to load session: {e}")
+                failed_loads.append(f"{os.path.basename(filename)} - {str(e)}")
 
-            self.bring_to_front()
+        # Report results to user
+        if successful_loads > 0:
+            # Switch to the last loaded session
+            last_session = loaded_session_names[-1]
+            self.switch_to_session(last_session)
+
+            # Update session selector UI
+            self.update_session_combo()
+            if hasattr(self, 'session_var'):
+                self.session_var.set(last_session)
+
+            # Update other UI components
+            self.update_sample_combo()
+            self.update_sample_checkboxes()
+
+            # Select first sample if available
+            if self.samples:
+                first_sample = list(self.samples.keys())[0]
+                self.sample_var.set(first_sample)
+                self.load_sample_data(first_sample)
+            else:
+                self.sample_var.set('')
+                self.clear_form()
+        
+            self.update_plot()
+
+            # Create success message
+            success_msg = f"Successfully loaded {successful_loads} session(s):\n"
+            success_msg += "\n".join([f"• {name}" for name in loaded_session_names])
+            success_msg += f"\n\nCurrently viewing: {last_session}"
+            success_msg += "\nUse session selector to switch between sessions."
+
+            debug_print(f"DEBUG: Successfully loaded {successful_loads} sessions")
+            messagebox.showinfo("Sessions Loaded", success_msg)
+
+        # Report any failures
+        if failed_loads:
+            failure_msg = f"Failed to load {len(failed_loads)} file(s):\n"
+            failure_msg += "\n".join([f"• {fail}" for fail in failed_loads])
+            debug_print(f"DEBUG: Failed to load {len(failed_loads)} files")
+            messagebox.showwarning("Load Errors", failure_msg)
+
+        # Overall result
+        if successful_loads == 0:
+            messagebox.showerror("Load Failed", "No valid session files could be loaded.")
+        else:
+            debug_print(f"DEBUG: Load session completed - {successful_loads} successful, {len(failed_loads)} failed")
+
+        self.bring_to_front()
                 
     def export_to_excel(self):
         """Export the sensory data to an Excel file."""

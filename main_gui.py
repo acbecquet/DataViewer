@@ -1132,8 +1132,26 @@ class TestingGUI:
     def open_sensory_data_collection(self):
         """Open the sensory data collection window."""
         from sensory_data_collection import SensoryDataCollectionWindow
-        sensory_window = SensoryDataCollectionWindow(self.root)
+    
+        debug_print("DEBUG: Opening sensory data collection window")
+        debug_print("DEBUG: Hiding main GUI window")
+    
+        # Hide the main window
+        self.root.withdraw()
+    
+        # Define callback to restore main window
+        def on_sensory_window_close():
+            debug_print("DEBUG: Sensory window closed, restoring main GUI window")
+            self.root.deiconify()  # Show the main window again
+            self.root.lift()       # Bring it to front
+            self.root.focus_set()  # Give it focus
+            debug_print("DEBUG: Main GUI window restored successfully")
+    
+        # Create sensory window with close callback
+        sensory_window = SensoryDataCollectionWindow(self.root, close_callback=on_sensory_window_close)
         sensory_window.show()
+    
+        debug_print("DEBUG: Sensory data collection window created and shown")
 
     def show_data_collection_startup_dialog(self):
         """Show a startup dialog for data collection when no file is loaded."""
