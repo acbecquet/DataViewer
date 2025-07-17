@@ -1495,38 +1495,75 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             
     def switch_to_comparison_mode(self):
         """Switch to comparison mode - show averages across users."""
+        debug_print("DEBUG: Switching to comparison mode")
+    
         self.current_mode = "comparison"
         self.mode_button.config(text="Switch to Collection Mode")
-        
+    
+        # Change to bright white background for comparison mode
+        self.update_window_background('#FFFFFF')
+    
+        # Add comparison title
+        self.setup_comparison_title()
+    
         # Gray out sensory evaluation panel
         self.disable_sensory_evaluation()
-        
-        # Load multiple sessions if not already loaded
+    
+        # Load multiple sessions if needed (use your existing logic)
         if not self.all_sessions_data:
             self.load_multiple_sessions()
-        
-        # Calculate averages
+    
+        # Calculate averages (use your existing method)
         self.calculate_sample_averages()
-        
+    
         # Update plot with averages
         self.update_comparison_plot()
-        
+    
+        # Bring to front after mode switch
+        self.bring_to_front()
+    
         debug_print("Switched to comparison mode - showing averaged data across users")
         messagebox.showinfo("Comparison Mode", "Now showing averaged data across multiple users.\nSensory evaluation is disabled in this mode.")
-        
+
     def switch_to_collection_mode(self):
         """Switch to collection mode - normal single user operation."""
+        debug_print("DEBUG: Switching to collection mode")
+    
         self.current_mode = "collection" 
         self.mode_button.config(text="Switch to Comparison Mode")
-        
+    
+        # Change back to light gray background for collection mode
+        self.update_window_background(APP_BACKGROUND_COLOR)
+    
+        # Remove comparison title if it exists
+        if hasattr(self, 'comparison_title_frame'):
+            self.comparison_title_frame.destroy()
+    
         # Re-enable sensory evaluation panel
         self.enable_sensory_evaluation()
-        
+    
         # Update plot with current user's data
         self.update_plot()
-        
+    
+        # Bring to front after mode switch
+        self.bring_to_front()
+    
         debug_print("Switched to collection mode - showing single user data")
         messagebox.showinfo("Collection Mode", "Now showing single user data collection mode.\nSensory evaluation is enabled.")
+
+    def update_widget_backgrounds(self, parent, color):
+        """Recursively update background colors for tkinter widgets."""
+        for child in parent.winfo_children():
+            try:
+                # Only update standard tkinter widgets (not ttk)
+                widget_class = child.winfo_class()
+                if widget_class in ['Frame', 'Label', 'Button', 'Entry', 'Text', 'Listbox']:
+                    child.configure(bg=color)
+            except:
+                pass  # Skip widgets that don't support bg parameter
+        
+            # Recursively update children
+            self.update_widget_backgrounds(child, color)
 
     def disable_sensory_evaluation(self):
         """Gray out and disable all sensory evaluation controls."""
@@ -1546,6 +1583,36 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
                 widget.configure(style='TLabelframe')
         debug_print("Enabled sensory evaluation panel for collection mode")
 
+    def bring_to_front(self):
+        """Bring the sensory window to front after user actions."""
+        if self.window and self.window.winfo_exists():
+            self.window.lift()
+            self.window.focus_set()
+            debug_print("DEBUG: Brought sensory window to front")
+
+    def update_window_background(self, color):
+        """Update the window background color and all child widgets."""
+        debug_print(f"DEBUG: Updating window background to {color}")
+    
+        # Update the main window background
+        self.window.configure(bg=color)
+    
+        # Update ttk style for the new background
+        style = ttk.Style()
+        style.configure('TLabel', background=color)
+        style.configure('TLabelFrame', background=color)
+        style.configure('TLabelFrame.Label', background=color)
+        style.configure('TFrame', background=color)
+    
+        # Update any direct tkinter widgets recursively
+        self.update_widget_backgrounds(self.window, color)
+    
+        # Force a redraw
+        self.window.update_idletasks()
+    
+    
+        debug_print(f"DEBUG: Window background updated to {color} and brought to front")
+
     def set_widget_state(self, parent, state):
         """Recursively set state of all child widgets."""
         try:
@@ -1557,77 +1624,124 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             self.set_widget_state(child, state)
 
     def load_multiple_sessions(self):
-        """Load multiple session files to calculate averages."""
+        """Enhanced method to load multiple session files for comparison."""
+        debug_print("DEBUG: Loading multiple sessions for comparison mode")
+    
         filenames = filedialog.askopenfilenames(
-            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
-            title="Select Multiple Session Files for Comparison"
+            title="Select Session Files for Comparison",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
         )
-        
+    
         if not filenames:
-            return
-            
-        self.all_sessions_data = {}
-        
+            debug_print("DEBUG: No files selected for comparison")
+            return False
+    
+        if len(filenames) < 2:
+            messagebox.showwarning("Warning", "Please select at least 2 session files for comparison.")
+            return False
+    
+        successful_loads = 0
+    
         for filename in filenames:
             try:
+                debug_print(f"DEBUG: Loading session file: {filename}")
+            
                 with open(filename, 'r') as f:
                     session_data = json.load(f)
-                    
-                # Extract assessor name for identification
-                assessor_name = session_data.get('header', {}).get('Assessor Name', 'Unknown')
-                if not assessor_name.strip():
-                    assessor_name = f"User_{len(self.all_sessions_data) + 1}"
-                    
-                self.all_sessions_data[assessor_name] = session_data
-                debug_print(f"Loaded session data for assessor: {assessor_name}")
-                
+            
+                # Create session name from filename
+                base_filename = os.path.splitext(os.path.basename(filename))[0]
+                session_name = base_filename
+            
+                # Ensure unique session name
+                counter = 1
+                original_name = session_name
+                while session_name in self.sessions:
+                    session_name = f"{original_name}_{counter}"
+                    counter += 1
+            
+                # Create new session with loaded data
+                self.sessions[session_name] = {
+                    'header': session_data.get('header', {}),
+                    'samples': session_data.get('samples', {}),
+                    'timestamp': session_data.get('timestamp', datetime.now().isoformat()),
+                    'source_file': filename
+                }
+            
+                successful_loads += 1
+                debug_print(f"DEBUG: Successfully loaded session {session_name} with {len(self.sessions[session_name]['samples'])} samples")
+            
             except Exception as e:
-                messagebox.showerror("Error", f"Failed to load {filename}: {e}")
-                
-        if self.all_sessions_data:
-            messagebox.showinfo("Success", f"Loaded {len(self.all_sessions_data)} session(s) for comparison")
-            debug_print(f"Successfully loaded {len(self.all_sessions_data)} sessions for comparison")
+                debug_print(f"DEBUG: Error loading session from {filename}: {e}")
+                messagebox.showerror("Error", f"Failed to load session from {os.path.basename(filename)}: {e}")
+    
+        if successful_loads >= 2:
+            debug_print(f"DEBUG: Successfully loaded {successful_loads} sessions for comparison")
+            messagebox.showinfo("Success", f"Loaded {successful_loads} sessions for comparison.")
+            return True
         else:
-            messagebox.showwarning("Warning", "No valid session files were loaded")
+            messagebox.showerror("Error", "Failed to load enough sessions for comparison (minimum 2 required).")
+            return False
+
+        self.bring_to_front()
             
     def calculate_sample_averages(self):
-        """Calculate average ratings for each sample across all users."""
-        if not self.all_sessions_data:
+        """Calculate averages for each sample across all loaded sessions."""
+        debug_print("DEBUG: Calculating sample averages across all sessions")
+    
+        if len(self.sessions) < 2:
+            debug_print("DEBUG: Not enough sessions for comparison")
             return
-            
-        sample_totals = {}  # {sample_name: {metric: [values], 'count': n}}
-        
+    
+        sample_data = {}  # {sample_name: {metric: [values], 'comments': [comments]}}
+    
         # Collect all values for each sample/metric combination
-        for assessor, session_data in self.all_sessions_data.items():
-            samples = session_data.get('samples', {})
-            for sample_name, sample_data in samples.items():
-                if sample_name not in sample_totals:
-                    sample_totals[sample_name] = {metric: [] for metric in self.metrics}
-                    sample_totals[sample_name]['comments'] = []
-                    
-                for metric in self.metrics:
-                    if metric in sample_data:
-                        sample_totals[sample_name][metric].append(sample_data[metric])
-                        
-                # Collect comments
-                if 'comments' in sample_data and sample_data['comments'].strip():
-                    sample_totals[sample_name]['comments'].append(f"{assessor}: {sample_data['comments']}")
+        for session_name, session_info in self.sessions.items():
+            samples = session_info.get('samples', {})
+            header = session_info.get('header', {})
+            assessor_name = header.get('Assessor Name', session_name)
         
+            debug_print(f"DEBUG: Processing session {session_name} with assessor {assessor_name}")
+        
+            for sample_name, sample_values in samples.items():
+                if sample_name not in sample_data:
+                    sample_data[sample_name] = {metric: [] for metric in self.metrics}
+                    sample_data[sample_name]['comments'] = []
+                    sample_data[sample_name]['assessors'] = []
+            
+                # Collect metric values
+                for metric in self.metrics:
+                    if metric in sample_values and sample_values[metric] is not None:
+                        try:
+                            value = float(sample_values[metric])
+                            sample_data[sample_name][metric].append(value)
+                        except (ValueError, TypeError):
+                            debug_print(f"DEBUG: Invalid value for {metric} in {sample_name}: {sample_values[metric]}")
+            
+                # Collect comments
+                if 'comments' in sample_values and sample_values['comments'].strip():
+                    sample_data[sample_name]['comments'].append(f"{assessor_name}: {sample_values['comments']}")
+            
+                sample_data[sample_name]['assessors'].append(assessor_name)
+    
         # Calculate averages
         self.average_samples = {}
-        for sample_name, data in sample_totals.items():
+        for sample_name, data in sample_data.items():
             self.average_samples[sample_name] = {}
+        
             for metric in self.metrics:
                 if data[metric]:  # If we have values
                     avg_value = sum(data[metric]) / len(data[metric])
                     self.average_samples[sample_name][metric] = round(avg_value, 1)
+                    debug_print(f"DEBUG: {sample_name} {metric} average: {avg_value:.1f} (from {len(data[metric])} values)")
                 else:
-                    self.average_samples[sample_name][metric] = 5  # Default
-                    
+                    self.average_samples[sample_name][metric] = 5  # Default middle value
+        
             # Combine comments
             self.average_samples[sample_name]['comments'] = '\n'.join(data['comments'])
-            
-        debug_print(f"Calculated averages for {len(self.average_samples)} samples")
+            self.average_samples[sample_name]['assessor_count'] = len(set(data['assessors']))
+    
+        debug_print(f"DEBUG: Calculated averages for {len(self.average_samples)} samples across {len(self.sessions)} sessions")
         
     def update_comparison_plot(self):
         """Update plot to show averaged data across users."""
@@ -1654,6 +1768,8 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         self.create_spider_plot()
         
         debug_print("Updated plot with averaged comparison data")
+
+        self.bring_to_front()
 
     def rename_current_sample(self):
         """Rename the currently selected sample."""
@@ -2462,6 +2578,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
     def update_plot(self):
         """Update the spider plot."""
         self.create_spider_plot()
+        self.bring_to_front()
         
     def show_sop(self):
         """Display the Standard Operating Procedure."""
@@ -2537,6 +2654,8 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             except Exception as e:
                 debug_print(f"DEBUG: Error saving session: {e}")
                 messagebox.showerror("Error", f"Failed to save session: {e}")
+
+        self.bring_to_front()
                 
     def load_session(self):
         """Load a session from a JSON file as a new session."""
@@ -2617,6 +2736,8 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
                 import traceback
                 traceback.print_exc()
                 messagebox.showerror("Error", f"Failed to load session: {e}")
+
+            self.bring_to_front()
                 
     def export_to_excel(self):
         """Export the sensory data to an Excel file."""
@@ -2664,6 +2785,8 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to export data: {e}")
 
+        self.bring_to_front()
+
     def auto_save_and_update(self):
         """Automatically save current sample data and update plot."""
         current_sample = self.sample_var.get()
@@ -2680,6 +2803,34 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             self.update_plot()
         
             debug_print(f"DEBUG: Auto-saved all data for {current_sample}")
+
+    def setup_comparison_title(self):
+        """Add or update the comparison mode title."""
+        # Remove existing title if it exists
+        if hasattr(self, 'comparison_title_frame'):
+            self.comparison_title_frame.destroy()
+    
+        if self.current_mode == "comparison":
+            # Create title frame at the top of the window
+            self.comparison_title_frame = ttk.Frame(self.window)
+            self.comparison_title_frame.pack(side='top', fill='x', pady=10)
+        
+            # Add the title label with white background
+            title_label = ttk.Label(
+                self.comparison_title_frame, 
+                text="Comparing Average Sensory Results",
+                font=("Arial", 16, "bold"),
+                background='#FFFFFF',  # Now bright white
+                foreground="black",
+                anchor='center'
+            )
+            title_label.pack(expand=True)
+        
+            # Ensure window stays on top after adding title
+            self.window.update_idletasks()
+            self.bring_to_front()
+        
+            debug_print("DEBUG: Added comparison mode title with white background and brought to front")
 
     def setup_session_selector(self, parent_frame):
         """Add session selector to the interface."""
