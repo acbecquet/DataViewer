@@ -276,47 +276,61 @@ class FileManager:
         Enhanced with duplicate checking and better error handling.
         """
         debug_print(f"DEBUG: Checking if file {original_file_path} needs database storage")
-        
+    
         # Check if already stored
         if original_file_path in self.stored_files_cache:
             debug_print("DEBUG: File already stored in database, skipping")
             return
-            
+        
         try:
             debug_print("DEBUG: Storing new file in database...")
             # Show progress dialog
             self.gui.progress_dialog.show_progress_bar("Storing file in database...")
             self.gui.root.update_idletasks()
-    
+
             # Create a temporary VAP3 file
             with tempfile.NamedTemporaryFile(suffix='.vap3', delete=False) as temp_file:
                 temp_vap3_path = temp_file.name
                 debug_print(f"DEBUG: Created temporary VAP3 file: {temp_vap3_path}")
-    
+
             # Save current state as VAP3
             from vap_file_manager import VapFileManager
             vap_manager = VapFileManager()
-    
+
             # Collect plot settings safely
             plot_settings = {}
             if hasattr(self.gui, 'selected_plot_type'):
                 plot_settings['selected_plot_type'] = self.gui.selected_plot_type.get()
-            
+        
             debug_print(f"DEBUG: Plot settings: {plot_settings}")
-    
+
             # Get image crop states safely
             image_crop_states = getattr(self.gui, 'image_crop_states', {})
             if hasattr(self.gui, 'image_loader') and self.gui.image_loader:
                 image_crop_states.update(getattr(self.gui.image_loader, 'image_crop_states', {}))
-            
+        
             debug_print(f"DEBUG: Image crop states: {len(image_crop_states)} items")
-    
-            # Extract just the filename (without path or extension) from the original file
+
+            # Extract and construct the display filename more robustly
             original_filename_base = os.path.splitext(os.path.basename(original_file_path))[0]
+        
+            # Ensure we have a valid filename - handle edge cases
+            if not original_filename_base or original_filename_base.startswith('tmp') or len(original_filename_base.strip()) == 0:
+                # If original filename is missing, empty, or looks like a temp file, try to get a better name
+                if hasattr(self.gui, 'current_file') and self.gui.current_file:
+                    original_filename_base = os.path.splitext(self.gui.current_file)[0]
+                    debug_print(f"DEBUG: Using current_file for filename: {original_filename_base}")
+                else:
+                    # Last resort - use timestamp
+                    original_filename_base = f"DataFile_{int(time.time())}"
+                    debug_print(f"DEBUG: Using timestamp for filename: {original_filename_base}")
+        
             display_filename = original_filename_base + '.vap3'
-            
-            debug_print(f"DEBUG: Display filename: {display_filename}")
-    
+        
+            debug_print(f"DEBUG: Original file path: {original_file_path}")
+            debug_print(f"DEBUG: Original filename base: '{original_filename_base}'")
+            debug_print(f"DEBUG: Final display filename: '{display_filename}'")
+
             # Save to temporary VAP3 file
             success = vap_manager.save_to_vap3(
                 temp_vap3_path,
@@ -326,12 +340,12 @@ class FileManager:
                 image_crop_states,
                 plot_settings
             )
-    
+
             if not success:
                 raise Exception("Failed to create temporary VAP3 file")
-            
+        
             debug_print("DEBUG: VAP3 file created successfully")
-    
+
             # Store metadata about the original file
             meta_data = {
                 'display_filename': display_filename,
@@ -342,18 +356,18 @@ class FileManager:
                 'plot_options': getattr(self.gui, 'plot_options', []),
                 'plot_settings': plot_settings
             }
-            
-            debug_print(f"DEBUG: Metadata: {meta_data}")
-    
+        
+            debug_print(f"DEBUG: Metadata to store: {meta_data}")
+
             # Store the VAP3 file in the database with the proper display filename
             file_id = self.db_manager.store_vap3_file(temp_vap3_path, meta_data)
             debug_print(f"DEBUG: File stored with ID: {file_id}")
-    
+
             # Store sheet metadata
             for sheet_name, sheet_info in self.gui.filtered_sheets.items():
                 is_plotting = processing.plotting_sheet_test(sheet_name, sheet_info["data"])
                 is_empty = sheet_info.get("is_empty", False)
-        
+    
                 sheet_id = self.db_manager.store_sheet_info(
                     file_id, 
                     sheet_name, 
@@ -361,7 +375,7 @@ class FileManager:
                     is_empty
                 )
                 debug_print(f"DEBUG: Stored sheet '{sheet_name}' with ID: {sheet_id}")
-    
+
             # Store associated images
             if hasattr(self.gui, 'sheet_images') and hasattr(self.gui, 'current_file') and self.gui.current_file in self.gui.sheet_images:
                 for sheet_name, images in self.gui.sheet_images[self.gui.current_file].items():
@@ -370,23 +384,23 @@ class FileManager:
                             crop_enabled = image_crop_states.get(img_path, False)
                             img_id = self.db_manager.store_image(file_id, img_path, sheet_name, crop_enabled)
                             debug_print(f"DEBUG: Stored image '{img_path}' with ID: {img_id}")
-    
+
             # Clean up the temporary file
             try:
                 os.unlink(temp_vap3_path)
                 debug_print(f"DEBUG: Cleaned up temporary file: {temp_vap3_path}")
             except Exception as cleanup_error:
                 print(f"WARNING: Failed to clean up temporary file: {cleanup_error}")
-    
+
             # Update progress
             self.gui.progress_dialog.update_progress_bar(100)
             self.gui.root.update_idletasks()
-    
+
             debug_print(f"SUCCESS: File successfully stored in database with ID: {file_id} and name: {display_filename}")
-            
+        
             # Mark as stored in cache
             self.stored_files_cache.add(original_file_path)
-    
+
         except Exception as e:
             error_msg = f"Error storing file in database: {e}"
             print(f"ERROR: {error_msg}")
@@ -395,51 +409,52 @@ class FileManager:
             # Hide progress dialog
             self.gui.progress_dialog.hide_progress_bar()
     
-    def load_from_database(self, file_id=None):
+    def load_from_database(self, file_id=None, show_success_message=True, batch_operation=False):
         """Load a file from the database."""
         try:
-            # Show progress dialog
-            self.gui.progress_dialog.show_progress_bar("Loading from database...")
-            self.gui.root.update_idletasks()
-            
+            # Only show progress dialog if not part of a batch operation
+            if not batch_operation:
+                self.gui.progress_dialog.show_progress_bar("Loading from database...")
+                self.gui.root.update_idletasks()
+        
             if file_id is None:
                 # Show a dialog to select from available files
                 file_list = self.db_manager.list_files()
                 if not file_list:
                     messagebox.showinfo("Info", "No files found in the database.")
-                    return
-                
+                    return False
+            
                 # Create a simple dialog to choose a file
                 dialog = Toplevel(self.gui.root)
                 dialog.title("Select File from Database")
                 dialog.geometry("600x400")
                 dialog.transient(self.gui.root)
                 dialog.grab_set()
-                
+            
                 # Create a frame for the listbox and scrollbar
                 frame = Frame(dialog)
                 frame.pack(fill="both", expand=True, padx=10, pady=10)
-                
+            
                 # Create a Listbox to display the files
                 listbox = tk.Listbox(frame, font=FONT)
                 listbox.pack(side="left", fill="both", expand=True)
-                
+            
                 # Add a scrollbar
                 scrollbar = tk.Scrollbar(frame, orient="vertical", command=listbox.yview)
                 scrollbar.pack(side="right", fill="y")
                 listbox.config(yscrollcommand=scrollbar.set)
-                
+            
                 # Populate the listbox
                 for file in file_list:
                     created_at = file["created_at"].strftime("%Y-%m-%d %H:%M:%S")
                     listbox.insert(tk.END, f"{file['id']}: {file['filename']} - {created_at}")
-                
+            
                 # Add buttons
                 button_frame = Frame(dialog)
                 button_frame.pack(fill="x", padx=10, pady=10)
-                
+            
                 selected_file_id = [None]  # Use a list to store the selected file ID
-                
+            
                 def on_select():
                     selection = listbox.curselection()
                     if selection:
@@ -447,161 +462,409 @@ class FileManager:
                         file_id = file_list[index]["id"]
                         selected_file_id[0] = file_id
                         dialog.destroy()
-                
+            
                 def on_cancel():
                     dialog.destroy()
-                
+            
                 select_button = Button(button_frame, text="Select", command=on_select)
                 select_button.pack(side="right", padx=5)
-                
+            
                 cancel_button = Button(button_frame, text="Cancel", command=on_cancel)
                 cancel_button.pack(side="right", padx=5)
-                
+            
                 # Wait for the dialog to close
                 self.gui.root.wait_window(dialog)
-                
+            
                 # Check if a file was selected
                 file_id = selected_file_id[0]
                 if file_id is None:
-                    return
-            
+                    return False
+        
             # Load the file from the database
             file_data = self.db_manager.get_file_by_id(file_id)
             if not file_data:
-                messagebox.showerror("Error", f"File with ID {file_id} not found in the database.")
-                return
+                if show_success_message:  # Only show error if not in batch mode
+                    messagebox.showerror("Error", f"File with ID {file_id} not found in the database.")
+                return False
+        
+            # DEBUG: Print all available data for troubleshooting
+            debug_print(f"DEBUG: Retrieved file data keys: {list(file_data.keys())}")
+            debug_print(f"DEBUG: Database filename field: '{file_data['filename']}'")
+            debug_print(f"DEBUG: Metadata exists: {'meta_data' in file_data}")
+        
+            if 'meta_data' in file_data and file_data['meta_data']:
+                debug_print(f"DEBUG: Metadata keys: {list(file_data['meta_data'].keys())}")
+                debug_print(f"DEBUG: display_filename in metadata: {file_data['meta_data'].get('display_filename')}")
+                debug_print(f"DEBUG: original_filename in metadata: {file_data['meta_data'].get('original_filename')}")
+            else:
+                debug_print("DEBUG: No metadata found")
+        
+            # Get the proper display filename - prioritize metadata, then fallback to database filename
+            display_filename = None
+        
+            # First, try to get display_filename from metadata
+            if 'meta_data' in file_data and file_data['meta_data']:
+                display_filename = file_data['meta_data'].get('display_filename')
+                debug_print(f"DEBUG: display_filename from metadata: '{display_filename}'")
             
+                # If not found, try original_filename from metadata and construct .vap3 name
+                if not display_filename:
+                    original_filename = file_data['meta_data'].get('original_filename')
+                    if original_filename:
+                        # Remove extension and add .vap3
+                        display_filename = os.path.splitext(original_filename)[0] + '.vap3'
+                        debug_print(f"DEBUG: Constructed filename from original_filename: '{display_filename}'")
+        
+            # Final fallback to database filename field
+            if not display_filename:
+                display_filename = file_data['filename']
+                debug_print(f"DEBUG: Using database filename as fallback: '{display_filename}'")
+        
+            debug_print(f"DEBUG: Final display filename to use: '{display_filename}'")
+        
+            # Check if we already have files loaded to determine if we should append
+            append_to_existing = len(self.gui.all_filtered_sheets) > 0
+            debug_print(f"DEBUG: Current loaded files count: {len(self.gui.all_filtered_sheets)}")
+            debug_print(f"DEBUG: Will append to existing: {append_to_existing}")
+        
             # Save the VAP3 file to a temporary location
             with tempfile.NamedTemporaryFile(suffix='.vap3', delete=False) as temp_file:
                 temp_vap3_path = temp_file.name
                 temp_file.write(file_data['file_content'])
-            
-            # Load the VAP3 file using the existing method
-            self.load_vap3_file(temp_vap3_path)
-            
+        
+            debug_print(f"DEBUG: Created temporary file for loading: {temp_vap3_path}")
+        
+            # Load the VAP3 file using the existing method with the correct display name and append flag
+            success = self.load_vap3_file(temp_vap3_path, display_name=display_filename, append_to_existing=append_to_existing)
+        
+            if not success:
+                debug_print("DEBUG: Failed to load VAP3 file")
+                return False
+        
             # Clean up the temporary file
             try:
                 os.unlink(temp_vap3_path)
-            except:
-                pass
-            
-            # Update the UI to indicate the file was loaded from the database
-            file_name = file_data['filename']
-            self.gui.root.title(f"DataViewer - {file_name} (from Database)")
-            
-            # Update progress
+                debug_print(f"DEBUG: Cleaned up temporary file: {temp_vap3_path}")
+            except Exception as cleanup_error:
+                debug_print(f"DEBUG: Warning - failed to cleanup temp file: {cleanup_error}")
+        
+            # Update the UI to indicate the file was loaded from the database - USE THE PROPER DISPLAY FILENAME
+            total_files = len(self.gui.all_filtered_sheets)
+            if not batch_operation:  # Only update title if not in batch mode
+                if total_files > 1:
+                    self.gui.root.title(f"DataViewer - {display_filename} (from Database) - {total_files} files loaded")
+                else:
+                    self.gui.root.title(f"DataViewer - {display_filename} (from Database)")
+        
+            # Update progress only if not in batch mode
+            if not batch_operation:
+                self.gui.progress_dialog.update_progress_bar(100)
+                self.gui.root.update_idletasks()
+        
+            debug_print(f"DEBUG: Successfully loaded file with display name: '{display_filename}'")
+            debug_print(f"DEBUG: Total files now loaded: {len(self.gui.all_filtered_sheets)}")
+        
+            # Show the success message only if requested and not in batch mode
+            if show_success_message and not batch_operation:
+                if total_files > 1:
+                    messagebox.showinfo("Success", f"VAP3 file loaded successfully: {display_filename}\nTotal files loaded: {total_files}")
+                else:
+                    messagebox.showinfo("Success", f"VAP3 file loaded successfully: {display_filename}")
+        
+            return True
+        
+        except Exception as e:
+            if show_success_message:  # Only show error dialog if not in batch mode
+                messagebox.showerror("Error", f"Error loading file from database: {e}")
+            debug_print(f"ERROR: Error loading file from database: {e}")
+            traceback.print_exc()
+            return False
+        finally:
+            # Hide progress dialog only if not in batch mode
+            if not batch_operation:
+                self.gui.progress_dialog.hide_progress_bar()
+
+    def load_multiple_from_database(self, file_ids):
+        """Load multiple files from the database with a single progress dialog and success message."""
+        if not file_ids:
+            return
+    
+        loaded_files = []
+        failed_files = []
+    
+        try:
+            # Show progress dialog for the entire batch operation
+            self.gui.progress_dialog.show_progress_bar("Loading files from database...")
+            self.gui.root.update_idletasks()
+        
+            total_files = len(file_ids)
+            debug_print(f"DEBUG: Starting batch load of {total_files} files")
+        
+            for i, file_id in enumerate(file_ids):
+                try:
+                    # Update progress
+                    progress = int(((i + 1) / total_files) * 100)
+                    self.gui.progress_dialog.update_progress_bar(progress)
+                    self.gui.root.update_idletasks()
+                
+                    debug_print(f"DEBUG: Loading file {i + 1}/{total_files} (ID: {file_id})")
+                
+                    # Load this file (suppress individual success messages and progress dialogs)
+                    success = self.load_from_database(file_id, show_success_message=False, batch_operation=True)
+                
+                    if success:
+                        # Get the file info for the success message
+                        file_data = self.db_manager.get_file_by_id(file_id)
+                        if file_data:
+                            display_filename = None
+                            if 'meta_data' in file_data and file_data['meta_data']:
+                                display_filename = file_data['meta_data'].get('display_filename')
+                                if not display_filename:
+                                    original_filename = file_data['meta_data'].get('original_filename')
+                                    if original_filename:
+                                        display_filename = os.path.splitext(original_filename)[0] + '.vap3'
+                            if not display_filename:
+                                display_filename = file_data['filename']
+                        
+                            loaded_files.append(display_filename)
+                            debug_print(f"DEBUG: Successfully loaded: {display_filename}")
+                    else:
+                        failed_files.append(f"File ID {file_id}")
+                        debug_print(f"DEBUG: Failed to load file ID: {file_id}")
+                    
+                except Exception as e:
+                    failed_files.append(f"File ID {file_id}")
+                    debug_print(f"DEBUG: Exception loading file ID {file_id}: {e}")
+        
+            # Update final progress
             self.gui.progress_dialog.update_progress_bar(100)
             self.gui.root.update_idletasks()
+        
+            # Update window title with final count
+            total_loaded = len(self.gui.all_filtered_sheets)
+            if total_loaded > 1:
+                last_loaded = loaded_files[-1] if loaded_files else "Multiple Files"
+                self.gui.root.title(f"DataViewer - {last_loaded} (from Database) - {total_loaded} files loaded")
+            elif total_loaded == 1:
+                self.gui.root.title(f"DataViewer - {loaded_files[0]} (from Database)")
+        
+            debug_print(f"DEBUG: Batch load complete. Loaded: {len(loaded_files)}, Failed: {len(failed_files)}")
+        
+            # Show single summary message
+            if failed_files:
+                if loaded_files:
+                    # Partial success
+                    success_count = len(loaded_files)
+                    failed_count = len(failed_files)
+                    message = f"Batch load completed:\n\n"
+                    message += f"✓ Successfully loaded: {success_count} files\n"
+                    message += f"✗ Failed to load: {failed_count} files\n\n"
+                    message += f"Total files now loaded: {len(self.gui.all_filtered_sheets)}"
+                    messagebox.showwarning("Partial Success", message)
+                else:
+                    # Complete failure
+                    messagebox.showerror("Error", f"Failed to load all {len(failed_files)} selected files.")
+            else:
+                # Complete success
+                if len(loaded_files) == 1:
+                    message = f"Successfully loaded 1 file:\n{loaded_files[0]}"
+                else:
+                    message = f"Successfully loaded {len(loaded_files)} files:\n\n"
+                    # Show first few filenames, then "and X more" if too many
+                    if len(loaded_files) <= 5:
+                        message += "\n".join([f"• {name}" for name in loaded_files])
+                    else:
+                        message += "\n".join([f"• {name}" for name in loaded_files[:3]])
+                        message += f"\n• ... and {len(loaded_files) - 3} more files"
+                
+                    message += f"\n\nTotal files now loaded: {len(self.gui.all_filtered_sheets)}"
             
-            messagebox.showinfo("Success", f"File '{file_name}' loaded from database.")
-            
+                messagebox.showinfo("Success", message)
+        
         except Exception as e:
-            messagebox.showerror("Error", f"Error loading file from database: {e}")
+            messagebox.showerror("Error", f"Error during batch loading: {e}")
+            debug_print(f"ERROR: Batch loading error: {e}")
             traceback.print_exc()
         finally:
             # Hide progress dialog
             self.gui.progress_dialog.hide_progress_bar()
 
     def show_database_browser(self):
-        """Show a dialog to browse files stored in the database."""
+        """Show a dialog to browse files stored in the database with multi-select support."""
         # Create a dialog to browse the database
         dialog = Toplevel(self.gui.root)
         dialog.title("Database Browser")
-        dialog.geometry("800x600")
+        dialog.geometry("900x700")  # Made slightly larger for better multi-select experience
         dialog.transient(self.gui.root)
-    
+
         # Create frames for UI elements
         top_frame = Frame(dialog)
         top_frame.pack(fill="x", padx=10, pady=10)
-    
+
         list_frame = Frame(dialog)
         list_frame.pack(fill="both", expand=True, padx=10, pady=10)
-    
+
         bottom_frame = Frame(dialog)
         bottom_frame.pack(fill="x", padx=10, pady=10)
-    
-        # Add a refresh button
+
+        # Add a refresh button and instructions
         def refresh_list():
             # Clear the current list
             file_listbox.delete(0, tk.END)
-        
+    
             # Get the latest file list
             file_list = self.db_manager.list_files()
-        
+    
             # Populate the listbox
             for file in file_list:
                 created_at = file["created_at"].strftime("%Y-%m-%d %H:%M:%S")
                 file_listbox.insert(tk.END, f"{file['id']}: {file['filename']} - {created_at}")
-        
+    
             # Update the status label
             status_label.config(text=f"Total files: {len(file_list)}")
-    
+
         refresh_button = Button(top_frame, text="Refresh", command=refresh_list)
         refresh_button.pack(side="left", padx=5)
-    
+
+        # Add instructions for multi-select
+        instructions_label = Label(top_frame, text="Ctrl+Click: Select individual files | Shift+Click: Select range", 
+                                  font=("Arial", 9), fg="gray")
+        instructions_label.pack(side="left", padx=20)
+
         # Add a status label
         status_label = Label(top_frame, text="Total files: 0")
         status_label.pack(side="right", padx=5)
-    
-        # Create a listbox with scrollbar for files
-        file_listbox = tk.Listbox(list_frame, font=FONT)
+
+        # Create a listbox with scrollbar for files - ENABLE MULTI-SELECT
+        file_listbox = tk.Listbox(list_frame, font=FONT, selectmode="extended")  # Key change: selectmode="extended"
         file_listbox.pack(side="left", fill="both", expand=True)
-    
+
         file_scrollbar = tk.Scrollbar(list_frame, orient="vertical", command=file_listbox.yview)
         file_scrollbar.pack(side="right", fill="y")
         file_listbox.config(yscrollcommand=file_scrollbar.set)
+
+        # Add selection counter
+        selection_frame = Frame(dialog)
+        selection_frame.pack(fill="x", padx=10, pady=5)
     
+        selection_label = Label(selection_frame, text="Selected: 0 files", font=("Arial", 10))
+        selection_label.pack(side="left")
+    
+        def update_selection_count():
+            """Update the selection counter."""
+            selected_count = len(file_listbox.curselection())
+            if selected_count == 0:
+                selection_label.config(text="Selected: 0 files")
+            elif selected_count == 1:
+                selection_label.config(text="Selected: 1 file")
+            else:
+                selection_label.config(text=f"Selected: {selected_count} files")
+    
+        # Bind selection change to update counter
+        file_listbox.bind("<<ListboxSelect>>", lambda event: update_selection_count())
+
         # Add buttons for actions
         def load_selected():
-            selection = file_listbox.curselection()
-            if not selection:
-                messagebox.showinfo("Info", "Please select a file to load.")
+            selections = file_listbox.curselection()
+            if not selections:
+                messagebox.showinfo("Info", "Please select one or more files to load.")
+                return
+    
+            debug_print(f"DEBUG: Starting batch load of {len(selections)} selected files from database")
+        
+            # Get file list for reference
+            file_list = self.db_manager.list_files()
+        
+            # Extract file IDs from selections
+            file_ids = []
+            for selection_index in selections:
+                try:
+                    file_id = file_list[selection_index]["id"]
+                    file_ids.append(file_id)
+                except IndexError:
+                    debug_print(f"DEBUG: Invalid selection index: {selection_index}")
+        
+            if not file_ids:
+                messagebox.showerror("Error", "No valid files selected.")
                 return
         
-            index = selection[0]
-            selected_text = file_listbox.get(index)
-            file_id = int(selected_text.split(":")[0])
-        
-            # Close the dialog
+            # Close the dialog first
             dialog.destroy()
         
-            # Load the file from the database
-            self.load_from_database(file_id)
-    
+            # Use the new batch loading method
+            self.load_multiple_from_database(file_ids)
+
         def delete_selected():
-            selection = file_listbox.curselection()
-            if not selection:
-                messagebox.showinfo("Info", "Please select a file to delete.")
+            selections = file_listbox.curselection()
+            if not selections:
+                messagebox.showinfo("Info", "Please select one or more files to delete.")
+                return
+    
+            # Get file list for reference
+            file_list = self.db_manager.list_files()
+        
+            # Create confirmation message
+            if len(selections) == 1:
+                selected_text = file_listbox.get(selections[0])
+                filename = selected_text.split(":")[1].split("-")[0].strip()
+                confirm_msg = f"Are you sure you want to delete {filename}?"
+            else:
+                confirm_msg = f"Are you sure you want to delete {len(selections)} files?"
+    
+            # Confirm deletion
+            if not messagebox.askyesno("Confirm Delete", confirm_msg):
                 return
         
-            index = selection[0]
-            selected_text = file_listbox.get(index)
-            file_id = int(selected_text.split(":")[0])
-            filename = selected_text.split(":")[1].split("-")[0].strip()
+            deleted_count = 0
+            failed_count = 0
         
-            # Confirm deletion
-            if messagebox.askyesno("Confirm Delete", f"Are you sure you want to delete {filename}?"):
-                # Delete the file
-                success = self.db_manager.delete_file(file_id)
-                if success:
-                    messagebox.showinfo("Success", f"File {filename} deleted successfully.")
-                    # Refresh the list
-                    refresh_list()
+            # Delete files (in reverse order to maintain indices)
+            for selection_index in reversed(selections):
+                try:
+                    file_id = file_list[selection_index]["id"]
+                    filename = file_list[selection_index]["filename"]
+                
+                    success = self.db_manager.delete_file(file_id)
+                    if success:
+                        debug_print(f"DEBUG: Successfully deleted file: {filename} (ID: {file_id})")
+                        deleted_count += 1
+                    else:
+                        debug_print(f"DEBUG: Failed to delete file: {filename} (ID: {file_id})")
+                        failed_count += 1
+                    
+                except Exception as e:
+                    debug_print(f"DEBUG: Exception deleting file at index {selection_index}: {e}")
+                    failed_count += 1
+        
+            # Refresh the list
+            refresh_list()
+        
+            # Show summary message
+            if failed_count == 0:
+                if deleted_count == 1:
+                    messagebox.showinfo("Success", f"1 file deleted successfully.")
                 else:
-                    messagebox.showerror("Error", f"Failed to delete file {filename}.")
-    
-        load_button = Button(bottom_frame, text="Load Selected", command=load_selected)
+                    messagebox.showinfo("Success", f"{deleted_count} files deleted successfully.")
+            else:
+                if deleted_count > 0:
+                    messagebox.showwarning("Partial Success", 
+                                         f"{deleted_count} files deleted successfully.\n{failed_count} files failed to delete.")
+                else:
+                    messagebox.showerror("Error", f"Failed to delete {failed_count} files.")
+
+        # Update button text to reflect multi-select capability
+        load_button = Button(bottom_frame, text="Load Selected Files", command=load_selected)
         load_button.pack(side="left", padx=5)
-    
-        delete_button = Button(bottom_frame, text="Delete Selected", command=delete_selected)
+
+        delete_button = Button(bottom_frame, text="Delete Selected Files", command=delete_selected)
         delete_button.pack(side="left", padx=5)
-    
+
         close_button = Button(bottom_frame, text="Close", command=dialog.destroy)
         close_button.pack(side="right", padx=5)
-    
+
         # Initial population of the list
         refresh_list()
-    
+
         # Center the dialog
         dialog.update_idletasks()
         width = dialog.winfo_width()
@@ -609,7 +872,7 @@ class FileManager:
         x = (dialog.winfo_screenwidth() - width) // 2
         y = (dialog.winfo_screenheight() - height) // 2
         dialog.geometry(f"{width}x{height}+{x}+{y}")
-    
+
         # Make the dialog modal
         dialog.grab_set()
         self.gui.root.wait_window(dialog)
@@ -1414,7 +1677,7 @@ class FileManager:
                 textvariable=self.gui.file_dropdown_var,
                 state="readonly",
                 font=FONT,
-                width=10
+                width=20
             )
             self.gui.file_dropdown.pack(side="left", fill="x", expand=True, padx=(5, 5))
             self.gui.file_dropdown.bind("<<ComboboxSelected>>", self.gui.on_file_selection)
@@ -1474,62 +1737,111 @@ class FileManager:
         finally:
             self.gui.progress_dialog.hide_progress_bar()
 
-    def load_vap3_file(self, filepath=None) -> bool:
+    def load_vap3_file(self, filepath=None, display_name=None, append_to_existing=False) -> bool:
         """Load a .vap3 file and update the application state."""
         from vap_file_manager import VapFileManager
-    
+
         if not filepath:
             filepath = filedialog.askopenfilename(
                 title="Open VAP3 File",
                 filetypes=[("VAP3 files", "*.vap3")]
             )
-        
+    
         if not filepath:
             return False
-    
+
         try:
             self.gui.progress_dialog.show_progress_bar("Loading VAP3 file...")
             self.root.update_idletasks()
-        
+    
             vap_manager = VapFileManager()
             result = vap_manager.load_from_vap3(filepath)
+    
+            # Use display_name if provided, otherwise use the actual filename
+            if display_name:
+                current_file_name = display_name
+                debug_print(f"DEBUG: Using provided display name: {display_name}")
+            else:
+                current_file_name = os.path.basename(filepath)
+                debug_print(f"DEBUG: Using actual filepath basename: {os.path.basename(filepath)}")
         
-            # Update application state with loaded data
-            self.gui.filtered_sheets = result['filtered_sheets']
-            self.gui.sheets = {name: sheet_info['data'] for name, sheet_info in result['filtered_sheets'].items()}
-            self.gui.sheet_images = result['sheet_images']
+            # Check if this file is already loaded (avoid duplicates)
+            existing_file = None
+            for file_data in self.gui.all_filtered_sheets:
+                if file_data["file_name"] == current_file_name or file_data["file_path"] == filepath:
+                    existing_file = file_data
+                    debug_print(f"DEBUG: File already loaded: {current_file_name}")
+                    break
         
-            if 'image_crop_states' in result and result['image_crop_states']:
-                self.gui.image_crop_states = result['image_crop_states']
+            if existing_file:
+                # File already loaded, just make it active
+                self.set_active_file(existing_file["file_name"])
+                self.update_ui_for_current_file()
+                debug_print(f"DEBUG: Switched to existing file: {existing_file['file_name']}")
+            else:
+                # New file, add it to the collection
+                debug_print(f"DEBUG: Adding new file: {current_file_name}")
+            
+                # Update current session data (this will be the active file)
+                self.gui.filtered_sheets = result['filtered_sheets']
+                self.gui.sheets = {name: sheet_info['data'] for name, sheet_info in result['filtered_sheets'].items()}
+            
+                # Handle sheet images - need to be careful about file-specific images
+                if 'sheet_images' in result and result['sheet_images']:
+                    if not hasattr(self.gui, 'sheet_images'):
+                        self.gui.sheet_images = {}
+                    self.gui.sheet_images[current_file_name] = result['sheet_images'].get(current_file_name, {})
+                    debug_print(f"DEBUG: Loaded sheet images for {current_file_name}")
+            
+                # Handle image crop states
+                if 'image_crop_states' in result and result['image_crop_states']:
+                    if not hasattr(self.gui, 'image_crop_states'):
+                        self.gui.image_crop_states = {}
+                    self.gui.image_crop_states.update(result['image_crop_states'])
         
-            if 'plot_options' in result and result['plot_options']:
-                self.gui.plot_options = result['plot_options']
+                # Handle plot options and settings
+                if 'plot_options' in result and result['plot_options']:
+                    self.gui.plot_options = result['plot_options']
         
-            if 'plot_settings' in result and result['plot_settings']:
-                if 'selected_plot_type' in result['plot_settings'] and result['plot_settings']['selected_plot_type']:
-                    self.gui.selected_plot_type.set(result['plot_settings']['selected_plot_type'])
-        
-            # Update UI state
-            self.gui.current_file = os.path.basename(filepath)
-            self.gui.file_path = filepath
-        
-            # Clear and rebuild all_filtered_sheets
-            self.gui.all_filtered_sheets = [{
-                "file_name": self.gui.current_file,
-                "file_path": filepath,
-                "filtered_sheets": self.gui.filtered_sheets
-            }]
-        
-            # Update UI
-            self.update_file_dropdown()
-            self.update_ui_for_current_file()
-        
+                if 'plot_settings' in result and result['plot_settings']:
+                    if 'selected_plot_type' in result['plot_settings'] and result['plot_settings']['selected_plot_type']:
+                        self.gui.selected_plot_type.set(result['plot_settings']['selected_plot_type'])
+            
+                # Set current file info
+                self.gui.current_file = current_file_name
+                self.gui.file_path = filepath
+            
+                # Add to all_filtered_sheets (append instead of replace if append_to_existing is True)
+                new_file_data = {
+                    "file_name": current_file_name,
+                    "file_path": filepath,
+                    "filtered_sheets": copy.deepcopy(result['filtered_sheets'])
+                }
+            
+                if append_to_existing:
+                    # Append to existing files
+                    self.gui.all_filtered_sheets.append(new_file_data)
+                    debug_print(f"DEBUG: Appended file to existing collection. Total files: {len(self.gui.all_filtered_sheets)}")
+                else:
+                    # Replace existing files (original behavior for single file loading)
+                    self.gui.all_filtered_sheets = [new_file_data]
+                    debug_print(f"DEBUG: Replaced file collection with single file")
+            
+                # Update UI
+                self.update_file_dropdown()
+                self.update_ui_for_current_file()
+    
             self.gui.progress_dialog.update_progress_bar(100)
             self.root.update_idletasks()
-        
-            messagebox.showinfo("Success", f"VAP3 file loaded successfully: {filepath}")
+    
+            # Only show success message if this wasn't called from load_from_database
+            if not display_name:
+                messagebox.showinfo("Success", f"VAP3 file loaded successfully: {current_file_name}")
+            else:
+                debug_print(f"DEBUG: VAP3 file loaded with display name: {current_file_name}")
+            
             return True
-        
+    
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load VAP3 file: {str(e)}")
             return False

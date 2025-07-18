@@ -732,7 +732,6 @@ class TestingGUI:
         # Database menu
         dbmenu = tk.Menu(menubar, tearoff=0)
         dbmenu.add_command(label="Browse Database", command=self.file_manager.show_database_browser)
-        dbmenu.add_command(label="Load from Database", command=self.file_manager.load_from_database)
         menubar.add_cascade(label="Database", menu=dbmenu)
 
        # Calculate menu
@@ -740,9 +739,8 @@ class TestingGUI:
         calculatemenu.add_command(label="Viscosity", command=self.open_viscosity_calculator)
         menubar.add_cascade(label="Calculate", menu=calculatemenu)
 
-        # Compare menu (empty for now)
         comparemenu = tk.Menu(menubar, tearoff=0)
-        # Future comparison functionality will go here
+        comparemenu.add_command(label="Compare Loaded Samples", command=self.show_sample_comparison)
         menubar.add_cascade(label="Compare", menu=comparemenu)
 
         # Reports menu
@@ -759,6 +757,12 @@ class TestingGUI:
         menubar.add_cascade(label="Help", menu=helpmenu)
     
         self.root.config(menu=menubar)
+
+    def show_sample_comparison(self):
+        """Show the sample comparison window."""
+        from sample_comparison import SampleComparisonWindow
+        comparison_window = SampleComparisonWindow(self)
+        comparison_window.show()    
 
     def show_new_template_dialog(self) -> None:
         """Show a dialog to create a new template file with selected tests."""
