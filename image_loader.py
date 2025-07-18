@@ -762,38 +762,108 @@ class ImageLoader:
             except:
                 return None
 
+# Update the ImageLoader methods with better error handling and debugging
+
     def save_image_for_report(self, img_path, output_path, target_width=None, target_height=None):
         """
         Save the best available version of an image to a file for report use.
-    
-        Args:
-            img_path: Path to the original image
-            output_path: Where to save the processed image
-            target_width: Optional target width
-            target_height: Optional target height
-    
-        Returns:
-            bool: True if successful, False otherwise
         """
         try:
+            debug_print(f"DEBUG: save_image_for_report called for {os.path.basename(img_path)}")
+        
             img = self.get_image_for_report(img_path, target_width, target_height)
             if img is None:
+                debug_print(f"DEBUG: Failed to get image for {img_path}")
                 return False
             
             # Ensure output directory exists
-            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            output_dir = os.path.dirname(output_path)
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir, exist_ok=True)
+                debug_print(f"DEBUG: Created output directory: {output_dir}")
         
             # Save as JPEG for reports (good compression, universal support)
             if img.mode != 'RGB':
                 img = img.convert('RGB')
         
-            img.save(output_path, 'JPEG', quality=90)
-            debug_print(f"DEBUG: Saved report image to: {output_path}")
-            return True
+            img.save(output_path, 'JPEG', quality=95)
+            debug_print(f"DEBUG: Successfully saved report image to: {output_path}")
+            debug_print(f"DEBUG: Saved image size: {img.size}")
+        
+            # Verify the file was created
+            if os.path.exists(output_path):
+                file_size = os.path.getsize(output_path)
+                debug_print(f"DEBUG: Verified saved file exists, size: {file_size} bytes")
+                return True
+            else:
+                debug_print(f"ERROR: File was not created: {output_path}")
+                return False
         
         except Exception as e:
-            print(f"ERROR: Failed to save image for report: {e}")
+            print(f"ERROR: Failed to save image for report {img_path}: {e}")
+            import traceback
+            traceback.print_exc()
             return False
+
+    def get_image_for_report(self, img_path, target_width=None, target_height=None):
+        """
+        Get the best available version of an image for report generation.
+        """
+        try:
+            Image, _, _, _, _, _ = _lazy_import_pil()
+            if Image is None:
+                debug_print("ERROR: PIL not available for get_image_for_report")
+                return None
+            
+            debug_print(f"DEBUG: Getting image for report: {os.path.basename(img_path)}")
+        
+            # Check if we have a processed version in cache
+            should_crop = self.image_crop_states.get(img_path, False)
+            cache_key = f"{img_path}_{should_crop}"
+        
+            debug_print(f"DEBUG: Image crop state for {os.path.basename(img_path)}: {should_crop}")
+            debug_print(f"DEBUG: Looking for cache key: {cache_key}")
+            debug_print(f"DEBUG: Available cache keys: {list(self.processed_image_cache.keys())}")
+        
+            if cache_key in self.processed_image_cache:
+                debug_print(f"DEBUG: FOUND processed version in cache for {os.path.basename(img_path)} (cropped={should_crop})")
+                img = self.processed_image_cache[cache_key].copy()
+                debug_print(f"DEBUG: Retrieved processed image size: {img.size}")
+            else:
+                debug_print(f"DEBUG: NO processed version found, using original for {os.path.basename(img_path)}")
+                img = Image.open(img_path)
+                debug_print(f"DEBUG: Original image size: {img.size}")
+        
+            # Resize if target dimensions are specified
+            if target_width or target_height:
+                original_width, original_height = img.size
+            
+                if target_width and target_height:
+                    img = img.resize((target_width, target_height), Image.Resampling.LANCZOS)
+                elif target_width:
+                    ratio = target_width / original_width
+                    new_height = int(original_height * ratio)
+                    img = img.resize((target_width, new_height), Image.Resampling.LANCZOS)
+                elif target_height:
+                    ratio = target_height / original_height
+                    new_width = int(original_width * ratio)
+                    img = img.resize((new_width, target_height), Image.Resampling.LANCZOS)
+            
+                debug_print(f"DEBUG: Resized image for report to: {img.size}")
+        
+            return img
+        
+        except Exception as e:
+            print(f"ERROR: Failed to get image for report {img_path}: {e}")
+            import traceback
+            traceback.print_exc()
+            try:
+                # Fallback to original image
+                debug_print(f"DEBUG: Attempting fallback to original image")
+                return Image.open(img_path)
+            except:
+                debug_print(f"ERROR: Fallback to original also failed")
+                return None
 
 # Add these functions at module level for lazy imports
 def _lazy_import_pil():
