@@ -1080,6 +1080,71 @@ class TestingGUI:
         
         debug_print(f"DEBUG: [update_displayed_sheet] END for sheet: {sheet_name}")
 
+    # Update the main_gui.py method with better debugging and file handling
+
+    def get_processed_image_paths_for_report(self, sheet_name, temp_dir):
+        """
+        Get paths to processed (cropped if available) images for report generation.
+        """
+        processed_paths = []
+    
+        debug_print(f"DEBUG: get_processed_image_paths_for_report called for sheet: {sheet_name}")
+        debug_print(f"DEBUG: Temp directory: {temp_dir}")
+    
+        # Get original image paths for this sheet
+        current_file = self.current_file
+        original_paths = self.sheet_images.get(current_file, {}).get(sheet_name, [])
+    
+        debug_print(f"DEBUG: Found {len(original_paths)} original image paths")
+        for path in original_paths:
+            debug_print(f"DEBUG: Original image: {os.path.basename(path)}")
+    
+        if not original_paths:
+            debug_print(f"DEBUG: No images found for sheet {sheet_name}")
+            return []
+    
+        if not hasattr(self, 'image_loader') or not self.image_loader:
+            debug_print("DEBUG: No image loader available, using original images")
+            return original_paths
+    
+        debug_print(f"DEBUG: Processing {len(original_paths)} images for report using ImageLoader")
+    
+        # Check ImageLoader cache status
+        if hasattr(self.image_loader, 'processed_image_cache'):
+            debug_print(f"DEBUG: ImageLoader cache contains {len(self.image_loader.processed_image_cache)} items")
+            for cache_key in self.image_loader.processed_image_cache.keys():
+                debug_print(f"DEBUG: Cache key: {cache_key}")
+    
+        for i, original_path in enumerate(original_paths):
+            try:
+                debug_print(f"DEBUG: Processing image {i+1}/{len(original_paths)}: {os.path.basename(original_path)}")
+            
+                # Create a unique filename for the processed image
+                base_name = os.path.splitext(os.path.basename(original_path))[0]
+                processed_filename = f"{sheet_name}_{base_name}_processed_{i}.jpg"
+                processed_path = os.path.join(temp_dir, processed_filename)
+            
+                debug_print(f"DEBUG: Target processed path: {processed_path}")
+            
+                # Save the processed version
+                if self.image_loader.save_image_for_report(original_path, processed_path):
+                    processed_paths.append(processed_path)
+                    debug_print(f"DEBUG: SUCCESS - Added processed image: {processed_filename}")
+                else:
+                    # Fallback to original if processing fails
+                    processed_paths.append(original_path)
+                    debug_print(f"DEBUG: FALLBACK - Processing failed, using original: {os.path.basename(original_path)}")
+                
+            except Exception as e:
+                print(f"ERROR: Failed to process image {original_path}: {e}")
+                import traceback
+                traceback.print_exc()
+                # Use original as fallback
+                processed_paths.append(original_path)
+    
+        debug_print(f"DEBUG: Returning {len(processed_paths)} processed image paths")
+        return processed_paths
+
     def load_images(self, is_plotting_sheet):
         """Load and display images in the dynamic image_frame."""
         if not hasattr(self, 'image_frame') or not self.image_frame.winfo_exists():
@@ -1513,6 +1578,9 @@ class TestingGUI:
             messagebox.showerror("Error", f"An error occurred: {e}")
 
         finally:
+            # Clean up temp files
+            if hasattr(self.report_generator, 'cleanup_temp_files'):
+                self.report_generator.cleanup_temp_files(images_to_delete)
             # Hide progress AFTER processing
             self.progress_dialog.hide_progress_bar()  
 

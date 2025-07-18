@@ -253,6 +253,19 @@ class ReportGenerator:
             prs.slide_width = Inches(13.33)
             prs.slide_height = Inches(7.5)
 
+            # CREATE TEMPORARY DIRECTORY FOR PROCESSED IMAGES
+            import tempfile
+            temp_dir = tempfile.mkdtemp(prefix="report_images_")
+            debug_print(f"DEBUG: Created temp directory for report images: {temp_dir}")
+
+            # GET PROCESSED IMAGE PATHS (cropped if available)
+            image_paths = self.gui.get_processed_image_paths_for_report(sheet_name, temp_dir)
+            debug_print(f"DEBUG: Using {len(image_paths)} processed images for test report")
+
+            # Add temp directory to cleanup list
+            if temp_dir not in images_to_delete:
+                images_to_delete.append(temp_dir)
+
             current_file = self.gui.current_file
             image_paths = self.gui.sheet_images.get(current_file, {}).get(sheet_name, [])
 
@@ -317,6 +330,15 @@ class ReportGenerator:
 
     def write_powerpoint_report(self, ppt_save_path: str, images_to_delete: list, plot_options: list, progress_callback = None) -> None:
         try:
+            # CREATE TEMPORARY DIRECTORY FOR PROCESSED IMAGES
+            import tempfile
+            temp_dir = tempfile.mkdtemp(prefix="full_report_images_")
+            debug_print(f"DEBUG: Created temp directory for full report images: {temp_dir}")
+        
+            # Add temp directory to cleanup list
+            if temp_dir not in images_to_delete:
+                images_to_delete.append(temp_dir)
+
             processed_slides = 0
             prs = Presentation()
             prs.slide_width = Inches(13.33)
@@ -399,6 +421,9 @@ class ReportGenerator:
 
             for sheet_name in self.gui.filtered_sheets.keys():
                 try:
+                    # GET PROCESSED IMAGE PATHS FOR THIS SHEET
+                    image_paths = self.gui.get_processed_image_paths_for_report(sheet_name, temp_dir)
+                    debug_print(f"DEBUG: Sheet {sheet_name}: Using {len(image_paths)} processed images")
                     data = self.gui.sheets.get(sheet_name)
                     if data is None or data.empty:
                         # Try to get data from filtered_sheets instead
@@ -470,7 +495,7 @@ class ReportGenerator:
                     if self.gui.current_file in self.gui.sheet_images and sheet_name in self.gui.sheet_images.get(self.gui.current_file, {}):
                         debug_print("Images Exist! Adding a slide...")
                         current_file = self.gui.current_file
-                        image_paths = self.gui.sheet_images.get(current_file, {}).get(sheet_name, [])
+                        
                         valid_image_paths = [path for path in image_paths if os.path.exists(path)]
                         img_slide = prs.slides.add_slide(prs.slide_layouts[6])
                         self.setup_image_slide(prs, img_slide, sheet_name)
