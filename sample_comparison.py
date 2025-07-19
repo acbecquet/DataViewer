@@ -1,4 +1,4 @@
-"""
+﻿"""
 sample_comparison.py
 Developed by Charlie Becquet.
 Sample comparison module for analyzing multiple datasets across different batches and design changes.
@@ -746,260 +746,233 @@ class SampleComparisonWindow:
             messagebox.showerror("Error", f"Failed to export results:\n{str(e)}")
 
     def show_comparison_plots(self):
-        """Create a new window with subplots comparing samples by date."""
+        """Create a new window with subplots comparing samples by date for the SELECTED test group only."""
         import matplotlib.pyplot as plt
         from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
         import matplotlib.dates as mdates
         from datetime import datetime
-    
+        from tkinter import filedialog
+        import tkinter as tk
+        from tkinter import ttk, messagebox
+        import numpy as np
+        import pandas as pd
+        from utils import debug_print
+
         if not self.comparison_results:
             messagebox.showinfo("Info", "No comparison data available. Please run analysis first.")
             return
+
+        # Get the selected item from the summary tree
+        selected_items = self.summary_tree.selection()
+        if not selected_items:
+            messagebox.showinfo("Info", "Please select a test group from the summary table first.")
+            return
+
+        # Get the values from the selected row
+        selected_item = selected_items[0]  # Take the first selected item
+        item_values = self.summary_tree.item(selected_item)['values']
     
-        # Create new window
-        plot_window = tk.Toplevel(self.window)
-        plot_window.title("Sample Comparison Plots")
-        plot_window.geometry("1200x800")
-        plot_window.transient(self.window)
-    
-        # Prepare data for plotting
-        plot_data = {}
-    
-        # Extract data for each sample with timestamps
-        for (keyword, test_group), data in self.comparison_results.items():
-            if keyword not in plot_data:
-                plot_data[keyword] = {
-                    'dates': [],
-                    'tpm_values': [],
-                    'std_dev_values': [],
-                    'draw_pressure_values': [],
-                    'tpm_per_power': [],
-                    'labels': []
-                }
-        
-            # Process each file's data
-            for file_info in data['files']:
-                # file_info is the display name, we need to find the actual file data
-                timestamp = None
-                actual_filename = None
-            
-                # Search through all loaded files to find the matching one
-                for file_data_item in self.gui.all_filtered_sheets:
-                    # Check if this is the file we're looking for
-                    if file_info in file_data_item.get("display_filename", "") or file_info in file_data_item["file_name"]:
-                    
-                        # First priority: Check for database filename (which includes timestamp)
-                        if "database_filename" in file_data_item:
-                            actual_filename = file_data_item["database_filename"]
-                            debug_print(f"DEBUG: Using database filename: {actual_filename}")
-                        elif "original_filename" in file_data_item:
-                            actual_filename = file_data_item["original_filename"]
-                            debug_print(f"DEBUG: Using original filename: {actual_filename}")
-                        else:
-                            actual_filename = file_data_item["file_name"]
-                            debug_print(f"DEBUG: Using file_name: {actual_filename}")
-                    
-                        # Check for stored timestamp in metadata
-                        if "database_created_at" in file_data_item:
-                            timestamp = file_data_item["database_created_at"]
-                            if isinstance(timestamp, str):
-                                try:
-                                    timestamp = datetime.fromisoformat(timestamp)
-                                except:
-                                    timestamp = None
-                            debug_print(f"DEBUG: Found database_created_at timestamp: {timestamp}")
-                        elif "created_at" in file_data_item:
-                            timestamp = file_data_item["created_at"]
-                            debug_print(f"DEBUG: Found created_at timestamp: {timestamp}")
-                    
-                        break
-            
-                # If we found an actual filename with potential timestamp and no timestamp yet, try to parse it
-                if actual_filename and not timestamp:
-                    import re
-                
-                    # Look for timestamp pattern AFTER the extension
-                    # Pattern: .vap3 - YYYY-MM-DD HH:MM:SS
-                    timestamp_pattern = r'\.vap3\s*-\s*(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})'
-                    match = re.search(timestamp_pattern, actual_filename)
-                
-                    if match:
-                        try:
-                            date_part = match.group(1)
-                            time_part = match.group(2)
-                            timestamp_str = f"{date_part} {time_part}"
-                            timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
-                            debug_print(f"DEBUG: Parsed timestamp {timestamp} from {actual_filename}")
-                        except Exception as e:
-                            debug_print(f"DEBUG: Failed to parse timestamp: {e}")
-                
-                    # If no standard timestamp found, check for other patterns after extension
-                    if not timestamp:
-                        # Alternative patterns that might appear after .vap3
-                        alt_patterns = [
-                            (r'\.vap3.*_(\d{8})_(\d{6})', '%Y%m%d_%H%M%S'),  # .vap3_20240315_143022
-                            (r'\.vap3.*_(\d{4}-\d{2}-\d{2})_(\d{2}-\d{2}-\d{2})', '%Y-%m-%d_%H-%M-%S'),  # .vap3_2024-03-15_14-30-22
-                            (r'\.vap3\s*-\s*(\d{4}-\d{2}-\d{2})', '%Y-%m-%d'),  # .vap3 - 2024-03-15 (date only)
-                        ]
-                    
-                        for pattern, date_format in alt_patterns:
-                            match = re.search(pattern, actual_filename)
-                            if match:
-                                try:
-                                    if len(match.groups()) == 2:
-                                        timestamp_str = f"{match.group(1)}_{match.group(2)}"
-                                    else:
-                                        timestamp_str = match.group(1)
-                                    timestamp = datetime.strptime(timestamp_str, date_format)
-                                    debug_print(f"DEBUG: Parsed alternative timestamp {timestamp} from {actual_filename}")
-                                    break
-                                except:
-                                    continue
-            
-                # If no timestamp found, use current time as fallback
-                if not timestamp:
-                    timestamp = datetime.now()
-                    debug_print(f"WARNING: No timestamp found in {actual_filename or file_info}, using current time")
-            
-                # Get the corresponding sample data
-                for file_data_item in self.gui.all_filtered_sheets:
-                    if file_info in file_data_item.get("display_filename", "") or file_info in file_data_item["file_name"]:
-                        for sheet_name, sheet_info in file_data_item["filtered_sheets"].items():
-                            if self.get_test_group(sheet_name) == test_group:
-                                sheet_data = sheet_info["data"]
-                            
-                                # Calculate averages for this file
-                                sample_indices = self.find_matching_samples(sheet_data, sheet_name, file_data_item["file_name"]).get(keyword, [])
-                            
-                                if sample_indices:
-                                    # Extract values for matching samples
-                                    tpm_vals = []
-                                    std_vals = []
-                                    dp_vals = []
-                                    power_vals = []
-                                
-                                    for idx in sample_indices:
-                                        tpm_col, std_col, dp_col, power_col = self.get_column_indices(sheet_data, sheet_name, idx)
-                                    
-                                        if tpm_col >= 0:
-                                            tpm_val = self.extract_column_average(sheet_data, tpm_col)
-                                            if tpm_val is not None:
-                                                tpm_vals.append(tpm_val)
-                                    
-                                        if std_col >= 0:
-                                            std_val = self.extract_column_average(sheet_data, std_col)
-                                            if std_val is not None:
-                                                std_vals.append(std_val)
-                                    
-                                        if dp_col >= 0:
-                                            dp_val = self.extract_column_average(sheet_data, dp_col)
-                                            if dp_val is not None:
-                                                dp_vals.append(dp_val)
-                                    
-                                        if power_col >= 0:
-                                            power_val = self.extract_column_average(sheet_data, power_col)
-                                            if power_val is not None:
-                                                power_vals.append(power_val)
-                                
-                                    # Calculate averages and add to plot data
-                                    if tpm_vals:
-                                        avg_tpm = np.mean(tpm_vals)
-                                        avg_std = np.mean(std_vals) if std_vals else 0
-                                        avg_dp = np.mean(dp_vals) if dp_vals else 0
-                                        avg_power = np.mean(power_vals) if power_vals else 1  # Avoid division by zero
-                                    
-                                        plot_data[keyword]['dates'].append(timestamp)
-                                        plot_data[keyword]['tpm_values'].append(avg_tpm)
-                                        plot_data[keyword]['std_dev_values'].append(avg_std)
-                                        plot_data[keyword]['draw_pressure_values'].append(avg_dp)
-                                        plot_data[keyword]['tpm_per_power'].append(avg_tpm / avg_power if avg_power > 0 else 0)
-                                        plot_data[keyword]['labels'].append(os.path.basename(file_info))
-                            
-                                break
-                        break
-    
-        # Check if we have any data to plot
-        has_data = False
-        for model_data in plot_data.values():
-            if model_data['dates']:
-                has_data = True
-                break
-    
-        if not has_data:
-            messagebox.showwarning("No Data", "No data available for plotting. Make sure samples have been analyzed.")
-            plot_window.destroy()
+        if len(item_values) < 2:
+            messagebox.showerror("Error", "Invalid selection. Please select a valid test group.")
             return
     
-        # Create matplotlib figure with 3 subplots
-        fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 10), sharex=True)
-        fig.suptitle('Sample Comparison Over Time', fontsize=16)
+        # Extract keyword and test group from the selected row
+        selected_keyword = item_values[0].lower()  # Model column (convert back to lowercase)
+        selected_test_group = item_values[1]        # Test Group column
     
-        # Color map for different models
-        colors = plt.cm.tab10(np.linspace(0, 1, len(plot_data)))
+        debug_print(f"DEBUG: Selected keyword: '{selected_keyword}', test group: '{selected_test_group}'")
     
-        # Plot for each model
-        for idx, (model, data) in enumerate(plot_data.items()):
-            if not data['dates']:
-                continue
-        
-            # Sort by date
-            sorted_indices = np.argsort(data['dates'])
-            dates = [data['dates'][i] for i in sorted_indices]
-            tpm_values = [data['tpm_values'][i] for i in sorted_indices]
-            std_values = [data['std_dev_values'][i] for i in sorted_indices]
-            dp_values = [data['draw_pressure_values'][i] for i in sorted_indices]
-            tpm_power_values = [data['tpm_per_power'][i] for i in sorted_indices]
-        
-            color = colors[idx]
-        
-            # Plot 1: Average TPM with error bars
-            if tpm_values:  # Only plot if we have data
-                ax1.errorbar(dates, tpm_values, yerr=std_values, 
-                            label=model.upper(), color=color, marker='o', 
-                            capsize=5, capthick=2, markersize=8)
-        
-            # Plot 2: Average Draw Pressure
-            if dp_values and any(v > 0 for v in dp_values):  # Only plot if we have non-zero data
-                ax2.plot(dates, dp_values, label=model.upper(), 
-                        color=color, marker='s', markersize=8, linewidth=2)
-        
-            # Plot 3: Average TPM/Power
-            if tpm_power_values and any(v > 0 for v in tpm_power_values):  # Only plot if we have data
-                ax3.plot(dates, tpm_power_values, label=model.upper(), 
-                        color=color, marker='^', markersize=8, linewidth=2)
+        # Find the matching entry in comparison_results
+        selected_key = None
+        for (keyword, test_group), data in self.comparison_results.items():
+            if keyword == selected_keyword and test_group == selected_test_group:
+                selected_key = (keyword, test_group)
+                break
     
+        if not selected_key:
+            messagebox.showerror("Error", f"No data found for selected combination: {selected_keyword} - {selected_test_group}")
+            return
+
+        debug_print(f"DEBUG: Processing only selected test group: {selected_key}")
+
+        # Create new window
+        plot_window = tk.Toplevel(self.window)
+        plot_window.title(f"Time-Series Plot: {selected_keyword.upper()} - {selected_test_group}")
+        plot_window.geometry("1200x800")
+        plot_window.transient(self.window)
+
+        # Prepare data for plotting - only the selected group
+        plot_data = {
+            selected_keyword: {
+                'dates': [],
+                'tpm_values': [],
+                'std_dev_values': [],
+                'draw_pressure_values': [],
+                'tpm_per_power': [],
+                'labels': []
+            }
+        }
+
+        # Extract data for the selected test group only
+        keyword, test_group = selected_key
+        data = self.comparison_results[selected_key]
+    
+        debug_print(f"DEBUG: Processing {len(data['files'])} files for {keyword} - {test_group}")
+
+        # Process each file's data
+        for file_info in data['files']:
+            # file_info contains "filename:sheetname" - extract just the filename part
+            if ':' in file_info:
+                filename_only = file_info.split(':')[0]
+                sheet_name_part = file_info.split(':')[1]
+            else:
+                filename_only = file_info
+                sheet_name_part = None
+        
+            debug_print(f"DEBUG: Looking for file_info: '{file_info}'")
+            debug_print(f"DEBUG: Extracted filename_only: '{filename_only}'")
+            debug_print(f"DEBUG: Sheet name part: '{sheet_name_part}'")
+        
+            timestamp = None
+            actual_filename = None
+            file_data_item = None
+
+            # Search through all loaded files to find the matching one
+            for idx, current_file_data_item in enumerate(self.gui.all_filtered_sheets):
+                # Check if this is the file we're looking for - match against filename_only
+                is_match = (
+                    filename_only == current_file_data_item.get("display_filename", "") or 
+                    filename_only == current_file_data_item.get("file_name", "") or
+                    filename_only in current_file_data_item.get("display_filename", "") or 
+                    filename_only in current_file_data_item.get("file_name", "")
+                )
+            
+                if is_match:
+                    debug_print(f"DEBUG: Found matching file at index {idx}")
+                    file_data_item = current_file_data_item
+                
+                    # Get timestamp from database metadata
+                    if "database_created_at" in file_data_item and file_data_item["database_created_at"]:
+                        timestamp = file_data_item["database_created_at"]
+                        if isinstance(timestamp, str):
+                            try:
+                                if 'T' in timestamp:
+                                    timestamp = datetime.fromisoformat(timestamp)
+                                else:
+                                    timestamp = datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S')
+                            except:
+                                timestamp = None
+                        elif hasattr(timestamp, 'year'):
+                            pass  # Already a datetime object
+                        else:
+                            timestamp = None
+                    elif "created_at" in file_data_item and file_data_item["created_at"]:
+                        timestamp = file_data_item["created_at"]
+                    else:
+                        timestamp = datetime.now()  # Fallback
+                
+                    break
+
+            # Get the corresponding sample data
+            if timestamp and file_data_item:
+                debug_print(f"DEBUG: Extracting data from matched file for sheet: {sheet_name_part}")
+            
+                # Look in the filtered_sheets of the matched file
+                if "filtered_sheets" in file_data_item:
+                    for sheet_name, sheet_info in file_data_item["filtered_sheets"].items():
+                        if self.get_test_group(sheet_name) == test_group:
+                            debug_print(f"DEBUG: Found matching test group for sheet: {sheet_name}")
+                            sheet_data = sheet_info["data"]
+                        
+                            # Extract metrics from the data using improved logic
+                            if not sheet_data.empty:
+                                debug_print(f"DEBUG: Sheet data shape: {sheet_data.shape}")
+                            
+                                # Search for TPM header in the data rows
+                                tpm_column_index = None
+                                tpm_header_row = None
+
+                                # Search through the first few rows to find "TPM (mg/puff)" header
+                                for row_idx in range(min(5, len(sheet_data))):
+                                    for col_idx in range(len(sheet_data.columns)):
+                                        cell_value = sheet_data.iloc[row_idx, col_idx]
+                                        if pd.notna(cell_value) and "TPM (mg/puff)" in str(cell_value):
+                                            tpm_column_index = col_idx
+                                            tpm_header_row = row_idx
+                                            debug_print(f"DEBUG: Found 'TPM (mg/puff)' at row {row_idx}, column {col_idx}")
+                                            break
+                                    if tpm_column_index is not None:
+                                        break
+
+                                if tpm_column_index is not None and tpm_header_row is not None:
+                                    # Extract TPM data from the rows below the header
+                                    data_start_row = tpm_header_row + 1
+                                    tpm_data = pd.to_numeric(sheet_data.iloc[data_start_row:, tpm_column_index], errors='coerce').dropna()
+                                
+                                    if not tpm_data.empty:
+                                        avg_tpm = tpm_data.mean()
+                                        std_dev = tpm_data.std()
+                                        debug_print(f"DEBUG: Calculated avg_tpm: {avg_tpm}, std_dev: {std_dev}")
+                                    
+                                        plot_data[keyword]['tpm_values'].append(avg_tpm)
+                                        plot_data[keyword]['dates'].append(timestamp)
+                                        plot_data[keyword]['std_dev_values'].append(std_dev)
+                                    
+                                        # For now, set draw pressure and power to 0 (you can add similar logic for these)
+                                        plot_data[keyword]['draw_pressure_values'].append(0)
+                                        plot_data[keyword]['tpm_per_power'].append(0)
+                                    
+                                        plot_data[keyword]['labels'].append(f"{filename_only}:{sheet_name}")
+                                        debug_print(f"DEBUG: Successfully added data point for {filename_only}:{sheet_name}")
+
+        # Check if we have any data to plot
+        if not plot_data[keyword]['dates']:
+            messagebox.showwarning("Warning", f"No plottable data found for {selected_keyword.upper()} - {selected_test_group}")
+            plot_window.destroy()
+            return
+
+        # Create matplotlib figure - single plot since we're only showing one test group
+        fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+        fig.suptitle(f'TPM Over Time: {selected_keyword.upper()} - {selected_test_group}', fontsize=16)
+
+        # Get the data for the selected group
+        dates = plot_data[keyword]['dates']
+        tpm_values = plot_data[keyword]['tpm_values']
+        std_values = plot_data[keyword]['std_dev_values']
+
+        # Sort by date
+        sorted_indices = np.argsort(dates)
+        sorted_dates = [dates[i] for i in sorted_indices]
+        sorted_tpm_values = [tpm_values[i] for i in sorted_indices]
+        sorted_std_values = [std_values[i] for i in sorted_indices]
+
+        # Plot TPM with error bars
+        ax.errorbar(sorted_dates, sorted_tpm_values, yerr=sorted_std_values, 
+                    color='blue', marker='o', capsize=5, capthick=2, markersize=8, linewidth=2)
+
         # Configure axes
-        ax1.set_ylabel('Average TPM', fontsize=12)
-        ax1.grid(True, alpha=0.3)
-        if ax1.get_lines():  # Only add legend if there are lines
-            ax1.legend(loc='upper left')
-    
-        ax2.set_ylabel('Average Draw Pressure', fontsize=12)
-        ax2.grid(True, alpha=0.3)
-    
-        ax3.set_ylabel('Average TPM/Power', fontsize=12)
-        ax3.set_xlabel('Date', fontsize=12)
-        ax3.grid(True, alpha=0.3)
-    
+        ax.set_ylabel('Average TPM (mg/puff)', fontsize=12)
+        ax.set_xlabel('Date', fontsize=12)
+        ax.grid(True, alpha=0.3)
+
         # Format x-axis dates
-        for ax in [ax1, ax2, ax3]:
-            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-            ax.xaxis.set_major_locator(mdates.AutoDateLocator())
-            plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
-    
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
+
         # Adjust layout
         plt.tight_layout()
-    
+
         # Create tkinter canvas
         canvas = FigureCanvasTkAgg(fig, master=plot_window)
         canvas.draw()
         canvas.get_tk_widget().pack(fill="both", expand=True)
-    
+
         # Add toolbar
         from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk
         toolbar = NavigationToolbar2Tk(canvas, plot_window)
         toolbar.update()
-    
+
         # Add export button
         def export_plot():
             file_path = filedialog.asksaveasfilename(
@@ -1009,9 +982,9 @@ class SampleComparisonWindow:
             if file_path:
                 fig.savefig(file_path, dpi=300, bbox_inches='tight')
                 messagebox.showinfo("Success", f"Plot saved to {file_path}")
-    
+
         button_frame = ttk.Frame(plot_window)
         button_frame.pack(fill="x", padx=10, pady=5)
-    
+
         ttk.Button(button_frame, text="Export Plot", command=export_plot).pack(side="left", padx=5)
         ttk.Button(button_frame, text="Close", command=plot_window.destroy).pack(side="right", padx=5)
