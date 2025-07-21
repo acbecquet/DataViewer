@@ -1788,10 +1788,10 @@ Developed by Charlie Becquet
             if not hasattr(self.parent, 'filtered_sheets') or self.test_name not in self.parent.filtered_sheets:
                 debug_print(f"ERROR: Sheet {self.test_name} not found in loaded data")
                 return
-            
+        
             sheet_data = self.parent.filtered_sheets[self.test_name]['data']
             debug_print(f"DEBUG: Found loaded sheet data with shape: {sheet_data.shape}")
-        
+    
             debug_print("DEBUG: First 10 rows and 16 columns of actual DataFrame data:")
             for i in range(min(10, len(sheet_data))):
                 row_preview = []
@@ -1803,18 +1803,6 @@ Developed by Charlie Becquet
                         val_str = str(val)[:10]  # Truncate long values
                         row_preview.append(f"'{val_str}'")
                 debug_print(f"  Row {i}: {row_preview}")
-        
-            # Also show some specific columns where we expect data
-            debug_print("DEBUG: Sample 1 data columns (0-11):")
-            for i in range(min(10, len(sheet_data))):
-                sample1_data = []
-                for j in range(min(12, len(sheet_data.columns))):
-                    val = sheet_data.iloc[i, j]
-                    if pd.isna(val):
-                        sample1_data.append("NaN")
-                    else:
-                        sample1_data.append(f"'{str(val)[:8]}'")
-                debug_print(f"  Row {i}: {sample1_data}")
 
             # Determine the data format based on test type
             if self.test_name in ["User Test Simulation", "User Simulation Test"]:
@@ -1823,22 +1811,44 @@ Developed by Charlie Becquet
             else:
                 columns_per_sample = 12
                 debug_print("DEBUG: Loading standard format")
-        
+    
             # Load data for each sample
             loaded_data_count = 0
         
             for sample_idx in range(self.num_samples):
                 sample_id = f"Sample {sample_idx + 1}"
                 col_offset = sample_idx * columns_per_sample
-            
+        
                 debug_print(f"DEBUG: Loading data for {sample_id} with column offset {col_offset}")
             
+                # CLEAR ALL EXISTING TEMPLATE DATA for this sample
+                debug_print(f"DEBUG: Clearing existing template data for {sample_id}")
+                if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+                    self.data[sample_id]["chronography"] = []
+                    self.data[sample_id]["puffs"] = []
+                    self.data[sample_id]["before_weight"] = []
+                    self.data[sample_id]["after_weight"] = []
+                    self.data[sample_id]["draw_pressure"] = []
+                    self.data[sample_id]["smell"] = []  # Used for failure in user simulation
+                    self.data[sample_id]["notes"] = []
+                    self.data[sample_id]["tpm"] = []
+                else:
+                    self.data[sample_id]["puffs"] = []
+                    self.data[sample_id]["before_weight"] = []
+                    self.data[sample_id]["after_weight"] = []
+                    self.data[sample_id]["draw_pressure"] = []
+                    self.data[sample_id]["resistance"] = []
+                    self.data[sample_id]["smell"] = []
+                    self.data[sample_id]["clog"] = []
+                    self.data[sample_id]["notes"] = []
+                    self.data[sample_id]["tpm"] = []
+        
                 # Load data starting from row 5 (DataFrame index 4)
                 sample_had_data = False
                 row_count = 0
-            
+        
                 data_start_row = 4  # Data starts at row 5 (0-indexed row 4)
-            
+        
                 for data_row_idx in range(data_start_row, min(len(sheet_data), 100)):  # Limit to reasonable number of rows
                     try:
                         if self.test_name in ["User Test Simulation", "User Simulation Test"]:
@@ -1851,67 +1861,89 @@ Developed by Charlie Becquet
                             failure_col = 5 + col_offset  # Stored in smell field
                             notes_col = 6 + col_offset
                             tpm_col = 7 + col_offset
-                        
+                    
                             # Extract values if columns exist
                             values = {}
+                    
+                            # Helper function to clean values and strip quotes
+                            def clean_value(raw_val):
+                                if pd.isna(raw_val):
+                                    return ""
+                                val_str = str(raw_val).strip()
+                                # Remove surrounding quotes if present
+                                if val_str.startswith("'") and val_str.endswith("'"):
+                                    val_str = val_str[1:-1]
+                                elif val_str.startswith('"') and val_str.endswith('"'):
+                                    val_str = val_str[1:-1]
+                                return val_str
+                        
+                            debug_print(f"DEBUG: Processing row {data_row_idx} for {sample_id}")
                         
                             if chronography_col < len(sheet_data.columns):
                                 raw_val = sheet_data.iloc[data_row_idx, chronography_col]
-                                values['chronography'] = "" if pd.isna(raw_val) else str(raw_val).strip()
+                                values['chronography'] = clean_value(raw_val)
+                                debug_print(f"DEBUG: chronography raw: {raw_val}, cleaned: {values['chronography']}")
                             else:
                                 values['chronography'] = ""
-                            
+                        
                             if puffs_col < len(sheet_data.columns):
                                 raw_val = sheet_data.iloc[data_row_idx, puffs_col]
-                                values['puffs'] = "" if pd.isna(raw_val) else str(raw_val).strip()
+                                values['puffs'] = clean_value(raw_val)
+                                debug_print(f"DEBUG: puffs raw: {raw_val}, cleaned: {values['puffs']}")
                             else:
                                 values['puffs'] = ""
-                            
+                        
                             if before_weight_col < len(sheet_data.columns):
                                 raw_val = sheet_data.iloc[data_row_idx, before_weight_col]
-                                values['before_weight'] = "" if pd.isna(raw_val) else str(raw_val).strip()
+                                values['before_weight'] = clean_value(raw_val)
+                                debug_print(f"DEBUG: before_weight raw: {raw_val}, cleaned: {values['before_weight']}")
                             else:
                                 values['before_weight'] = ""
-                            
+                        
                             if after_weight_col < len(sheet_data.columns):
                                 raw_val = sheet_data.iloc[data_row_idx, after_weight_col]
-                                values['after_weight'] = "" if pd.isna(raw_val) else str(raw_val).strip()
+                                values['after_weight'] = clean_value(raw_val)
+                                debug_print(f"DEBUG: after_weight raw: {raw_val}, cleaned: {values['after_weight']}")
                             else:
                                 values['after_weight'] = ""
-                            
+                        
                             if draw_pressure_col < len(sheet_data.columns):
                                 raw_val = sheet_data.iloc[data_row_idx, draw_pressure_col]
-                                values['draw_pressure'] = "" if pd.isna(raw_val) else str(raw_val).strip()
+                                values['draw_pressure'] = clean_value(raw_val)
                             else:
                                 values['draw_pressure'] = ""
-                            
+                        
                             if failure_col < len(sheet_data.columns):
                                 raw_val = sheet_data.iloc[data_row_idx, failure_col]
-                                values['failure'] = "" if pd.isna(raw_val) else str(raw_val).strip()
+                                values['failure'] = clean_value(raw_val)
                             else:
                                 values['failure'] = ""
-                            
+                        
                             if notes_col < len(sheet_data.columns):
                                 raw_val = sheet_data.iloc[data_row_idx, notes_col]
-                                values['notes'] = "" if pd.isna(raw_val) else str(raw_val).strip()
+                                values['notes'] = clean_value(raw_val)
                             else:
                                 values['notes'] = ""
-                            
+                        
                             if tpm_col < len(sheet_data.columns):
                                 raw_val = sheet_data.iloc[data_row_idx, tpm_col]
-                                if not pd.isna(raw_val) and str(raw_val).strip():
+                                cleaned_val = clean_value(raw_val)
+                                if cleaned_val and cleaned_val.strip():
                                     try:
-                                        values['tpm'] = float(raw_val)
+                                        values['tpm'] = float(cleaned_val)
+                                        debug_print(f"DEBUG: tpm raw: {raw_val}, cleaned: {cleaned_val}, float: {values['tpm']}")
                                     except (ValueError, TypeError):
                                         values['tpm'] = None
+                                        debug_print(f"DEBUG: tpm conversion failed for: {cleaned_val}")
                                 else:
                                     values['tpm'] = None
                             else:
                                 values['tpm'] = None
-                        
-                            # Check if this row has any meaningful data
+                    
+                            # Check if this row has any meaningful data (not all empty)
                             if any([values['chronography'], values['puffs'], values['before_weight'], values['after_weight']]):
-                                # Store the data
+                                debug_print(f"DEBUG: Storing data for row {data_row_idx}: puffs={values['puffs']}, before={values['before_weight']}, after={values['after_weight']}")
+                                # Append the data (building from scratch)
                                 self.data[sample_id]["chronography"].append(values['chronography'])
                                 self.data[sample_id]["puffs"].append(values['puffs'])
                                 self.data[sample_id]["before_weight"].append(values['before_weight'])
@@ -1920,10 +1952,12 @@ Developed by Charlie Becquet
                                 self.data[sample_id]["smell"].append(values['failure'])  # Failure stored in smell field
                                 self.data[sample_id]["notes"].append(values['notes'])
                                 self.data[sample_id]["tpm"].append(values['tpm'])
-                            
+                        
                                 sample_had_data = True
                                 row_count += 1
-                            
+                            else:
+                                debug_print(f"DEBUG: Row {data_row_idx} has no meaningful data, skipping")
+                        
                         else:
                             # Standard format: [Puffs, Before Weight, After Weight, Draw Pressure, Resistance, Smell, Clog, Notes, TPM]
                             puffs_col = 0 + col_offset
@@ -1935,10 +1969,24 @@ Developed by Charlie Becquet
                             clog_col = 6 + col_offset
                             notes_col = 7 + col_offset
                             tpm_col = 8 + col_offset  # TPM is typically in column 9 for standard format
-                        
+                    
                             # Extract values if columns exist
                             values = {}
                         
+                            # Helper function to clean values and strip quotes
+                            def clean_value(raw_val):
+                                if pd.isna(raw_val):
+                                    return ""
+                                val_str = str(raw_val).strip()
+                                # Remove surrounding quotes if present
+                                if val_str.startswith("'") and val_str.endswith("'"):
+                                    val_str = val_str[1:-1]
+                                elif val_str.startswith('"') and val_str.endswith('"'):
+                                    val_str = val_str[1:-1]
+                                return val_str
+                        
+                            debug_print(f"DEBUG: Processing row {data_row_idx} for {sample_id}")
+                    
                             for field, col_idx in [
                                 ('puffs', puffs_col), ('before_weight', before_weight_col), 
                                 ('after_weight', after_weight_col), ('draw_pressure', draw_pressure_col),
@@ -1947,45 +1995,78 @@ Developed by Charlie Becquet
                             ]:
                                 if col_idx < len(sheet_data.columns):
                                     raw_val = sheet_data.iloc[data_row_idx, col_idx]
-                                    values[field] = "" if pd.isna(raw_val) else str(raw_val).strip()
+                                    values[field] = clean_value(raw_val)
+                                    debug_print(f"DEBUG: {field} raw: {raw_val}, cleaned: {values[field]}")
                                 else:
                                     values[field] = ""
-                        
+                    
                             # Handle TPM separately
                             if tpm_col < len(sheet_data.columns):
                                 raw_val = sheet_data.iloc[data_row_idx, tpm_col]
-                                if not pd.isna(raw_val) and str(raw_val).strip():
+                                cleaned_val = clean_value(raw_val)
+                                if cleaned_val and cleaned_val.strip():
                                     try:
-                                        values['tpm'] = float(raw_val)
+                                        values['tpm'] = float(cleaned_val)
+                                        debug_print(f"DEBUG: tpm raw: {raw_val}, cleaned: {cleaned_val}, float: {values['tpm']}")
                                     except (ValueError, TypeError):
                                         values['tpm'] = None
+                                        debug_print(f"DEBUG: tpm conversion failed for: {cleaned_val}")
                                 else:
                                     values['tpm'] = None
                             else:
                                 values['tpm'] = None
-                        
-                            # Check if this row has any meaningful data
+                    
+                            # Check if this row has any meaningful data (not all empty)
                             if any([values['puffs'], values['before_weight'], values['after_weight']]):
-                                # Store the data
-                                for field in ['puffs', 'before_weight', 'after_weight', 'draw_pressure', 'resistance', 'smell', 'clog', 'notes']:
-                                    self.data[sample_id][field].append(values[field])
+                                debug_print(f"DEBUG: Storing data for row {data_row_idx}: puffs={values['puffs']}, before={values['before_weight']}, after={values['after_weight']}")
+                                # Append the data (building from scratch)
+                                self.data[sample_id]["puffs"].append(values['puffs'])
+                                self.data[sample_id]["before_weight"].append(values['before_weight'])
+                                self.data[sample_id]["after_weight"].append(values['after_weight'])
+                                self.data[sample_id]["draw_pressure"].append(values['draw_pressure'])
+                                self.data[sample_id]["resistance"].append(values['resistance'])
+                                self.data[sample_id]["smell"].append(values['smell'])
+                                self.data[sample_id]["clog"].append(values['clog'])
+                                self.data[sample_id]["notes"].append(values['notes'])
                                 self.data[sample_id]["tpm"].append(values['tpm'])
-                            
+                        
                                 sample_had_data = True
                                 row_count += 1
-                    
+                            else:
+                                debug_print(f"DEBUG: Row {data_row_idx} has no meaningful data, skipping")
+                
                     except Exception as e:
                         debug_print(f"DEBUG: Error processing row {data_row_idx} for {sample_id}: {e}")
                         continue
-            
+        
                 if sample_had_data:
                     loaded_data_count += 1
-                    debug_print(f"DEBUG: {sample_id} - Loaded {row_count} rows of existing data")
+                    debug_print(f"DEBUG: {sample_id} - Loaded {row_count} rows of existing data (cleared template)")
                 else:
                     debug_print(f"DEBUG: {sample_id} - No existing data found")
-        
+                    # If no data was found, ensure we still have empty arrays (not template data)
+                    if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+                        self.data[sample_id]["chronography"] = []
+                        self.data[sample_id]["puffs"] = []
+                        self.data[sample_id]["before_weight"] = []
+                        self.data[sample_id]["after_weight"] = []
+                        self.data[sample_id]["draw_pressure"] = []
+                        self.data[sample_id]["smell"] = []
+                        self.data[sample_id]["notes"] = []
+                        self.data[sample_id]["tpm"] = []
+                    else:
+                        self.data[sample_id]["puffs"] = []
+                        self.data[sample_id]["before_weight"] = []
+                        self.data[sample_id]["after_weight"] = []
+                        self.data[sample_id]["draw_pressure"] = []
+                        self.data[sample_id]["resistance"] = []
+                        self.data[sample_id]["smell"] = []
+                        self.data[sample_id]["clog"] = []
+                        self.data[sample_id]["notes"] = []
+                        self.data[sample_id]["tpm"] = []
+    
             debug_print(f"DEBUG: Successfully loaded existing data for {loaded_data_count} samples from loaded sheets")
-        
+    
             # Recalculate TPM values for all samples
             for i in range(self.num_samples):
                 sample_id = f"Sample {i + 1}"
@@ -2002,7 +2083,7 @@ Developed by Charlie Becquet
             self.update_stats_panel()
 
             debug_print("DEBUG: Existing data loading from loaded sheets completed successfully")
-        
+    
         except Exception as e:
             debug_print(f"ERROR: Failed to load existing data from loaded sheets: {e}")
             import traceback
