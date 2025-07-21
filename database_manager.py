@@ -2,6 +2,7 @@ import os
 import sqlite3
 import json
 import datetime
+
 from typing import Dict, List, Any, Optional
 from utils import debug_print
 
@@ -316,3 +317,149 @@ class DatabaseManager:
                 debug_print("Database connection closed")
             except sqlite3.Error as e:
                 print(f"Error closing database connection: {e}")
+
+    def show_database_browser_for_comparison(self, parent_window):
+        """Show database browser specifically for file selection for comparison."""
+        debug_print("DEBUG: Opening database browser for comparison file selection")
+        import tkinter as tk
+        from tkinter import ttk
+        try:
+            # Create the database browser window
+            browser_window = tk.Toplevel(parent_window)
+            browser_window.title("Select Files for Comparison")
+            browser_window.geometry("1000x700")
+            browser_window.transient(parent_window)
+            browser_window.grab_set()
+        
+            # Store selected files
+            selected_files = []
+            selection_confirmed = False
+        
+            # Create main frame
+            main_frame = ttk.Frame(browser_window)
+            main_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        
+            # Add instruction label
+            instruction_label = ttk.Label(main_frame, 
+                                        text="Select files for comparison analysis (minimum 2 required):", 
+                                        font=("Arial", 12, "bold"))
+            instruction_label.pack(pady=(0, 10))
+        
+            # Create treeview for file listing
+            columns = ("Filename", "Created", "Test Count", "File Size")
+            file_tree = ttk.Treeview(main_frame, columns=columns, show="headings", selectmode="extended")
+        
+            # Configure columns
+            file_tree.heading("Filename", text="Filename")
+            file_tree.heading("Created", text="Created")
+            file_tree.heading("Test Count", text="Test Count")
+            file_tree.heading("File Size", text="File Size")
+        
+            file_tree.column("Filename", width=400)
+            file_tree.column("Created", width=150)
+            file_tree.column("Test Count", width=100)
+            file_tree.column("File Size", width=100)
+        
+            # Add scrollbars
+            tree_scrollbar_v = ttk.Scrollbar(main_frame, orient="vertical", command=file_tree.yview)
+            tree_scrollbar_h = ttk.Scrollbar(main_frame, orient="horizontal", command=file_tree.xview)
+            file_tree.configure(yscrollcommand=tree_scrollbar_v.set, xscrollcommand=tree_scrollbar_h.set)
+        
+            # Pack treeview and scrollbars
+            tree_frame = ttk.Frame(main_frame)
+            tree_frame.pack(fill="both", expand=True, pady=(0, 10))
+        
+            file_tree.pack(side="left", fill="both", expand=True)
+            tree_scrollbar_v.pack(side="right", fill="y")
+            tree_scrollbar_h.pack(side="bottom", fill="x")
+        
+            # Load files from database
+            files = self.list_files()
+            file_data_map = {}  # Map tree item IDs to file data
+        
+            for file_info in files:
+                # Format the display information
+                filename = file_info.get('filename', 'Unknown')
+                created = file_info.get('created_at', 'Unknown')
+                if isinstance(created, str) and len(created) > 16:
+                    created = created[:16]  # Truncate long timestamps
+            
+                test_count = file_info.get('test_count', 'Unknown')
+                file_size = file_info.get('file_size', 'Unknown')
+                if isinstance(file_size, (int, float)):
+                    file_size = f"{file_size / 1024:.1f} KB"
+            
+                # Insert into treeview
+                item_id = file_tree.insert("", "end", values=(filename, created, test_count, file_size))
+                file_data_map[item_id] = file_info
+        
+            # Selection tracking
+            selection_label = ttk.Label(main_frame, text="Selected: 0 files", font=("Arial", 10))
+            selection_label.pack(pady=(0, 5))
+        
+            def update_selection_label():
+                selected_items = file_tree.selection()
+                count = len(selected_items)
+                selection_label.config(text=f"Selected: {count} files")
+            
+            file_tree.bind("<<TreeviewSelect>>", lambda e: update_selection_label())
+        
+            # Button frame
+            button_frame = ttk.Frame(main_frame)
+            button_frame.pack(fill="x", pady=(10, 0))
+        
+            def on_select_all():
+                """Select all files."""
+                for item in file_tree.get_children():
+                    file_tree.selection_add(item)
+                update_selection_label()
+        
+            def on_deselect_all():
+                """Deselect all files."""
+                file_tree.selection_remove(file_tree.selection())
+                update_selection_label()
+        
+            def on_confirm():
+                """Confirm selection and close dialog."""
+                nonlocal selected_files, selection_confirmed
+                selected_items = file_tree.selection()
+            
+                if len(selected_items) < 2:
+                    messagebox.showwarning("Warning", "Please select at least 2 files for comparison.")
+                    return
+            
+                # Collect selected file data
+                selected_files = [file_data_map[item_id] for item_id in selected_items]
+                selection_confirmed = True
+                browser_window.destroy()
+        
+            def on_cancel():
+                """Cancel selection and close dialog."""
+                nonlocal selection_confirmed
+                selection_confirmed = False
+                browser_window.destroy()
+        
+            # Add buttons
+            ttk.Button(button_frame, text="Select All", command=on_select_all).pack(side="left", padx=5)
+            ttk.Button(button_frame, text="Deselect All", command=on_deselect_all).pack(side="left", padx=5)
+        
+            ttk.Button(button_frame, text="Cancel", command=on_cancel).pack(side="right", padx=5)
+            ttk.Button(button_frame, text="Compare Selected Files", command=on_confirm).pack(side="right", padx=5)
+        
+            # Handle window close
+            browser_window.protocol("WM_DELETE_WINDOW", on_cancel)
+        
+            # Wait for user selection
+            browser_window.wait_window()
+        
+            if selection_confirmed:
+                debug_print(f"DEBUG: User selected {len(selected_files)} files for comparison")
+                return selected_files
+            else:
+                debug_print("DEBUG: User cancelled database file selection")
+                return []
+            
+        except Exception as e:
+            debug_print(f"DEBUG: Error in show_database_browser_for_comparison: {e}")
+            messagebox.showerror("Error", f"Failed to open database browser: {e}")
+            return []

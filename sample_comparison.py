@@ -16,9 +16,10 @@ import processing
 class SampleComparisonWindow:
     """Window for comparing samples across multiple loaded files."""
     
-    def __init__(self, gui):
+    def __init__(self, gui, selected_files=None):
         self.gui = gui
         self.window = None
+        self.selected_files = selected_files if selected_files is not None else gui.all_filtered_sheets
         
         # Predefined model keywords (can be expanded)
         self.model_keywords_raw = [
@@ -40,15 +41,18 @@ class SampleComparisonWindow:
         
     def show(self):
         """Show the comparison window."""
-        if not self.gui.all_filtered_sheets:
-            messagebox.showinfo("Info", "No files are currently loaded. Please load some data files first.")
+        if not self.selected_files:
+            messagebox.showinfo("Info", "No files are selected for comparison.")
+            debug_print("DEBUG: No files selected for comparison")
             return
-            
+        
+        debug_print(f"DEBUG: Showing comparison window with {len(self.selected_files)} selected files")
+        
         self.window = tk.Toplevel(self.gui.root)
         self.window.title("Sample Comparison Analysis")
         self.window.geometry("1200x800")
         self.window.transient(self.gui.root)
-        
+    
         self.create_ui()
         self.perform_analysis()
         
@@ -269,84 +273,127 @@ class SampleComparisonWindow:
             debug_print(f"DEBUG: Final parsed keywords: {self.model_keywords}")
 
     def perform_analysis(self):
-        """Perform the sample comparison analysis."""
+        """Perform the sample comparison analysis with time-series data creation."""
         debug_print("DEBUG: Starting sample comparison analysis")
-    
-        if not self.gui.all_filtered_sheets:
+
+        if not self.selected_files:
+            debug_print("DEBUG: No selected files for analysis")
             return
-        
+    
         self.comparison_results = {}
-    
+
         # Progress tracking
-        total_files = len(self.gui.all_filtered_sheets)
-        debug_print(f"DEBUG: Analyzing {total_files} loaded files")
-    
-        for file_idx, file_data in enumerate(self.gui.all_filtered_sheets):
+        total_files = len(self.selected_files)
+        debug_print(f"DEBUG: Analyzing {total_files} selected files")
+
+        for file_idx, file_data in enumerate(self.selected_files):
             file_name = file_data["file_name"]
             filtered_sheets = file_data["filtered_sheets"]
         
-            debug_print(f"DEBUG: Processing file {file_idx + 1}/{total_files}: {file_name}")
+            # Extract timestamp from file data
+            file_timestamp = None
+            if "database_created_at" in file_data and file_data["database_created_at"]:
+                timestamp = file_data["database_created_at"]
+                if isinstance(timestamp, str):
+                    try:
+                        from datetime import datetime
+                        if 'T' in timestamp:
+                            file_timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                        else:
+                            file_timestamp = datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S')
+                    except:
+                        file_timestamp = None
+                elif hasattr(timestamp, 'year'):
+                    file_timestamp = timestamp
         
+            # Fallback to current date if no timestamp available
+            if file_timestamp is None:
+                from datetime import datetime
+                file_timestamp = datetime.now()
+                debug_print(f"DEBUG: No timestamp found for {file_name}, using current date")
+        
+            debug_print(f"DEBUG: Processing selected file {file_idx + 1}/{total_files}: {file_name} (timestamp: {file_timestamp})")
+
             for sheet_name, sheet_info in filtered_sheets.items():
                 data = sheet_info["data"]
-            
+    
                 if data.empty:
                     continue
-                
+        
                 # Determine test group
                 test_group = self.get_test_group(sheet_name)
-            
+    
                 # Find samples matching keywords (now passing filename)
                 matching_samples = self.find_matching_samples(data, sheet_name, file_name)
-            
+    
                 for keyword, sample_columns in matching_samples.items():
                     if not sample_columns:
                         continue
-                    
+                
                     # Extract metrics for this keyword/test group combination
                     metrics = self.extract_metrics(data, sample_columns, sheet_name)
+            
+                    # Store results with proper structure for time-series plotting
+                    if keyword not in self.comparison_results:
+                        self.comparison_results[keyword] = {}
                 
-                    # Store results
-                    key = (keyword, test_group)
-                    if key not in self.comparison_results:
-                        self.comparison_results[key] = {
+                    if test_group not in self.comparison_results[keyword]:
+                        self.comparison_results[keyword][test_group] = {
+                            'dates': [],
                             'tpm_values': [],
                             'std_dev_values': [],
                             'draw_pressure_values': [],
+                            'file_info': [],
                             'file_count': 0,
                             'sample_count': 0,
                             'files': [],
-                            'match_sources': []  # NEW: Track whether matches came from sample names or filenames
+                            'match_sources': []
                         }
                 
-                    if metrics['tpm'] is not None:
-                        self.comparison_results[key]['tpm_values'].extend(metrics['tpm'])
-                    if metrics['std_dev'] is not None:
-                        self.comparison_results[key]['std_dev_values'].extend(metrics['std_dev'])
-                    if metrics['draw_pressure'] is not None:
-                        self.comparison_results[key]['draw_pressure_values'].extend(metrics['draw_pressure'])
-                
-                    self.comparison_results[key]['sample_count'] += len(sample_columns)
-                    self.comparison_results[key]['files'].append(f"{file_name}:{sheet_name}")
-                
+                    # Add data points for each sample in this file/sheet combination
+                    if metrics['tpm'] is not None and len(metrics['tpm']) > 0:
+                        for i, tpm_val in enumerate(metrics['tpm']):
+                            self.comparison_results[keyword][test_group]['dates'].append(file_timestamp)
+                            self.comparison_results[keyword][test_group]['tpm_values'].append(tpm_val)
+                        
+                            # Add corresponding std dev if available
+                            if metrics['std_dev'] and i < len(metrics['std_dev']):
+                                self.comparison_results[keyword][test_group]['std_dev_values'].append(metrics['std_dev'][i])
+                            else:
+                                self.comparison_results[keyword][test_group]['std_dev_values'].append(0)
+                        
+                            # Add corresponding draw pressure if available
+                            if metrics['draw_pressure'] and i < len(metrics['draw_pressure']):
+                                self.comparison_results[keyword][test_group]['draw_pressure_values'].append(metrics['draw_pressure'][i])
+                            else:
+                                self.comparison_results[keyword][test_group]['draw_pressure_values'].append(0)
+                        
+                            # Add file info for color mapping
+                            display_filename = file_data.get('display_filename', file_name)
+                            self.comparison_results[keyword][test_group]['file_info'].append(display_filename)
+
+                    self.comparison_results[keyword][test_group]['sample_count'] += len(sample_columns)
+                    self.comparison_results[keyword][test_group]['files'].append(f"{file_name}:{sheet_name}")
+            
                     # Determine match source for this file
                     sample_name_matches = self.find_sample_name_matches_only(data, keyword, sheet_name)
                     if sample_name_matches:
                         match_source = "sample_name"
                     else:
                         match_source = "filename"
-                    self.comparison_results[key]['match_sources'].append(f"{file_name}:{match_source}")
-    
+                    self.comparison_results[keyword][test_group]['match_sources'].append(f"{file_name}:{match_source}")
+
         # Calculate file counts (unique files for each combination)
-        for key in self.comparison_results:
-            unique_files = set()
-            for file_sheet in self.comparison_results[key]['files']:
-                file_name = file_sheet.split(':')[0]
-                unique_files.add(file_name)
-            self.comparison_results[key]['file_count'] = len(unique_files)
-    
-        debug_print(f"DEBUG: Analysis complete. Found {len(self.comparison_results)} model/test combinations")
-    
+        for keyword in self.comparison_results:
+            for test_group in self.comparison_results[keyword]:
+                unique_files = set()
+                for file_sheet in self.comparison_results[keyword][test_group]['files']:
+                    file_name = file_sheet.split(':')[0]
+                    unique_files.add(file_name)
+                self.comparison_results[keyword][test_group]['file_count'] = len(unique_files)
+
+        debug_print(f"DEBUG: Analysis complete. Found {sum(len(groups) for groups in self.comparison_results.values())} model/test combinations")
+
         # Update displays
         self.update_summary_display()
         self.update_details_display()
@@ -533,8 +580,17 @@ class SampleComparisonWindow:
                     
                     tpm_numeric = pd.to_numeric(tpm_values, errors='coerce').dropna()
                     if not tpm_numeric.empty:
-                        metrics['tpm'].append(tpm_numeric.mean())
-                        metrics['std_dev'].append(tpm_numeric.std())
+                        # Use only the first 70% of TPM values for better representation
+                        tpm_count = len(tpm_numeric)
+                        cutoff_index = int(tpm_count * 0.70)
+                        if cutoff_index < 1:
+                            cutoff_index = 1  # Ensure we use at least one value
+                    
+                        tpm_truncated = tpm_numeric.iloc[:cutoff_index]
+                        debug_print(f"DEBUG: Sample {sample_idx} - Using first {cutoff_index} of {tpm_count} TPM values ({(cutoff_index/tpm_count)*100:.1f}%)")
+                    
+                        metrics['tpm'].append(tpm_truncated.mean())
+                        metrics['std_dev'].append(tpm_truncated.std())
                         
                 except Exception as e:
                     debug_print(f"DEBUG: Error extracting TPM for sample {sample_idx}: {e}")
@@ -565,25 +621,30 @@ class SampleComparisonWindow:
         # Clear existing items
         for item in self.summary_tree.get_children():
             self.summary_tree.delete(item)
-            
+        
         if not self.comparison_results:
             return
-            
-        # Sort results by model keyword and test group
-        sorted_results = sorted(self.comparison_results.items(), 
-                               key=lambda x: (x[0][0], x[0][1]))
         
+        # Flatten the results for display
+        flattened_results = []
+        for keyword, test_groups in self.comparison_results.items():
+            for test_group, data in test_groups.items():
+                flattened_results.append(((keyword, test_group), data))
+    
+        # Sort results by model keyword and test group
+        sorted_results = sorted(flattened_results, key=lambda x: (x[0][0], x[0][1]))
+    
         for (keyword, test_group), data in sorted_results:
             # Calculate averages
             avg_tpm = np.mean(data['tpm_values']) if data['tpm_values'] else 0
             avg_std_dev = np.mean(data['std_dev_values']) if data['std_dev_values'] else 0
             avg_draw_pressure = np.mean(data['draw_pressure_values']) if data['draw_pressure_values'] else 0
-            
+        
             # Format values
             avg_tpm_str = f"{avg_tpm:.3f}" if avg_tpm > 0 else "N/A"
             avg_std_dev_str = f"{avg_std_dev:.3f}" if avg_std_dev > 0 else "N/A"
             avg_draw_pressure_str = f"{avg_draw_pressure:.1f}" if avg_draw_pressure > 0 else "N/A"
-            
+        
             # Insert into treeview
             self.summary_tree.insert("", "end", values=(
                 keyword.upper(),
@@ -594,18 +655,18 @@ class SampleComparisonWindow:
                 data['file_count'],
                 data['sample_count']
             ))
-            
+
     def update_details_display(self):
         """Update the detailed results text widget."""
         self.details_text.delete("1.0", tk.END)
-    
+
         if not self.comparison_results:
             self.details_text.insert("1.0", "No analysis results available.")
             return
-        
+    
         details = "DETAILED SAMPLE COMPARISON ANALYSIS\n"
         details += "=" * 60 + "\n\n"
-    
+
         # Show keyword variations at the top
         details += "KEYWORD VARIATIONS:\n"
         details += "-" * 20 + "\n"
@@ -615,58 +676,53 @@ class SampleComparisonWindow:
             else:
                 details += f"{main_keyword.upper()}: (no variations)\n"
         details += "\n" + "=" * 60 + "\n\n"
-    
+
         # Group by keyword
-        keyword_groups = {}
-        for (keyword, test_group), data in self.comparison_results.items():
-            if keyword not in keyword_groups:
-                keyword_groups[keyword] = {}
-            keyword_groups[keyword][test_group] = data
-        
-        for keyword in sorted(keyword_groups.keys()):
+        for keyword in sorted(self.comparison_results.keys()):
             details += f"MODEL: {keyword.upper()}\n"
             if keyword in self.model_keywords and len(self.model_keywords[keyword]) > 1:
                 details += f"  Variations: {', '.join(self.model_keywords[keyword])}\n"
             details += "-" * 40 + "\n"
-        
-            test_groups = keyword_groups[keyword]
+    
+            test_groups = self.comparison_results[keyword]
             for test_group in sorted(test_groups.keys()):
                 data = test_groups[test_group]
-            
+        
                 details += f"\nTest Group: {test_group}\n"
                 details += f"  Files involved: {data['file_count']}\n"
                 details += f"  Total samples: {data['sample_count']}\n"
-            
+                details += f"  Data points: {len(data['tpm_values'])}\n"
+        
                 if data['tpm_values']:
                     avg_tpm = np.mean(data['tpm_values'])
                     min_tpm = np.min(data['tpm_values'])
                     max_tpm = np.max(data['tpm_values'])
                     details += f"  TPM - Avg: {avg_tpm:.3f}, Range: {min_tpm:.3f} - {max_tpm:.3f}\n"
-                
+            
                 if data['std_dev_values']:
                     avg_std = np.mean(data['std_dev_values'])
                     details += f"  Std Dev - Avg: {avg_std:.3f}\n"
-                
+            
                 if data['draw_pressure_values']:
                     avg_dp = np.mean(data['draw_pressure_values'])
                     min_dp = np.min(data['draw_pressure_values'])
                     max_dp = np.max(data['draw_pressure_values'])
                     details += f"  Draw Pressure - Avg: {avg_dp:.1f}, Range: {min_dp:.1f} - {max_dp:.1f}\n"
-                
+            
                 # Show which files contributed to this data and match sources
                 file_match_info = {}
                 for file_sheet in data['files']:
                     file_name = file_sheet.split(':')[0]
                     if file_name not in file_match_info:
                         file_match_info[file_name] = set()
-            
+        
                 # Determine match sources for each file
                 for match_source_info in data.get('match_sources', []):
                     if ':' in match_source_info:
                         file_name, source = match_source_info.split(':', 1)
                         if file_name in file_match_info:
                             file_match_info[file_name].add(source)
-            
+        
                 details += f"  Contributing files:\n"
                 for file_name in sorted(file_match_info.keys()):
                     sources = list(file_match_info[file_name])
@@ -677,9 +733,9 @@ class SampleComparisonWindow:
                     else:
                         source_text = "(unknown match)"
                     details += f"    - {file_name} {source_text}\n"
-                
+            
             details += "\n" + "=" * 60 + "\n\n"
-        
+    
         self.details_text.insert("1.0", details)
         
     def export_results(self):
@@ -746,9 +802,9 @@ class SampleComparisonWindow:
             messagebox.showerror("Error", f"Failed to export results:\n{str(e)}")
 
     def show_comparison_plots(self):
-        """Create a new window with subplots comparing samples by date for the SELECTED test group only."""
+        """Show comparison plots for the selected test group with enhanced visualization."""
         import matplotlib.pyplot as plt
-        from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+        from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
         import matplotlib.dates as mdates
         from datetime import datetime
         from tkinter import filedialog
@@ -771,184 +827,145 @@ class SampleComparisonWindow:
         # Get the values from the selected row
         selected_item = selected_items[0]  # Take the first selected item
         item_values = self.summary_tree.item(selected_item)['values']
-    
+
         if len(item_values) < 2:
             messagebox.showerror("Error", "Invalid selection. Please select a valid test group.")
             return
-    
-        # Extract keyword and test group from the selected row
-        selected_keyword = item_values[0].lower()  # Model column (convert back to lowercase)
-        selected_test_group = item_values[1]        # Test Group column
-    
-        debug_print(f"DEBUG: Selected keyword: '{selected_keyword}', test group: '{selected_test_group}'")
-    
-        # Find the matching entry in comparison_results
-        selected_key = None
-        for (keyword, test_group), data in self.comparison_results.items():
-            if keyword == selected_keyword and test_group == selected_test_group:
-                selected_key = (keyword, test_group)
-                break
-    
-        if not selected_key:
-            messagebox.showerror("Error", f"No data found for selected combination: {selected_keyword} - {selected_test_group}")
-            return
 
-        debug_print(f"DEBUG: Processing only selected test group: {selected_key}")
+        selected_keyword = item_values[0]  # Model (keyword)
+        selected_test_group = item_values[1]  # Test Group
 
-        # Create new window
-        plot_window = tk.Toplevel(self.window)
-        plot_window.title(f"Time-Series Plot: {selected_keyword.upper()} - {selected_test_group}")
-        plot_window.geometry("1200x800")
-        plot_window.transient(self.window)
+        debug_print(f"DEBUG: Showing enhanced plots for {selected_keyword} - {selected_test_group}")
 
-        # Prepare data for plotting - only the selected group
-        plot_data = {
-            selected_keyword: {
-                'dates': [],
-                'tpm_values': [],
-                'std_dev_values': [],
-                'draw_pressure_values': [],
-                'tpm_per_power': [],
-                'labels': []
-            }
-        }
+        # Find the comparison data for the selected group
+        plot_data = {}
+        keyword = selected_keyword.lower()
 
-        # Extract data for the selected test group only
-        keyword, test_group = selected_key
-        data = self.comparison_results[selected_key]
-    
-        debug_print(f"DEBUG: Processing {len(data['files'])} files for {keyword} - {test_group}")
-
-        # Process each file's data
-        for file_info in data['files']:
-            # file_info contains "filename:sheetname" - extract just the filename part
-            if ':' in file_info:
-                filename_only = file_info.split(':')[0]
-                sheet_name_part = file_info.split(':')[1]
-            else:
-                filename_only = file_info
-                sheet_name_part = None
-        
-            debug_print(f"DEBUG: Looking for file_info: '{file_info}'")
-            debug_print(f"DEBUG: Extracted filename_only: '{filename_only}'")
-            debug_print(f"DEBUG: Sheet name part: '{sheet_name_part}'")
-        
-            timestamp = None
-            actual_filename = None
-            file_data_item = None
-
-            # Search through all loaded files to find the matching one
-            for idx, current_file_data_item in enumerate(self.gui.all_filtered_sheets):
-                # Check if this is the file we're looking for - match against filename_only
-                is_match = (
-                    filename_only == current_file_data_item.get("display_filename", "") or 
-                    filename_only == current_file_data_item.get("file_name", "") or
-                    filename_only in current_file_data_item.get("display_filename", "") or 
-                    filename_only in current_file_data_item.get("file_name", "")
-                )
-            
-                if is_match:
-                    debug_print(f"DEBUG: Found matching file at index {idx}")
-                    file_data_item = current_file_data_item
-                
-                    # Get timestamp from database metadata
-                    if "database_created_at" in file_data_item and file_data_item["database_created_at"]:
-                        timestamp = file_data_item["database_created_at"]
-                        if isinstance(timestamp, str):
-                            try:
-                                if 'T' in timestamp:
-                                    timestamp = datetime.fromisoformat(timestamp)
-                                else:
-                                    timestamp = datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S')
-                            except:
-                                timestamp = None
-                        elif hasattr(timestamp, 'year'):
-                            pass  # Already a datetime object
-                        else:
-                            timestamp = None
-                    elif "created_at" in file_data_item and file_data_item["created_at"]:
-                        timestamp = file_data_item["created_at"]
-                    else:
-                        timestamp = datetime.now()  # Fallback
-                
+        if keyword in self.comparison_results:
+            for test_group, group_data in self.comparison_results[keyword].items():
+                if test_group.lower() == selected_test_group.lower():
+                    plot_data[keyword] = group_data
                     break
 
-            # Get the corresponding sample data
-            if timestamp and file_data_item:
-                debug_print(f"DEBUG: Extracting data from matched file for sheet: {sheet_name_part}")
-            
-                # Look in the filtered_sheets of the matched file
-                if "filtered_sheets" in file_data_item:
-                    for sheet_name, sheet_info in file_data_item["filtered_sheets"].items():
-                        if self.get_test_group(sheet_name) == test_group:
-                            debug_print(f"DEBUG: Found matching test group for sheet: {sheet_name}")
-                            sheet_data = sheet_info["data"]
-                        
-                            # Extract metrics from the data using improved logic
-                            if not sheet_data.empty:
-                                debug_print(f"DEBUG: Sheet data shape: {sheet_data.shape}")
-                            
-                                # Search for TPM header in the data rows
-                                tpm_column_index = None
-                                tpm_header_row = None
-
-                                # Search through the first few rows to find "TPM (mg/puff)" header
-                                for row_idx in range(min(5, len(sheet_data))):
-                                    for col_idx in range(len(sheet_data.columns)):
-                                        cell_value = sheet_data.iloc[row_idx, col_idx]
-                                        if pd.notna(cell_value) and "TPM (mg/puff)" in str(cell_value):
-                                            tpm_column_index = col_idx
-                                            tpm_header_row = row_idx
-                                            debug_print(f"DEBUG: Found 'TPM (mg/puff)' at row {row_idx}, column {col_idx}")
-                                            break
-                                    if tpm_column_index is not None:
-                                        break
-
-                                if tpm_column_index is not None and tpm_header_row is not None:
-                                    # Extract TPM data from the rows below the header
-                                    data_start_row = tpm_header_row + 1
-                                    tpm_data = pd.to_numeric(sheet_data.iloc[data_start_row:, tpm_column_index], errors='coerce').dropna()
-                                
-                                    if not tpm_data.empty:
-                                        avg_tpm = tpm_data.mean()
-                                        std_dev = tpm_data.std()
-                                        debug_print(f"DEBUG: Calculated avg_tpm: {avg_tpm}, std_dev: {std_dev}")
-                                    
-                                        plot_data[keyword]['tpm_values'].append(avg_tpm)
-                                        plot_data[keyword]['dates'].append(timestamp)
-                                        plot_data[keyword]['std_dev_values'].append(std_dev)
-                                    
-                                        # For now, set draw pressure and power to 0 (you can add similar logic for these)
-                                        plot_data[keyword]['draw_pressure_values'].append(0)
-                                        plot_data[keyword]['tpm_per_power'].append(0)
-                                    
-                                        plot_data[keyword]['labels'].append(f"{filename_only}:{sheet_name}")
-                                        debug_print(f"DEBUG: Successfully added data point for {filename_only}:{sheet_name}")
-
-        # Check if we have any data to plot
-        if not plot_data[keyword]['dates']:
-            messagebox.showwarning("Warning", f"No plottable data found for {selected_keyword.upper()} - {selected_test_group}")
-            plot_window.destroy()
+        if not plot_data:
+            messagebox.showinfo("Info", f"No time-series data found for {selected_keyword.upper()} - {selected_test_group}")
             return
 
-        # Create matplotlib figure - single plot since we're only showing one test group
-        fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+        # Create the plot window
+        plot_window = tk.Toplevel(self.window)
+        plot_window.title(f'Enhanced Sample Comparison: {selected_keyword.upper()} - {selected_test_group}')
+        plot_window.geometry("1400x900")  # Larger window to accommodate legend
+        plot_window.transient(self.window)
+
+        # Create main container
+        main_container = ttk.Frame(plot_window)
+        main_container.pack(fill="both", expand=True, padx=10, pady=10)
+
+        # Create matplotlib figure with reduced height (half of original)
+        fig, ax = plt.subplots(1, 1, figsize=(12, 4))  # Reduced height from 8 to 4
         fig.suptitle(f'TPM Over Time: {selected_keyword.upper()} - {selected_test_group}', fontsize=16)
 
         # Get the data for the selected group
         dates = plot_data[keyword]['dates']
         tpm_values = plot_data[keyword]['tpm_values']
         std_values = plot_data[keyword]['std_dev_values']
+    
+        # Get file info for each data point to assign colors
+        file_info_list = plot_data[keyword].get('file_info', [])
+    
+        debug_print(f"DEBUG: Processing {len(dates)} data points from {len(set(file_info_list))} unique files")
 
-        # Sort by date
-        sorted_indices = np.argsort(dates)
-        sorted_dates = [dates[i] for i in sorted_indices]
-        sorted_tpm_values = [tpm_values[i] for i in sorted_indices]
-        sorted_std_values = [std_values[i] for i in sorted_indices]
+        # Create a color map for unique files
+        unique_files = list(set(file_info_list))
+        colors = plt.cm.tab10(np.linspace(0, 1, len(unique_files)))  # Use tab10 colormap for distinct colors
+        file_color_map = {file_info: colors[i] for i, file_info in enumerate(unique_files)}
 
-        # Plot TPM with error bars
-        ax.errorbar(sorted_dates, sorted_tpm_values, yerr=sorted_std_values, 
-                    color='blue', marker='o', capsize=5, capthick=2, markersize=8, linewidth=2)
+        debug_print(f"DEBUG: Unique files: {unique_files}")
+        debug_print(f"DEBUG: Assigned colors to {len(file_color_map)} files")
+
+        # Group data by file to identify min/max values for enhanced error bars
+        file_data_groups = {}
+        for i, (date, tpm, std, file_info) in enumerate(zip(dates, tpm_values, std_values, file_info_list)):
+            if file_info not in file_data_groups:
+                file_data_groups[file_info] = []
+            file_data_groups[file_info].append((i, date, tpm, std))
+
+        # Find the error bars that extend furthest for each file (pick only ONE point for each extreme)
+        file_error_extremes = {}
+        for file_info, data_points in file_data_groups.items():
+            # Calculate error bar extents for each point
+            min_extent_value = float('inf')
+            max_extent_value = float('-inf')
+            min_extent_index = None
+            max_extent_index = None
+    
+            for point in data_points:
+                i, date, tpm, std = point
+                lower_extent = tpm - std  # Bottom of error bar
+                upper_extent = tpm + std  # Top of error bar
+        
+                # Update minimum extent (only if this is a new minimum)
+                if lower_extent < min_extent_value:
+                    min_extent_value = lower_extent
+                    min_extent_index = i
+            
+                # Update maximum extent (only if this is a new maximum)
+                if upper_extent > max_extent_value:
+                    max_extent_value = upper_extent
+                    max_extent_index = i
+    
+            file_error_extremes[file_info] = {
+                'min_extent_index': min_extent_index,  # Single index of point with lowest error bar
+                'max_extent_index': max_extent_index,  # Single index of point with highest error bar
+                'min_extent_value': min_extent_value,
+                'max_extent_value': max_extent_value
+            }
+
+        debug_print(f"DEBUG: File error bar extremes analysis completed for {len(file_error_extremes)} files")
+        for file_info, extremes in file_error_extremes.items():
+            debug_print(f"DEBUG: {file_info} - Lowest error bar extent: {extremes['min_extent_value']:.3f} at index {extremes['min_extent_index']}, Highest error bar extent: {extremes['max_extent_value']:.3f} at index {extremes['max_extent_index']}")
+
+        # Plot each data point with enhanced error bars only for error bar extremes
+        normal_capsize = 5
+        enhanced_capsize = 15  # 3x the normal capsize
+
+        for i, (date, tpm, std, file_info) in enumerate(zip(dates, tpm_values, std_values, file_info_list)):
+            color = file_color_map.get(file_info, colors[0])  # Default to first color if not found
+    
+            # Determine if this specific point index has an extreme error bar for its file
+            is_min_extent = (i == file_error_extremes[file_info]['min_extent_index'])
+            is_max_extent = (i == file_error_extremes[file_info]['max_extent_index'])
+            is_extreme_error_bar = is_min_extent or is_max_extent
+    
+            # Use enhanced capsize for extreme error bars
+            capsize = enhanced_capsize if is_extreme_error_bar else normal_capsize
+            capthick = 3 if is_extreme_error_bar else 2
+    
+            debug_print(f"DEBUG: Point {i} for {file_info}: TPM={tpm:.3f}, std={std:.3f}, lower_extent={tpm-std:.3f}, upper_extent={tpm+std:.3f}, is_min_extent={is_min_extent}, is_max_extent={is_max_extent}, capsize={capsize}")
+    
+            # All points have same marker size - only error bar caps are different
+            marker_size = 8
+            edge_width = 1
+    
+            # Plot the main error bar (horizontal)
+            ax.errorbar(date, tpm, yerr=std, color=color, marker='o', 
+                       capsize=capsize, capthick=capthick, markersize=marker_size, linewidth=0,
+                       alpha=0.8, markeredgewidth=edge_width, markeredgecolor='black')
+    
+            # Add vertical lines connecting the point to the error bar endpoints
+            if std > 0:  # Only add vertical lines if there's actually an error bar
+                # Calculate error bar endpoints
+                upper_y = tpm + std
+                lower_y = tpm - std
+        
+                # Draw vertical lines from the center point to the error bar caps
+                line_alpha = 0.7 if is_extreme_error_bar else 0.5
+                line_width = 1.5 if is_extreme_error_bar else 1
+        
+                ax.plot([date, date], [tpm, upper_y], color=color, linewidth=line_width, 
+                       alpha=line_alpha, linestyle='-', zorder=1)
+                ax.plot([date, date], [tpm, lower_y], color=color, linewidth=line_width, 
+                       alpha=line_alpha, linestyle='-', zorder=1)
 
         # Configure axes
         ax.set_ylabel('Average TPM (mg/puff)', fontsize=12)
@@ -960,31 +977,128 @@ class SampleComparisonWindow:
         ax.xaxis.set_major_locator(mdates.AutoDateLocator())
         plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
 
-        # Adjust layout
+        # Adjust layout to make room for legend below
         plt.tight_layout()
+        fig.subplots_adjust(bottom=0.3)  # Make room for legend below plot
 
-        # Create tkinter canvas
-        canvas = FigureCanvasTkAgg(fig, master=plot_window)
+        # Create the plot canvas
+        plot_frame = ttk.Frame(main_container)
+        plot_frame.pack(fill="both", expand=True)
+
+        canvas = FigureCanvasTkAgg(fig, master=plot_frame)
         canvas.draw()
         canvas.get_tk_widget().pack(fill="both", expand=True)
 
-        # Add toolbar
-        from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk
-        toolbar = NavigationToolbar2Tk(canvas, plot_window)
+        # Add toolbar above the legend
+        toolbar = NavigationToolbar2Tk(canvas, plot_frame)
         toolbar.update()
 
-        # Add export button
-        def export_plot():
+        # Create detailed legend below the plot
+        legend_frame = ttk.LabelFrame(main_container, text="File Legend", padding=10)
+        legend_frame.pack(fill="x", pady=(10, 0))
+
+        # Create scrollable frame for legend if there are many files
+        if len(unique_files) > 6:  # If more than 6 files, make it scrollable
+            legend_canvas = tk.Canvas(legend_frame, height=120)
+            legend_scrollbar = ttk.Scrollbar(legend_frame, orient="vertical", command=legend_canvas.yview)
+            scrollable_legend_frame = ttk.Frame(legend_canvas)
+        
+            scrollable_legend_frame.bind(
+                "<Configure>",
+                lambda e: legend_canvas.configure(scrollregion=legend_canvas.bbox("all"))
+            )
+        
+            legend_canvas.create_window((0, 0), window=scrollable_legend_frame, anchor="nw")
+            legend_canvas.configure(yscrollcommand=legend_scrollbar.set)
+        
+            legend_canvas.pack(side="left", fill="both", expand=True)
+            legend_scrollbar.pack(side="right", fill="y")
+        
+            legend_parent = scrollable_legend_frame
+        else:
+            legend_parent = legend_frame
+
+        # Create legend entries in a grid layout
+        cols = 2  # Two columns for better space usage
+        for i, (file_info, color) in enumerate(file_color_map.items()):
+            row = i // cols
+            col = i % cols
+        
+            # Create a colored square
+            color_frame = tk.Frame(legend_parent, width=20, height=20, bg='black')
+            color_frame.grid(row=row, column=col*2, padx=(0, 5), pady=2, sticky="w")
+            color_frame.configure(bg=f'#{int(color[0]*255):02x}{int(color[1]*255):02x}{int(color[2]*255):02x}')
+            color_frame.grid_propagate(False)
+        
+            # Create label with file name
+            file_label = ttk.Label(legend_parent, text=file_info, font=("Arial", 10))
+            file_label.grid(row=row, column=col*2+1, padx=(0, 20), pady=2, sticky="w")
+
+        # Add mouse wheel scrolling to legend if scrollable
+        if len(unique_files) > 6:
+            def on_mousewheel(event):
+                legend_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+            legend_canvas.bind("<MouseWheel>", on_mousewheel)
+
+        # Create button frame for actions
+        button_frame = ttk.Frame(main_container)
+        button_frame.pack(fill="x", pady=(10, 0))
+
+        # Export button
+        def export_enhanced_plot():
             file_path = filedialog.asksaveasfilename(
                 defaultextension=".png",
-                filetypes=[("PNG files", "*.png"), ("PDF files", "*.pdf"), ("All files", "*.*")]
+                filetypes=[("PNG files", "*.png"), ("PDF files", "*.pdf"), ("SVG files", "*.svg"), ("All files", "*.*")]
             )
             if file_path:
-                fig.savefig(file_path, dpi=300, bbox_inches='tight')
-                messagebox.showinfo("Success", f"Plot saved to {file_path}")
+                # Save with high DPI and tight bounding box
+                fig.savefig(file_path, dpi=300, bbox_inches='tight', facecolor='white', edgecolor='none')
+                messagebox.showinfo("Success", f"Enhanced plot saved to {file_path}")
 
-        button_frame = ttk.Frame(plot_window)
-        button_frame.pack(fill="x", padx=10, pady=5)
+        # Statistics button
+        def show_statistics():
+            stats_text = f"Statistics for {selected_keyword.upper()} - {selected_test_group}\n"
+            stats_text += "="*50 + "\n\n"
+            stats_text += f"Total data points: {len(tpm_values)}\n"
+            stats_text += f"Unique files: {len(unique_files)}\n"
+            stats_text += f"Date range: {min(dates).strftime('%Y-%m-%d')} to {max(dates).strftime('%Y-%m-%d')}\n\n"
+            stats_text += f"TPM Statistics:\n"
+            stats_text += f"  Mean: {np.mean(tpm_values):.4f} mg/puff\n"
+            stats_text += f"  Std Dev: {np.std(tpm_values):.4f} mg/puff\n"
+            stats_text += f"  Min: {np.min(tpm_values):.4f} mg/puff\n"
+            stats_text += f"  Max: {np.max(tpm_values):.4f} mg/puff\n\n"
+        
+            # Add file-specific statistics
+            stats_text += "File-specific statistics:\n"
+            for file_info in unique_files:
+                file_indices = [i for i, fi in enumerate(file_info_list) if fi == file_info]
+                file_tpm_values = [tpm_values[i] for i in file_indices]
+                file_count = len(file_tpm_values)
+            
+                if file_tpm_values:
+                    file_mean = np.mean(file_tpm_values)
+                    file_min = np.min(file_tpm_values)
+                    file_max = np.max(file_tpm_values)
+                    stats_text += f"  {file_info}: {file_count} points, "
+                    stats_text += f"Mean: {file_mean:.4f}, Range: {file_min:.4f} - {file_max:.4f}\n"
 
-        ttk.Button(button_frame, text="Export Plot", command=export_plot).pack(side="left", padx=5)
+            # Create statistics window
+            stats_window = tk.Toplevel(plot_window)
+            stats_window.title("Enhanced Statistics")
+            stats_window.geometry("600x500")
+        
+            stats_text_widget = tk.Text(stats_window, wrap="word", font=("Courier", 10))
+            stats_scrollbar = ttk.Scrollbar(stats_window, orient="vertical", command=stats_text_widget.yview)
+            stats_text_widget.configure(yscrollcommand=stats_scrollbar.set)
+        
+            stats_text_widget.insert("1.0", stats_text)
+            stats_text_widget.configure(state="disabled")
+        
+            stats_text_widget.pack(side="left", fill="both", expand=True)
+            stats_scrollbar.pack(side="right", fill="y")
+
+        ttk.Button(button_frame, text="Export Plot", command=export_enhanced_plot).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Show Statistics", command=show_statistics).pack(side="left", padx=5)
         ttk.Button(button_frame, text="Close", command=plot_window.destroy).pack(side="right", padx=5)
+
+        debug_print(f"DEBUG: Enhanced comparison plot created with {len(unique_files)} unique file colors, detailed legend, and enhanced error bars")

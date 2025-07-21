@@ -741,6 +741,7 @@ class TestingGUI:
 
         comparemenu = tk.Menu(menubar, tearoff=0)
         comparemenu.add_command(label="Compare Loaded Samples", command=self.show_sample_comparison)
+        comparemenu.add_command(label="Compare From Database", command=self.show_database_comparison)
         menubar.add_cascade(label="Compare", menu=comparemenu)
 
         # Reports menu
@@ -758,11 +759,102 @@ class TestingGUI:
     
         self.root.config(menu=menubar)
 
+    def show_database_comparison(self):
+        """Show database browser for file selection, then run comparison analysis."""
+        debug_print("DEBUG: show_database_comparison called - delegating to database browser in comparison mode")
+        self.file_manager.show_database_browser(comparison_mode=True)
+
+    def load_files_from_database_for_comparison(self, selected_files):
+        """Load files from database selection for comparison analysis."""
+        debug_print(f"DEBUG: Loading {len(selected_files)} files from database for comparison")
+    
+        loaded_files = []
+    
+        try:
+            # Show progress for loading
+            self.progress_dialog.show_progress_bar("Loading files from database...")
+        
+            for i, file_info in enumerate(selected_files):
+                try:
+                    debug_print(f"DEBUG: Loading file {i+1}/{len(selected_files)}: {file_info}")
+                
+                    # Update progress
+                    progress = (i + 1) / len(selected_files) * 100
+                    self.progress_dialog.update_progress(progress, f"Loading {file_info.get('filename', 'file')}...")
+                
+                    # Load the file data
+                    if 'filepath' in file_info:
+                        # Load from file path
+                        self.file_manager.load_excel_file(file_info['filepath'], skip_database_storage=True)
+                    elif 'id' in file_info:
+                        # Load from database ID
+                        self.file_manager.load_from_database_by_id(file_info['id'])
+                    else:
+                        debug_print(f"DEBUG: Invalid file info structure: {file_info}")
+                        continue
+                
+                    # Create file data structure for comparison
+                    if self.filtered_sheets:
+                        file_data = {
+                            'file_name': file_info.get('filename', f'Database_File_{i+1}'),
+                            'display_filename': file_info.get('display_name', file_info.get('filename', f'Database_File_{i+1}')),
+                            'filtered_sheets': self.filtered_sheets.copy(),
+                            'database_created_at': file_info.get('created_at', None),
+                            'source': 'database'
+                        }
+                        loaded_files.append(file_data)
+                        debug_print(f"DEBUG: Successfully loaded file: {file_data['file_name']}")
+                    else:
+                        debug_print(f"DEBUG: No sheets found for file: {file_info}")
+                    
+                except Exception as e:
+                    debug_print(f"DEBUG: Error loading file {file_info}: {e}")
+                    continue
+        
+            self.progress_dialog.hide_progress_bar()
+        
+            debug_print(f"DEBUG: Successfully loaded {len(loaded_files)} files for comparison")
+            return loaded_files
+        
+        except Exception as e:
+            self.progress_dialog.hide_progress_bar()
+            debug_print(f"DEBUG: Error in load_files_from_database_for_comparison: {e}")
+            return []
+
     def show_sample_comparison(self):
         """Show the sample comparison window."""
-        from sample_comparison import SampleComparisonWindow
-        comparison_window = SampleComparisonWindow(self)
-        comparison_window.show()    
+        debug_print("DEBUG: show_sample_comparison called")
+
+        from sample_comparison import SampleComparisonWindow 
+    
+        if not self.all_filtered_sheets:
+            messagebox.showinfo("Info", "No files are currently loaded. Please load some data files first.")
+            debug_print("DEBUG: No files loaded for comparison")
+            return
+    
+        debug_print(f"DEBUG: Found {len(self.all_filtered_sheets)} loaded files for potential comparison")
+    
+        # Import the file selection dialog
+        from file_selection_dialog import FileSelectionDialog
+    
+        # Show file selection dialog
+        file_dialog = FileSelectionDialog(self.root, self.all_filtered_sheets)
+        result, selected_files = file_dialog.show()
+    
+        if not result or not selected_files:
+            debug_print("DEBUG: File selection cancelled or no files selected")
+            return
+    
+        if len(selected_files) < 2:
+            messagebox.showwarning("Warning", "Please select at least 2 files for comparison.")
+            debug_print(f"DEBUG: Only {len(selected_files)} files selected, need at least 2")
+            return
+    
+        debug_print(f"DEBUG: Proceeding with comparison of {len(selected_files)} files")
+    
+        # Create and show the comparison window with selected files
+        comparison_window = SampleComparisonWindow(self, selected_files)
+        comparison_window.show()  
 
     def show_new_template_dialog(self) -> None:
         """Show a dialog to create a new template file with selected tests."""

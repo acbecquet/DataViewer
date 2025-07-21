@@ -706,11 +706,37 @@ class FileManager:
             # Hide progress dialog
             self.gui.progress_dialog.hide_progress_bar()
 
-    def show_database_browser(self):
+    def load_from_database_by_id(self, file_id):
+        """Load a file from database by its ID."""
+        debug_print(f"DEBUG: Loading file from database with ID: {file_id}")
+    
+        try:
+            # Get file data from database
+            file_data = self.db_manager.get_file_by_id(file_id)
+        
+            if file_data and 'filepath' in file_data:
+                # Load the file
+                self.load_excel_file(file_data['filepath'], skip_database_storage=True)
+                return True
+            else:
+                debug_print(f"DEBUG: Could not find file data for ID: {file_id}")
+                return False
+            
+        except Exception as e:
+            debug_print(f"DEBUG: Error loading file from database ID {file_id}: {e}")
+            return False
+
+    def show_database_browser(self, comparison_mode=False):
         """Show a dialog to browse files stored in the database with multi-select support."""
         # Create a dialog to browse the database
         dialog = Toplevel(self.gui.root)
-        dialog.title("Database Browser")
+    
+        # Update title based on mode
+        if comparison_mode:
+            dialog.title("Select Files for Comparison")
+        else:
+            dialog.title("Database Browser")
+        
         dialog.geometry("900x700")
         dialog.transient(self.gui.root)
 
@@ -726,279 +752,190 @@ class FileManager:
 
         # Store grouped files data
         file_groups = {}  # Key: base filename, Value: list of file records
-    
+
         def extract_base_filename(filename):
             """Extract base filename without timestamp and extension."""
-            # Remove .vap3 extension if present
-            if filename.endswith('.vap3'):
-                filename = filename[:-5]
-        
-            # Try to identify and remove timestamp patterns
-            # Common patterns: _YYYYMMDD_HHMMSS, _YYYY-MM-DD_HH-MM-SS, etc.
             import re
-            patterns = [
-                r'_\d{8}_\d{6}$',  # _20240315_143022
-                r'_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$',  # _2024-03-15_14-30-22
-                r'_\d{4}-\d{2}-\d{2}_\d{6}$',  # _2024-03-15_143022
-                r'_\d{8}_\d{2}-\d{2}-\d{2}$',  # _20240315_14-30-22
-            ]
-        
-            for pattern in patterns:
-                filename = re.sub(pattern, '', filename)
-        
-            return filename
+            # Remove common timestamp patterns and extensions
+            base = re.sub(r'\s+\d{4}-\d{2}-\d{2}.*', '', filename)  # Remove date patterns
+            base = re.sub(r'\s+copy.*', '', base, flags=re.IGNORECASE)  # Remove "copy" variants
+            base = re.sub(r'\.[^.]*$', '', base)  # Remove extension
+            return base.strip()
 
-        # Add a refresh button and instructions
-        def refresh_list():
-            """Refresh the file list with grouping by base filename."""
-            # Clear the current list and groups
-            file_listbox.delete(0, tk.END)
-            file_groups.clear()
-        
-            debug_print("DEBUG: Refreshing database browser list")
-    
-            # Get the latest file list
-            file_list = self.db_manager.list_files()
-        
+        try:
+            # Get files from database
+            files = self.db_manager.list_files()
+            debug_print(f"DEBUG: Found {len(files)} files in database")
+
             # Group files by base filename
-            for file in file_list:
-                base_name = extract_base_filename(file['filename'])
-            
+            for file_record in files:
+                base_name = extract_base_filename(file_record['filename'])
                 if base_name not in file_groups:
                     file_groups[base_name] = []
-                file_groups[base_name].append(file)
-        
-            # Sort each group by date (newest first)
-            for base_name in file_groups:
-                file_groups[base_name].sort(key=lambda x: x['created_at'], reverse=True)
-        
-            # Populate the listbox with unique base filenames
-            sorted_base_names = sorted(file_groups.keys())
-            for base_name in sorted_base_names:
-                latest_file = file_groups[base_name][0]  # Most recent
-                count = len(file_groups[base_name])
-            
-                # Show count if multiple versions exist
-                if count > 1:
-                    display_text = f"{base_name} ({count} versions)"
-                else:
-                    display_text = base_name
-            
-                file_listbox.insert(tk.END, display_text)
-        
-            # Update the status label
-            unique_count = len(file_groups)
-            total_count = len(file_list)
-            status_label.config(text=f"Unique files: {unique_count} | Total versions: {total_count}")
-        
-            debug_print(f"DEBUG: Found {unique_count} unique files with {total_count} total versions")
+                file_groups[base_name].append(file_record)
 
-        refresh_button = Button(top_frame, text="Refresh", command=refresh_list)
-        refresh_button.pack(side="left", padx=5)
+            # Sort each group by creation date (newest first)
+            for group in file_groups.values():
+                group.sort(key=lambda x: x['created_at'], reverse=True)
 
-        # Add instructions for multi-select
-        instructions_label = Label(top_frame, text="Double-click: View versions | Ctrl+Click: Multi-select | Shift+Click: Range select", 
-                                  font=("Arial", 9), fg="gray")
-        instructions_label.pack(side="left", padx=20)
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load files from database: {e}")
+            dialog.destroy()
+            return
 
-        # Add a status label
-        status_label = Label(top_frame, text="Unique files: 0 | Total versions: 0")
-        status_label.pack(side="right", padx=5)
+        # Create header
+        if comparison_mode:
+            header_text = "Select files for comparison analysis (minimum 2 required)"
+        else:
+            header_text = "Database Files (grouped by base name, showing latest version)"
+        
+        Label(top_frame, text=header_text, font=("Arial", 12, "bold")).pack()
 
-        # Create a listbox with scrollbar for files - ENABLE MULTI-SELECT
-        file_listbox = tk.Listbox(list_frame, font=FONT, selectmode="extended")
+        # Create listbox with scrollbar
+        listbox_frame = Frame(list_frame)
+        listbox_frame.pack(fill="both", expand=True)
+
+        scrollbar = tk.Scrollbar(listbox_frame)
+        scrollbar.pack(side="right", fill="y")
+
+        # Use extended selection mode for multi-select
+        file_listbox = tk.Listbox(listbox_frame, yscrollcommand=scrollbar.set, 
+                                 selectmode=tk.EXTENDED, font=FONT)
         file_listbox.pack(side="left", fill="both", expand=True)
+        scrollbar.config(command=file_listbox.yview)
 
-        file_scrollbar = tk.Scrollbar(list_frame, orient="vertical", command=file_listbox.yview)
-        file_scrollbar.pack(side="right", fill="y")
-        file_listbox.config(yscrollcommand=file_scrollbar.set)
+        # Populate listbox with grouped files
+        for base_name in sorted(file_groups.keys()):
+            latest_file = file_groups[base_name][0]  # First item is newest
+            count = len(file_groups[base_name])
+        
+            if count > 1:
+                display_text = f"{base_name} ({count} versions, latest: {latest_file['created_at'].strftime('%Y-%m-%d %H:%M')})"
+            else:
+                display_text = f"{base_name} ({latest_file['created_at'].strftime('%Y-%m-%d %H:%M')})"
+            
+            file_listbox.insert(tk.END, display_text)
 
-        # Add selection counter
-        selection_frame = Frame(dialog)
-        selection_frame.pack(fill="x", padx=10, pady=5)
-    
-        selection_label = Label(selection_frame, text="Selected: 0 files", font=("Arial", 10))
-        selection_label.pack(side="left")
-    
-        def update_selection_count():
-            """Update the selection counter."""
+        # Selection info
+        selection_info = Label(list_frame, text="", font=("Arial", 10))
+        selection_info.pack(pady=5)
+
+        def update_selection_info():
+            """Update the selection information label."""
             selected_count = len(file_listbox.curselection())
-            if selected_count == 0:
-                selection_label.config(text="Selected: 0 files")
-            elif selected_count == 1:
-                selection_label.config(text="Selected: 1 file")
+            if comparison_mode:
+                if selected_count < 2:
+                    selection_info.config(text=f"Selected: {selected_count} files (need at least 2 for comparison)", 
+                                        fg="red")
+                else:
+                    selection_info.config(text=f"Selected: {selected_count} files (ready for comparison)", 
+                                        fg="green")
             else:
-                selection_label.config(text=f"Selected: {selected_count} files")
+                selection_info.config(text=f"Selected: {selected_count} files", fg="black")
+
+        file_listbox.bind("<<ListboxSelect>>", lambda e: update_selection_info())
+
+        # Create buttons
+        button_frame = Frame(bottom_frame)
+        button_frame.pack(fill="x", pady=10)
+
+        # Add select all/none buttons
+        select_frame = Frame(button_frame)
+        select_frame.pack(fill="x", pady=(0, 10))
     
-        def show_version_dialog(base_name):
-            """Show a dialog with all versions of a file for selection."""
-            versions = file_groups.get(base_name, [])
-            if not versions:
-                return
+        def select_all():
+            file_listbox.select_set(0, tk.END)
+            update_selection_info()
         
-            # Create version selection dialog
-            version_dialog = Toplevel(dialog)
-            version_dialog.title(f"Select Version - {base_name}")
-            version_dialog.geometry("600x400")
-            version_dialog.transient(dialog)
-            version_dialog.grab_set()
-        
-            # Instructions
-            Label(version_dialog, text="Select version(s) to load:", font=("Arial", 10)).pack(pady=5)
-        
-            # Version listbox
-            version_frame = Frame(version_dialog)
-            version_frame.pack(fill="both", expand=True, padx=10, pady=5)
-        
-            version_listbox = tk.Listbox(version_frame, font=FONT, selectmode="extended")
-            version_listbox.pack(side="left", fill="both", expand=True)
-        
-            version_scrollbar = tk.Scrollbar(version_frame, orient="vertical", command=version_listbox.yview)
-            version_scrollbar.pack(side="right", fill="y")
-            version_listbox.config(yscrollcommand=version_scrollbar.set)
-        
-            # Populate with versions
-            for file in versions:
-                created_at = file["created_at"].strftime("%Y-%m-%d %H:%M:%S")
-                version_listbox.insert(tk.END, f"{file['filename']} - {created_at}")
-        
-            # Select the most recent by default
-            version_listbox.selection_set(0)
-        
-            # Buttons
-            button_frame = Frame(version_dialog)
-            button_frame.pack(fill="x", padx=10, pady=10)
-        
-            def load_selected_versions():
-                selections = version_listbox.curselection()
-                if selections:
-                    file_ids = [versions[idx]["id"] for idx in selections]
-                    version_dialog.destroy()
-                    dialog.destroy()
-                    self.load_multiple_from_database(file_ids)
-        
-            def cancel():
-                version_dialog.destroy()
-        
-            Button(button_frame, text="Load Selected", command=load_selected_versions).pack(side="right", padx=5)
-            Button(button_frame, text="Cancel", command=cancel).pack(side="right", padx=5)
-    
-        def on_double_click(event):
-            """Handle double-click to show version selection."""
-            selections = file_listbox.curselection()
-            if selections:
-                idx = selections[0]
-                sorted_base_names = sorted(file_groups.keys())
-                if idx < len(sorted_base_names):
-                    base_name = sorted_base_names[idx]
+        def select_none():
+            file_listbox.selection_clear(0, tk.END)
+            update_selection_info()
+
+        Button(select_frame, text="Select All", command=select_all, font=FONT).pack(side="left", padx=5)
+        Button(select_frame, text="Select None", command=select_none, font=FONT).pack(side="left", padx=5)
+
+        if comparison_mode:
+            # Comparison mode: different button text and behavior
+            def on_load_for_comparison():
+                """Load selected files and immediately start comparison."""
+                selected_items = file_listbox.curselection()
+                if len(selected_items) < 2:
+                    messagebox.showwarning("Warning", "Please select at least 2 files for comparison.")
+                    return
                 
-                    # If only one version, load it directly
-                    if len(file_groups[base_name]) == 1:
-                        file_id = file_groups[base_name][0]["id"]
-                        dialog.destroy()
-                        self.load_from_database(file_id)
-                    else:
-                        show_version_dialog(base_name)
-    
-        # Bind selection change to update counter
-        file_listbox.bind("<<ListboxSelect>>", lambda event: update_selection_count())
-    
-        # Bind double-click
-        file_listbox.bind("<Double-Button-1>", on_double_click)
-
-        # Add buttons for actions
-        def load_selected():
-            """Load the most recent version of each selected file."""
-            selections = file_listbox.curselection()
-            if not selections:
-                messagebox.showinfo("Info", "Please select one or more files to load.")
-                return
-        
-            debug_print(f"DEBUG: Loading most recent version of {len(selections)} selected files")
-        
-            # Get file IDs for the most recent version of each selection
-            file_ids = []
-            sorted_base_names = sorted(file_groups.keys())
-        
-            for idx in selections:
-                if idx < len(sorted_base_names):
-                    base_name = sorted_base_names[idx]
-                    # Get the most recent file (first in the sorted list)
-                    most_recent = file_groups[base_name][0]
-                    file_ids.append(most_recent["id"])
-                    debug_print(f"DEBUG: Selected {base_name} -> {most_recent['filename']}")
-        
-            if file_ids:
+                # Collect file IDs
+                file_ids = []
+                for idx in selected_items:
+                    display_text = file_listbox.get(idx)
+                    # Extract base name from display text
+                    base_name = display_text.split(' (')[0]
+                    if base_name in file_groups:
+                        latest_file = max(file_groups[base_name], key=lambda x: x['created_at'])
+                        file_ids.append(latest_file['id'])
+            
+                debug_print(f"DEBUG: Loading {len(file_ids)} files for comparison")
+            
+                # Close the dialog
                 dialog.destroy()
-                self.load_multiple_from_database(file_ids)
-
-        def delete_selected():
-            """Delete all versions of selected files after confirmation."""
-            selections = file_listbox.curselection()
-            if not selections:
-                messagebox.showinfo("Info", "Please select one or more files to delete.")
-                return
-        
-            sorted_base_names = sorted(file_groups.keys())
-            total_files_to_delete = 0
-            files_to_delete = []
-        
-            # Count total files that will be deleted
-            for idx in selections:
-                if idx < len(sorted_base_names):
-                    base_name = sorted_base_names[idx]
-                    versions = file_groups[base_name]
-                    total_files_to_delete += len(versions)
-                    files_to_delete.extend(versions)
-        
-            # Create confirmation message
-            if len(selections) == 1:
-                base_name = sorted_base_names[selections[0]]
-                version_count = len(file_groups[base_name])
-                if version_count == 1:
-                    confirm_msg = f"Delete '{base_name}'?"
-                else:
-                    confirm_msg = f"Delete '{base_name}' and all {version_count} versions?"
-            else:
-                confirm_msg = f"Delete {len(selections)} files ({total_files_to_delete} total versions)?"
-        
-            # Confirm deletion
-            if messagebox.askyesno("Confirm Delete", confirm_msg):
-                deleted_count = 0
-                failed_count = 0
             
-                for file in files_to_delete:
-                    if self.db_manager.delete_file(file["id"]):
-                        deleted_count += 1
-                        debug_print(f"DEBUG: Deleted {file['filename']}")
+                # Load files and start comparison
+                if len(file_ids) >= 2:
+                    # Store current state
+                    original_all_filtered_sheets = self.gui.all_filtered_sheets.copy()
+                
+                    # Load the selected files
+                    self.load_multiple_from_database(file_ids)
+                
+                    # Check if files were loaded successfully
+                    if len(self.gui.all_filtered_sheets) >= 2:
+                        debug_print(f"DEBUG: Successfully loaded {len(self.gui.all_filtered_sheets)} files, starting comparison")
+                    
+                        # Import and create the comparison window directly
+                        from sample_comparison import SampleComparisonWindow
+                        comparison_window = SampleComparisonWindow(self.gui, self.gui.all_filtered_sheets)
+                        comparison_window.show()
                     else:
-                        failed_count += 1
-                        debug_print(f"DEBUG: Failed to delete {file['filename']}")
+                        messagebox.showwarning("Warning", "Failed to load enough files for comparison.")
+                        # Restore original state if loading failed
+                        self.gui.all_filtered_sheets = original_all_filtered_sheets
+        
+            Button(button_frame, text="Load for Comparison", command=on_load_for_comparison, 
+                   bg="#4CAF50", fg="white", font=FONT).pack(side="left", padx=5)
+            Button(button_frame, text="Cancel", command=dialog.destroy, 
+                   bg="#f44336", fg="white", font=FONT).pack(side="right", padx=5)
+
+        else:
+            # Normal mode: existing button behavior
+            def on_load():
+                """Load selected files normally."""
+                selected_items = file_listbox.curselection()
+                if not selected_items:
+                    messagebox.showwarning("Warning", "Please select at least one file to load.")
+                    return
+
+                file_ids = []
+                for idx in selected_items:
+                    display_text = file_listbox.get(idx)
+                    # Extract base name from display text
+                    base_name = display_text.split(' (')[0]
+                    if base_name in file_groups:
+                        latest_file = max(file_groups[base_name], key=lambda x: x['created_at'])
+                        file_ids.append(latest_file['id'])
+
+                dialog.destroy()
             
-                # Show result and refresh
-                if failed_count > 0:
-                    messagebox.showwarning("Partial Success", 
-                        f"Deleted {deleted_count} files.\nFailed to delete {failed_count} files.")
+                if len(file_ids) == 1:
+                    self.load_from_database(file_ids[0])
                 else:
-                    messagebox.showinfo("Success", f"Successfully deleted {deleted_count} files.")
-            
-                refresh_list()
+                    self.load_multiple_from_database(file_ids)
 
-        # Add buttons for actions
-        load_button = Button(bottom_frame, text="Load Selected (Most Recent)", command=load_selected)
-        load_button.pack(side="left", padx=5)
+            Button(button_frame, text="Load Selected", command=on_load, 
+                   bg="#4CAF50", fg="white", font=FONT).pack(side="left", padx=5)
+            Button(button_frame, text="Close", command=dialog.destroy, 
+                   bg="#f44336", fg="white", font=FONT).pack(side="right", padx=5)
 
-        delete_button = Button(bottom_frame, text="Delete Selected", command=delete_selected)
-        delete_button.pack(side="left", padx=5)
-
-        close_button = Button(bottom_frame, text="Close", command=dialog.destroy)
-        close_button.pack(side="right", padx=5)
-
-        # Initial refresh
-        refresh_list()
-
-        # Focus the dialog
-        dialog.focus_set()
+        # Initialize selection info
+        update_selection_info()
 
     def set_active_file(self, file_name: str) -> None:
         """Set the active file based on the given file name."""
