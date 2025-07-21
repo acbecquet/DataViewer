@@ -1285,34 +1285,41 @@ class FileManager:
         If file is already loaded, try to extract existing header data and skip the dialog.
         """
         debug_print(f"DEBUG: Showing test start menu for file: {file_path}")
-        
-        # Show the test start menu
-        start_menu = TestStartMenu(self.gui.root, file_path)
-        result, selected_test = start_menu.show()
     
+        # For .vap3 files or files that don't exist, use loaded sheet data instead
+        available_tests = None
+        if file_path.endswith('.vap3') or not os.path.exists(file_path):
+            # Use the currently loaded sheets instead of trying to read the file
+            if hasattr(self.gui, 'filtered_sheets') and self.gui.filtered_sheets:
+                available_tests = list(self.gui.filtered_sheets.keys())
+                debug_print(f"DEBUG: Using loaded sheet names for .vap3 file: {available_tests}")
+            else:
+                debug_print("ERROR: No loaded sheets available for .vap3 file")
+                messagebox.showerror("Error", "No sheet data is currently loaded. Please load a file first.")
+                return
+    
+        # Show the test start menu with available tests
+        start_menu = TestStartMenu(self.gui.root, file_path, available_tests)
+        result, selected_test = start_menu.show()
+
         if result == "start_test" and selected_test:
             debug_print(f"DEBUG: Starting test: {selected_test}")
-            
-            # Check if this file is already loaded and has header data
-            if hasattr(self.gui, 'file_path') and self.gui.file_path == file_path:
-                debug_print("DEBUG: File is already loaded - attempting to extract existing header data")
-                
-                # Try to extract existing header data from the loaded file
-                existing_header_data = self.extract_existing_header_data(file_path, selected_test)
-                
-                if existing_header_data and self.validate_header_data(existing_header_data):
-                    debug_print("DEBUG: Found complete header data - skipping header dialog")
-                    # Go directly to data collection with existing header data
-                    self.start_data_collection_with_header_data(file_path, selected_test, existing_header_data)
-                else:
-                    debug_print("DEBUG: Header data incomplete or missing - showing header dialog")
-                    # Show header data dialog for missing/incomplete data
-                    self.show_header_data_dialog(file_path, selected_test)
+        
+            # For existing files, always try to extract header data first
+            debug_print("DEBUG: Attempting to extract existing header data from file/loaded data")
+        
+            # Try to extract existing header data
+            existing_header_data = self.extract_existing_header_data(file_path, selected_test)
+        
+            if existing_header_data and self.validate_header_data(existing_header_data):
+                debug_print("DEBUG: Found complete header data - skipping header dialog and going directly to data collection")
+                # Go directly to data collection with existing header data
+                self.start_data_collection_with_header_data(file_path, selected_test, existing_header_data)
             else:
-                debug_print("DEBUG: File not loaded yet - showing header dialog")
-                # Show header data dialog for new files
+                debug_print("DEBUG: Header data incomplete or missing - showing header dialog")
+                # Only show header data dialog if we couldn't find valid header data
                 self.show_header_data_dialog(file_path, selected_test)
-                
+            
         elif result == "view_raw_file":
             debug_print("DEBUG: Viewing raw file requested")
             # Load the file for viewing if not already loaded
@@ -1322,19 +1329,171 @@ class FileManager:
             debug_print("DEBUG: Test start menu was cancelled or closed")
 
     def extract_existing_header_data(self, file_path, selected_test):
-        """Extract existing header data from the Excel file with corrected positioning."""
+        """Extract existing header data from Excel files or loaded .vap3 data."""
         debug_print(f"DEBUG: Extracting header data from {file_path} for test {selected_test}")
+    
+        try:
+            # Check if this is a .vap3 file or temporary file that doesn't exist
+            if file_path.endswith('.vap3') or not os.path.exists(file_path):
+                debug_print("DEBUG: Detected .vap3 file or non-existent file, extracting from loaded data")
+                return self.extract_header_data_from_loaded_sheets(selected_test)
+            else:
+                debug_print("DEBUG: Detected Excel file, extracting from file using openpyxl")
+                return self.extract_header_data_from_excel_file(file_path, selected_test)
+            
+        except Exception as e:
+            debug_print(f"ERROR: Failed to extract header data: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
+    def extract_header_data_from_loaded_sheets(self, selected_test):
+        """Extract header data from already-loaded sheet data (for .vap3 files)."""
+        debug_print(f"DEBUG: Extracting header data from loaded sheets for test: {selected_test}")
+
+        try:
+            # Check if the sheet is loaded
+            if not hasattr(self.gui, 'filtered_sheets') or selected_test not in self.gui.filtered_sheets:
+                debug_print(f"ERROR: Sheet {selected_test} not found in loaded data")
+                return None
         
+            sheet_data = self.gui.filtered_sheets[selected_test]['data']
+            debug_print(f"DEBUG: Found loaded sheet data with shape: {sheet_data.shape}")
+            debug_print(f"DEBUG: Column headers: {list(sheet_data.columns[:20])}")  # Show first 20 column headers
+    
+            # Extract header data from the first few rows of the DataFrame
+            header_data = {
+                'common': {
+                    'tester': '',
+                    'media': '',
+                    'viscosity': '',
+                    'voltage': '',
+                    'oil_mass': '',
+                    'puffing_regime': 'Standard'
+                },
+                'samples': [],
+                'test': selected_test,
+                'num_samples': 1
+            }
+    
+            # Extract common header data using your specified positions
+            try:
+                # Tester: row 2, col 2
+                if len(sheet_data) > 2 and len(sheet_data.columns) > 2:
+                    tester_value = sheet_data.iloc[2, 2] if not pd.isna(sheet_data.iloc[2, 2]) else ""
+                    header_data['common']['tester'] = str(tester_value).strip()
+                    debug_print(f"DEBUG: Extracted tester: '{header_data['common']['tester']}'")
+        
+                # Media: row 1, col 0
+                if len(sheet_data) > 1 and len(sheet_data.columns) > 0:
+                    media_value = sheet_data.iloc[1, 0] if not pd.isna(sheet_data.iloc[1, 0]) else ""
+                    header_data['common']['media'] = str(media_value).strip()
+                    debug_print(f"DEBUG: Extracted media: '{header_data['common']['media']}'")
+        
+                # Viscosity: row 1, col 1
+                if len(sheet_data) > 1 and len(sheet_data.columns) > 1:
+                    viscosity_value = sheet_data.iloc[1, 1] if not pd.isna(sheet_data.iloc[1, 1]) else ""
+                    header_data['common']['viscosity'] = str(viscosity_value).strip()
+                    debug_print(f"DEBUG: Extracted viscosity: '{header_data['common']['viscosity']}'")
+        
+                # Voltage: row 5, col 1
+                if len(sheet_data) > 5 and len(sheet_data.columns) > 1:
+                    voltage_value = sheet_data.iloc[5, 1] if not pd.isna(sheet_data.iloc[5, 1]) else ""
+                    header_data['common']['voltage'] = str(voltage_value).strip()
+                    debug_print(f"DEBUG: Extracted voltage: '{header_data['common']['voltage']}'")
+        
+                # Oil mass: row 7, col 1
+                if len(sheet_data) > 7 and len(sheet_data.columns) > 1:
+                    oil_mass_value = sheet_data.iloc[7, 1] if not pd.isna(sheet_data.iloc[7, 1]) else ""
+                    header_data['common']['oil_mass'] = str(oil_mass_value).strip()
+                    debug_print(f"DEBUG: Extracted oil_mass: '{header_data['common']['oil_mass']}'")
+            
+                # Puffing regime: row 7, col 0
+                if len(sheet_data) > 7 and len(sheet_data.columns) > 0:
+                    puffing_regime_value = sheet_data.iloc[7, 0] if not pd.isna(sheet_data.iloc[7, 0]) else "Standard"
+                    header_data['common']['puffing_regime'] = str(puffing_regime_value).strip()
+                    debug_print(f"DEBUG: Extracted puffing_regime: '{header_data['common']['puffing_regime']}'")
+                
+            except Exception as e:
+                debug_print(f"DEBUG: Error extracting common header data: {e}")
+    
+            # Extract sample data from column headers and resistance from row 0
+            samples = []
+            sample_count = 0
+        
+            try:
+                # Look for sample IDs in column headers at positions 5, 17, 29, 41, etc. (every 12 columns)
+                for i in range(6):  # Check up to 6 samples
+                    sample_id_col = 5 + (i * 12)  # Columns 5, 17, 29, 41, 53, 65
+                    resistance_col = 3 + (i * 12)  # Columns 3, 15, 27, 39, 51, 63
+                
+                    # Check if these columns exist
+                    if sample_id_col < len(sheet_data.columns) and resistance_col < len(sheet_data.columns):
+                        # Get sample ID from column header
+                        sample_id = str(sheet_data.columns[sample_id_col]).strip()
+                    
+                        # Get resistance from row 0 of the resistance column
+                        resistance = ""
+                        if len(sheet_data) > 0:
+                            resistance_val = sheet_data.iloc[0, resistance_col]
+                            if not pd.isna(resistance_val):
+                                resistance = str(resistance_val).strip()
+                    
+                        # Only add if we have a meaningful sample ID (not NaN, empty, or default column name)
+                        if sample_id and sample_id != 'nan' and not sample_id.startswith('Unnamed'):
+                            samples.append({
+                                'id': sample_id,
+                                'resistance': resistance
+                            })
+                            sample_count += 1
+                            debug_print(f"DEBUG: Found sample {sample_count} from headers: ID='{sample_id}' (col {sample_id_col}), Resistance='{resistance}' (col {resistance_col}, row 0)")
+                        else:
+                            # No more meaningful samples
+                            debug_print(f"DEBUG: No meaningful sample found at column {sample_id_col}, stopping sample search")
+                            break
+                    else:
+                        # Columns don't exist, stop looking
+                        debug_print(f"DEBUG: Sample columns {sample_id_col} or {resistance_col} don't exist, stopping sample search")
+                        break
+                    
+            except Exception as e:
+                debug_print(f"DEBUG: Error extracting sample data from headers: {e}")
+    
+            # If no samples found, create a default one
+            if sample_count == 0:
+                debug_print("DEBUG: No samples found in headers, creating default sample")
+                samples = [{'id': 'Sample 1', 'resistance': ''}]
+                sample_count = 1
+    
+            header_data['samples'] = samples
+            header_data['num_samples'] = sample_count
+    
+            debug_print(f"DEBUG: Successfully extracted header data from loaded sheets: {sample_count} samples")
+            debug_print(f"DEBUG: Common data: {header_data['common']}")
+            debug_print(f"DEBUG: Samples: {samples}")
+    
+            return header_data
+        
+        except Exception as e:
+            debug_print(f"ERROR: Failed to extract header data from loaded sheets: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
+    def extract_header_data_from_excel_file(self, file_path, selected_test):
+        """Extract header data from Excel file using openpyxl (existing method)."""
+        debug_print(f"DEBUG: Extracting header data from Excel file: {file_path} for test {selected_test}")
+    
         try:
             wb = openpyxl.load_workbook(file_path)
-            
+        
             if selected_test not in wb.sheetnames:
                 debug_print(f"DEBUG: Sheet {selected_test} not found in file. Available sheets: {wb.sheetnames}")
                 return None
-                
+            
             ws = wb[selected_test]
             debug_print(f"DEBUG: Successfully opened sheet '{selected_test}'")
-            
+        
             # Extract tester name from corrected position: row 3, column 4
             tester_cell = ws.cell(row=3, column=4)
             tester = ""
@@ -1345,49 +1504,39 @@ class FileManager:
                     tester = tester_value.split(":", 1)[1].strip() if ":" in tester_value else ""
                 else:
                     tester = tester_value.strip()
-            
+        
             debug_print(f"DEBUG: Extracted tester: '{tester}' from cell D3: '{tester_cell.value}'")
-            
+        
             # Extract common data from corrected positions
             common_data = {
                 'tester': tester,
                 'media': str(ws.cell(row=2, column=2).value or ""),          # Row 2, Col B
                 'viscosity': str(ws.cell(row=3, column=2).value or ""),      # Row 3, Col B
                 'voltage': str(ws.cell(row=3, column=6).value or ""),        # Row 3, Col F (corrected)
-                'oil_mass': str(ws.cell(row=3, column=8).value or "")        # Row 3, Col H (corrected)
+                'oil_mass': str(ws.cell(row=3, column=8).value or ""),       # Row 3, Col H (corrected)
+                'puffing_regime': str(ws.cell(row=2, column=7).value or "Standard")  # Row 2, Col G
             }
-            
+        
             debug_print(f"DEBUG: Extracted common data with corrected positions: {common_data}")
-            
-            # Extract sample data (check up to 10 samples with 12-column blocks, or 8-column if user test simulation)
-            # Determine columns per sample based on test type
-
-            if selected_test in ["User Test Simulation", "User Simulation Test"]:
-                columns_per_sample = 8
-                debug_print(f"DEBUG: Using 8-column layout for {selected_test}")
-            else:
-                columns_per_sample = 12
-                debug_print(f"DEBUG: Using 12-column layout for {selected_test}")
-
-            # Extract sample data (check up to 10 samples)
+        
+            # Extract sample data by scanning the first row for sample IDs
             samples = []
             sample_count = 0
-
-            for i in range(10):
-                col_offset = i * columns_per_sample
-                sample_id_col = 6 + col_offset  # Column F + offset (relative to sample block)
-                resistance_col = 4 + col_offset  # Column D + offset (relative to sample block)
-    
+        
+            # Scan the first row looking for sample blocks (starting from column 6, then every 12 columns)
+            for i in range(6):  # Check up to 6 samples maximum
+                # Sample ID position: row 1, columns 6, 18, 30, 42, 54, 66
+                sample_id_col = 6 + (i * 12)
+                resistance_col = 4 + (i * 12)  # Row 2, columns 4, 16, 28, 40, 52, 64
+            
+                # Check if there's a sample ID at this position
                 sample_id_cell = ws.cell(row=1, column=sample_id_col)
                 resistance_cell = ws.cell(row=2, column=resistance_col)
-    
-                sample_id = sample_id_cell.value
-                resistance = resistance_cell.value
-    
-                debug_print(f"DEBUG: Sample {i+1} check - ID cell (row 1, col {sample_id_col}): '{sample_id}', Resistance cell (row 2, col {resistance_col}): '{resistance}'")
-    
-                # If we find a sample ID, this is a valid sample
-                if sample_id and str(sample_id).strip():
+            
+                if sample_id_cell.value:
+                    sample_id = str(sample_id_cell.value).strip()
+                    resistance = str(resistance_cell.value or "").strip()
+                
                     samples.append({
                         'id': str(sample_id).strip(),
                         'resistance': str(resistance).strip() if resistance else ""
@@ -1398,27 +1547,28 @@ class FileManager:
                     # If no sample ID, we've reached the end of samples
                     debug_print(f"DEBUG: No more samples found after checking {i+1} positions")
                     break
-            
+        
             if sample_count == 0:
                 debug_print("DEBUG: No samples found, using default single sample")
                 samples = [{'id': 'Sample 1', 'resistance': ''}]
                 sample_count = 1
-            
+        
             header_data = {
                 'common': common_data,
                 'samples': samples,
                 'test': selected_test,
                 'num_samples': sample_count
             }
-            
-            debug_print(f"DEBUG: Final extracted header data with corrected positions: {sample_count} samples")
+        
+            debug_print(f"DEBUG: Final extracted header data from Excel file: {sample_count} samples")
             debug_print(f"DEBUG: Samples: {samples}")
             debug_print(f"DEBUG: Common: {common_data}")
-            
+        
+            wb.close()
             return header_data
-            
+        
         except Exception as e:
-            print(f"ERROR: Exception extracting header data: {e}")
+            print(f"ERROR: Exception extracting header data from Excel file: {e}")
             traceback.print_exc()
             return None
 

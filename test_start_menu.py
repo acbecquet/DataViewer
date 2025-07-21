@@ -9,16 +9,18 @@ from tkinter import ttk
 from utils import APP_BACKGROUND_COLOR, FONT, BUTTON_COLOR
 
 class TestStartMenu:
-    def __init__(self, parent, file_path):
+    def __init__(self, parent, file_path, available_tests=None):
         """
         Initialize the test start menu.
         
         Args:
             parent (tk.Tk): The parent window.
             file_path (str): Path to the created file.
+            available_tests (list, optional): Pre-loaded list of available tests.
         """
         self.parent = parent
         self.file_path = file_path
+        self.available_tests = available_tests  # Allow passing tests directly
         self.result = None
         self.selected_test = None
         
@@ -54,10 +56,36 @@ class TestStartMenu:
         )
         header_label.pack(pady=(0, 20))
         
-        # Get tests from the file to populate the dropdown
-        import openpyxl
-        wb = openpyxl.load_workbook(self.file_path)
-        self.available_tests = wb.sheetnames
+        # Get tests from the file to populate the dropdown - with improved logic
+        if self.available_tests is not None:
+            # Use pre-loaded tests if provided
+            print(f"DEBUG: Using pre-loaded available tests: {self.available_tests}")
+        else:
+            # Extract tests from file
+            try:
+                if self.file_path.endswith('.vap3'):
+                    print(f"DEBUG: Detected .vap3 file, using VapFileManager to extract sheet names from {self.file_path}")
+                    # Use VapFileManager for .vap3 files
+                    from vap_file_manager import VapFileManager
+                    vap_manager = VapFileManager()
+                    vap_data = vap_manager.load_from_vap3(self.file_path)
+                    self.available_tests = vap_data.get('meta_data', {}).get('sheet_names', [])
+                    print(f"DEBUG: Extracted sheet names from .vap3 file: {self.available_tests}")
+                else:
+                    print(f"DEBUG: Detected Excel file, using openpyxl to extract sheet names from {self.file_path}")
+                    # Use openpyxl for Excel files
+                    import openpyxl
+                    wb = openpyxl.load_workbook(self.file_path)
+                    self.available_tests = wb.sheetnames
+                    wb.close()
+                    print(f"DEBUG: Extracted sheet names from Excel file: {self.available_tests}")
+                    
+            except Exception as e:
+                print(f"ERROR: Failed to extract sheet names from {self.file_path}: {e}")
+                import traceback
+                traceback.print_exc()
+                # Fallback to empty list if extraction fails
+                self.available_tests = []
         
         # Test selection dropdown (only shown when starting a test)
         self.test_selection_frame = ttk.Frame(frame)
