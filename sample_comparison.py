@@ -12,6 +12,9 @@ import re
 from typing import Dict, List, Any, Tuple
 from utils import debug_print, FONT
 import processing
+import os
+import json
+from datetime import datetime
 
 class SampleComparisonWindow:
     """Window for comparing samples across multiple loaded files."""
@@ -20,24 +23,34 @@ class SampleComparisonWindow:
         self.gui = gui
         self.window = None
         self.selected_files = selected_files if selected_files is not None else gui.all_filtered_sheets
-        
-        # Predefined model keywords (can be expanded)
-        self.model_keywords_raw = [
-            'ds7010', 'ds7020', 'cps2910', 'cps2920', 'pc0110', 
-            'ds7110', 'ds7120', 'ds7310', 'ds7320'
-        ]
-
+    
+        # Configuration file path
+        self.config_file_path = os.path.join(os.path.dirname(__file__), 'sample_comparison_config.json')
+    
+        # Default configuration values
+        self.default_config = {
+            'model_keywords_raw': [
+                'ds7010', 'ds7020', 'cps2910', 'cps2920', 'pc0110', 
+                'ds7110', 'ds7120', 'ds7310', 'ds7320','briq 2.0'
+            ],
+            'grouped_tests': [
+                'quick screening test', 'extended test', 
+                'horizontal test', 'lifetime test', 'device life test',
+                'user simulation test','user test simulation',
+                'user sim test','user sim','user test sim'
+            ]
+        }
+    
+        # Load configuration from file or use defaults
+        self.load_configuration()
+    
         self.model_keywords = {} 
-        
-        # Test groupings
-        self.grouped_tests = [
-            'quick screening test', 'extended test', 'intense test', 
-            'horizontal test', 'lifetime test', 'device life test'
-        ]
-        
         self.comparison_results = {}
 
         self.parse_keyword_variations()
+    
+        debug_print(f"DEBUG: Sample comparison initialized with config from {self.config_file_path}")
+
         
     def show(self):
         """Show the comparison window."""
@@ -96,13 +109,14 @@ class SampleComparisonWindow:
         title_label = ttk.Label(self.summary_frame, text="Sample Comparison Summary", 
                                font=("Arial", 16, "bold"))
         title_label.pack(pady=(0, 10))
-        
-        # Create treeview for summary results
+    
+        # Create treeview for summary results with extended selection support
         columns = ("Model", "Test Group", "Avg TPM", "Avg Std Dev", "Avg Draw Pressure", 
                   "File Count", "Sample Count")
-        
-        self.summary_tree = ttk.Treeview(self.summary_frame, columns=columns, show="headings", height=15)
-        
+    
+        self.summary_tree = ttk.Treeview(self.summary_frame, columns=columns, show="headings", height=15,
+                                        selectmode='extended')  # Enable multiple selection
+    
         # Configure column headings and widths
         for col in columns:
             self.summary_tree.heading(col, text=col)
@@ -114,22 +128,74 @@ class SampleComparisonWindow:
                 self.summary_tree.column(col, width=120)
             else:
                 self.summary_tree.column(col, width=100)
-        
+    
         # Add scrollbars
         summary_scrollbar_v = ttk.Scrollbar(self.summary_frame, orient="vertical", command=self.summary_tree.yview)
         summary_scrollbar_h = ttk.Scrollbar(self.summary_frame, orient="horizontal", command=self.summary_tree.xview)
         self.summary_tree.configure(yscrollcommand=summary_scrollbar_v.set, xscrollcommand=summary_scrollbar_h.set)
-        
+    
         # Pack treeview and scrollbars
         self.summary_tree.pack(side="left", fill="both", expand=True)
         summary_scrollbar_v.pack(side="right", fill="y")
         summary_scrollbar_h.pack(side="bottom", fill="x")
+    
         # Add button frame for summary actions
         summary_button_frame = ttk.Frame(self.summary_frame)
         summary_button_frame.pack(fill="x", pady=(10, 0))
 
+        # Update button text to reflect multi-selection capability
         ttk.Button(summary_button_frame, text="Show Time-Series Plots", 
                    command=self.show_comparison_plots).pack(side="left", padx=5)
+    
+        # Add filter frame BELOW the button frame
+        filter_frame = ttk.LabelFrame(self.summary_frame, text="Filters", padding=5)
+        filter_frame.pack(fill="x", pady=(5, 0))
+    
+        # Model filter
+        ttk.Label(filter_frame, text="Model:").grid(row=0, column=0, padx=5, sticky="w")
+        self.model_filter_var = tk.StringVar(value="All")
+        self.model_filter_combo = ttk.Combobox(filter_frame, textvariable=self.model_filter_var, 
+                                              width=15, state="readonly")
+        self.model_filter_combo.grid(row=0, column=1, padx=5)
+        self.model_filter_combo.bind("<<ComboboxSelected>>", self.apply_filters)
+    
+        # Test Group filter  
+        ttk.Label(filter_frame, text="Test Group:").grid(row=1, column=0, padx=5, sticky="w")
+        self.test_group_filter_var = tk.StringVar(value="All")
+        self.test_group_filter_combo = ttk.Combobox(filter_frame, textvariable=self.test_group_filter_var,
+                                                   width=15, state="readonly")
+        self.test_group_filter_combo.grid(row=1, column=1, padx=5)
+        self.test_group_filter_combo.bind("<<ComboboxSelected>>", self.apply_filters)
+    
+        # Clear filters button
+        ttk.Button(filter_frame, text="Clear Filters", command=self.clear_filters).grid(row=2, column=0, columnspan=2, pady=5)
+    
+        # Selection info label
+        self.selection_info_label = ttk.Label(filter_frame, text="Selected: 0 combinations", 
+                                             font=("Arial", 9), foreground="blue")
+        self.selection_info_label.grid(row=3, column=0, columnspan=2, pady=2)
+    
+        # Bind selection change event to update selection info
+        self.summary_tree.bind("<<TreeviewSelect>>", self.update_selection_info)
+    
+        debug_print("DEBUG: Summary tab created with multi-selection filtering functionality")
+
+    def update_selection_info(self, event=None):
+        """Update the selection info label when tree selection changes."""
+        selected_items = self.summary_tree.selection()
+        count = len(selected_items)
+    
+        if count == 0:
+            self.selection_info_label.config(text="Selected: 0 combinations")
+        elif count == 1:
+            item_values = self.summary_tree.item(selected_items[0])['values']
+            model = item_values[0] if len(item_values) > 0 else "Unknown"
+            test_group = item_values[1] if len(item_values) > 1 else "Unknown"
+            self.selection_info_label.config(text=f"Selected: {model} - {test_group}")
+        else:
+            self.selection_info_label.config(text=f"Selected: {count} combinations (multi-plot mode)")
+    
+        debug_print(f"DEBUG: Selection updated - {count} items selected")
 
     def create_details_tab(self):
         """Create the detailed results tab."""
@@ -146,12 +212,94 @@ class SampleComparisonWindow:
         self.details_text.pack(side="left", fill="both", expand=True)
         details_scrollbar.pack(side="right", fill="y")
         
+    def load_configuration(self):
+        """Load configuration from JSON file or use defaults if file doesn't exist."""
+        try:
+            if os.path.exists(self.config_file_path):
+                with open(self.config_file_path, 'r') as f:
+                    config = json.load(f)
+            
+                # Validate and use loaded config
+                self.model_keywords_raw = config.get('model_keywords_raw', self.default_config['model_keywords_raw'])
+                self.grouped_tests = config.get('grouped_tests', self.default_config['grouped_tests'])
+            
+                debug_print(f"DEBUG: Configuration loaded successfully from {self.config_file_path}")
+                debug_print(f"DEBUG: Loaded {len(self.model_keywords_raw)} model keywords and {len(self.grouped_tests)} grouped tests")
+            
+            else:
+                # Use default configuration
+                self.model_keywords_raw = self.default_config['model_keywords_raw'].copy()
+                self.grouped_tests = self.default_config['grouped_tests'].copy()
+            
+                debug_print(f"DEBUG: Configuration file not found, using defaults. Will create: {self.config_file_path}")
+            
+        except Exception as e:
+            debug_print(f"DEBUG: Error loading configuration file: {e}")
+            debug_print("DEBUG: Falling back to default configuration")
+        
+            # Fall back to defaults if loading fails
+            self.model_keywords_raw = self.default_config['model_keywords_raw'].copy()
+            self.grouped_tests = self.default_config['grouped_tests'].copy()
+
+    def save_configuration(self):
+        """Save current configuration to JSON file."""
+        try:
+            config = {
+                'model_keywords_raw': self.model_keywords_raw,
+                'grouped_tests': self.grouped_tests,
+                'last_updated': json.dumps(datetime.now().isoformat()) if 'datetime' in globals() else None
+            }
+        
+            # Ensure directory exists
+            config_dir = os.path.dirname(self.config_file_path)
+            if not os.path.exists(config_dir):
+                os.makedirs(config_dir)
+        
+            with open(self.config_file_path, 'w') as f:
+                json.dump(config, f, indent=2)
+        
+            debug_print(f"DEBUG: Configuration saved successfully to {self.config_file_path}")
+            debug_print(f"DEBUG: Saved {len(self.model_keywords_raw)} model keywords and {len(self.grouped_tests)} grouped tests")
+            return True
+        
+        except Exception as e:
+            debug_print(f"DEBUG: Error saving configuration file: {e}")
+            return False
+
+    def update_configuration(self):
+        """Update the configuration based on user input and save permanently."""
+        # Update keywords with variation parsing
+        keywords_text = self.keywords_var.get().strip()
+        if keywords_text:
+            self.model_keywords_raw = [kw.strip() for kw in keywords_text.split(",") if kw.strip()]
+            self.parse_keyword_variations()
+
+        # Update grouped tests
+        grouped_text = self.grouped_tests_var.get().strip()
+        if grouped_text:
+            self.grouped_tests = [test.strip().lower() for test in grouped_text.split(",") if test.strip()]
+
+        debug_print(f"DEBUG: Updated keywords with variations: {self.model_keywords}")
+        debug_print(f"DEBUG: Updated grouped tests: {self.grouped_tests}")
+
+        # Save configuration permanently
+        if self.save_configuration():
+            success_message = "Configuration updated and saved permanently!"
+            debug_print("DEBUG: Configuration changes saved to file successfully")
+        else:
+            success_message = "Configuration updated (but save failed - changes are temporary)"
+            debug_print("DEBUG: Configuration changes could not be saved to file")
+
+        # Refresh analysis
+        self.perform_analysis()
+        messagebox.showinfo("Success", success_message)
+    
     def create_config_tab(self):
         """Create the configuration tab for customizing keywords and groupings."""
         # Model Keywords section
         keywords_frame = ttk.LabelFrame(self.config_frame, text="Model Keywords")
         keywords_frame.pack(fill="x", padx=5, pady=5)
-    
+
         # Convert model_keywords dict back to string format for display
         keywords_display = []
         for main_keyword, variations in self.model_keywords.items():
@@ -159,42 +307,59 @@ class SampleComparisonWindow:
                 keywords_display.append(main_keyword)
             else:
                 keywords_display.append(':'.join(variations))
-    
+
         self.keywords_var = tk.StringVar(value=", ".join(keywords_display))
-    
+
         # Add format explanation
         format_label = ttk.Label(keywords_frame, 
                                text="Format: keyword1, keyword2:'variation1':'variation2', keyword3", 
                                font=("Arial", 9), foreground="gray")
         format_label.pack(anchor="w", padx=5, pady=2)
-    
+
         ttk.Label(keywords_frame, text="Keywords (comma-separated):").pack(anchor="w", padx=5, pady=2)
         keywords_entry = ttk.Entry(keywords_frame, textvariable=self.keywords_var, width=80)
         keywords_entry.pack(fill="x", padx=5, pady=2)
-    
+
         # Example label
         example_label = ttk.Label(keywords_frame, 
                                 text="Example: cps2910:'T58G 510':'CCELL3.0 510', ds7010:'new_variation'", 
                                 font=("Arial", 9), foreground="blue")
         example_label.pack(anchor="w", padx=5, pady=2)
-    
+
         # Grouped Tests section
         grouped_frame = ttk.LabelFrame(self.config_frame, text="Grouped Tests")
         grouped_frame.pack(fill="x", padx=5, pady=5)
-    
+
         self.grouped_tests_var = tk.StringVar(value=", ".join(self.grouped_tests))
         ttk.Label(grouped_frame, text="Tests to group together (comma-separated):").pack(anchor="w", padx=5, pady=2)
         grouped_entry = ttk.Entry(grouped_frame, textvariable=self.grouped_tests_var, width=80)
         grouped_entry.pack(fill="x", padx=5, pady=2)
+
+        # Configuration file info
+        config_info_frame = ttk.LabelFrame(self.config_frame, text="Configuration Storage")
+        config_info_frame.pack(fill="x", padx=5, pady=5)
+    
+        config_path_label = ttk.Label(config_info_frame, 
+                                     text=f"Configuration saved to: {self.config_file_path}", 
+                                     font=("Arial", 9), foreground="darkgreen")
+        config_path_label.pack(anchor="w", padx=5, pady=2)
+    
+        # Buttons frame
+        buttons_frame = ttk.Frame(self.config_frame)
+        buttons_frame.pack(fill="x", padx=5, pady=10)
     
         # Update button
-        ttk.Button(self.config_frame, text="Update Configuration", 
-                  command=self.update_configuration).pack(pady=10)
+        ttk.Button(buttons_frame, text="Update & Save Configuration", 
+                  command=self.update_configuration).pack(side="left", padx=5)
     
+        # Reset to defaults button
+        ttk.Button(buttons_frame, text="Reset to Defaults", 
+                  command=self.reset_to_defaults).pack(side="left", padx=5)
+
         # Info section
         info_frame = ttk.LabelFrame(self.config_frame, text="Analysis Information")
         info_frame.pack(fill="both", expand=True, padx=5, pady=5)
-    
+
         info_text = """
     Analysis Process:
     1. Searches through all loaded files for sample names containing the specified keywords OR their variations
@@ -215,6 +380,11 @@ class SampleComparisonWindow:
     1. Sample name matches (highest priority)
     2. Filename matches (fallback when no sample name matches)
 
+    Configuration Storage:
+    - Changes are automatically saved to a configuration file
+    - Settings persist between application sessions
+    - Use "Reset to Defaults" to restore original values
+
     Metrics Calculated:
     - Average TPM: Mean Total Particulate Matter across all matching samples
     - Average Std Dev: Mean standard deviation of measurements
@@ -222,29 +392,45 @@ class SampleComparisonWindow:
     - File Count: Number of files containing this model/test combination
     - Sample Count: Total number of samples analyzed for this combination
             """
-    
+
         info_label = ttk.Label(info_frame, text=info_text, justify="left", wraplength=600)
         info_label.pack(padx=5, pady=5, anchor="w")
+
+    def reset_to_defaults(self):
+        """Reset configuration to default values."""
+        result = messagebox.askyesno("Reset Configuration", 
+                                    "Are you sure you want to reset all configuration to default values?\n\n"
+                                    "This will permanently overwrite your saved settings.")
+    
+        if result:
+            # Reset to defaults
+            self.model_keywords_raw = self.default_config['model_keywords_raw'].copy()
+            self.grouped_tests = self.default_config['grouped_tests'].copy()
         
-    def update_configuration(self):
-        """Update the configuration based on user input."""
-        # Update keywords with variation parsing
-        keywords_text = self.keywords_var.get().strip()
-        if keywords_text:
-            self.model_keywords_raw = [kw.strip() for kw in keywords_text.split(",") if kw.strip()]
+            # Update the GUI
+            keywords_display = []
+            for main_keyword, variations in self.model_keywords.items():
+                if len(variations) == 1:
+                    keywords_display.append(main_keyword)
+                else:
+                    keywords_display.append(':'.join(variations))
+        
+            self.keywords_var.set(", ".join(self.model_keywords_raw))
+            self.grouped_tests_var.set(", ".join(self.grouped_tests))
+        
+            # Parse and save
             self.parse_keyword_variations()
-    
-        # Update grouped tests
-        grouped_text = self.grouped_tests_var.get().strip()
-        if grouped_text:
-            self.grouped_tests = [test.strip().lower() for test in grouped_text.split(",") if test.strip()]
-    
-        debug_print(f"DEBUG: Updated keywords with variations: {self.model_keywords}")
-        debug_print(f"DEBUG: Updated grouped tests: {self.grouped_tests}")
-    
-        # Refresh analysis
-        self.perform_analysis()
-        messagebox.showinfo("Success", "Configuration updated and analysis refreshed!")
+        
+            if self.save_configuration():
+                success_message = "Configuration reset to defaults and saved!"
+            else:
+                success_message = "Configuration reset to defaults (but save failed)"
+        
+            # Refresh analysis
+            self.perform_analysis()
+            messagebox.showinfo("Reset Complete", success_message)
+        
+            debug_print("DEBUG: Configuration reset to defaults")
         
     def parse_keyword_variations(self):
             """Parse keyword variations from the raw keyword string."""
@@ -621,30 +807,53 @@ class SampleComparisonWindow:
         # Clear existing items
         for item in self.summary_tree.get_children():
             self.summary_tree.delete(item)
-        
+    
         if not self.comparison_results:
             return
-        
+    
+        # Collect unique models and test groups for filter dropdowns
+        all_models = set()
+        all_test_groups = set()
+    
         # Flatten the results for display
         flattened_results = []
         for keyword, test_groups in self.comparison_results.items():
+            all_models.add(keyword.upper())
             for test_group, data in test_groups.items():
+                all_test_groups.add(test_group)
                 flattened_results.append(((keyword, test_group), data))
+
+        # Update filter comboboxes
+        model_values = ["All"] + sorted(all_models)
+        test_group_values = ["All"] + sorted(all_test_groups)
+    
+        self.model_filter_combo['values'] = model_values
+        self.test_group_filter_combo['values'] = test_group_values
+    
+        # Apply current filters
+        current_model_filter = self.model_filter_var.get()
+        current_test_group_filter = self.test_group_filter_var.get()
     
         # Sort results by model keyword and test group
         sorted_results = sorted(flattened_results, key=lambda x: (x[0][0], x[0][1]))
-    
+
         for (keyword, test_group), data in sorted_results:
+            # Apply filters
+            if current_model_filter != "All" and keyword.upper() != current_model_filter:
+                continue
+            if current_test_group_filter != "All" and test_group != current_test_group_filter:
+                continue
+            
             # Calculate averages
             avg_tpm = np.mean(data['tpm_values']) if data['tpm_values'] else 0
             avg_std_dev = np.mean(data['std_dev_values']) if data['std_dev_values'] else 0
             avg_draw_pressure = np.mean(data['draw_pressure_values']) if data['draw_pressure_values'] else 0
-        
+    
             # Format values
             avg_tpm_str = f"{avg_tpm:.3f}" if avg_tpm > 0 else "N/A"
             avg_std_dev_str = f"{avg_std_dev:.3f}" if avg_std_dev > 0 else "N/A"
             avg_draw_pressure_str = f"{avg_draw_pressure:.1f}" if avg_draw_pressure > 0 else "N/A"
-        
+    
             # Insert into treeview
             self.summary_tree.insert("", "end", values=(
                 keyword.upper(),
@@ -655,6 +864,21 @@ class SampleComparisonWindow:
                 data['file_count'],
                 data['sample_count']
             ))
+    
+        debug_print(f"DEBUG: Summary display updated with filters - Model: {current_model_filter}, Test Group: {current_test_group_filter}")
+
+    def apply_filters(self, event=None):
+        """Apply the selected filters to the summary display."""
+        debug_print(f"DEBUG: Applying filters - Model: {self.model_filter_var.get()}, Test Group: {self.test_group_filter_var.get()}")
+        self.update_summary_display()
+
+    def clear_filters(self):
+        """Clear all filters and show all results."""
+        debug_print("DEBUG: Clearing all filters")
+        self.model_filter_var.set("All")
+        self.test_group_filter_var.set("All")
+        self.update_summary_display()
+
 
     def update_details_display(self):
         """Update the detailed results text widget."""
@@ -802,303 +1026,358 @@ class SampleComparisonWindow:
             messagebox.showerror("Error", f"Failed to export results:\n{str(e)}")
 
     def show_comparison_plots(self):
-        """Show comparison plots for the selected test group with enhanced visualization."""
+        """Show comparison plots for the selected test groups with enhanced multi-selection visualization."""
         import matplotlib.pyplot as plt
-        from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
         import matplotlib.dates as mdates
-        from datetime import datetime
-        from tkinter import filedialog
-        import tkinter as tk
-        from tkinter import ttk, messagebox
-        import numpy as np
-        import pandas as pd
-        from utils import debug_print
-
-        if not self.comparison_results:
-            messagebox.showinfo("Info", "No comparison data available. Please run analysis first.")
-            return
-
-        # Get the selected item from the summary tree
+        from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+    
         selected_items = self.summary_tree.selection()
         if not selected_items:
-            messagebox.showinfo("Info", "Please select a test group from the summary table first.")
+            messagebox.showinfo("Info", "Please select one or more test groups from the summary table.\n\n"
+                                      "Use Ctrl+Click to select multiple individual items\n"
+                                      "Use Shift+Click to select a range of items")
+            debug_print("DEBUG: No test groups selected for plotting")
             return
 
-        # Get the values from the selected row
-        selected_item = selected_items[0]  # Take the first selected item
-        item_values = self.summary_tree.item(selected_item)['values']
+        debug_print(f"DEBUG: Showing enhanced multi-selection plots for {len(selected_items)} selected combinations")
 
-        if len(item_values) < 2:
-            messagebox.showerror("Error", "Invalid selection. Please select a valid test group.")
+        # Collect data from all selected combinations
+        combined_plot_data = {
+            'dates': [],
+            'tpm_values': [],
+            'std_dev_values': [],
+            'draw_pressure_values': [],
+            'combination_labels': [],  # To track which combination each data point belongs to
+            'file_info': []
+        }
+    
+        selected_combinations = []
+    
+        for selected_item in selected_items:
+            item_values = self.summary_tree.item(selected_item)['values']
+
+            if len(item_values) < 2:
+                continue
+
+            selected_keyword = item_values[0]  # Model (keyword)
+            selected_test_group = item_values[1]  # Test Group
+        
+            combination_label = f"{selected_keyword} - {selected_test_group}"
+            selected_combinations.append(combination_label)
+
+            # Find the comparison data for this combination
+            keyword = selected_keyword.lower()
+
+            if keyword in self.comparison_results:
+                for test_group, group_data in self.comparison_results[keyword].items():
+                    if test_group.lower() == selected_test_group.lower():
+                        # Add data from this combination to the combined dataset
+                        dates = group_data['dates']
+                        tpm_values = group_data['tpm_values']
+                        std_values = group_data['std_dev_values']
+                        draw_pressure_values = group_data['draw_pressure_values']
+                        file_info_list = group_data.get('file_info', [])
+                    
+                        # Extend combined data
+                        combined_plot_data['dates'].extend(dates)
+                        combined_plot_data['tpm_values'].extend(tpm_values)
+                        combined_plot_data['std_dev_values'].extend(std_values)
+                        combined_plot_data['draw_pressure_values'].extend(draw_pressure_values)
+                        combined_plot_data['file_info'].extend(file_info_list)
+                    
+                        # Add combination labels for each data point
+                        combined_plot_data['combination_labels'].extend([combination_label] * len(dates))
+                    
+                        debug_print(f"DEBUG: Added {len(dates)} data points from {combination_label}")
+                        break
+
+        if not combined_plot_data['dates']:
+            messagebox.showinfo("Info", f"No time-series data found for the selected combinations")
             return
 
-        selected_keyword = item_values[0]  # Model (keyword)
-        selected_test_group = item_values[1]  # Test Group
+        # Create plot title
+        if len(selected_combinations) == 1:
+            plot_title = f'Time-Series Comparison: {selected_combinations[0]}'
+        else:
+            plot_title = f'Multi-Selection Time-Series Comparison ({len(selected_combinations)} combinations)'
 
-        debug_print(f"DEBUG: Showing enhanced plots for {selected_keyword} - {selected_test_group}")
-
-        # Find the comparison data for the selected group
-        plot_data = {}
-        keyword = selected_keyword.lower()
-
-        if keyword in self.comparison_results:
-            for test_group, group_data in self.comparison_results[keyword].items():
-                if test_group.lower() == selected_test_group.lower():
-                    plot_data[keyword] = group_data
-                    break
-
-        if not plot_data:
-            messagebox.showinfo("Info", f"No time-series data found for {selected_keyword.upper()} - {selected_test_group}")
-            return
-
-        # Create the plot window
+        # Create the plot window with proper sizing for plots + legend
         plot_window = tk.Toplevel(self.window)
-        plot_window.title(f'Enhanced Sample Comparison: {selected_keyword.upper()} - {selected_test_group}')
-        plot_window.geometry("1400x900")  # Larger window to accommodate legend
+        plot_window.title(plot_title)
+        plot_window.geometry("1400x900")  # Reduced window size slightly
         plot_window.transient(self.window)
 
         # Create main container
         main_container = ttk.Frame(plot_window)
-        main_container.pack(fill="both", expand=True, padx=10, pady=10)
+        main_container.pack(fill="both", expand=True, padx=10, pady=5)
 
-        # Create matplotlib figure with reduced height (half of original)
-        fig, ax = plt.subplots(1, 1, figsize=(12, 4))  # Reduced height from 8 to 4
-        fig.suptitle(f'TPM Over Time: {selected_keyword.upper()} - {selected_test_group}', fontsize=16)
-
-        # Get the data for the selected group
-        dates = plot_data[keyword]['dates']
-        tpm_values = plot_data[keyword]['tpm_values']
-        std_values = plot_data[keyword]['std_dev_values']
-    
-        # Get file info for each data point to assign colors
-        file_info_list = plot_data[keyword].get('file_info', [])
-    
-        debug_print(f"DEBUG: Processing {len(dates)} data points from {len(set(file_info_list))} unique files")
-
-        # Create a color map for unique files
-        unique_files = list(set(file_info_list))
-        colors = plt.cm.tab10(np.linspace(0, 1, len(unique_files)))  # Use tab10 colormap for distinct colors
-        file_color_map = {file_info: colors[i] for i, file_info in enumerate(unique_files)}
-
-        debug_print(f"DEBUG: Unique files: {unique_files}")
-        debug_print(f"DEBUG: Assigned colors to {len(file_color_map)} files")
-
-        # Group data by file to identify min/max values for enhanced error bars
-        file_data_groups = {}
-        for i, (date, tpm, std, file_info) in enumerate(zip(dates, tpm_values, std_values, file_info_list)):
-            if file_info not in file_data_groups:
-                file_data_groups[file_info] = []
-            file_data_groups[file_info].append((i, date, tpm, std))
-
-        # Find the error bars that extend furthest for each file (pick only ONE point for each extreme)
-        file_error_extremes = {}
-        for file_info, data_points in file_data_groups.items():
-            # Calculate error bar extents for each point
-            min_extent_value = float('inf')
-            max_extent_value = float('-inf')
-            min_extent_index = None
-            max_extent_index = None
-    
-            for point in data_points:
-                i, date, tpm, std = point
-                lower_extent = tpm - std  # Bottom of error bar
-                upper_extent = tpm + std  # Top of error bar
         
-                # Update minimum extent (only if this is a new minimum)
-                if lower_extent < min_extent_value:
-                    min_extent_value = lower_extent
-                    min_extent_index = i
-            
-                # Update maximum extent (only if this is a new maximum)
-                if upper_extent > max_extent_value:
-                    max_extent_value = upper_extent
-                    max_extent_index = i
-    
-            file_error_extremes[file_info] = {
-                'min_extent_index': min_extent_index,  # Single index of point with lowest error bar
-                'max_extent_index': max_extent_index,  # Single index of point with highest error bar
-                'min_extent_value': min_extent_value,
-                'max_extent_value': max_extent_value
-            }
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 5))  # Reduced from (14, 9) to (13, 7)
+        fig.suptitle(plot_title, fontsize=10)
 
-        debug_print(f"DEBUG: File error bar extremes analysis completed for {len(file_error_extremes)} files")
-        for file_info, extremes in file_error_extremes.items():
-            debug_print(f"DEBUG: {file_info} - Lowest error bar extent: {extremes['min_extent_value']:.3f} at index {extremes['min_extent_index']}, Highest error bar extent: {extremes['max_extent_value']:.3f} at index {extremes['max_extent_index']}")
+        # Get combined data
+        dates = combined_plot_data['dates']
+        tpm_values = combined_plot_data['tpm_values']
+        std_values = combined_plot_data['std_dev_values']
+        draw_pressure_values = combined_plot_data['draw_pressure_values']
+        combination_labels = combined_plot_data['combination_labels']
+        file_info_list = combined_plot_data['file_info']
 
-        # Plot each data point with enhanced error bars only for error bar extremes
-        normal_capsize = 5
-        enhanced_capsize = 15  # 3x the normal capsize
+        debug_print(f"DEBUG: Processing {len(dates)} total data points from {len(selected_combinations)} combinations")
 
-        for i, (date, tpm, std, file_info) in enumerate(zip(dates, tpm_values, std_values, file_info_list)):
-            color = file_color_map.get(file_info, colors[0])  # Default to first color if not found
+        # Create color maps - one for combinations, and different markers/styles for files within combinations
+        unique_combinations = list(set(combination_labels))
+        combination_colors = plt.cm.Set1(np.linspace(0, 1, len(unique_combinations)))
+        combination_color_map = {combo: combination_colors[i] for i, combo in enumerate(unique_combinations)}
     
-            # Determine if this specific point index has an extreme error bar for its file
-            is_min_extent = (i == file_error_extremes[file_info]['min_extent_index'])
-            is_max_extent = (i == file_error_extremes[file_info]['max_extent_index'])
-            is_extreme_error_bar = is_min_extent or is_max_extent
-    
-            # Use enhanced capsize for extreme error bars
-            capsize = enhanced_capsize if is_extreme_error_bar else normal_capsize
-            capthick = 3 if is_extreme_error_bar else 2
-    
-            debug_print(f"DEBUG: Point {i} for {file_info}: TPM={tpm:.3f}, std={std:.3f}, lower_extent={tpm-std:.3f}, upper_extent={tpm+std:.3f}, is_min_extent={is_min_extent}, is_max_extent={is_max_extent}, capsize={capsize}")
-    
-            # All points have same marker size - only error bar caps are different
-            marker_size = 8
-            edge_width = 1
-    
-            # Plot the main error bar (horizontal)
-            ax.errorbar(date, tpm, yerr=std, color=color, marker='o', 
-                       capsize=capsize, capthick=capthick, markersize=marker_size, linewidth=0,
-                       alpha=0.8, markeredgewidth=edge_width, markeredgecolor='black')
-    
-            # Add vertical lines connecting the point to the error bar endpoints
-            if std > 0:  # Only add vertical lines if there's actually an error bar
-                # Calculate error bar endpoints
+        # Create distinct markers for different files
+        unique_files = list(set(file_info_list))
+        markers = ['o', 's', '^', 'v', 'D', 'P', '*', 'h', 'X', '+']  # Different marker styles
+        file_marker_map = {file_info: markers[i % len(markers)] for i, file_info in enumerate(unique_files)}
+
+        # Plot TPM data (top subplot)
+        ax1.set_title('TPM Over Time (Multi-Selection)', fontsize=14)
+        for i, (date, tpm, std, combination, file_info) in enumerate(zip(dates, tpm_values, std_values, combination_labels, file_info_list)):
+            color = combination_color_map[combination]
+            marker = file_marker_map[file_info]
+        
+            # Determine if this is an extreme error bar for enhanced visualization
+            is_extreme_error_bar = std > np.percentile(std_values, 90) if std_values else False
+            marker_size = 6
+            marker_alpha = 0.7
+        
+            # Plot the main data point with combination-specific color and file-specific marker
+            ax1.scatter(date, tpm, color=color, s=marker_size**2, alpha=marker_alpha, 
+                       marker=marker, edgecolors='black', linewidths=0.5, zorder=2)
+        
+            # Enhanced error bars
+            if std > 0:
                 upper_y = tpm + std
                 lower_y = tpm - std
-        
-                # Draw vertical lines from the center point to the error bar caps
-                line_alpha = 0.7 if is_extreme_error_bar else 0.5
-                line_width = 1.5 if is_extreme_error_bar else 1
-        
-                ax.plot([date, date], [tpm, upper_y], color=color, linewidth=line_width, 
+            
+                line_alpha = 0.5
+                line_width = 1
+            
+                ax1.plot([date, date], [tpm, upper_y], color=color, linewidth=line_width, 
                        alpha=line_alpha, linestyle='-', zorder=1)
-                ax.plot([date, date], [tpm, lower_y], color=color, linewidth=line_width, 
+                ax1.plot([date, date], [tpm, lower_y], color=color, linewidth=line_width, 
                        alpha=line_alpha, linestyle='-', zorder=1)
 
-        # Configure axes
-        ax.set_ylabel('Average TPM (mg/puff)', fontsize=12)
-        ax.set_xlabel('Date', fontsize=12)
-        ax.grid(True, alpha=0.3)
+        # Configure TPM plot axes
+        ax1.set_ylabel('Average TPM (mg/puff)', fontsize=12)
+        ax1.grid(True, alpha=0.3)
+        ax1.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        ax1.xaxis.set_major_locator(mdates.AutoDateLocator())
+        plt.setp(ax1.xaxis.get_majorticklabels(), rotation=45, ha='right')
 
-        # Format x-axis dates
-        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-        ax.xaxis.set_major_locator(mdates.AutoDateLocator())
-        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
+        # Plot Draw Pressure data (bottom subplot) with identical styling
+        ax2.set_title('Draw Pressure Over Time (Multi-Selection)', fontsize=14)
+        for i, (date, draw_pressure, combination, file_info) in enumerate(zip(dates, draw_pressure_values, combination_labels, file_info_list)):
+            color = combination_color_map[combination]
+            marker = file_marker_map[file_info]
+        
+            # Use consistent marker styling
+            marker_size = 6
+            marker_alpha = 0.7
+        
+            # Plot the main data point
+            ax2.scatter(date, draw_pressure, color=color, s=marker_size**2, alpha=marker_alpha, 
+                       marker=marker, edgecolors='black', linewidths=0.5, zorder=2)
 
-        # Adjust layout to make room for legend below
+        # Configure Draw Pressure plot axes
+        ax2.set_ylabel('Average Draw Pressure (kPa)', fontsize=12)
+        ax2.set_xlabel('Date', fontsize=12)
+        ax2.grid(True, alpha=0.3)
+        ax2.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        ax2.xaxis.set_major_locator(mdates.AutoDateLocator())
+        plt.setp(ax2.xaxis.get_majorticklabels(), rotation=45, ha='right')
+
+        # Adjust layout to provide proper spacing
         plt.tight_layout()
-        fig.subplots_adjust(bottom=0.3)  # Make room for legend below plot
+        fig.subplots_adjust(bottom=0.15)  # Reduced from 0.25 to 0.15 for tighter layout
 
-        # Create the plot canvas
-        plot_frame = ttk.Frame(main_container)
-        plot_frame.pack(fill="both", expand=True)
+        # Create the plot canvas with constrained size
+        plot_frame = ttk.Frame(main_container, height=700)  # Fixed height for plot area
+        plot_frame.pack(fill="x", expand=False)  # Don't expand vertically
+        plot_frame.pack_propagate(False)  # Maintain fixed height
 
         canvas = FigureCanvasTkAgg(fig, master=plot_frame)
         canvas.draw()
         canvas.get_tk_widget().pack(fill="both", expand=True)
 
-        # Add toolbar above the legend
+        # Add toolbar in the plot frame
         toolbar = NavigationToolbar2Tk(canvas, plot_frame)
         toolbar.update()
 
-        # Create detailed legend below the plot
-        legend_frame = ttk.LabelFrame(main_container, text="File Legend", padding=10)
-        legend_frame.pack(fill="x", pady=(10, 0))
+        # Create comprehensive legend below the plot with guaranteed space
+        legend_frame = ttk.LabelFrame(main_container, text="Multi-Selection Legend", padding=5)
+        legend_frame.pack(fill="both", expand=True, pady=(10, 0))  # This will expand to fill remaining space
 
-        # Create scrollable frame for legend if there are many files
-        if len(unique_files) > 6:  # If more than 6 files, make it scrollable
-            legend_canvas = tk.Canvas(legend_frame, height=120)
-            legend_scrollbar = ttk.Scrollbar(legend_frame, orient="vertical", command=legend_canvas.yview)
-            scrollable_legend_frame = ttk.Frame(legend_canvas)
+        # Create notebook for organized legend display with fixed height
+        legend_notebook = ttk.Notebook(legend_frame)
+        legend_notebook.pack(fill="both", expand=True)
+    
+        # Combinations tab
+        combo_frame = ttk.Frame(legend_notebook)
+        legend_notebook.add(combo_frame, text=f"Model/Test Combinations ({len(unique_combinations)})")
+    
+        # Create scrollable area for combinations if needed
+        if len(unique_combinations) > 8:
+            combo_canvas = tk.Canvas(combo_frame, height=120)
+            combo_scrollbar = ttk.Scrollbar(combo_frame, orient="vertical", command=combo_canvas.yview)
+            scrollable_combo_frame = ttk.Frame(combo_canvas)
         
-            scrollable_legend_frame.bind(
+            scrollable_combo_frame.bind(
                 "<Configure>",
-                lambda e: legend_canvas.configure(scrollregion=legend_canvas.bbox("all"))
+                lambda e: combo_canvas.configure(scrollregion=combo_canvas.bbox("all"))
             )
         
-            legend_canvas.create_window((0, 0), window=scrollable_legend_frame, anchor="nw")
-            legend_canvas.configure(yscrollcommand=legend_scrollbar.set)
+            combo_canvas.create_window((0, 0), window=scrollable_combo_frame, anchor="nw")
+            combo_canvas.configure(yscrollcommand=combo_scrollbar.set)
         
-            legend_canvas.pack(side="left", fill="both", expand=True)
-            legend_scrollbar.pack(side="right", fill="y")
+            combo_canvas.pack(side="left", fill="both", expand=True)
+            combo_scrollbar.pack(side="right", fill="y")
         
-            legend_parent = scrollable_legend_frame
+            combo_parent = scrollable_combo_frame
         else:
-            legend_parent = legend_frame
-
-        # Create legend entries in a grid layout
-        cols = 2  # Two columns for better space usage
-        for i, (file_info, color) in enumerate(file_color_map.items()):
-            row = i // cols
-            col = i % cols
+            combo_parent = combo_frame
+    
+        # Create legend entries for combinations
+        combo_columns = min(2, len(unique_combinations))
+        for i, combination in enumerate(unique_combinations):
+            row = i // combo_columns
+            col = i % combo_columns
         
-            # Create a colored square
-            color_frame = tk.Frame(legend_parent, width=20, height=20, bg='black')
-            color_frame.grid(row=row, column=col*2, padx=(0, 5), pady=2, sticky="w")
-            color_frame.configure(bg=f'#{int(color[0]*255):02x}{int(color[1]*255):02x}{int(color[2]*255):02x}')
+            # Create color patch
+            color_frame = tk.Frame(combo_parent, width=20, height=20, bg='#{:02x}{:02x}{:02x}'.format(
+                int(combination_color_map[combination][0] * 255),
+                int(combination_color_map[combination][1] * 255),
+                int(combination_color_map[combination][2] * 255)
+            ))
+            color_frame.grid(row=row, column=col*2, padx=5, pady=2, sticky="w")
             color_frame.grid_propagate(False)
         
-            # Create label with file name
-            file_label = ttk.Label(legend_parent, text=file_info, font=("Arial", 10))
-            file_label.grid(row=row, column=col*2+1, padx=(0, 20), pady=2, sticky="w")
+            # Add combination label
+            combo_label = ttk.Label(combo_parent, text=combination, font=("Arial", 9))
+            combo_label.grid(row=row, column=col*2+1, padx=(5, 20), pady=2, sticky="w")
 
-        # Add mouse wheel scrolling to legend if scrollable
-        if len(unique_files) > 6:
-            def on_mousewheel(event):
-                legend_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-            legend_canvas.bind("<MouseWheel>", on_mousewheel)
+        # Files tab
+        files_frame = ttk.Frame(legend_notebook)
+        legend_notebook.add(files_frame, text=f"File Markers ({len(unique_files)})")
+    
+        # Create scrollable frame for files if there are many
+        if len(unique_files) > 12:
+            files_canvas = tk.Canvas(files_frame, height=120)
+            files_scrollbar = ttk.Scrollbar(files_frame, orient="vertical", command=files_canvas.yview)
+            scrollable_files_frame = ttk.Frame(files_canvas)
+        
+            scrollable_files_frame.bind(
+                "<Configure>",
+                lambda e: files_canvas.configure(scrollregion=files_canvas.bbox("all"))
+            )
+        
+            files_canvas.create_window((0, 0), window=scrollable_files_frame, anchor="nw")
+            files_canvas.configure(yscrollcommand=files_scrollbar.set)
+        
+            files_canvas.pack(side="left", fill="both", expand=True)
+            files_scrollbar.pack(side="right", fill="y")
+        
+            files_parent = scrollable_files_frame
+        else:
+            files_parent = files_frame
 
-        # Create button frame for actions
+        # Create legend entries for file markers
+        file_columns = min(3, len(unique_files))
+        for i, file_info in enumerate(unique_files):
+            row = i // file_columns
+            col = i % file_columns
+        
+            # Create marker symbol (simplified text representation)
+            marker_symbol = file_marker_map[file_info]
+            marker_label = ttk.Label(files_parent, text=f"[{marker_symbol}]", font=("Arial", 12, "bold"))
+            marker_label.grid(row=row, column=col*2, padx=5, pady=2, sticky="w")
+        
+            # Add file name label
+            file_label = ttk.Label(files_parent, text=file_info, font=("Arial", 9))
+            file_label.grid(row=row, column=col*2+1, padx=(5, 15), pady=2, sticky="w")
+
+        # Button frame for plot controls at the bottom
         button_frame = ttk.Frame(main_container)
-        button_frame.pack(fill="x", pady=(10, 0))
+        button_frame.pack(fill="x", pady=(5, 0))
 
-        # Export button
-        def export_enhanced_plot():
+        # Export plot button
+        def export_multi_selection_plot():
+            from tkinter import filedialog
+            default_name = f"multi_selection_comparison_{len(selected_combinations)}_combinations.png"
             file_path = filedialog.asksaveasfilename(
+                title="Save Multi-Selection Comparison Plot", 
+                initialfile=default_name,
                 defaultextension=".png",
                 filetypes=[("PNG files", "*.png"), ("PDF files", "*.pdf"), ("SVG files", "*.svg"), ("All files", "*.*")]
             )
             if file_path:
-                # Save with high DPI and tight bounding box
                 fig.savefig(file_path, dpi=300, bbox_inches='tight', facecolor='white', edgecolor='none')
-                messagebox.showinfo("Success", f"Enhanced plot saved to {file_path}")
+                messagebox.showinfo("Success", f"Multi-selection plot saved to {file_path}")
 
-        # Statistics button
-        def show_statistics():
-            stats_text = f"Statistics for {selected_keyword.upper()} - {selected_test_group}\n"
+        # Enhanced statistics button
+        def show_multi_selection_statistics():
+            stats_text = f"Multi-Selection Statistics\n"
             stats_text += "="*50 + "\n\n"
+            stats_text += f"Selected combinations: {len(selected_combinations)}\n"
             stats_text += f"Total data points: {len(tpm_values)}\n"
             stats_text += f"Unique files: {len(unique_files)}\n"
             stats_text += f"Date range: {min(dates).strftime('%Y-%m-%d')} to {max(dates).strftime('%Y-%m-%d')}\n\n"
-            stats_text += f"TPM Statistics:\n"
+        
+            # Overall statistics
+            stats_text += f"Overall TPM Statistics:\n"
             stats_text += f"  Mean: {np.mean(tpm_values):.4f} mg/puff\n"
             stats_text += f"  Std Dev: {np.std(tpm_values):.4f} mg/puff\n"
             stats_text += f"  Min: {np.min(tpm_values):.4f} mg/puff\n"
             stats_text += f"  Max: {np.max(tpm_values):.4f} mg/puff\n\n"
         
-            # Add file-specific statistics
-            stats_text += "File-specific statistics:\n"
-            for file_info in unique_files:
-                file_indices = [i for i, fi in enumerate(file_info_list) if fi == file_info]
-                file_tpm_values = [tpm_values[i] for i in file_indices]
-                file_count = len(file_tpm_values)
+            # Overall Draw Pressure Statistics
+            if draw_pressure_values and any(dp > 0 for dp in draw_pressure_values):
+                valid_dp_values = [dp for dp in draw_pressure_values if dp > 0]
+                stats_text += f"Overall Draw Pressure Statistics:\n"
+                stats_text += f"  Mean: {np.mean(valid_dp_values):.2f} kPa\n"
+                stats_text += f"  Std Dev: {np.std(valid_dp_values):.2f} kPa\n"
+                stats_text += f"  Min: {np.min(valid_dp_values):.2f} kPa\n"
+                stats_text += f"  Max: {np.max(valid_dp_values):.2f} kPa\n\n"
+        
+            # Per-combination statistics
+            stats_text += "Per-Combination Statistics:\n"
+            stats_text += "-" * 30 + "\n"
+            for combination in unique_combinations:
+                combo_indices = [i for i, combo in enumerate(combination_labels) if combo == combination]
+                combo_tpm_values = [tpm_values[i] for i in combo_indices]
+                combo_dp_values = [draw_pressure_values[i] for i in combo_indices if draw_pressure_values[i] > 0]
             
-                if file_tpm_values:
-                    file_mean = np.mean(file_tpm_values)
-                    file_min = np.min(file_tpm_values)
-                    file_max = np.max(file_tpm_values)
-                    stats_text += f"  {file_info}: {file_count} points, "
-                    stats_text += f"Mean: {file_mean:.4f}, Range: {file_min:.4f} - {file_max:.4f}\n"
+                stats_text += f"\n{combination}:\n"
+                stats_text += f"  Data points: {len(combo_tpm_values)}\n"
+                if combo_tpm_values:
+                    stats_text += f"  TPM Mean: {np.mean(combo_tpm_values):.4f} mg/puff\n"
+                    stats_text += f"  TPM Range: {np.min(combo_tpm_values):.4f} - {np.max(combo_tpm_values):.4f}\n"
+                if combo_dp_values:
+                    stats_text += f"  Draw Pressure Mean: {np.mean(combo_dp_values):.2f} kPa\n"
+                    stats_text += f"  Draw Pressure Range: {np.min(combo_dp_values):.2f} - {np.max(combo_dp_values):.2f}\n"
 
             # Create statistics window
             stats_window = tk.Toplevel(plot_window)
-            stats_window.title("Enhanced Statistics")
-            stats_window.geometry("600x500")
+            stats_window.title("Multi-Selection Statistics")
+            stats_window.geometry("800x700")
         
             stats_text_widget = tk.Text(stats_window, wrap="word", font=("Courier", 10))
             stats_scrollbar = ttk.Scrollbar(stats_window, orient="vertical", command=stats_text_widget.yview)
             stats_text_widget.configure(yscrollcommand=stats_scrollbar.set)
-        
+    
             stats_text_widget.insert("1.0", stats_text)
             stats_text_widget.configure(state="disabled")
-        
+    
             stats_text_widget.pack(side="left", fill="both", expand=True)
             stats_scrollbar.pack(side="right", fill="y")
 
-        ttk.Button(button_frame, text="Export Plot", command=export_enhanced_plot).pack(side="left", padx=5)
-        ttk.Button(button_frame, text="Show Statistics", command=show_statistics).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Export Multi-Selection Plot", command=export_multi_selection_plot).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Show Multi-Selection Statistics", command=show_multi_selection_statistics).pack(side="left", padx=5)
         ttk.Button(button_frame, text="Close", command=plot_window.destroy).pack(side="right", padx=5)
 
-        debug_print(f"DEBUG: Enhanced comparison plot created with {len(unique_files)} unique file colors, detailed legend, and enhanced error bars")
+        debug_print(f"DEBUG: Enhanced multi-selection plot created with proper sizing - plots: (13x7), legend guaranteed visible")

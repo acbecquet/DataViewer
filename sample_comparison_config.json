@@ -1,0 +1,31 @@
+{
+  "model_keywords_raw": [
+    "ds7010",
+    "ds7020",
+    "cps2910:T58G 510",
+    "cps2920",
+    "pc0110",
+    "ds7110",
+    "ds7120",
+    "ds7310",
+    "ds7320",
+    "briq 2.0",
+    "rosin bar",
+    "gembox",
+    "gembar"
+  ],
+  "grouped_tests": [
+    "quick screening test",
+    "extended test",
+    "horizontal test",
+    "lifetime test",
+    "device life test",
+    "user simulation test",
+    "user test simulation",
+    "user sim test",
+    "user sim",
+    "user test sim",
+    "viscosity compatibility"
+  ],
+  "last_updated": "\"2025-07-21T11:31:50.987327\""
+}
