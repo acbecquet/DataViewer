@@ -147,7 +147,7 @@ class SampleComparisonWindow:
 
         # Update button text to reflect multi-selection capability
         ttk.Button(summary_button_frame, text="Show Time-Series Plots", 
-                   command=self.show_comparison_plots).pack(side="left", padx=5)
+                   command=self.show_comparison_plots).pack(expand=True, padx=5)
     
         # Add filter frame BELOW the button frame
         filter_frame = ttk.LabelFrame(self.summary_frame, text="Filters", padding=5)
@@ -363,40 +363,67 @@ class SampleComparisonWindow:
         info_frame.pack(fill="both", expand=True, padx=5, pady=5)
 
         info_text = """
-    Analysis Process:
-    1. Searches through all loaded files for sample names containing the specified keywords OR their variations
-    2. Groups tests according to the grouping rules (grouped tests vs individual tests)
-    3. For each model keyword and test group combination:
-       - Extracts TPM, standard deviation, and draw pressure data
-       - Calculates averages within each file
-       - Computes overall averages across all files
-    4. Displays results showing performance comparisons across different batches and design changes
+        Analysis Process:
+        1. Searches through all loaded files for sample names containing the specified keywords OR their variations
+        2. Groups tests according to the grouping rules (grouped tests vs individual tests)
+        3. For each model keyword and test group combination:
+           - Extracts TPM, standard deviation, and draw pressure data
+           - Calculates averages within each file
+           - Computes overall averages across all files
+        4. Displays results showing performance comparisons across different batches and design changes
 
-    Keyword Variations:
-    - Use colons to add variations to a main keyword
-    - Format: main_keyword:'variation1':'variation2'
-    - Example: cps2910:'T58G 510':'CCELL3.0 510'
-    - All variations will be grouped under the main keyword in results
+        Keyword Variations:
+        - Use colons to add variations to a main keyword
+        - Format: main_keyword:'variation1':'variation2'
+        - Example: cps2910:'T58G 510':'CCELL3.0 510'
+        - All variations will be grouped under the main keyword in results
 
-    Matching Priority:
-    1. Sample name matches (highest priority)
-    2. Filename matches (fallback when no sample name matches)
+        Matching Priority:
+        1. Sample name matches (highest priority)
+        2. Filename matches (fallback when no sample name matches)
 
-    Configuration Storage:
-    - Changes are automatically saved to a configuration file
-    - Settings persist between application sessions
-    - Use "Reset to Defaults" to restore original values
+        Configuration Storage:
+        - Changes are automatically saved to a configuration file
+        - Settings persist between application sessions
+        - Use "Reset to Defaults" to restore original values
 
-    Metrics Calculated:
-    - Average TPM: Mean Total Particulate Matter across all matching samples
-    - Average Std Dev: Mean standard deviation of measurements
-    - Average Draw Pressure: Mean draw pressure across all matching samples
-    - File Count: Number of files containing this model/test combination
-    - Sample Count: Total number of samples analyzed for this combination
-            """
+        Metrics Calculated:
+        - Average TPM: Mean Total Particulate Matter across all matching samples
+        - Average Std Dev: Mean standard deviation of measurements
+        - Average Draw Pressure: Mean draw pressure across all matching samples
+        - File Count: Number of files containing this model/test combination
+        - Sample Count: Total number of samples analyzed for this combination
 
-        info_label = ttk.Label(info_frame, text=info_text, justify="left", wraplength=600)
-        info_label.pack(padx=5, pady=5, anchor="w")
+        Plot Features:
+        - Color coding: Each file gets a unique color for easy identification
+        - Marker shapes: Each test type gets a unique marker (Performance Tests Group = circle)
+        - Interactive legend: Click combinations or files to highlight in plots
+        - Grid-based layout: Files are automatically spaced to prevent overlap
+        - Zoom functionality: Scroll wheel to zoom, middle-click to reset
+        - Error bars: Show standard deviation with proper horizontal caps
+
+        Selection Modes:
+        - Normal click: Select single item (clears others)
+        - Ctrl+click: Add/remove items from selection (multi-select)
+        - File highlighting: Select files to highlight all their data points
+        - Combination highlighting: Select test combinations to highlight specific markers
+                """
+
+        # Create scrollable text widget for info
+        info_text_frame = ttk.Frame(info_frame)
+        info_text_frame.pack(fill="both", expand=True, padx=5, pady=5)
+
+        info_text_widget = tk.Text(info_text_frame, wrap="word", font=("Arial", 10), height=15)
+        info_scrollbar = ttk.Scrollbar(info_text_frame, orient="vertical", command=info_text_widget.yview)
+        info_text_widget.configure(yscrollcommand=info_scrollbar.set)
+
+        # Insert the text and make it read-only
+        info_text_widget.insert("1.0", info_text)
+        info_text_widget.configure(state="disabled")  # Make it read-only
+
+        # Pack the text widget and scrollbar
+        info_text_widget.pack(side="left", fill="both", expand=True)
+        info_scrollbar.pack(side="right", fill="y")
 
     def reset_to_defaults(self):
         """Reset configuration to default values."""
