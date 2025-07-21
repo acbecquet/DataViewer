@@ -726,6 +726,27 @@ class FileManager:
             debug_print(f"DEBUG: Error loading file from database ID {file_id}: {e}")
             return False
 
+    def center_window(self, window, width, height):
+        """Center a window on the screen."""
+        try:
+            # Get screen dimensions
+            screen_width = window.winfo_screenwidth()
+            screen_height = window.winfo_screenheight()
+        
+            # Calculate center position
+            x = (screen_width - width) // 2
+            y = (screen_height - height) // 2
+        
+            # Set window geometry with center position
+            window.geometry(f"{width}x{height}+{x}+{y}")
+        
+            debug_print(f"DEBUG: Centered window {width}x{height} at position ({x}, {y}) on {screen_width}x{screen_height} screen")
+        
+        except Exception as e:
+            debug_print(f"DEBUG: Error centering window: {e}")
+            # Fallback to basic geometry if centering fails
+            window.geometry(f"{width}x{height}")
+
     def show_database_browser(self, comparison_mode=False):
         """Show a dialog to browse files stored in the database with multi-select support."""
         # Create a dialog to browse the database
@@ -737,9 +758,9 @@ class FileManager:
         else:
             dialog.title("Database Browser")
         
-        dialog.geometry("900x700")
+        
         dialog.transient(self.gui.root)
-
+        self.center_window(dialog,900,700)
         # Create frames for UI elements
         top_frame = Frame(dialog)
         top_frame.pack(fill="x", padx=10, pady=10)
