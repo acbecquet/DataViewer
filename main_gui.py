@@ -192,73 +192,73 @@ class TestingGUI:
         self.display_startup_timing_summary()
 
     def setup_update_checking(self):
-            """Set up automatic update checking"""
-            print("DEBUG: Setting up update checking...")
+        """Set up automatic update checking"""
+        print("DEBUG: Setting up update checking...")
         
-            try:
-                # Check for updates in background after 5 seconds
-                self.root.after(5000, self.check_for_updates_background)
-                print("DEBUG: Update checking scheduled")
+        try:
+            # Check for updates in background after 5 seconds
+            self.root.after(5000, self.check_for_updates_background)
+            print("DEBUG: Update checking scheduled")
             
-            except Exception as e:
-                print(f"DEBUG: Update checking setup failed: {e}")
+        except Exception as e:
+            print(f"DEBUG: Update checking setup failed: {e}")
     
-        def check_for_updates_background(self):
-            """Check for updates without blocking UI"""
-            try:
-                print("DEBUG: Checking for updates...")
-                update_info = self.update_checker.check_for_updates()
+    def check_for_updates_background(self):
+        """Check for updates without blocking UI"""
+        try:
+            print("DEBUG: Checking for updates...")
+            update_info = self.update_checker.check_for_updates()
             
-                if update_info and update_info.get('update_available'):
-                    print(f"DEBUG: Update found: v{update_info['latest_version']}")
-                    self.show_update_dialog(update_info)
-                else:
-                    print("DEBUG: No updates available")
+            if update_info and update_info.get('update_available'):
+                print(f"DEBUG: Update found: v{update_info['latest_version']}")
+                self.show_update_dialog(update_info)
+            else:
+                print("DEBUG: No updates available")
                 
-            except Exception as e:
-                print(f"DEBUG: Update check error: {e}")
+        except Exception as e:
+            print(f"DEBUG: Update check error: {e}")
     
-        def show_update_dialog(self, update_info):
-            """Show update notification to user"""
-            from tkinter import messagebox
+    def show_update_dialog(self, update_info):
+        """Show update notification to user"""
+        from tkinter import messagebox
         
-            latest_version = update_info['latest_version']
-            current_version = update_info['current_version']
+        latest_version = update_info['latest_version']
+        current_version = update_info['current_version']
         
-            message = f"""Update Available!
+        message = f"""Update Available!
 
-    Current Version: {current_version}
-    Latest Version: {latest_version}
+Current Version: {current_version}
+Latest Version: {latest_version}
 
-    Would you like to download and install the update?"""
+Would you like to download and install the update?"""
         
-            result = messagebox.askyesno("Update Available", message)
+        result = messagebox.askyesno("Update Available", message)
         
-            if result:
-                self.download_and_install_update(update_info)
+        if result:
+            self.download_and_install_update(update_info)
     
-        def download_and_install_update(self, update_info):
-            """Download and install the update"""
-            if not update_info.get('download_url'):
-                messagebox.showerror("Error", "No download URL available")
-                return
+    def download_and_install_update(self, update_info):
+        """Download and install the update"""
+        if not update_info.get('download_url'):
+            messagebox.showerror("Error", "No download URL available")
+            return
         
-            try:
-                messagebox.showinfo("Downloading", "Downloading update... This may take a moment.")
+        try:
+            messagebox.showinfo("Downloading", "Downloading update... This may take a moment.")
             
-                installer_path = self.update_checker.download_update(
-                    update_info['download_url'],
-                    update_info['installer_name']
-                )
+            installer_path = self.update_checker.download_update(
+                update_info['download_url'],
+                update_info['installer_name']
+            )
             
-                if installer_path:
-                    # This will exit your app and run the installer
-                    self.update_checker.install_update(installer_path)
-                else:
-                    messagebox.showerror("Error", "Failed to download update")
+            if installer_path:
+                # This will exit your app and run the installer
+                self.update_checker.install_update(installer_path)
+            else:
+                messagebox.showerror("Error", "Failed to download update")
                 
-            except Exception as e:
-                messagebox.showerror("Error", f"Update failed: {e}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Update failed: {e}")
 
     def get_viscosity_calculator(self):
         """Lazy load viscosity calculator only when needed."""

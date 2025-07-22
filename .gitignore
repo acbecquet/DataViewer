@@ -1,7 +1,41 @@
-.vs/
+# Build artifacts
+build/
+dist/
+*.spec
+*.exe
+*.msi
 
+# Python cache
 __pycache__/
+*.pyc
+*.pyo
 
-clean_env/
+# Virtual environments - NEVER commit these
 release_env/
+venv/
+env/
+.env/
+.venv/
+Scripts/
+Lib/
+Include/
+pyvenv.cfg
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Installer output
+installer_output/
+
+# Temporary files
+*.tmp
 *.log
+
+# Training data (if it's large)
+training_data/
