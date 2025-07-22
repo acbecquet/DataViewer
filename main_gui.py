@@ -140,34 +140,7 @@ def _lazy_import_processing():
         print(f"Error importing processing: {e}")
         return None, None
 
-class UpdateManager:
-    def __init__(self, current_version="3.0.0"):
-        self.current_version = current_version
-        self.update_url = "https://github.com/acbecquet/DataViewer"
-    
-    def check_for_updates(self):
-        """Check if updates are available."""
-        requests = lazy_import_requests()
-        version = lazy_import_packaging()
-        if not requests or not version:
-            debug_print("DEBUG: Could not load required modules for update check")
-            return False, None
-        try:
-            response = requests.get(self.update_url, timeout=5)
-            latest_info = response.json()
-            latest_version = latest_info["version"]
-            
-            if version.parse(latest_version) > version.parse(self.current_version):
-                return True, latest_info
-            return False, None
-        except Exception as e:
-            debug_print(f"DEBUG: Update check failed: {e}")
-            return False, None
-    
-    def download_update(self, download_url):
-        """Download and install update."""
-        # Implement download and installation logic
-        pass
+from update_checker import UpdateChecker
 
 class TestingGUI:
     """Main GUI class for the Standardized Testing application."""
@@ -211,21 +184,81 @@ class TestingGUI:
         print(f"TIMING: Total TestingGUI.__init__ took: {init_time:.3f}s")
         main.log_timing_checkpoint("TestingGUI.__init__ complete")
 
-        def check_updates_on_startup(self):
-            """Check for updates when app starts."""
-            update_manager = UpdateManager()
-            has_update, update_info = update_manager.check_for_updates()
-    
-            if has_update:
-                result = messagebox.askyesno(
-                    "Update Available",
-                    f"Version {update_info['version']} is available. Update now?"
-                )
-                if result:
-                    # Handle update installation
-                    pass
+        self.update_checker = UpdateChecker(current_version="3.0.0")
+        
+        # Set up automatic checking
+        self.setup_update_checking()
 
         self.display_startup_timing_summary()
+
+    def setup_update_checking(self):
+            """Set up automatic update checking"""
+            print("DEBUG: Setting up update checking...")
+        
+            try:
+                # Check for updates in background after 5 seconds
+                self.root.after(5000, self.check_for_updates_background)
+                print("DEBUG: Update checking scheduled")
+            
+            except Exception as e:
+                print(f"DEBUG: Update checking setup failed: {e}")
+    
+        def check_for_updates_background(self):
+            """Check for updates without blocking UI"""
+            try:
+                print("DEBUG: Checking for updates...")
+                update_info = self.update_checker.check_for_updates()
+            
+                if update_info and update_info.get('update_available'):
+                    print(f"DEBUG: Update found: v{update_info['latest_version']}")
+                    self.show_update_dialog(update_info)
+                else:
+                    print("DEBUG: No updates available")
+                
+            except Exception as e:
+                print(f"DEBUG: Update check error: {e}")
+    
+        def show_update_dialog(self, update_info):
+            """Show update notification to user"""
+            from tkinter import messagebox
+        
+            latest_version = update_info['latest_version']
+            current_version = update_info['current_version']
+        
+            message = f"""Update Available!
+
+    Current Version: {current_version}
+    Latest Version: {latest_version}
+
+    Would you like to download and install the update?"""
+        
+            result = messagebox.askyesno("Update Available", message)
+        
+            if result:
+                self.download_and_install_update(update_info)
+    
+        def download_and_install_update(self, update_info):
+            """Download and install the update"""
+            if not update_info.get('download_url'):
+                messagebox.showerror("Error", "No download URL available")
+                return
+        
+            try:
+                messagebox.showinfo("Downloading", "Downloading update... This may take a moment.")
+            
+                installer_path = self.update_checker.download_update(
+                    update_info['download_url'],
+                    update_info['installer_name']
+                )
+            
+                if installer_path:
+                    # This will exit your app and run the installer
+                    self.update_checker.install_update(installer_path)
+                else:
+                    messagebox.showerror("Error", "Failed to download update")
+                
+            except Exception as e:
+                messagebox.showerror("Error", f"Update failed: {e}")
 
     def get_viscosity_calculator(self):
         """Lazy load viscosity calculator only when needed."""
