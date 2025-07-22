@@ -717,9 +717,329 @@ class SensoryAIProcessor:
 
     def _show_enhanced_ai_extraction_preview(self, extracted_data, processed_image, filename):
         """Show enhanced AI extraction preview with editable ratings."""
-        # This method would contain the AI preview logic
-        # (Moving the existing implementation from the main file)
-        pass
+        print("DEBUG: Starting enhanced AI extraction preview")
+        print(f"DEBUG: Extracted data keys: {list(extracted_data.keys())}")
+        print(f"DEBUG: Processed image shape: {processed_image.shape if hasattr(processed_image, 'shape') else 'No shape attr'}")
+    
+        try:
+            import tkinter as tk
+            from tkinter import ttk, messagebox
+            from PIL import Image, ImageTk
+            import cv2
+            import numpy as np
+        
+            # Create preview window
+            preview_window = tk.Toplevel(self.parent.window)
+            preview_window.title(f"Enhanced AI Extraction Preview - {os.path.basename(filename)}")
+            preview_window.geometry("1400x900")
+            preview_window.configure(bg='white')
+            preview_window.transient(self.parent.window)
+            preview_window.grab_set()
+        
+            print("DEBUG: Preview window created")
+        
+            # Create main frame
+            main_frame = tk.Frame(preview_window, bg='white')
+            main_frame.pack(fill='both', expand=True, padx=10, pady=10)
+        
+            # Header frame
+            header_frame = tk.Frame(main_frame, bg='lightblue', height=60)
+            header_frame.pack(fill='x', pady=(0, 10))
+            header_frame.pack_propagate(False)
+        
+            # Title
+            title_label = tk.Label(header_frame, text=f"AI Extraction Preview: {os.path.basename(filename)}", 
+                                  font=('Arial', 14, 'bold'), bg='lightblue')
+            title_label.pack(side='left', padx=10, pady=15)
+        
+            # Action buttons
+            button_frame = tk.Frame(header_frame, bg='lightblue')
+            button_frame.pack(side='right', padx=10, pady=10)
+        
+            def save_and_load():
+                """Save edits and load into main application."""
+                print("DEBUG: save_and_load called")
+                try:
+                    # Save current edits
+                    final_data = {}
+                    for sample_key, widgets in entry_widgets.items():
+                        sample_data = {}
+                        sample_data['sample_name'] = widgets['sample_name'].get()
+                    
+                        # Get metric values
+                        for metric in ['Burnt Taste', 'Vapor Volume', 'Overall Flavor', 'Smoothness', 'Overall Liking']:
+                            value = widgets[metric].get().strip()
+                            if value:
+                                try:
+                                    sample_data[metric] = int(value)
+                                except ValueError:
+                                    sample_data[metric] = None
+                            else:
+                                sample_data[metric] = None
+                    
+                        # Get comments
+                        if isinstance(widgets['comments'], tk.Text):
+                            sample_data['comments'] = widgets['comments'].get('1.0', tk.END).strip()
+                        else:
+                            sample_data['comments'] = widgets['comments'].get()
+                    
+                        final_data[sample_key] = sample_data
+                
+                    print(f"DEBUG: Final data prepared: {list(final_data.keys())}")
+                
+                    # Create new session with the extracted data
+                    session_id = f"AI_Extract_{os.path.basename(filename).replace('.', '_')}"
+                
+                    # Ensure unique session name
+                    counter = 1
+                    original_session_id = session_id
+                    while session_id in self.parent.sessions:
+                        session_id = f"{original_session_id}_{counter}"
+                        counter += 1
+                
+                    # Create session data structure
+                    from datetime import datetime
+                    self.parent.sessions[session_id] = {
+                        'header': {
+                            'Date': datetime.now().strftime("%Y-%m-%d"),
+                            'Assessor Name': 'AI Extraction',
+                            'Session Type': 'AI Processing',
+                            'Notes': f'Extracted from {os.path.basename(filename)}'
+                        },
+                        'samples': final_data,
+                        'timestamp': datetime.now().isoformat(),
+                        'source_file': filename,
+                        'source_image': filename
+                    }
+                
+                    print(f"DEBUG: Created session: {session_id}")
+                
+                    # Switch to the new session
+                    if hasattr(self.parent, 'switch_to_session'):
+                        self.parent.switch_to_session(session_id)
+                        print(f"DEBUG: Switched to session: {session_id}")
+                    
+                        # Update UI components
+                        if hasattr(self.parent, 'update_session_combo'):
+                            self.parent.update_session_combo()
+                        if hasattr(self.parent, 'session_var'):
+                            self.parent.session_var.set(session_id)
+                        
+                        messagebox.showinfo("Success", 
+                                          f"Data loaded into new session: {session_id}\n"
+                                          f"Loaded {len(final_data)} samples")
+                        preview_window.destroy()
+                    else:
+                        print("DEBUG: switch_to_session method not found")
+                        messagebox.showerror("Error", "Could not switch to new session")
+                    
+                except Exception as e:
+                    print(f"DEBUG: Error in save_and_load: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    messagebox.showerror("Error", f"Failed to save and load data: {e}")
+        
+            tk.Button(button_frame, text="💾 Load Data", command=save_and_load,
+                     bg='gold', font=('Arial', 10, 'bold')).pack(side='left', padx=5)
+        
+            tk.Button(button_frame, text="❌ Cancel", command=preview_window.destroy,
+                     bg='lightcoral', font=('Arial', 10, 'bold')).pack(side='left', padx=5)
+        
+            # Content frame
+            content_frame = tk.Frame(main_frame, bg='white')
+            content_frame.pack(fill='both', expand=True)
+        
+            # Left side - Image display (60% width)
+            image_frame = tk.Frame(content_frame, bg='white', width=960)
+            image_frame.pack(side='left', fill='both', expand=True, padx=(0, 10))
+        
+            # Display processed image
+            try:
+                if isinstance(processed_image, np.ndarray):
+                    # Convert from CV2 format to PIL
+                    if len(processed_image.shape) == 3:
+                        # Color image - convert from BGR to RGB
+                        rgb_image = cv2.cvtColor(processed_image, cv2.COLOR_BGR2RGB)
+                        pil_image = Image.fromarray(rgb_image)
+                    else:
+                        # Grayscale image
+                        pil_image = Image.fromarray(processed_image)
+                else:
+                    pil_image = processed_image
+            
+                # Resize for display
+                display_width = 900
+                aspect_ratio = pil_image.height / pil_image.width
+                display_height = int(display_width * aspect_ratio)
+            
+                if display_height > 700:
+                    display_height = 700
+                    display_width = int(display_height / aspect_ratio)
+            
+                pil_image = pil_image.resize((display_width, display_height), Image.Resampling.LANCZOS)
+                photo = ImageTk.PhotoImage(pil_image)
+            
+                image_label = tk.Label(image_frame, image=photo, bg='white')
+                image_label.pack(pady=10)
+                image_label.image = photo  # Keep reference
+            
+                print(f"DEBUG: Image displayed at {display_width}x{display_height}")
+            
+            except Exception as e:
+                print(f"DEBUG: Error displaying image: {e}")
+                image_label = tk.Label(image_frame, text=f"Error displaying image: {e}", bg='white')
+                image_label.pack(pady=10)
+        
+            # Right side - Data editing (40% width)
+            edit_frame = tk.Frame(content_frame, bg='lightgray', width=640)
+            edit_frame.pack(side='right', fill='both')
+            edit_frame.pack_propagate(False)
+        
+            # Scrollable frame for data editing
+            canvas = tk.Canvas(edit_frame, bg='white')
+            scrollbar = ttk.Scrollbar(edit_frame, orient="vertical", command=canvas.yview)
+            scrollable_frame = tk.Frame(canvas, bg='white')
+        
+            scrollable_frame.bind(
+                "<Configure>",
+                lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+            )
+        
+            canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+            canvas.configure(yscrollcommand=scrollbar.set)
+        
+            canvas.pack(side="left", fill="both", expand=True)
+            scrollbar.pack(side="right", fill="y")
+        
+            # Title for editing section
+            title_label = tk.Label(scrollable_frame, text="Extracted Data (Click to Edit)", 
+                                  font=('Arial', 14, 'bold'), bg='white')
+            title_label.pack(pady=10)
+        
+            # Store entry widgets for saving
+            entry_widgets = {}
+        
+            # Convert to list for easier indexing
+            sample_items = list(extracted_data.items())
+            print(f"DEBUG: Processing {len(sample_items)} samples for display")
+        
+            # Create 2x2 grid layout to match form structure
+            grid_frame = tk.Frame(scrollable_frame, bg='white')
+            grid_frame.pack(fill='both', expand=True, padx=10, pady=10)
+        
+            # Configure grid weights for even distribution
+            grid_frame.grid_columnconfigure(0, weight=1)
+            grid_frame.grid_columnconfigure(1, weight=1)
+            grid_frame.grid_rowconfigure(0, weight=1)
+            grid_frame.grid_rowconfigure(1, weight=1)
+        
+            metrics = ['Burnt Taste', 'Vapor Volume', 'Overall Flavor', 'Smoothness', 'Overall Liking']
+        
+            for i, (sample_key, sample_data) in enumerate(sample_items):
+                print(f"DEBUG: Creating UI for sample {i}: {sample_key}")
+            
+                # Calculate grid position (2x2 layout)
+                row = i // 2  # 0 for first two samples, 1 for last two
+                col = i % 2   # 0 for left column, 1 for right column
+            
+                # Sample frame
+                sample_frame = tk.LabelFrame(grid_frame, text=f"{sample_key}", 
+                                           font=('Arial', 11, 'bold'), bg='white', 
+                                           padx=8, pady=8, relief='raised', bd=2)
+                sample_frame.grid(row=row, column=col, sticky='nsew', padx=8, pady=8)
+            
+                entry_widgets[sample_key] = {}
+            
+                # Sample name section
+                name_frame = tk.Frame(sample_frame, bg='white')
+                name_frame.pack(fill='x', pady=(0, 8))
+            
+                tk.Label(name_frame, text="Name:", font=('Arial', 9, 'bold'), 
+                        bg='white', width=8, anchor='w').pack(side='left')
+                name_entry = tk.Entry(name_frame, font=('Arial', 9), width=15)
+                name_entry.pack(side='left', padx=(3, 0), fill='x', expand=True)
+                name_entry.insert(0, str(sample_data.get('sample_name', sample_key)))
+                entry_widgets[sample_key]['sample_name'] = name_entry
+            
+                # Metrics section
+                metrics_frame = tk.Frame(sample_frame, bg='white')
+                metrics_frame.pack(fill='both', expand=True)
+            
+                for metric in metrics:
+                    metric_frame = tk.Frame(metrics_frame, bg='white')
+                    metric_frame.pack(fill='x', pady=1)
+                
+                    # Metric label
+                    label_text = metric.replace(' ', '\n') if len(metric) > 12 else metric
+                    metric_label = tk.Label(metric_frame, text=f"{label_text}:", 
+                                          font=('Arial', 8), bg='white', 
+                                          width=12, anchor='w', justify='left')
+                    metric_label.pack(side='left')
+                
+                    # Metric entry
+                    metric_entry = tk.Entry(metric_frame, font=('Arial', 9), width=8)
+                    metric_entry.pack(side='left', padx=(3, 0))
+                
+                    # Pre-fill with extracted value
+                    value = sample_data.get(metric)
+                    if value is not None:
+                        metric_entry.insert(0, str(value))
+                
+                    entry_widgets[sample_key][metric] = metric_entry
+            
+                # Comments section
+                comments_frame = tk.Frame(sample_frame, bg='white')
+                comments_frame.pack(fill='x', pady=(8, 0))
+            
+                tk.Label(comments_frame, text="Comments:", font=('Arial', 8, 'bold'), 
+                        bg='white', width=12, anchor='w').pack(side='top', anchor='w')
+            
+                comments_text = tk.Text(comments_frame, font=('Arial', 8), 
+                                      width=25, height=3, wrap='word')
+                comments_text.pack(fill='x', expand=True, pady=(2, 0))
+                comments_text.insert('1.0', str(sample_data.get('comments', '')))
+                entry_widgets[sample_key]['comments'] = comments_text
+        
+            # Add placeholder frames if fewer than 4 samples
+            total_samples = len(sample_items)
+            if total_samples < 4:
+                for i in range(total_samples, 4):
+                    row = i // 2
+                    col = i % 2
+                    placeholder_frame = tk.Frame(grid_frame, bg='lightgray', relief='sunken', bd=1)
+                    placeholder_frame.grid(row=row, column=col, sticky='nsew', padx=8, pady=8)
+                    tk.Label(placeholder_frame, text="No Sample", 
+                            font=('Arial', 10), bg='lightgray', fg='gray').pack(expand=True)
+        
+            print("DEBUG: Enhanced AI extraction preview setup complete")
+        
+           # Center the window - IMPROVED VERSION
+            preview_window.update_idletasks()  # Ensure all widgets are rendered
+            preview_window.geometry("")  # Reset geometry to auto-size
+            preview_window.update_idletasks()  # Update again after reset
+        
+            # Get the actual window dimensions
+            width = preview_window.winfo_reqwidth()
+            height = preview_window.winfo_reqheight()
+        
+            # Get screen dimensions
+            screen_width = preview_window.winfo_screenwidth()
+            screen_height = preview_window.winfo_screenheight()
+        
+            # Calculate center position
+            x = (screen_width - width) // 2
+            y = (screen_height - height) // 2
+        
+            # Set the centered geometry
+            preview_window.geometry(f"{width}x{height}+{x}+{y}")
+        
+            print(f"DEBUG: Window centered at {x},{y} with size {width}x{height}")
+        
+        except Exception as e:
+            print(f"DEBUG: Error in _show_enhanced_ai_extraction_preview: {e}")
+            import traceback
+            traceback.print_exc()
+            messagebox.showerror("Preview Error", f"Failed to show extraction preview: {e}")
 
     def _monitor_review_completion(self, ai_processor):
         """Monitor the review interface for completion."""
