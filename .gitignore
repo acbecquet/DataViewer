@@ -37,5 +37,21 @@ installer_output/
 *.tmp
 *.log
 
-# Training data (if it's large)
+# Development/temporary folders - EXCLUDE from builds
 training_data/
+scanned_forms/
+plots/
+data/temp/
+data/cache/
+data/logs/
+
+# INCLUDE the main database - DO NOT ignore
+!dataviewer.db
+!data/dataviewer.db
+
+# Old builds and executable files
+build_old/
+dist_old/
+*.exe.old
+*.msi.old
+backup_builds/

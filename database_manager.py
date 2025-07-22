@@ -2,13 +2,22 @@ import os
 import sqlite3
 import json
 import datetime
+import sys
 
 from typing import Dict, List, Any, Optional
 from utils import debug_print
 
+def get_database_path():
+    """Get the correct database path whether running as script or executable"""
+    if hasattr(sys, '_MEIPASS'):
+        # Running as PyInstaller executable
+        return os.path.join(sys._MEIPASS, 'dataviewer.db')
+    else:
+        # Running as script
+        return 'dataviewer.db'
+
 class DatabaseManager:
     """Manages interactions with the SQLite database for storing VAP3 files and metadata."""
-    
     def __init__(self, db_path=None):
         """
         Initialize the DatabaseManager with a connection to the SQLite database.
@@ -18,6 +27,7 @@ class DatabaseManager:
                                     If None, creates a 'dataviewer.db' in the current directory.
         """
         try:
+            db_path = get_database_path()
             if db_path is None:
                 # Use a default path in the application directory
                 db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dataviewer.db')

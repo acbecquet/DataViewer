@@ -193,8 +193,17 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Create desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: unchecked
 
 [Files]
+; Main executable
 Source: "dist\\TestingGUI.exe"; DestDir: "{{app}}"; Flags: ignoreversion
+
+; Resources folder
 Source: "resources\\*"; DestDir: "{{app}}\\resources"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+; Database file (IMPORTANT!)
+Source: "dataviewer.db"; DestDir: "{{app}}"; Flags: ignoreversion; Check: FileExists(ExpandConstant('{{srcdir}}\\dataviewer.db'))
+
+; Exclude unwanted folders explicitly
+; NOTE: The above Source entries only include what we want
 
 [Icons]
 Name: "{{group}}\\Testing GUI"; Filename: "{{app}}\\TestingGUI.exe"
@@ -245,7 +254,14 @@ def build_executable():
             shutil.rmtree(dir_name)
             debug_print(f"Removed {dir_name}")
     
-    # PyInstaller command
+    # Check if database exists and copy it to a safe location
+    db_path = 'dataviewer.db'
+    if os.path.exists(db_path):
+        debug_print("Found dataviewer.db - will include in package")
+    else:
+        debug_print("WARNING: dataviewer.db not found!")
+    
+    # PyInstaller command with database inclusion
     cmd = [
         sys.executable, '-m', 'PyInstaller',
         '--onefile',
@@ -253,6 +269,7 @@ def build_executable():
         '--name=TestingGUI',
         '--icon=resources/ccell_icon.ico',
         '--add-data=resources;resources',
+        '--add-data=dataviewer.db;.',  # Add database to root of executable
         '--hidden-import=matplotlib.backends.backend_tkagg',
         '--hidden-import=PIL._tkinter_finder',
         '--hidden-import=pkg_resources.py2_warn',
@@ -276,6 +293,9 @@ def build_executable():
             if os.path.exists(exe_path):
                 size_mb = os.path.getsize(exe_path) / (1024 * 1024)
                 success_print(f"Executable created: {exe_path} ({size_mb:.1f} MB)")
+                
+                # Verify database is included
+                debug_print("Verifying database inclusion...")
                 return True
             else:
                 error_print("Executable not found after build")
@@ -349,6 +369,47 @@ def build_installer():
     except Exception as e:
         error_print(f"Installer build error: {e}")
         return None
+
+def cleanup_unwanted_folders():
+    """Remove unwanted folders before packaging"""
+    debug_print("Cleaning up unwanted folders before packaging...")
+    
+    unwanted_folders = [
+        'scanned_forms',
+        'training_data', 
+        'plots',
+        'data',
+        'build',
+        'dist',
+        '__pycache__',
+        'old_builds',
+        'temp'
+    ]
+    
+    removed_folders = []
+    for folder in unwanted_folders:
+        if os.path.exists(folder):
+            try:
+                shutil.rmtree(folder)
+                removed_folders.append(folder)
+                debug_print(f"Removed folder: {folder}")
+            except Exception as e:
+                debug_print(f"Could not remove {folder}: {e}")
+    
+    if removed_folders:
+        success_print(f"Cleaned up: {', '.join(removed_folders)}")
+    else:
+        debug_print("No unwanted folders found to clean")
+    
+    # Verify database still exists
+    if os.path.exists('dataviewer.db'):
+        db_size = os.path.getsize('dataviewer.db') / 1024
+        success_print(f"Database preserved: dataviewer.db ({db_size:.1f} KB)")
+    else:
+        error_print("WARNING: dataviewer.db not found!")
+        return False
+    
+    return True
 
 def create_github_release(version, installer_path, release_notes=""):
     """Create GitHub release (optional)"""
@@ -445,6 +506,11 @@ def main():
     print("\n" + "=" * 60)
     print("🏗️  STARTING BUILD PROCESS")
     print("=" * 60)
+    
+    # Step 4.5: Clean up unwanted folders FIRST
+    if not cleanup_unwanted_folders():
+        error_print("Pre-build cleanup failed")
+        return False
     
     # Step 5: Update version numbers
     updated_files = update_version_in_files(new_version)

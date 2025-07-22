@@ -2113,10 +2113,10 @@ Developed by Charlie Becquet
             if self.test_name not in wb.sheetnames:
                 debug_print(f"DEBUG: Sheet '{self.test_name}' not found in file")
                 return
-    
+
             ws = wb[self.test_name]
             debug_print(f"DEBUG: Successfully opened sheet '{self.test_name}'")
-    
+
             # Determine column layout based on test type
             if self.test_name in ["User Test Simulation", "User Simulation Test"]:
                 columns_per_sample = 8  # Including chronography
@@ -2130,203 +2130,191 @@ Developed by Charlie Becquet
             for sample_idx in range(self.num_samples):
                 sample_id = f"Sample {sample_idx + 1}"
                 col_offset = sample_idx * columns_per_sample
-    
+
                 debug_print(f"DEBUG: Loading data for {sample_id} with column offset {col_offset}")
-    
+
+                # CLEAR ALL EXISTING TEMPLATE DATA for this sample (like in load_existing_data_from_loaded_sheets)
+                debug_print(f"DEBUG: Clearing existing template data for {sample_id}")
+                if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+                    self.data[sample_id]["chronography"] = []
+                    self.data[sample_id]["puffs"] = []
+                    self.data[sample_id]["before_weight"] = []
+                    self.data[sample_id]["after_weight"] = []
+                    self.data[sample_id]["draw_pressure"] = []
+                    self.data[sample_id]["smell"] = []  # Used for failure in user simulation
+                    self.data[sample_id]["notes"] = []
+                    self.data[sample_id]["tpm"] = []
+                else:
+                    self.data[sample_id]["puffs"] = []
+                    self.data[sample_id]["before_weight"] = []
+                    self.data[sample_id]["after_weight"] = []
+                    self.data[sample_id]["draw_pressure"] = []
+                    self.data[sample_id]["resistance"] = []
+                    self.data[sample_id]["smell"] = []
+                    self.data[sample_id]["clog"] = []
+                    self.data[sample_id]["notes"] = []
+                    self.data[sample_id]["tpm"] = []
+
                 # Read data starting from row 5 (Excel row 5 = index 4)
                 row_count = 0
                 sample_had_data = False
-    
-                for row_idx in range(4, min(ws.max_row + 1, 100)):  # Limit to 100 rows max
-                    excel_row = row_idx + 1  # Convert to 1-based Excel row
-                    data_row_idx = row_idx - 4  # Convert to 0-based data index
-        
-                    # Make sure our data lists are long enough
-                    while len(self.data[sample_id]["puffs"]) <= data_row_idx:
-                        # Extend all lists if needed
-                        for key in ["puffs", "before_weight", "after_weight", "draw_pressure", "smell", "notes", "tpm"]:
-                            self.data[sample_id][key].append("" if key != "tpm" else None)
-                        # Also extend chronography for User Test Simulation
-                        if self.test_name in ["User Test Simulation", "User Simulation Test"]:
-                            if "chronography" not in self.data[sample_id]:
-                                self.data[sample_id]["chronography"] = []
-                            self.data[sample_id]["chronography"].append("")
-        
-                    # Read each column for this row based on test type
-                    if self.test_name in ["User Test Simulation", "User Simulation Test"]:
-                        # User Test Simulation layout (8 columns)
-                        chrono_cell = ws.cell(row=excel_row, column=1 + col_offset)  # Chronography
-                        puffs_cell = ws.cell(row=excel_row, column=2 + col_offset)   # Puffs
-                        before_weight_cell = ws.cell(row=excel_row, column=3 + col_offset)  # Before weight
-                        after_weight_cell = ws.cell(row=excel_row, column=4 + col_offset)   # After weight
-                        draw_pressure_cell = ws.cell(row=excel_row, column=5 + col_offset)  # Draw pressure
-                        # Skip resistance column (6)
-                        failure_cell = ws.cell(row=excel_row, column=6 + col_offset)   # failure
-                        notes_cell = ws.cell(row=excel_row, column=7 + col_offset)   # Notes
-                        tpm_cell = None  # TPM not stored in User Test Simulation format
-                        resistance_cell = None  # Not used in User Test Simulation
-                        clog_cell = None  # Not used in User Test Simulation
-                        smell_cell = failure_cell
-                    else:
-                        # Standard layout (12 columns)
-                        puffs_cell = ws.cell(row=excel_row, column=1 + col_offset)
-                        before_weight_cell = ws.cell(row=excel_row, column=2 + col_offset)
-                        after_weight_cell = ws.cell(row=excel_row, column=3 + col_offset)
-                        draw_pressure_cell = ws.cell(row=excel_row, column=4 + col_offset)
-                        resistance_cell = ws.cell(row=excel_row, column=5 + col_offset)  # Column E - Resistance
-                        smell_cell = ws.cell(row=excel_row, column=6 + col_offset)  # Column F
-                        clog_cell = ws.cell(row=excel_row, column=7 + col_offset)   # Column G - Clog
-                        notes_cell = ws.cell(row=excel_row, column=8 + col_offset)  # Column H
-                        tpm_cell = ws.cell(row=excel_row, column=9 + col_offset)    # Column I
-                        failure_cell = smell_cell
-        
-                    # Check if this row has meaningful numeric data (skip text like "Day 1", "Day 2", etc.)
-                    
-                    has_meaningful_data = False
 
-                    if self.test_name in ["User Test Simulation", "User Simulation Test"]:
-                        # For User Test Simulation, be more restrictive (skip "Day 1", "Day 2" text rows)
-                        if puffs_cell.value is not None:
-                            if isinstance(puffs_cell.value, (int, float)):
-                                has_meaningful_data = True
-                            elif isinstance(puffs_cell.value, str) and puffs_cell.value.replace('.', '').replace('-', '').isdigit():
-                                has_meaningful_data = True
-    
-                        if not has_meaningful_data:
-                            for cell in [before_weight_cell, after_weight_cell, draw_pressure_cell]:
-                                if cell.value is not None and isinstance(cell.value, (int, float)) and cell.value != 0:
-                                    has_meaningful_data = True
-                                    break
-                    else:
-                        # For normal tests, be permissive - load any row that has data in any field
-                        for cell in [puffs_cell, before_weight_cell, after_weight_cell, draw_pressure_cell, smell_cell, notes_cell]:
-                            if cell.value is not None and str(cell.value).strip():
-                                has_meaningful_data = True
-                                break
-                        # Also check TPM for standard format
-                        if not has_meaningful_data and tpm_cell and tpm_cell.value is not None:
-                            has_meaningful_data = True
-
-                    # If no meaningful data, skip this row
-                    if not has_meaningful_data:
-                        debug_print(f"DEBUG: Skipping row {excel_row} - no data found")
-                        continue
-                    
-                    debug_print(f"DEBUG: Loading row {excel_row} for {sample_id} - found meaningful data")
-        
-                    # Load the data with proper type conversion
+                for excel_row_idx in range(5, min(ws.max_row + 1, 100)):  # Start from row 5, limit to 100 rows max
                     try:
-                        # Chronography (User Test Simulation only)
                         if self.test_name in ["User Test Simulation", "User Simulation Test"]:
-                            chrono_value = str(chrono_cell.value) if chrono_cell.value is not None else ""
-                            if "chronography" not in self.data[sample_id]:
-                                self.data[sample_id]["chronography"] = [""] * len(self.data[sample_id]["puffs"])
-                            # Ensure chronography list is long enough
-                            while len(self.data[sample_id]["chronography"]) <= data_row_idx:
-                                self.data[sample_id]["chronography"].append("")
-                            self.data[sample_id]["chronography"][data_row_idx] = chrono_value
-                
-                        # Puffs - convert to int (skip if it's text like "Day 1")
-                        if isinstance(puffs_cell.value, (int, float)):
-                            puffs_value = int(puffs_cell.value)
-                            self.data[sample_id]["puffs"][data_row_idx] = puffs_value
-                        elif isinstance(puffs_cell.value, str) and puffs_cell.value.replace('.', '').replace('-', '').isdigit():
-                            puffs_value = int(float(puffs_cell.value))
-                            self.data[sample_id]["puffs"][data_row_idx] = puffs_value
-                        else:
-                            debug_print(f"DEBUG: Skipping non-numeric puffs value: {puffs_cell.value}")
-                            continue
-            
-                        # Before weight - convert to float or empty string
-                        before_weight_value = ""
-                        if before_weight_cell.value is not None and isinstance(before_weight_cell.value, (int, float)):
-                            before_weight_value = float(before_weight_cell.value)
-                        self.data[sample_id]["before_weight"][data_row_idx] = before_weight_value
-            
-                        # After weight - convert to float or empty string
-                        after_weight_value = ""
-                        if after_weight_cell.value is not None and isinstance(after_weight_cell.value, (int, float)):
-                            after_weight_value = float(after_weight_cell.value)
-                        self.data[sample_id]["after_weight"][data_row_idx] = after_weight_value
-            
-                        # Draw pressure - convert to float or empty string
-                        draw_pressure_value = ""
-                        if draw_pressure_cell.value is not None and isinstance(draw_pressure_cell.value, (int, float)):
-                            draw_pressure_value = float(draw_pressure_cell.value)
-                        self.data[sample_id]["draw_pressure"][data_row_idx] = draw_pressure_value
+                            # User Test Simulation format: [Chronography, Puffs, Before Weight, After Weight, Draw Pressure, Failure, Notes, TPM]
+                            chronography_col = 1 + col_offset  # Column A + offset
+                            puffs_col = 2 + col_offset          # Column B + offset  
+                            before_weight_col = 3 + col_offset  # Column C + offset
+                            after_weight_col = 4 + col_offset   # Column D + offset
+                            draw_pressure_col = 5 + col_offset  # Column E + offset
+                            failure_col = 6 + col_offset        # Column F + offset (stored in smell field)
+                            notes_col = 7 + col_offset          # Column G + offset
+                            tpm_col = 8 + col_offset            # Column H + offset
+
+                            # Extract values and clean them
+                            def clean_excel_value(cell_value):
+                                if cell_value is None:
+                                    return ""
+                                return str(cell_value).strip().strip('"').strip("'")
+
+                            values = {}
+                            values['chronography'] = clean_excel_value(ws.cell(row=excel_row_idx, column=chronography_col).value)
+                            values['puffs'] = clean_excel_value(ws.cell(row=excel_row_idx, column=puffs_col).value)
+                            values['before_weight'] = clean_excel_value(ws.cell(row=excel_row_idx, column=before_weight_col).value)
+                            values['after_weight'] = clean_excel_value(ws.cell(row=excel_row_idx, column=after_weight_col).value)
+                            values['draw_pressure'] = clean_excel_value(ws.cell(row=excel_row_idx, column=draw_pressure_col).value)
+                            values['failure'] = clean_excel_value(ws.cell(row=excel_row_idx, column=failure_col).value)
+                            values['notes'] = clean_excel_value(ws.cell(row=excel_row_idx, column=notes_col).value)
                         
-                        # Resistance - convert to float or empty string
-                        resistance_value = ""
-                        if resistance_cell and resistance_cell.value is not None and isinstance(resistance_cell.value, (int, float)):
-                            resistance_value = float(resistance_cell.value)
-                        self.data[sample_id]["resistance"][data_row_idx] = resistance_value
+                            # Handle TPM calculation
+                            tpm_cell_value = ws.cell(row=excel_row_idx, column=tpm_col).value
+                            if tpm_cell_value is not None:
+                                try:
+                                    values['tpm'] = float(tpm_cell_value)
+                                except (ValueError, TypeError):
+                                    values['tpm'] = None
+                            else:
+                                values['tpm'] = None
 
-                        # Clog - convert to float or empty string  
-                        clog_value = ""
-                        if clog_cell and clog_cell.value is not None and isinstance(clog_cell.value, (int, float)):
-                            clog_value = float(clog_cell.value)
-                        self.data[sample_id]["clog"][data_row_idx] = clog_value
+                            # Check if this row has any meaningful data
+                            if any([values['puffs'], values['before_weight'], values['after_weight']]):
+                                debug_print(f"DEBUG: Appending User Test Simulation data for Excel row {excel_row_idx}: puffs={values['puffs']}, before={values['before_weight']}, after={values['after_weight']}")
+                            
+                                # APPEND the data (don't assign to indices)
+                                self.data[sample_id]["chronography"].append(values['chronography'])
+                                self.data[sample_id]["puffs"].append(values['puffs'])
+                                self.data[sample_id]["before_weight"].append(values['before_weight'])
+                                self.data[sample_id]["after_weight"].append(values['after_weight'])
+                                self.data[sample_id]["draw_pressure"].append(values['draw_pressure'])
+                                self.data[sample_id]["smell"].append(values['failure'])  # failure stored in smell field
+                                self.data[sample_id]["notes"].append(values['notes'])
+                                self.data[sample_id]["tpm"].append(values['tpm'])
 
-                        # Smell - convert to float or empty string
-                        smell_value = ""
-                        if smell_cell.value is not None and isinstance(smell_cell.value, (int, float)):
-                            smell_value = float(smell_cell.value)
-                        self.data[sample_id]["smell"][data_row_idx] = smell_value
-            
-                        # Notes - keep as string
-                        notes_value = str(notes_cell.value) if notes_cell.value is not None else ""
-                        self.data[sample_id]["notes"][data_row_idx] = notes_value
-            
-                        # TPM - convert to float or None (not used in User Test Simulation)
-                        if tpm_cell is not None and tpm_cell.value is not None and isinstance(tpm_cell.value, (int, float)):
-                            tpm_value = float(tpm_cell.value)
-                            self.data[sample_id]["tpm"][data_row_idx] = tpm_value
+                                sample_had_data = True
+                                row_count += 1
+                            else:
+                                debug_print(f"DEBUG: Excel row {excel_row_idx} has no meaningful data, skipping")
+
                         else:
-                            self.data[sample_id]["tpm"][data_row_idx] = None
-            
-                        sample_had_data = True
-                        row_count += 1
-            
-                        if self.test_name in ["User Test Simulation", "User Simulation Test"]:
-                            debug_print(f"DEBUG: {sample_id} Row {data_row_idx}: chrono={chrono_value}, puffs={puffs_value}, before={before_weight_value}, after={after_weight_value}")
-                        else:
-                            debug_print(f"DEBUG: {sample_id} Row {data_row_idx}: puffs={puffs_value}, before={before_weight_value}, after={after_weight_value}")
-            
-                    except (ValueError, TypeError) as e:
-                        debug_print(f"DEBUG: Error converting data for {sample_id} row {data_row_idx}: {e}")
-                        # Keep default values if conversion fails
+                            # Standard format: [Puffs, Before Weight, After Weight, Draw Pressure, Resistance, Smell, Clog, Notes, TPM]
+                            puffs_col = 1 + col_offset          # Column A + offset
+                            before_weight_col = 2 + col_offset  # Column B + offset
+                            after_weight_col = 3 + col_offset   # Column C + offset
+                            draw_pressure_col = 4 + col_offset  # Column D + offset
+                            resistance_col = 5 + col_offset     # Column E + offset
+                            smell_col = 6 + col_offset          # Column F + offset
+                            clog_col = 7 + col_offset           # Column G + offset
+                            notes_col = 8 + col_offset          # Column H + offset
+                            tpm_col = 9 + col_offset            # Column I + offset
+
+                            # Extract values and clean them
+                            def clean_excel_value(cell_value):
+                                if cell_value is None:
+                                    return ""
+                                return str(cell_value).strip().strip('"').strip("'")
+
+                            values = {}
+                            values['puffs'] = clean_excel_value(ws.cell(row=excel_row_idx, column=puffs_col).value)
+                            values['before_weight'] = clean_excel_value(ws.cell(row=excel_row_idx, column=before_weight_col).value)
+                            values['after_weight'] = clean_excel_value(ws.cell(row=excel_row_idx, column=after_weight_col).value)
+                            values['draw_pressure'] = clean_excel_value(ws.cell(row=excel_row_idx, column=draw_pressure_col).value)
+                            values['resistance'] = clean_excel_value(ws.cell(row=excel_row_idx, column=resistance_col).value)
+                            values['smell'] = clean_excel_value(ws.cell(row=excel_row_idx, column=smell_col).value)
+                            values['clog'] = clean_excel_value(ws.cell(row=excel_row_idx, column=clog_col).value)
+                            values['notes'] = clean_excel_value(ws.cell(row=excel_row_idx, column=notes_col).value)
+
+                            # Handle TPM calculation
+                            tpm_cell_value = ws.cell(row=excel_row_idx, column=tpm_col).value
+                            if tpm_cell_value is not None:
+                                try:
+                                    values['tpm'] = float(tpm_cell_value)
+                                except (ValueError, TypeError):
+                                    values['tpm'] = None
+                            else:
+                                values['tpm'] = None
+
+                            # Check if this row has any meaningful data
+                            if any([values['puffs'], values['before_weight'], values['after_weight']]):
+                                debug_print(f"DEBUG: Appending standard data for Excel row {excel_row_idx}: puffs={values['puffs']}, before={values['before_weight']}, after={values['after_weight']}")
+                            
+                                # APPEND the data (don't assign to indices) - THIS FIXES THE IndexError
+                                self.data[sample_id]["puffs"].append(values['puffs'])
+                                self.data[sample_id]["before_weight"].append(values['before_weight'])
+                                self.data[sample_id]["after_weight"].append(values['after_weight'])
+                                self.data[sample_id]["draw_pressure"].append(values['draw_pressure'])
+                                self.data[sample_id]["resistance"].append(values['resistance'])
+                                self.data[sample_id]["smell"].append(values['smell'])
+                                self.data[sample_id]["clog"].append(values['clog'])
+                                self.data[sample_id]["notes"].append(values['notes'])
+                                self.data[sample_id]["tpm"].append(values['tpm'])
+
+                                sample_had_data = True
+                                row_count += 1
+                            else:
+                                debug_print(f"DEBUG: Excel row {excel_row_idx} has no meaningful data, skipping")
+
+                    except Exception as e:
+                        debug_print(f"DEBUG: Error processing Excel row {excel_row_idx} for {sample_id}: {e}")
                         continue
-    
+
                 if sample_had_data:
                     loaded_data_count += 1
-                    debug_print(f"DEBUG: {sample_id} - Loaded {row_count} rows of existing data")
+                    debug_print(f"DEBUG: {sample_id} - Loaded {row_count} rows of existing data from Excel")
                 else:
-                    debug_print(f"DEBUG: {sample_id} - No existing data found")
+                    debug_print(f"DEBUG: {sample_id} - No existing data found in Excel")
 
-            debug_print(f"DEBUG: Successfully loaded existing data for {loaded_data_count} samples")
-
-            # Recalculate TPM values for all samples FIRST
-            for i in range(self.num_samples):
-                sample_id = f"Sample {i + 1}"
-                self.calculate_tpm(sample_id)
-                debug_print(f"DEBUG: Calculated TPM for {sample_id}")
-
-            # Update all treeviews to show the loaded data WITH calculated TPM
-            for i, sample_tree in enumerate(self.sample_trees):
-                sample_id = f"Sample {i + 1}"
-                self.update_treeview(sample_tree, sample_id)
-                debug_print(f"DEBUG: Updated treeview for {sample_id} with TPM values")
-
-            # Update the stats panel
-            self.update_stats_panel()
             wb.close()
-            debug_print("DEBUG: Existing data loading completed successfully")
+        
+            if loaded_data_count > 0:
+                debug_print(f"DEBUG: Successfully loaded existing data from Excel file for {loaded_data_count} samples")
+            
+                # Recalculate TPM values for all samples FIRST
+                for i in range(self.num_samples):
+                    sample_id = f"Sample {i + 1}"
+                    self.calculate_tpm(sample_id)
+                    debug_print(f"DEBUG: Calculated TPM for {sample_id}")
+
+                # Update all treeviews to show the loaded data WITH calculated TPM
+                if hasattr(self, 'sample_trees') and self.sample_trees:
+                    for i, sample_tree in enumerate(self.sample_trees):
+                        if i < self.num_samples:
+                            sample_id = f"Sample {i + 1}"
+                            self.update_treeview(sample_tree, sample_id)  # FIXED: Pass both tree and sample_id
+                            debug_print(f"DEBUG: Updated treeview for {sample_id} with TPM values")
+                else:
+                    debug_print("DEBUG: sample_trees not available yet, TPM calculation completed")
+                
+                # Update the stats panel if available
+                if hasattr(self, 'update_stats_panel'):
+                    self.update_stats_panel()
+            else:
+                debug_print("DEBUG: No existing data found in Excel file")
 
         except Exception as e:
-            print(f"ERROR: Failed to load existing data from file: {e}")
+            debug_print(f"ERROR: Failed to load existing data from Excel file: {e}")
             import traceback
             traceback.print_exc()
-            # Don't show error to user - just continue with empty data
     
     def ensure_initial_tpm_calculation(self):
         """Ensure TPM is calculated and displayed when window opens."""

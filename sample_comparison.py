@@ -31,13 +31,14 @@ class SampleComparisonWindow:
         self.default_config = {
             'model_keywords_raw': [
                 'ds7010', 'ds7020', 'cps2910', 'cps2920', 'pc0110', 
-                'ds7110', 'ds7120', 'ds7310', 'ds7320','briq 2.0'
+                'ds7110', 'ds7120', 'ds7310', 'ds7320','briq 2.0','cgs1810','th2','m6t','gembar',
+                'gembox','mixjoy','briq 3.0','minitank','evomax','evo','t28','rosin bar'
             ],
             'grouped_tests': [
                 'quick screening test', 'extended test', 
                 'horizontal test', 'lifetime test', 'device life test',
                 'user simulation test','user test simulation',
-                'user sim test','user sim','user test sim'
+                'user sim test','user sim','user test sim','legacy'
             ]
         }
     

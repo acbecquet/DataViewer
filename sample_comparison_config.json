@@ -2,7 +2,7 @@
   "model_keywords_raw": [
     "ds7010",
     "ds7020",
-    "cps2910:T58G 510",
+    "cps2910:t58g 510",
     "cps2920",
     "pc0110",
     "ds7110",
@@ -12,7 +12,8 @@
     "briq 2.0",
     "rosin bar",
     "gembox",
-    "gembar"
+    "gembar",
+    "CGS1810"
   ],
   "grouped_tests": [
     "quick screening test",
@@ -27,5 +28,5 @@
     "user test sim",
     "viscosity compatibility"
   ],
-  "last_updated": "\"2025-07-21T11:31:50.987327\""
+  "last_updated": "\"2025-07-22T16:32:50.481577\""
 }
