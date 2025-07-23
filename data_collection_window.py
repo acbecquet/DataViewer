@@ -145,6 +145,7 @@ class DataCollectionWindow:
             file_path (str): Path to the Excel file.
             test_name (str): Name of the test being conducted.
             header_data (dict): Dictionary containing header data.
+            original_filename (str): original filename for .vap3 files
         """
         # Debug flag - set to False to disable all debug output
         self.DEBUG = False
@@ -238,7 +239,6 @@ class DataCollectionWindow:
         self.ensure_initial_tpm_calculation()
     
         self.log(f"DataCollectionWindow initialized for {test_name} with {self.num_samples} samples", "debug")
-
 
     def create_menu_bar(self):
         """Create a comprehensive menu bar for the data collection window."""
@@ -487,7 +487,6 @@ class DataCollectionWindow:
             pady=5
         )
 
-    
         # Insert the SOP text and center it
         self.sop_text_widget.insert("1.0", sop_text.strip())
     
@@ -523,11 +522,9 @@ class DataCollectionWindow:
         
         self.auto_save_timer = self.window.after(self.auto_save_interval, self.auto_save)
         
-    # needs modification !!!!
     def auto_save(self):
         """Perform automatic save without user confirmation."""
-        if self.has_unsaved_changes:
-            
+        if self.has_unsaved_changes:            
             try:
                 self.save_data(show_confirmation=False, auto_save=True)
                 self.update_save_status(False)  # Mark as saved
@@ -545,7 +542,6 @@ class DataCollectionWindow:
             self.has_unsaved_changes = True
             self.update_save_status(True)
             
-    
     def update_save_status(self, has_changes):
         """Update the save status indicator in the UI."""
         if has_changes:
@@ -557,7 +553,6 @@ class DataCollectionWindow:
             import datetime
             self.last_save_time = datetime.datetime.now()
     
-    
     def exit_without_saving(self):
         """Exit without saving (with confirmation)."""
         if self.has_unsaved_changes:
@@ -568,17 +563,6 @@ class DataCollectionWindow:
         debug_print("DEBUG: Exiting without saving")
         self.result = "cancel"
         self.window.destroy()
-    
-    def open_raw_excel(self):
-        """Open the raw Excel file for direct editing."""
-        
-        try:
-            if os.path.exists(self.file_path):
-                os.startfile(self.file_path)
-            else:
-                messagebox.showerror("File Not Found", f"Could not find file: {self.file_path}")
-        except Exception as e:
-            messagebox.showerror("Open Error", f"Failed to open Excel file: {e}")
     
     def export_csv(self):
         """Export current data to CSV files."""
@@ -757,7 +741,6 @@ class DataCollectionWindow:
     def update_header_display(self):
         """Update the header information displayed in the UI."""
         
-        
         # Update the header labels (if they exist)
         try:
             # Update any header text that shows tester name, etc.
@@ -770,9 +753,7 @@ class DataCollectionWindow:
                 if i < len(self.header_data.get('samples', [])):
                     sample_name = self.header_data['samples'][i].get('id', f"Sample {i+1}")
                     self.notebook.tab(i, text=f"Sample {i+1} - {sample_name}")
-            
-            
-            
+                    
         except Exception as e:
             debug_print(f"DEBUG: Error updating header display: {e}")
 
@@ -845,8 +826,7 @@ class DataCollectionWindow:
         current_tab = self.notebook.index(self.notebook.select())
         sample_id = f"Sample {current_tab + 1}"
 
-        if messagebox.askyesno("Confirm Clear", 
-                             f"Are you sure you want to clear all data for {sample_id}?"):
+        if messagebox.askyesno("Confirm Clear", f"Are you sure you want to clear all data for {sample_id}?"):
             # Clear all data except puffs
             clear_keys = ["before_weight", "after_weight", "draw_pressure", "smell", "notes", "tpm"]
         
@@ -1009,7 +989,6 @@ class DataCollectionWindow:
             self.auto_save_interval = int(new_minutes * 60 * 1000)
             self.start_auto_save_timer()  # Restart with new interval
             debug_print(f"DEBUG: Changed auto-save interval to {new_minutes} minutes")
-    
     
     def show_keyboard_shortcuts(self):
         """Show keyboard shortcuts help."""
@@ -1467,40 +1446,23 @@ Developed by Charlie Becquet
                         
                 except Exception as e:
                     debug_print(f"DEBUG: Error updating VAP3 file: {e}")
-    # modify
+    
     def create_sample_tab(self, parent_frame, sample_id, sample_index):
         """Create a tab for a single sample with data entry controls."""
         debug_print(f"DEBUG: Creating sample tab for {sample_id}")
         debug_print(f"DEBUG: Test name: '{self.test_name}'")
 
-        # Create main container
+        # Create main container that will hold everything
         main_container = ttk.Frame(parent_frame)
         main_container.pack(fill="both", expand=True)
-        # Ensure main container expands
+    
+        # Configure main container to expand properly
         main_container.grid_rowconfigure(0, weight=1)
         main_container.grid_columnconfigure(0, weight=1)
-
-        # Create scrollable frame
-        canvas = tk.Canvas(main_container, bg='white')
-        scrollbar = ttk.Scrollbar(main_container, orient="vertical", command=canvas.yview)
-        scrollable_frame = ttk.Frame(canvas)
-
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
-
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-
-        # Pack scrollbar and canvas
-        scrollbar.pack(side="right", fill="y")
-        canvas.pack(side="left", fill="both", expand=True)
 
         # Determine columns based on test type
         if self.test_name in ["User Test Simulation", "User Simulation Test"]:
             debug_print(f"DEBUG: Setting up User Test Simulation columns with chronography")
-            # User Test Simulation: 8 columns including chronography
             columns = ["Chronography", "Puffs", "Before Weight", "After Weight", "Draw Pressure", "Failure", "Notes", "TPM"]
             column_widths = [100, 80, 100, 100, 100, 80, 150, 80]
             self.tree_columns = len(columns)
@@ -1509,49 +1471,41 @@ Developed by Charlie Becquet
             if "chronography" not in self.data[sample_id]:
                 debug_print(f"DEBUG: Creating chronography data structure for {sample_id}")
                 self.data[sample_id]["chronography"] = []
-                # Pre-initialize chronography data to match existing data length
                 existing_length = len(self.data[sample_id]["puffs"])
                 for j in range(existing_length):
                     self.data[sample_id]["chronography"].append("")
-            
+        
             debug_print(f"DEBUG: User Test Simulation columns: {columns}")
         else:
-            # Standard tests: 9 columns without chronography  
             columns = ["Puffs", "Before Weight", "After Weight", "Draw Pressure", "Resistance", "Smell", "Clog", "Notes", "TPM"]
             column_widths = [80, 100, 100, 100, 100, 80, 80, 150, 80]
             self.tree_columns = len(columns)
             debug_print(f"DEBUG: Standard test columns: {columns}")
 
-        tree = ttk.Treeview(scrollable_frame, columns=columns, show="headings")
-
-        # Configure columns with better spacing
+        # Create the Treeview directly in the main container
+        tree = ttk.Treeview(main_container, columns=columns, show="headings")
+    
+        # Configure columns
         for i, (col, width) in enumerate(zip(columns, column_widths)):
             tree.heading(col, text=col)
-            tree.column(col, width=width, minwidth=50, anchor='center')  # Center align for better appearance
+            tree.column(col, width=width, minwidth=50, anchor='center')
             debug_print(f"DEBUG: Configured column {i}: {col} with width {width}")
 
         # Configure highlighting tags
         tree.tag_configure('highlight_selected', background='#CCE5FF', foreground='black')
-        # Configure TPM calculated cells with green background - ONLY for TPM column
         tree.tag_configure('tpm_calculated', background='#C6EFCE', foreground='black')
-
-        # Configure striped rows for better visual separation
         tree.tag_configure('evenrow', background='#F8F8F8')
         tree.tag_configure('oddrow', background='white')
 
-        # Create tree scrollbars
-        tree_v_scrollbar = ttk.Scrollbar(scrollable_frame, orient="vertical", command=tree.yview)
-        tree_h_scrollbar = ttk.Scrollbar(scrollable_frame, orient="horizontal", command=tree.xview)
+        # Create scrollbars for the treeview
+        tree_v_scrollbar = ttk.Scrollbar(main_container, orient="vertical", command=tree.yview)
+        tree_h_scrollbar = ttk.Scrollbar(main_container, orient="horizontal", command=tree.xview)
         tree.configure(yscrollcommand=tree_v_scrollbar.set, xscrollcommand=tree_h_scrollbar.set)
 
-        # Grid the treeview and scrollbars
-        tree.grid(row=0, column=0, sticky="nsew", padx=(0, 0), pady=(0, 0))
+        # Grid everything to fill the container
+        tree.grid(row=0, column=0, sticky="nsew", padx=2, pady=2)
         tree_v_scrollbar.grid(row=0, column=1, sticky="ns")
         tree_h_scrollbar.grid(row=1, column=0, sticky="ew")
-
-        # Configure grid weights
-        scrollable_frame.grid_columnconfigure(0, weight=1)
-        scrollable_frame.grid_rowconfigure(0, weight=1)
 
         # Populate treeview with initial data
         self.update_treeview(tree, sample_id)
@@ -1561,15 +1515,9 @@ Developed by Charlie Becquet
         tree.bind("<Double-1>", lambda event: self.on_tree_click(event, tree, sample_id))
         tree.bind("<KeyPress>", lambda event: self.on_tree_key_press(event, tree, sample_id))
 
-        # Mouse wheel scrolling for canvas
-        def on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-
-        canvas.bind("<MouseWheel>", on_mousewheel)
-
         debug_print(f"DEBUG: Sample tab created for {sample_id} with {len(columns)} columns")
         return tree
-    # modify
+
     def on_tree_key_press(self, event, tree, sample_id):
         """Handle key press events in the treeview."""
         if event.keysym == "Tab":
@@ -1584,20 +1532,6 @@ Developed by Charlie Becquet
     def update_treeview(self, tree, sample_id):
         """Update the treeview with current data, highlighting only TPM cells."""
         debug_print(f"DEBUG: Updating treeview for {sample_id}")
-    
-        debug_print(f"DEBUG: Raw data lengths for {sample_id}:")
-        debug_print(f"  puffs: {len(self.data[sample_id]['puffs'])}")
-        debug_print(f"  before_weight: {len(self.data[sample_id]['before_weight'])}")
-        debug_print(f"  after_weight: {len(self.data[sample_id]['after_weight'])}")
-        debug_print(f"  tpm: {len(self.data[sample_id]['tpm'])}")
-            
-        debug_print(f"DEBUG: First 3 actual data values for {sample_id}:")
-        for i in range(min(3, len(self.data[sample_id]['puffs']))):
-            puffs_val = self.data[sample_id]['puffs'][i]
-            before_val = self.data[sample_id]['before_weight'][i]
-            after_val = self.data[sample_id]['after_weight'][i]
-            tpm_val = self.data[sample_id]['tpm'][i]
-            debug_print(f"  Row {i}: puffs='{puffs_val}' (type: {type(puffs_val)}), before='{before_val}' (type: {type(before_val)}), after='{after_val}' (type: {type(after_val)}), tpm='{tpm_val}' (type: {type(tpm_val)})")
 
         # Clear existing items
         for item in tree.get_children():
@@ -1769,7 +1703,6 @@ Developed by Charlie Becquet
             import traceback
             traceback.print_exc()
 
-    # modified
     def calculate_tpm(self, sample_id):
         """Calculate TPM (Total Particulate Matter) for all rows with valid data."""
         valid_tpm_values = []
@@ -1910,7 +1843,6 @@ Developed by Charlie Becquet
         
                 debug_print(f"DEBUG: Loading data for {sample_id} with column offset {col_offset}")
             
-                # CLEAR ALL EXISTING TEMPLATE DATA for this sample
                 debug_print(f"DEBUG: Clearing existing template data for {sample_id}")
                 if self.test_name in ["User Test Simulation", "User Simulation Test"]:
                     self.data[sample_id]["chronography"] = []
@@ -1918,7 +1850,7 @@ Developed by Charlie Becquet
                     self.data[sample_id]["before_weight"] = []
                     self.data[sample_id]["after_weight"] = []
                     self.data[sample_id]["draw_pressure"] = []
-                    self.data[sample_id]["smell"] = []  # Used for failure in user simulation
+                    self.data[sample_id]["smell"] = []  
                     self.data[sample_id]["notes"] = []
                     self.data[sample_id]["tpm"] = []
                 else:
@@ -2038,7 +1970,7 @@ Developed by Charlie Becquet
                                 self.data[sample_id]["before_weight"].append(values['before_weight'])
                                 self.data[sample_id]["after_weight"].append(values['after_weight'])
                                 self.data[sample_id]["draw_pressure"].append(values['draw_pressure'])
-                                self.data[sample_id]["smell"].append(values['failure'])  # Failure stored in smell field
+                                self.data[sample_id]["smell"].append(values['failure']) 
                                 self.data[sample_id]["notes"].append(values['notes'])
                                 self.data[sample_id]["tpm"].append(values['tpm'])
                         
@@ -2290,7 +2222,7 @@ Developed by Charlie Becquet
                             if any([values['puffs'], values['before_weight'], values['after_weight']]):
                                 debug_print(f"DEBUG: Appending User Test Simulation data for Excel row {excel_row_idx}: puffs={values['puffs']}, before={values['before_weight']}, after={values['after_weight']}")
                             
-                                # APPEND the data (don't assign to indices)
+                               
                                 self.data[sample_id]["chronography"].append(values['chronography'])
                                 self.data[sample_id]["puffs"].append(values['puffs'])
                                 self.data[sample_id]["before_weight"].append(values['before_weight'])
@@ -2347,7 +2279,7 @@ Developed by Charlie Becquet
                             if any([values['puffs'], values['before_weight'], values['after_weight']]):
                                 debug_print(f"DEBUG: Appending standard data for Excel row {excel_row_idx}: puffs={values['puffs']}, before={values['before_weight']}, after={values['after_weight']}")
                             
-                                # APPEND the data (don't assign to indices) - THIS FIXES THE IndexError
+                             
                                 self.data[sample_id]["puffs"].append(values['puffs'])
                                 self.data[sample_id]["before_weight"].append(values['before_weight'])
                                 self.data[sample_id]["after_weight"].append(values['after_weight'])
@@ -2432,7 +2364,7 @@ Developed by Charlie Becquet
         
         # Set up hotkeys
         self.setup_hotkeys()
-    # update
+    
     def setup_hotkeys(self):
         """Set up keyboard shortcuts for navigation."""
         if not hasattr(self, 'hotkey_bindings'):
@@ -2444,7 +2376,7 @@ Developed by Charlie Becquet
     
         self.hotkey_bindings.clear()
     
-        # Bind Ctrl+S for quick save - FIX: use save_data directly
+        # Bind Ctrl+S for quick save
         binding_id = self.window.bind("<Control-s>", lambda e: self.save_data(show_confirmation=False) if self.hotkeys_enabled else None)
         self.hotkey_bindings["<Control-s>"] = binding_id
     
@@ -2459,8 +2391,7 @@ Developed by Charlie Becquet
     def on_window_close(self):
         """Handle window close event with auto-save."""
         self.log("Window close event triggered", "debug")
-    
-
+ 
         # Cancel auto-save timer
         if self.auto_save_timer:
             self.window.after_cancel(self.auto_save_timer)
@@ -2640,22 +2571,22 @@ Developed by Charlie Becquet
         # Create a title with minimal padding
         title_label = ttk.Label(scrollable_stats_frame, text="TPM Statistics", 
                                font=("Arial", 12, "bold"), style='TLabel')
-        title_label.pack(pady=(2, 5))  # Reduced from (10, 20)
+        title_label.pack(pady=(2, 5)) 
 
         # Create frame for current sample statistics - 1/3 of height
         stats_container = ttk.Frame(scrollable_stats_frame, style='TFrame')
-        stats_container.pack(fill="x", padx=5, pady=2)  # Reduced padding
+        stats_container.pack(fill="x", padx=5, pady=2) 
 
         # Initialize TPM labels dictionary
         self.tpm_labels = {}
 
         # Create placeholder for current sample stats (will be updated in update_stats_panel)
         self.current_sample_stats_frame = ttk.Frame(stats_container, style='TFrame')
-        self.current_sample_stats_frame.pack(fill="x", pady=2)  # Reduced padding
+        self.current_sample_stats_frame.pack(fill="x", pady=2)  
 
         # Create frame for TPM plot - 2/3 of height with minimal padding
         plot_frame = ttk.LabelFrame(scrollable_stats_frame, text="TPM Over Time", style='TLabelframe')
-        plot_frame.pack(fill="both", expand=True, padx=5, pady=(5, 2))  # Reduced from (20, 10)
+        plot_frame.pack(fill="both", expand=True, padx=5, pady=(5, 2)) 
     
         # Add resize handling for the plot frame
         plot_frame.bind('<Configure>', self._on_plot_frame_resize)
@@ -2681,10 +2612,10 @@ Developed by Charlie Becquet
         canvas_frame.pack(fill="both", expand=True)
     
         self.tpm_canvas = FigureCanvasTkAgg(self.tpm_figure, canvas_frame)
-        self.tpm_canvas.get_tk_widget().pack(fill="both", expand=True, padx=1, pady=1)  # Minimal padding
+        self.tpm_canvas.get_tk_widget().pack(fill="both", expand=True, padx=1, pady=1)  
 
         # Configure the plot with tight layout
-        self.tpm_figure.tight_layout(pad=0.1)  # Much tighter layout
+        self.tpm_figure.tight_layout(pad=0.1)  
 
         # Initialize empty plot
         self.tpm_ax.set_xlabel('Puffs', fontsize=9)
@@ -2717,9 +2648,9 @@ Developed by Charlie Becquet
                
                 return
             
-            # Calculate figure size in inches (accounting for minimal padding and DPI)
+            # Calculate figure size in inches
             dpi = 80
-            padding_pixels = 4  # Minimal padding - reduced from 20
+            padding_pixels = 4  
         
             # Use 2/3 of available height for plot (66.7%)
             available_plot_height = frame_height * 0.95  # Use almost all available space
@@ -2727,28 +2658,22 @@ Developed by Charlie Becquet
             # Calculate dimensions with minimal padding
             new_width_inches = max(2.0, (frame_width - padding_pixels) / dpi)
             new_height_inches = max(1.5, (available_plot_height - padding_pixels) / dpi)
-        
-           
-        
+                
             # Only resize if the change is significant (avoid excessive redraws)
             current_size = self.tpm_figure.get_size_inches()
             width_diff = abs(current_size[0] - new_width_inches)
             height_diff = abs(current_size[1] - new_height_inches)
         
-            if width_diff > 0.1 or height_diff > 0.1:
-               
-            
+            if width_diff > 0.1 or height_diff > 0.1:            
                 # Resize the figure
                 self.tpm_figure.set_size_inches(new_width_inches, new_height_inches)
             
                 # Apply very tight layout and redraw
                 self.tpm_figure.tight_layout(pad=0.05)  # Very minimal padding
                 self.tpm_canvas.draw()
-           
-            
+                
         except Exception as e:
             debug_print(f"DEBUG: Error during plot resize: {e}")
-
 
     def update_plot_size(self):
         """Update plot size to fit container."""
@@ -2764,8 +2689,8 @@ Developed by Charlie Becquet
                 # Only resize if we have valid dimensions
                 if width > 50 and height > 50:
                     # Convert pixels to inches (80 DPI)
-                    fig_width = max(3, width / 80.0)   # Minimum 3 inches wide
-                    fig_height = max(2, height / 80.0) # Minimum 2 inches tall
+                    fig_width = max(3, width / 80.0)   
+                    fig_height = max(2, height / 80.0) 
                 
                     # Update figure size
                     self.tpm_figure.set_size_inches(fig_width, fig_height)
@@ -2785,7 +2710,7 @@ Developed by Charlie Becquet
             current_sample_id = f"Sample {current_tab_index + 1}"
             debug_print(f"DEBUG: Updating stats for {current_sample_id}")
         except:
-            current_sample_id = "Sample 1"  # Default fallback
+            current_sample_id = "Sample 1"  
             current_tab_index = 0
 
         # Clear current sample stats frame
@@ -2807,14 +2732,13 @@ Developed by Charlie Becquet
         sample_header = ttk.Label(self.current_sample_stats_frame, 
                                  text=f"{current_sample_id}: {sample_name}",
                                  font=("Arial", 11, "bold"), style='TLabel')
-        sample_header.pack(anchor="w", pady=(0, 2))  # Reduced from (0, 10)
+        sample_header.pack(anchor="w", pady=(0, 2))  
 
-        # Add separator with minimal padding
-        ttk.Separator(self.current_sample_stats_frame, orient="horizontal").pack(fill="x", pady=1)  # Reduced from 5
+        ttk.Separator(self.current_sample_stats_frame, orient="horizontal").pack(fill="x", pady=1) 
 
         # Create statistics grid with minimal padding
         stat_grid = ttk.Frame(self.current_sample_stats_frame, style='TFrame')
-        stat_grid.pack(fill="x", pady=2)  # Reduced from 10
+        stat_grid.pack(fill="x", pady=2)  
 
         # Configure grid columns
         stat_grid.columnconfigure(0, weight=1)
@@ -2845,8 +2769,8 @@ Developed by Charlie Becquet
             current_puff_count = 0
             recent_tpm_values = []
 
-        # Row 1: Average TPM - minimal padding
-        ttk.Label(stat_grid, text="Average TPM:", style='TLabel').grid(row=0, column=0, sticky="w", pady=1)  # Reduced from 2
+        # Row 1: Average TPM
+        ttk.Label(stat_grid, text="Average TPM:", style='TLabel').grid(row=0, column=0, sticky="w", pady=1)  
         avg_tpm_label = ttk.Label(stat_grid, text=f"{avg_tpm:.6f}" if tpm_values else "N/A", 
                                  font=("Arial", 10, "bold"), style='TLabel')
         avg_tpm_label.grid(row=0, column=1, sticky="e", pady=1)
@@ -2924,7 +2848,6 @@ Developed by Charlie Becquet
             self.tpm_ax.text(0.5, 0.5, 'No TPM data available', 
                             transform=self.tpm_ax.transAxes, ha='center', va='center', fontsize=9)
     
-        # Apply tight layout to ensure everything fits
         self.tpm_figure.tight_layout(pad=0.5)
     
         # Refresh the canvas
@@ -2939,7 +2862,7 @@ Developed by Charlie Becquet
         if not self.hotkeys_enabled:
             return
         current_tab = self.notebook.index(self.notebook.select())
-        target_tab = (current_tab - 1) % len(self.sample_frames)  # Wrap around
+        target_tab = (current_tab - 1) % len(self.sample_frames) 
         self.notebook.select(target_tab)
 
     def go_to_next_sample(self):
@@ -2947,10 +2870,9 @@ Developed by Charlie Becquet
         if not self.hotkeys_enabled:
             return
         current_tab = self.notebook.index(self.notebook.select())
-        target_tab = (current_tab + 1) % len(self.sample_frames)  # Wrap around
+        target_tab = (current_tab + 1) % len(self.sample_frames)  
         self.notebook.select(target_tab)
     
-
     def get_column_name(self, col_idx):
         """Get the internal column name based on column index."""
         # Column mapping varies by test type
@@ -3051,7 +2973,7 @@ Developed by Charlie Becquet
         ttk.Label(left_controls, text="Puff Interval:", style='TLabel').pack(side="left")
         self.puff_interval_var = tk.IntVar(value=self.puff_interval)
     
-        # FIX: Define update function inline since update_puff_interval was deleted
+        # Define update function inline
         def update_interval():
             try:
                 self.puff_interval = self.puff_interval_var.get()
@@ -3066,7 +2988,7 @@ Developed by Charlie Becquet
             to=100, 
             textvariable=self.puff_interval_var, 
             width=5,
-            command=update_interval  # FIX: use inline function
+            command=update_interval 
         )
         puff_spinbox.pack(side="left", padx=5)
 
@@ -3085,12 +3007,6 @@ Developed by Charlie Becquet
         ttk.Button(button_frame, text="Cancel", command=self.on_cancel).pack(side="right", padx=(0, 10))
 
         self.log("Control buttons created", "debug")
-
-
-
-    # ============================================================================
-    # COMPLETE CELL EDITING AND NAVIGATION METHODS
-    # ============================================================================
 
     def finish_edit(self, event=None):
         """Finalize editing of a cell, update data and UI, and optionally navigate."""
@@ -3128,7 +3044,7 @@ Developed by Charlie Becquet
         values[col_idx] = str(value) if value != "" else ""
         tree.item(item, values=values)
 
-        # ENHANCED: Live TPM calculation and display update
+        # Live TPM calculation and display update
         if column_name in ["before_weight", "after_weight", "puffs"]:
             debug_print(f"DEBUG: Triggering live TPM calculation for {sample_id} due to {column_name} change")
         
@@ -3641,7 +3557,3 @@ Developed by Charlie Becquet
             tree.item(item, tags=current_tags)
     
         debug_print(f"DEBUG: Cell highlighted - item: {item}, column: {column}")
-
-    # ============================================================================
-    # END OF CELL EDITING AND NAVIGATION METHODS
-    # ============================================================================
