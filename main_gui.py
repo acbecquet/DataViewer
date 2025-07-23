@@ -24,7 +24,7 @@ def lazy_import_pandas():
         import pandas as pd
         return pd
     except ImportError as e:
-        print(f"Error importing pandas: {e}")
+        debug_print(f"Error importing pandas: {e}")
         return None
 
 def lazy_import_numpy():
@@ -33,7 +33,7 @@ def lazy_import_numpy():
         import numpy as np
         return np
     except ImportError as e:
-        print(f"Error importing numpy: {e}")
+        debug_print(f"Error importing numpy: {e}")
         return None
 
 def lazy_import_matplotlib():
@@ -43,7 +43,7 @@ def lazy_import_matplotlib():
         matplotlib.use('TkAgg')
         return matplotlib
     except ImportError as e:
-        print(f"Error importing matplotlib: {e}")
+        debug_print(f"Error importing matplotlib: {e}")
         return None
 
 def lazy_import_tkintertable():
@@ -52,7 +52,7 @@ def lazy_import_tkintertable():
         from tkintertable import TableCanvas, TableModel
         return TableCanvas, TableModel
     except ImportError as e:
-        print(f"Error importing tkintertable: {e}")
+        debug_print(f"Error importing tkintertable: {e}")
         return None, None
 
 def lazy_import_requests():
@@ -61,7 +61,7 @@ def lazy_import_requests():
         import requests
         return requests
     except ImportError as e:
-        print(f"Error importing requests: {e}")
+        debug_print(f"Error importing requests: {e}")
         return None
 
 def lazy_import_packaging():
@@ -70,7 +70,7 @@ def lazy_import_packaging():
         from packaging import version
         return version
     except ImportError as e:
-        print(f"Error importing packaging: {e}")
+        debug_print(f"Error importing packaging: {e}")
         return None
 
 def _lazy_import_processing():
@@ -80,7 +80,7 @@ def _lazy_import_processing():
         from processing import get_valid_plot_options
         return processing, get_valid_plot_options
     except ImportError as e:
-        print(f"Error importing processing: {e}")
+        debug_print(f"Error importing processing: {e}")
         return None, None
 
 def lazy_import_viscosity_gui():
@@ -89,7 +89,7 @@ def lazy_import_viscosity_gui():
         from viscosity_gui import ViscosityGUI
         return ViscosityGUI
     except ImportError as e:
-        print(f"Error importing viscosity GUI: {e}")
+        debug_print(f"Error importing viscosity GUI: {e}")
         return None
 
 # Import utilities after lazy imports
@@ -248,7 +248,7 @@ Would you like to download and install the update?"""
         """Initialize variables used throughout the GUI."""
         pd = self.get_pandas()
         if not pd:
-            print("ERROR: Could not load pandas")
+            debug_print("ERROR: Could not load pandas")
             return None
             
         # Basic variables
@@ -548,7 +548,7 @@ Would you like to download and install the update?"""
             self.root.destroy()
             os._exit(0)
         except Exception as e:
-            print(f"Error during shutdown: {e}")
+            debug_print(f"Error during shutdown: {e}")
             os._exit(1)
 
     def add_menu(self) -> None:
@@ -580,7 +580,7 @@ Would you like to download and install the update?"""
         dbmenu.add_command(label="Browse Database", command=lambda: self.file_manager.show_database_browser())
         menubar.add_cascade(label="Database", menu=dbmenu)
 
-       # Calculate menu
+        # Calculate menu
         calculatemenu = tk.Menu(menubar, tearoff=0)
         calculatemenu.add_command(label="Viscosity (Under Development)", command=self.open_viscosity_calculator)
         menubar.add_cascade(label="Calculate", menu=calculatemenu)
@@ -777,7 +777,7 @@ Would you like to download and install the update?"""
                 self.root.after(0, lambda: self._finish_sheet_update(sheet_name, data, is_empty, is_plotting_sheet, processing))
 
             except Exception as e:
-                print(f"Error in background sheet update: {e}")
+                debug_print(f"Error in background sheet update: {e}")
 
         # Start background processing
         thread = threading.Thread(target=update_in_background, daemon=True)
@@ -816,7 +816,7 @@ Would you like to download and install the update?"""
                     self.num_columns_per_sample = 12
 
             except Exception as e:
-                print(f"ERROR: Processing function failed for {sheet_name}: {e}")
+                debug_print(f"ERROR: Processing function failed for {sheet_name}: {e}")
                 messagebox.showerror("Processing Error", f"Error processing sheet '{sheet_name}': {e}")
                 return
 
@@ -824,7 +824,7 @@ Would you like to download and install the update?"""
             try:
                 self.display_table(self.table_frame, processed_data, sheet_name, is_plotting_sheet)
             except Exception as e:
-                print(f"ERROR: Failed to display table: {e}")
+                debug_print(f"ERROR: Failed to display table: {e}")
 
             # Display plot if it's a plotting sheet
             if is_plotting_sheet:
@@ -834,12 +834,12 @@ Would you like to download and install the update?"""
                     else:
                         self._show_empty_plot_message()
                 except Exception as e:
-                    print(f"ERROR: Failed to display plot: {e}")
+                    debug_print(f"ERROR: Failed to display plot: {e}")
 
             self.root.update_idletasks()
 
         except Exception as e:
-            print(f"Error finishing sheet update: {e}")
+            debug_print(f"Error finishing sheet update: {e}")
 
     def _setup_image_loader(self, sheet_name, is_plotting_sheet):
         """Setup image loader for current sheet."""
@@ -943,7 +943,7 @@ Would you like to download and install the update?"""
                         # Try database filename as fallback
                         original_filename = current_file_data.get('database_filename')
                 
-                    print(f"DEBUG: Found original filename for data collection: {original_filename}")
+                    debug_print(f"DEBUG: Found original filename for data collection: {original_filename}")
         
             self.file_manager.show_test_start_menu(self.file_path, original_filename=original_filename)
 
@@ -1148,39 +1148,6 @@ Would you like to download and install the update?"""
 
         table_canvas.show()
 
-    def update_plot_dropdown(self):
-        """Update the plot type dropdown with only the valid options and manage visibility."""
-        current_sheet = self.selected_sheet.get()
-        if current_sheet not in self.filtered_sheets:
-            self.plot_dropdown.pack_forget()
-            return
-
-        sheet_data = self.filtered_sheets[current_sheet]["data"]
-        processing, get_valid_plot_options = _lazy_import_processing()
-        if not processing:
-            return
-            
-        valid_plot_options = get_valid_plot_options(self.plot_options, sheet_data)
-
-        if valid_plot_options:
-            self.plot_dropdown['values'] = valid_plot_options
-
-            if self.selected_plot_type.get() not in valid_plot_options:
-                self.selected_plot_type.set(valid_plot_options[0])
-
-            self.plot_dropdown.pack(fill="x", pady=(5, 5))
-            self.plot_dropdown.bind(
-                "<<ComboboxSelected>>",
-                lambda event: self.plot_manager.plot_all_samples(self.display_frame, self.get_full_sample_data(), 12)
-            )
-        else:
-            self.plot_dropdown.pack_forget()
-
-    def get_full_sample_data(self):
-        """Get full sample data for plotting."""
-        # This method was referenced but missing - implement based on your needs
-        return getattr(self, 'current_sheet_data', pd.DataFrame())
-
     def store_images(self, sheet_name, paths):
         """Store image paths and their crop states for a specific sheet."""
         if not sheet_name:
@@ -1272,7 +1239,6 @@ Would you like to download and install the update?"""
         if not ViscosityGUI:
             messagebox.showerror("Error", "Could not load viscosity calculator")
             return
-    
         try:
             # Create and show the viscosity calculator as a child window
             viscosity_app = ViscosityGUI(parent=self.root)

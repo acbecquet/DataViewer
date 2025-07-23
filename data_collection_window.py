@@ -159,7 +159,7 @@ class DataCollectionWindow:
         # Store the original filename for saving purposes
         self.original_filename = original_filename
         if self.original_filename:
-            print(f"DEBUG: DataCollectionWindow initialized with original filename: {self.original_filename}")
+            debug_print(f"DEBUG: DataCollectionWindow initialized with original filename: {self.original_filename}")
     
 
         # Validate num_samples
@@ -1835,7 +1835,7 @@ Developed by Charlie Becquet
             
             # Check for reasonable weight values (between 0.001g and 100g)
             if weight_value < 0.001 or weight_value > 100:
-                print(f"WARNING: Weight value {weight_value}g seems unreasonable for row {row_idx}")
+                debug_print(f"WARNING: Weight value {weight_value}g seems unreasonable for row {row_idx}")
                 return False
                 
             # If this is an after_weight, check that it's less than before_weight
@@ -1845,7 +1845,7 @@ Developed by Charlie Becquet
                     try:
                         before_weight = float(before_weight_str.strip())
                         if weight_value >= before_weight:
-                            print(f"WARNING: After weight ({weight_value}g) should be less than before weight ({before_weight}g)")
+                            debug_print(f"WARNING: After weight ({weight_value}g) should be less than before weight ({before_weight}g)")
                             return False
                     except ValueError:
                         pass
@@ -1857,7 +1857,7 @@ Developed by Charlie Becquet
                     try:
                         after_weight = float(after_weight_str.strip())
                         if weight_value <= after_weight:
-                            print(f"WARNING: Before weight ({weight_value}g) should be greater than after weight ({after_weight}g)")
+                            debug_print(f"WARNING: Before weight ({weight_value}g) should be greater than after weight ({after_weight}g)")
                             return False
                     except ValueError:
                         pass
@@ -1865,7 +1865,7 @@ Developed by Charlie Becquet
             return True
             
         except ValueError:
-            print(f"ERROR: Invalid weight value '{value}' - must be a number")
+            debug_print(f"ERROR: Invalid weight value '{value}' - must be a number")
             return False
     
     def load_existing_data_from_loaded_sheets(self):
@@ -2712,11 +2712,9 @@ Developed by Charlie Becquet
             frame_width = self.plot_frame.winfo_width()
             frame_height = self.plot_frame.winfo_height()
         
-            #debug_print(f"DEBUG: Plot frame resized to: {frame_width}x{frame_height}")
-        
             # Skip if dimensions are too small or not ready
             if frame_width <= 1 or frame_height <= 1:
-                #debug_print("DEBUG: Frame dimensions too small, skipping resize")
+               
                 return
             
             # Calculate figure size in inches (accounting for minimal padding and DPI)
@@ -2730,7 +2728,7 @@ Developed by Charlie Becquet
             new_width_inches = max(2.0, (frame_width - padding_pixels) / dpi)
             new_height_inches = max(1.5, (available_plot_height - padding_pixels) / dpi)
         
-            #debug_print(f"DEBUG: Calculated new figure size: {new_width_inches:.2f}x{new_height_inches:.2f} inches")
+           
         
             # Only resize if the change is significant (avoid excessive redraws)
             current_size = self.tpm_figure.get_size_inches()
@@ -2738,7 +2736,7 @@ Developed by Charlie Becquet
             height_diff = abs(current_size[1] - new_height_inches)
         
             if width_diff > 0.1 or height_diff > 0.1:
-                #debug_print(f"DEBUG: Resizing figure from {current_size[0]:.2f}x{current_size[1]:.2f} to {new_width_inches:.2f}x{new_height_inches:.2f}")
+               
             
                 # Resize the figure
                 self.tpm_figure.set_size_inches(new_width_inches, new_height_inches)
@@ -2746,10 +2744,7 @@ Developed by Charlie Becquet
                 # Apply very tight layout and redraw
                 self.tpm_figure.tight_layout(pad=0.05)  # Very minimal padding
                 self.tpm_canvas.draw()
-            
-                #debug_print("DEBUG: Plot resizing completed successfully")
-            
-                #debug_print("DEBUG: Size change too small, skipping resize to avoid excessive redraws")
+           
             
         except Exception as e:
             debug_print(f"DEBUG: Error during plot resize: {e}")
@@ -3423,7 +3418,7 @@ Developed by Charlie Becquet
         return "break"  # Stop event propagation
 
     def start_edit_on_typing(self, event, tree, sample_id):
-        """Start editing if a printable character is typed while a cell is selected."""
+        """Start editing if a debug_printable character is typed while a cell is selected."""
         if not event.char.isprintable():
             return  # Skip control keys
 

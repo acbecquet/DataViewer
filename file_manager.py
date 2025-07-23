@@ -221,7 +221,7 @@ class FileManager:
 
         except Exception as e:
             error_msg = f"Error occurred while loading file: {e}"
-            print(f"ERROR: {error_msg}")
+            debug_print(f"ERROR: {error_msg}")
             traceback.print_exc()
             messagebox.showerror("Error", error_msg)
 
@@ -390,7 +390,7 @@ class FileManager:
                 os.unlink(temp_vap3_path)
                 debug_print(f"DEBUG: Cleaned up temporary file: {temp_vap3_path}")
             except Exception as cleanup_error:
-                print(f"WARNING: Failed to clean up temporary file: {cleanup_error}")
+                debug_print(f"WARNING: Failed to clean up temporary file: {cleanup_error}")
 
             # Update progress
             self.gui.progress_dialog.update_progress_bar(100)
@@ -403,7 +403,7 @@ class FileManager:
 
         except Exception as e:
             error_msg = f"Error storing file in database: {e}"
-            print(f"ERROR: {error_msg}")
+            debug_print(f"ERROR: {error_msg}")
             traceback.print_exc()
         finally:
             # Hide progress dialog
@@ -490,7 +490,7 @@ class FileManager:
             debug_print(f"DEBUG: Raw database filename: {raw_database_filename}")
             created_at = file_data.get('created_at')
 
-            # DEBUG: Print all available data for troubleshooting
+            # DEBUG: debug_print all available data for troubleshooting
             debug_print(f"DEBUG: Retrieved file data keys: {list(file_data.keys())}")
             debug_print(f"DEBUG: Database filename field: '{file_data['filename']}'")
             debug_print(f"DEBUG: Metadata exists: {'meta_data' in file_data}")
@@ -1101,7 +1101,7 @@ class FileManager:
             try:
                 subprocess.Popen(cmd, shell=True)
             except Exception as e:
-                print(f"Error launching Excel with command: {e}")
+                debug_print(f"Error launching Excel with command: {e}")
                 os.startfile(os.path.abspath(temp_file))
             
             time.sleep(2.0)
@@ -1288,7 +1288,7 @@ class FileManager:
             
         # Store the original filename for later use
         if original_filename:
-            print(f"DEBUG: Storing original filename for data collection: {original_filename}")
+            debug_print(f"DEBUG: Storing original filename for data collection: {original_filename}")
             # You can store this in a class attribute or pass it through the flow
             self.current_original_filename = original_filename
         else:
@@ -1576,7 +1576,7 @@ class FileManager:
             return header_data
         
         except Exception as e:
-            print(f"ERROR: Exception extracting header data from Excel file: {e}")
+            debug_print(f"ERROR: Exception extracting header data from Excel file: {e}")
             traceback.print_exc()
             return None
 
@@ -1926,12 +1926,12 @@ class FileManager:
             
             else:
                 error_msg = f"Sheet '{header_data['test']}' not found in the file. Available sheets: {wb.sheetnames}"
-                print(f"ERROR: {error_msg}")
+                debug_print(f"ERROR: {error_msg}")
                 messagebox.showerror("Error", error_msg)
             
         except Exception as e:
             error_msg = f"Error applying header data: {str(e)}"
-            print(f"ERROR: {error_msg}")
+            debug_print(f"ERROR: {error_msg}")
             debug_print("DEBUG: Full traceback:")
             traceback.print_exc()
             messagebox.showerror("Error", error_msg)
