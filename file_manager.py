@@ -1279,13 +1279,21 @@ class FileManager:
                     pass
             return None
 
-    def show_test_start_menu(self, file_path):
+    def show_test_start_menu(self, file_path, original_filename = None):
         """
         Show the test start menu for a file.
         If file is already loaded, try to extract existing header data and skip the dialog.
         """
         debug_print(f"DEBUG: Showing test start menu for file: {file_path}")
-    
+            
+        # Store the original filename for later use
+        if original_filename:
+            print(f"DEBUG: Storing original filename for data collection: {original_filename}")
+            # You can store this in a class attribute or pass it through the flow
+            self.current_original_filename = original_filename
+        else:
+            self.current_original_filename = None
+
         # For .vap3 files or files that don't exist, use loaded sheet data instead
         available_tests = None
         if file_path.endswith('.vap3') or not os.path.exists(file_path):
@@ -1609,23 +1617,28 @@ class FileManager:
         debug_print("DEBUG: Header data validation passed")
         return True
 
+
+
     def start_data_collection_with_header_data(self, file_path, selected_test, header_data):
         """Start data collection directly with existing header data."""
         debug_print("DEBUG: Starting data collection with existing header data")
-        
+    
         try:
             # Show the data collection window directly
             from data_collection_window import DataCollectionWindow
-            data_collection = DataCollectionWindow(self.gui, file_path, selected_test, header_data)
-            data_result = data_collection.show()
         
+            # Pass the original filename to the data collection window
+            original_filename = getattr(self, 'current_original_filename', None)
+            data_collection = DataCollectionWindow(self.gui, file_path, selected_test, header_data, original_filename=original_filename)
+            data_result = data_collection.show()
+    
             if data_result == "load_file":
                 debug_print("DEBUG: Data collection completed - file should already be loaded, updating UI only")
                 self.ensure_file_is_loaded_in_ui(file_path)
             elif data_result == "cancel":
                 debug_print("DEBUG: Data collection was cancelled - file should already be loaded, updating UI only")
                 self.ensure_file_is_loaded_in_ui(file_path)
-                
+            
         except Exception as e:
             debug_print(f"DEBUG: Error starting data collection: {e}")
             traceback.print_exc()
@@ -1634,22 +1647,63 @@ class FileManager:
     def ensure_file_is_loaded_in_ui(self, file_path):
         """Ensure the file is properly loaded in the UI without redundant processing."""
         debug_print(f"DEBUG: Ensuring file {file_path} is loaded in UI")
+    
+        # Special handling for .vap3 files - they're already loaded in memory
+        if file_path.endswith('.vap3'):
+            debug_print("DEBUG: .vap3 file detected - file should already be loaded in memory")
         
+            # For .vap3 files, just verify the UI state is correct
+            if hasattr(self.gui, 'filtered_sheets') and self.gui.filtered_sheets:
+                debug_print("DEBUG: .vap3 file data is already loaded, ensuring UI is updated")
+            
+                # Check if file is in all_filtered_sheets
+                file_name = None
+                for file_data in self.gui.all_filtered_sheets:
+                    if file_data.get("file_path") == file_path:
+                        file_name = file_data["file_name"]
+                        break
+            
+                if file_name:
+                    debug_print(f"DEBUG: Found .vap3 file in loaded files: {file_name}")
+                    try:
+                        self.set_active_file(file_name)
+                        self.update_ui_for_current_file()
+                        return True
+                    except Exception as e:
+                        debug_print(f"ERROR: Failed to set active .vap3 file: {e}")
+                        return False
+                else:
+                    debug_print("DEBUG: .vap3 file not found in loaded files list")
+                    # The file data is loaded but not in the list - this is OK for database files
+                    # Just update the UI with current data
+                    if hasattr(self.gui, 'update_displayed_sheet') and hasattr(self.gui, 'selected_sheet'):
+                        current_sheet = self.gui.selected_sheet.get()
+                        if current_sheet in self.gui.filtered_sheets:
+                            self.gui.update_displayed_sheet(current_sheet)
+                            debug_print(f"DEBUG: Updated display for current sheet: {current_sheet}")
+                            return True
+                    debug_print("DEBUG: Could not update .vap3 file UI")
+                    return False
+            else:
+                debug_print("ERROR: .vap3 file should be loaded but no data found")
+                return False
+    
+        # Regular Excel file handling (existing code)
         # Validate file path
         if not file_path or not os.path.exists(file_path):
-            print(f"ERROR: Invalid file path: {file_path}")
+            debug_print(f"ERROR: Invalid file path: {file_path}")
             return False
-        
+    
         # Check if file is already in the UI state
         file_name = os.path.basename(file_path)
-        
+    
         # Look for existing entry in all_filtered_sheets
         existing_entry = None
         for file_data in self.gui.all_filtered_sheets:
             if file_data["file_path"] == file_path:
                 existing_entry = file_data
                 break
-        
+    
         if existing_entry:
             debug_print("DEBUG: File already in UI state, just updating active file")
             try:
@@ -1657,29 +1711,29 @@ class FileManager:
                 self.update_ui_for_current_file()
                 return True
             except Exception as e:
-                print(f"ERROR: Failed to set active file: {e}")
+                debug_print(f"ERROR: Failed to set active file: {e}")
                 return False
         else:
             debug_print("DEBUG: File not in UI state, adding it")
             try:
                 # Load file without database storage (skip_database_storage=True)
                 self.load_excel_file(file_path, skip_database_storage=True)
-                
+            
                 # Add to all_filtered_sheets
                 self.gui.all_filtered_sheets.append({
                     "file_name": file_name,
                     "file_path": file_path,
                     "filtered_sheets": copy.deepcopy(self.gui.filtered_sheets)
                 })
-                
+            
                 self.update_file_dropdown()
                 self.set_active_file(file_name)
                 self.update_ui_for_current_file()
                 debug_print(f"DEBUG: Successfully added file {file_name} to UI")
                 return True
-                
+            
             except Exception as e:
-                print(f"ERROR: Failed to load file into UI: {e}")
+                debug_print(f"ERROR: Failed to load file into UI: {e}")
                 traceback.print_exc()
                 return False
 

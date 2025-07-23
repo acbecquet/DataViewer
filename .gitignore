@@ -23,6 +23,7 @@ pyvenv.cfg
 
 # IDE files
 .vscode/
+.vs/
 .idea/
 *.swp
 

@@ -925,7 +925,27 @@ Would you like to download and install the update?"""
         if not hasattr(self, 'filtered_sheets') or not self.filtered_sheets or not hasattr(self, 'file_path') or not self.file_path:
             self.show_data_collection_startup_dialog()
         else:
-            self.file_manager.show_test_start_menu(self.file_path)
+            # Get the original filename for .vap3 files loaded from database
+            original_filename = None
+        
+            # Check if this file was loaded from database and has original filename metadata
+            if hasattr(self, 'all_filtered_sheets') and self.all_filtered_sheets:
+                current_file_data = None
+                for file_data in self.all_filtered_sheets:
+                    if file_data.get("file_path") == self.file_path:
+                        current_file_data = file_data
+                        break
+            
+                if current_file_data:
+                    # Check for original filename in metadata
+                    original_filename = current_file_data.get('original_filename')
+                    if not original_filename:
+                        # Try database filename as fallback
+                        original_filename = current_file_data.get('database_filename')
+                
+                    print(f"DEBUG: Found original filename for data collection: {original_filename}")
+        
+            self.file_manager.show_test_start_menu(self.file_path, original_filename=original_filename)
 
     def open_sensory_data_collection(self):
         """Open the sensory data collection window."""

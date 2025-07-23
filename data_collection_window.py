@@ -136,7 +136,7 @@ Key Points:
 }
 
 class DataCollectionWindow:
-    def __init__(self, parent, file_path, test_name, header_data):
+    def __init__(self, parent, file_path, test_name, header_data, original_filename=None):
         """
         Initialize the data collection window.
     
@@ -155,6 +155,12 @@ class DataCollectionWindow:
         self.header_data = header_data
         self.num_samples = header_data["num_samples"]
         self.result = None
+
+        # Store the original filename for saving purposes
+        self.original_filename = original_filename
+        if self.original_filename:
+            print(f"DEBUG: DataCollectionWindow initialized with original filename: {self.original_filename}")
+    
 
         # Validate num_samples
         if self.num_samples <= 0:
@@ -336,12 +342,32 @@ class DataCollectionWindow:
     
     def center_window(self):
         """Center the window on the screen."""
-        self.window.update_idletasks()
+        # Force the window to update and calculate its actual size
+        self.window.update()
+    
+        # Get the actual window dimensions
         width = self.window.winfo_width()
         height = self.window.winfo_height()
-        x = (self.window.winfo_screenwidth() // 2) - (width // 2)
-        y = (self.window.winfo_screenheight() // 2) - (height // 2)
+    
+        # If width/height are still too small, use the requested size
+        if width < 100 or height < 100:
+            self.window.update_idletasks()
+            width = self.window.winfo_reqwidth()
+            height = self.window.winfo_reqheight()
+    
+        # Calculate center position
+        screen_width = self.window.winfo_screenwidth()
+        screen_height = self.window.winfo_screenheight()
+        x = (screen_width // 2) - (width // 2)
+        y = (screen_height // 2) - (height // 2)
+    
+        # Ensure the window isn't positioned off-screen
+        x = max(0, min(x, screen_width - width))
+        y = max(0, min(y, screen_height - height))
+    
         self.window.geometry(f"{width}x{height}+{x}+{y}")
+    
+        debug_print(f"DEBUG: Window centered at {x},{y} with size {width}x{height}")
     
     def on_canvas_resize(self, event=None):
         """Handle canvas resize events to update plot size."""
@@ -430,10 +456,10 @@ class DataCollectionWindow:
         header_frame.pack(fill="x", padx=5, pady=5)
     
         # Add small toggle button on the left with minimal size
-        self.sop_visible = True
+        self.sop_visible = False
         self.toggle_sop_button = ttk.Button(
             header_frame,
-            text="Hide",
+            text="Show",
             width=6,  # Even smaller width
             command=self.toggle_sop_visibility
         )
@@ -460,7 +486,7 @@ class DataCollectionWindow:
             padx=10,
             pady=5
         )
-        self.sop_text_widget.pack(fill="x", padx=10, pady=(0, 5))
+
     
         # Insert the SOP text and center it
         self.sop_text_widget.insert("1.0", sop_text.strip())
@@ -1246,72 +1272,119 @@ Developed by Charlie Becquet
         debug_print(f"DEBUG: Excel file saved successfully to {self.file_path}")
     
     def _save_to_loaded_sheets(self):
-        """Save data back to the loaded sheet data (for .vap3 files)."""
-        debug_print(f"DEBUG: Saving data to loaded sheets for test: {self.test_name}")
+        """Save data to the loaded sheets in memory."""
+        debug_print("DEBUG: _save_to_loaded_sheets() starting")
+    
+        # Use original filename if available, otherwise fall back to file_path
+        display_filename = self.original_filename if self.original_filename else os.path.basename(self.file_path)
+    
+        debug_print(f"DEBUG: Saving to loaded sheets with display filename: {display_filename}")
     
         try:
+            # Find the correct file data in all_filtered_sheets
+            
+            current_file_data = None
+        
+            # For .vap3 files, the matching logic needs to be more flexible
+            if self.file_path.endswith('.vap3'):
+                debug_print("DEBUG: .vap3 file detected, using flexible matching")
+            
+                # Try multiple matching strategies for .vap3 files
+                for file_data in self.parent.all_filtered_sheets:
+                    # First try original filename match
+                    if (self.original_filename and 
+                        (file_data.get("original_filename") == self.original_filename or
+                         file_data.get("database_filename") == self.original_filename or
+                         file_data.get("file_name") == self.original_filename)):
+                        current_file_data = file_data
+                        debug_print(f"DEBUG: Found matching .vap3 file by original filename: {self.original_filename}")
+                        break
+                
+                    # Then try display filename match
+                    if (display_filename and 
+                        (file_data.get("file_name") == display_filename or
+                         file_data.get("display_filename") == display_filename)):
+                        current_file_data = file_data
+                        debug_print(f"DEBUG: Found matching .vap3 file by display filename: {display_filename}")
+                        break
+            
+                # If still no match, just use the first loaded file for .vap3 files
+                if not current_file_data and self.parent.all_filtered_sheets:
+                    current_file_data = self.parent.all_filtered_sheets[0]
+                    debug_print("DEBUG: Using first loaded file as fallback for .vap3 file")
+            else:
+                # Regular Excel file matching
+                for file_data in self.parent.all_filtered_sheets:
+                    if file_data.get("file_path") == self.file_path:
+                        current_file_data = file_data
+                        debug_print(f"DEBUG: Found matching Excel file: {self.file_path}")
+                        break
+
+            if not current_file_data:
+                debug_print(f"ERROR: Could not find file data for {display_filename}")
+                return
+
+            debug_print(f"DEBUG: Saving data to loaded sheets for test: {self.test_name}")
+
             # Check if the sheet exists in loaded data
             if not hasattr(self.parent, 'filtered_sheets') or self.test_name not in self.parent.filtered_sheets:
                 debug_print(f"ERROR: Sheet {self.test_name} not found in loaded data")
                 raise Exception(f"Sheet '{self.test_name}' not found in loaded data")
-            
+        
             sheet_data = self.parent.filtered_sheets[self.test_name]['data'].copy()
             debug_print(f"DEBUG: Found loaded sheet data with shape: {sheet_data.shape}")
-        
-            # Determine format
+    
+            # Determine format based on test type
             if self.test_name in ["User Test Simulation", "User Simulation Test"]:
-                columns_per_sample = 8
+                columns_per_sample = 8  # [Chronography, Puffs, Before Weight, After Weight, Draw Pressure, Failure, Notes, TPM]
                 debug_print("DEBUG: Saving in User Test Simulation format")
             else:
-                columns_per_sample = 12
+                columns_per_sample = 12  # [Puffs, Before Weight, After Weight, Draw Pressure, Resistance, Smell, Clog, Notes, TPM, etc.]
                 debug_print("DEBUG: Saving in standard format")
-        
+    
             total_data_written = 0
-        
+    
             # Save data for each sample
             for sample_idx in range(self.num_samples):
                 sample_id = f"Sample {sample_idx + 1}"
                 col_offset = sample_idx * columns_per_sample
-            
+        
                 debug_print(f"DEBUG: Saving data for {sample_id} with column offset {col_offset}")
-            
+        
                 sample_data_written = 0
                 data_start_row = 4  # Data starts at row 5 (0-indexed row 4)
-            
+        
                 # Clear existing data in this sample's area first
                 for clear_row in range(data_start_row, len(sheet_data)):
                     for clear_col in range(col_offset, col_offset + columns_per_sample):
                         if clear_col < len(sheet_data.columns):
-                            sheet_data.iloc[clear_row, clear_col] = None
-            
-                # Write the data
-                num_rows = len(self.data[sample_id]["puffs"])
-            
-                for i in range(num_rows):
+                            sheet_data.iloc[clear_row, clear_col] = ""
+        
+                # Write new data for this sample
+                for i in range(len(self.data[sample_id]["puffs"])):
                     data_row_idx = data_start_row + i
                 
-                    # Ensure the DataFrame has enough rows
-                    while data_row_idx >= len(sheet_data):
-                        # Add a new row filled with NaN
-                        new_row = pd.DataFrame([[None] * len(sheet_data.columns)], columns=sheet_data.columns)
-                        sheet_data = pd.concat([sheet_data, new_row], ignore_index=True)
+                    # Ensure we don't exceed the DataFrame bounds
+                    if data_row_idx >= len(sheet_data):
+                        break
                 
                     try:
+                        # Prepare data values based on test type
                         if self.test_name in ["User Test Simulation", "User Simulation Test"]:
-                            # User Test Simulation format
+                            # User Test Simulation format: [Chronography, Puffs, Before Weight, After Weight, Draw Pressure, Failure, Notes, TPM]
                             values_to_write = [
                                 self.data[sample_id]["chronography"][i] if i < len(self.data[sample_id]["chronography"]) else "",
                                 self.data[sample_id]["puffs"][i] if i < len(self.data[sample_id]["puffs"]) else "",
                                 self.data[sample_id]["before_weight"][i] if i < len(self.data[sample_id]["before_weight"]) else "",
                                 self.data[sample_id]["after_weight"][i] if i < len(self.data[sample_id]["after_weight"]) else "",
                                 self.data[sample_id]["draw_pressure"][i] if i < len(self.data[sample_id]["draw_pressure"]) else "",
-                                self.data[sample_id]["smell"][i] if i < len(self.data[sample_id]["smell"]) else "",  # Failure column
+                                self.data[sample_id]["smell"][i] if i < len(self.data[sample_id]["smell"]) else "",  # "Failure" stored in smell field
                                 self.data[sample_id]["notes"][i] if i < len(self.data[sample_id]["notes"]) else "",
                                 self.data[sample_id]["tpm"][i] if i < len(self.data[sample_id]["tpm"]) and self.data[sample_id]["tpm"][i] is not None else ""
                             ]
-                        
+                    
                         else:
-                            # Standard format
+                            # Standard format: [Puffs, Before Weight, After Weight, Draw Pressure, Resistance, Smell, Clog, Notes, TPM]
                             values_to_write = [
                                 self.data[sample_id]["puffs"][i] if i < len(self.data[sample_id]["puffs"]) else "",
                                 self.data[sample_id]["before_weight"][i] if i < len(self.data[sample_id]["before_weight"]) else "",
@@ -1323,36 +1396,36 @@ Developed by Charlie Becquet
                                 self.data[sample_id]["notes"][i] if i < len(self.data[sample_id]["notes"]) else "",
                                 self.data[sample_id]["tpm"][i] if i < len(self.data[sample_id]["tpm"]) and self.data[sample_id]["tpm"][i] is not None else ""
                             ]
-                    
+                
                         # Write values to the appropriate columns
                         for col_idx, value in enumerate(values_to_write):
                             target_col = col_offset + col_idx
                             if target_col < len(sheet_data.columns):
                                 sheet_data.iloc[data_row_idx, target_col] = value
-                    
+                
                         sample_data_written += 1
-                    
+                
                     except Exception as e:
                         debug_print(f"DEBUG: Error writing row {i} for {sample_id}: {e}")
                         continue
-            
+        
                 total_data_written += sample_data_written
                 debug_print(f"DEBUG: Wrote {sample_data_written} data rows for {sample_id}")
-        
-            # Update the loaded sheet data
+    
+            # Update the loaded sheet data in memory
             self.parent.filtered_sheets[self.test_name]['data'] = sheet_data
             debug_print(f"DEBUG: Updated loaded sheet data with {total_data_written} total data rows")
-        
-            # Also update the UI state if needed
+    
+            # Also update the UI state in all_filtered_sheets
             if hasattr(self.parent, 'all_filtered_sheets'):
                 for file_data in self.parent.all_filtered_sheets:
                     if self.test_name in file_data.get('filtered_sheets', {}):
                         file_data['filtered_sheets'][self.test_name]['data'] = sheet_data.copy()
                         debug_print("DEBUG: Updated all_filtered_sheets with new data")
                         break
-        
+    
             debug_print("DEBUG: Successfully saved data to loaded sheets")
-        
+    
         except Exception as e:
             debug_print(f"ERROR: Failed to save data to loaded sheets: {e}")
             import traceback
@@ -1608,70 +1681,94 @@ Developed by Charlie Becquet
             # Use test_name as the sheet to refresh
             current_sheet_name = self.test_name
             debug_print(f"DEBUG: Target sheet: {current_sheet_name}")
-        
+    
             # Check parent and file_manager
             debug_print(f"DEBUG: Has parent: {hasattr(self, 'parent')}")
             debug_print(f"DEBUG: Parent exists: {self.parent is not None}")
             debug_print(f"DEBUG: Has file_manager: {hasattr(self.parent, 'file_manager')}")
             debug_print(f"DEBUG: File manager exists: {self.parent.file_manager is not None}")
+    
+            # Handle .vap3 files differently - they don't need reloading from disk
+            if self.file_path.endswith('.vap3'):
+                debug_print("DEBUG: .vap3 file detected - updating UI without reloading from disk")
+            
+                # For .vap3 files, the data is already updated in memory
+                # Just refresh the display without reloading
+                if hasattr(self.parent, 'selected_sheet'):
+                    if not self.parent.selected_sheet:
+                        import tkinter as tk
+                        self.parent.selected_sheet = tk.StringVar()
+                        debug_print("DEBUG: Created selected_sheet variable")
+                    self.parent.selected_sheet.set(current_sheet_name)
+                    debug_print(f"DEBUG: Set sheet to {current_sheet_name}")
+
+                # Update the display
+                if hasattr(self.parent, 'update_displayed_sheet'):
+                    debug_print("DEBUG: Calling update_displayed_sheet")
+                    self.parent.update_displayed_sheet(current_sheet_name)
+                    debug_print("DEBUG: Display updated")
+                else:
+                    debug_print("DEBUG: No update_displayed_sheet method available")
         
-            # Force reload the file
-            if hasattr(self.parent, 'file_manager') and self.parent.file_manager:
-                debug_print(f"DEBUG: Force reloading {self.file_path}")
-            
+            else:
+                # Regular Excel file handling
+                debug_print(f"DEBUG: Force reloading Excel file {self.file_path}")
+        
                 # Clear any existing cache for this file first
-                if hasattr(self.parent.file_manager, 'loaded_files_cache'):
-                    cache_key = f"{self.file_path}_None"
-                    if cache_key in self.parent.file_manager.loaded_files_cache:
-                        del self.parent.file_manager.loaded_files_cache[cache_key]
-                        debug_print("DEBUG: Cleared file cache")
+                if hasattr(self.parent, 'file_manager') and self.parent.file_manager:
+                    if hasattr(self.parent.file_manager, 'loaded_files_cache'):
+                        cache_key = f"{self.file_path}_None"
+                        if cache_key in self.parent.file_manager.loaded_files_cache:
+                            del self.parent.file_manager.loaded_files_cache[cache_key]
+                            debug_print("DEBUG: Cleared file cache")
             
-                self.parent.file_manager.load_excel_file(
-                    self.file_path, 
-                    skip_database_storage=True,
-                    force_reload=True
-                )
-                debug_print("DEBUG: File reloaded")
-            else:
-                debug_print("DEBUG: Cannot reload - file_manager not available")
+                    self.parent.file_manager.load_excel_file(
+                        self.file_path, 
+                        skip_database_storage=True,
+                        force_reload=True
+                    )
+                    debug_print("DEBUG: Excel file reloaded")
 
-            # Update all_filtered_sheets
-            if hasattr(self.parent, 'all_filtered_sheets') and hasattr(self.parent, 'current_file'):
-                debug_print(f"DEBUG: Updating all_filtered_sheets for {self.parent.current_file}")
-                for file_data in self.parent.all_filtered_sheets:
-                    if file_data.get("file_name") == self.parent.current_file:
-                        file_data["filtered_sheets"] = copy.deepcopy(self.parent.filtered_sheets)
-                        debug_print("DEBUG: Updated all_filtered_sheets entry")
-                        break
+                    # Update all_filtered_sheets
+                    if hasattr(self.parent, 'all_filtered_sheets') and hasattr(self.parent, 'current_file'):
+                        debug_print(f"DEBUG: Updating all_filtered_sheets for {self.parent.current_file}")
+                        for file_data in self.parent.all_filtered_sheets:
+                            if file_data.get("file_name") == self.parent.current_file:
+                                file_data["filtered_sheets"] = copy.deepcopy(self.parent.filtered_sheets)
+                                debug_print("DEBUG: Updated all_filtered_sheets entry")
+                                break
 
-            # Set the sheet selection
-            if hasattr(self.parent, 'selected_sheet'):
-                if not self.parent.selected_sheet:
-                    import tkinter as tk
-                    self.parent.selected_sheet = tk.StringVar()
-                    debug_print("DEBUG: Created selected_sheet variable")
-                self.parent.selected_sheet.set(current_sheet_name)
-                debug_print(f"DEBUG: Set sheet to {current_sheet_name}")
+                    # Set the sheet selection
+                    if hasattr(self.parent, 'selected_sheet'):
+                        if not self.parent.selected_sheet:
+                            import tkinter as tk
+                            self.parent.selected_sheet = tk.StringVar()
+                            debug_print("DEBUG: Created selected_sheet variable")
+                        self.parent.selected_sheet.set(current_sheet_name)
+                        debug_print(f"DEBUG: Set sheet to {current_sheet_name}")
 
-            # Update the display
-            if hasattr(self.parent, 'update_displayed_sheet'):
-                debug_print("DEBUG: Calling update_displayed_sheet")
-                self.parent.update_displayed_sheet(current_sheet_name)
-                debug_print("DEBUG: Display updated")
-            else:
-                debug_print("DEBUG: No update_displayed_sheet method available")
+                    # Update the display
+                    if hasattr(self.parent, 'update_displayed_sheet'):
+                        debug_print("DEBUG: Calling update_displayed_sheet")
+                        self.parent.update_displayed_sheet(current_sheet_name)
+                        debug_print("DEBUG: Display updated")
+                    else:
+                        debug_print("DEBUG: No update_displayed_sheet method available")
+                else:
+                    debug_print("DEBUG: Cannot reload - file_manager not available")
         
             # Force GUI update
             if hasattr(self.parent, 'root'):
                 self.parent.root.update_idletasks()
                 debug_print("DEBUG: Forced GUI update")
-    
+
             debug_print("DEBUG: Refresh complete")
 
         except Exception as e:
-            print(f"ERROR: Refresh failed: {e}")
+            debug_print(f"ERROR: Refresh failed: {e}")
             import traceback
             traceback.print_exc()
+
     # modified
     def calculate_tpm(self, sample_id):
         """Calculate TPM (Total Particulate Matter) for all rows with valid data."""
