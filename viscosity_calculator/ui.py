@@ -14,7 +14,7 @@ class UI_Methods:
             notebook (ttk.Notebook): The notebook widget to add the tab to
         """
         FONT = ('Arial', 12)
-        APP_BACKGROUND_COLOR = '#0504AA'
+        APP_BACKGROUND_COLOR = 'white'
         
         tab1 = Frame(notebook, bg=APP_BACKGROUND_COLOR)
         notebook.add(tab1, text="Calculator")
@@ -26,12 +26,12 @@ class UI_Methods:
         # Row 0: Title and explanation
         explanation = Label(form_frame, 
                             text="Calculate terpene % based on viscosity formula.\nIf no formula is known, use the 'Iterative Method' tab.",
-                            bg=APP_BACKGROUND_COLOR, fg="white", 
+                            bg=APP_BACKGROUND_COLOR, 
                             font=FONT, justify="center")
         explanation.grid(row=0, column=0, columnspan=4, pady=0)
         
         # Row 1: Media and Terpene
-        Label(form_frame, text="Media:", bg=APP_BACKGROUND_COLOR, fg="white", 
+        Label(form_frame, text="Media:", bg=APP_BACKGROUND_COLOR,  
               font=FONT, anchor="w").grid(row=1, column=0, sticky="w", pady=5)
         
         media_dropdown = ttk.Combobox(
@@ -44,34 +44,34 @@ class UI_Methods:
         media_dropdown.grid(row=1, column=1, sticky="w", padx=5, pady=5)
         media_dropdown.current(0)  # Set default value
         
-        Label(form_frame, text="Terpene:", bg=APP_BACKGROUND_COLOR, fg="white", 
+        Label(form_frame, text="Terpene:", bg=APP_BACKGROUND_COLOR, fg="black", 
               font=FONT, anchor="w").grid(row=1, column=2, sticky="w", pady=5)
         
         terpene_entry = Entry(form_frame, textvariable=self.terpene_var, width=15)
         terpene_entry.grid(row=1, column=3, sticky="w", padx=5, pady=5)
         
         # Row 2: Media Brand and Terpene Brand
-        Label(form_frame, text="Media Brand:", bg=APP_BACKGROUND_COLOR, fg="white", 
+        Label(form_frame, text="Media Brand:", bg=APP_BACKGROUND_COLOR, fg="black", 
               font=FONT, anchor="w").grid(row=2, column=0, sticky="w", pady=5)
         
         media_brand_entry = Entry(form_frame, textvariable=self.media_brand_var, width=15)
         media_brand_entry.grid(row=2, column=1, sticky="w", padx=5, pady=5)
         
-        Label(form_frame, text="Terpene Brand:", bg=APP_BACKGROUND_COLOR, fg="white", 
+        Label(form_frame, text="Terpene Brand:", bg=APP_BACKGROUND_COLOR, fg="black", 
               font=FONT, anchor="w").grid(row=2, column=2, sticky="w", pady=5)
         
         terpene_brand_entry = Entry(form_frame, textvariable=self.terpene_brand_var, width=15)
         terpene_brand_entry.grid(row=2, column=3, sticky="w", padx=5, pady=5)
         
         # Row 3: Mass of Oil
-        Label(form_frame, text="Mass of Oil (g):", bg=APP_BACKGROUND_COLOR, fg="white", 
+        Label(form_frame, text="Mass of Oil (g):", bg=APP_BACKGROUND_COLOR, fg="black", 
               font=FONT, anchor="w").grid(row=3, column=0, sticky="w", pady=5)
         
         mass_entry = Entry(form_frame, textvariable=self.mass_of_oil_var, width=15)
         mass_entry.grid(row=3, column=1, sticky="w", padx=5, pady=5)
         
         # Row 4: Target Viscosity
-        Label(form_frame, text="Target Viscosity:", bg=APP_BACKGROUND_COLOR, fg="white", 
+        Label(form_frame, text="Target Viscosity:", bg=APP_BACKGROUND_COLOR, fg="black", 
               font=FONT, anchor="w").grid(row=4, column=0, sticky="w", pady=5)
         
         viscosity_entry = Entry(form_frame, textvariable=self.target_viscosity_var, width=15)
@@ -81,38 +81,38 @@ class UI_Methods:
         ttk.Separator(form_frame, orient='horizontal').grid(row=5, column=0, columnspan=4, sticky="ew", pady=15)
 
         # Results section header
-        Label(form_frame, text="Results:", bg=APP_BACKGROUND_COLOR, fg="white", 
+        Label(form_frame, text="Results:", bg=APP_BACKGROUND_COLOR, fg="black", 
               font=(FONT[0], FONT[1], "bold"), anchor="w").grid(row=6, column=0, sticky="w", pady=5)
         
         
         # Row 7: Exact % and Exact Mass
-        Label(form_frame, text="Exact %:", bg=APP_BACKGROUND_COLOR, fg="white", 
+        Label(form_frame, text="Exact %:", bg=APP_BACKGROUND_COLOR, fg="black", 
               font=FONT, anchor="w").grid(row=7, column=0, sticky="w", pady=3)
         
         exact_percent_label = Label(form_frame, textvariable=self.exact_percent_var, 
-                              bg=APP_BACKGROUND_COLOR, fg="#90EE90", font=FONT)
+                              bg=APP_BACKGROUND_COLOR, fg="#00b539", font=FONT)
         exact_percent_label.grid(row=7, column=1, sticky="w", pady=3)
         
-        Label(form_frame, text="Exact Mass:", bg=APP_BACKGROUND_COLOR, fg="white", 
+        Label(form_frame, text="Exact Mass:", bg=APP_BACKGROUND_COLOR, fg="black", 
               font=FONT, anchor="w").grid(row=7, column=2, sticky="w", pady=3)
         
         exact_mass_label = Label(form_frame, textvariable=self.exact_mass_var, 
-                           bg=APP_BACKGROUND_COLOR, fg="#90EE90", font=FONT)
+                           bg=APP_BACKGROUND_COLOR, fg="#00b539", font=FONT)
         exact_mass_label.grid(row=7, column=3, sticky="w", pady=3)
         
         # Row 8: Start % and Start Mass
-        Label(form_frame, text="Start %:", bg=APP_BACKGROUND_COLOR, fg="white", 
+        Label(form_frame, text="Start %:", bg=APP_BACKGROUND_COLOR, fg="black", 
               font=FONT, anchor="w").grid(row=8, column=0, sticky="w", pady=3)
         
         start_percent_label = Label(form_frame, textvariable=self.start_percent_var, 
-                              bg=APP_BACKGROUND_COLOR, fg="#90EE90", font=FONT)
+                              bg=APP_BACKGROUND_COLOR, fg="#00b539", font=FONT)
         start_percent_label.grid(row=8, column=1, sticky="w", pady=3)
         
-        Label(form_frame, text="Start Mass:", bg=APP_BACKGROUND_COLOR, fg="white", 
+        Label(form_frame, text="Start Mass:", bg=APP_BACKGROUND_COLOR, fg="black", 
               font=FONT, anchor="w").grid(row=8, column=2, sticky="w", pady=3)
         
         start_mass_label = Label(form_frame, textvariable=self.start_mass_var, 
-                           bg=APP_BACKGROUND_COLOR, fg="#90EE90", font=FONT)
+                           bg=APP_BACKGROUND_COLOR, fg="#00b539", font=FONT)
         start_mass_label.grid(row=8, column=3, sticky="w", pady=3)
         
         # Create button frame for organized rows of buttons
@@ -131,12 +131,13 @@ class UI_Methods:
         )
         calculate_btn.pack(padx=5,pady=5)
 
+
     def create_advanced_tab(self, notebook):
         """
         Create the advanced tab for iterative viscosity calculation with balanced spacing.
         """
         FONT = ('Arial', 12)
-        APP_BACKGROUND_COLOR = '#0504AA'
+        APP_BACKGROUND_COLOR = 'white'
         
         tab2 = Frame(notebook, bg=APP_BACKGROUND_COLOR)
         notebook.add(tab2, text="Iterative Method")
@@ -152,42 +153,42 @@ class UI_Methods:
         # Row 0: Title and Explanation
         explanation = Label(form_frame, 
                            text="Use this method when no formula is available.\nFollow the steps and measure viscosity at each stage.",
-                           bg=APP_BACKGROUND_COLOR, fg="white", 
+                           bg=APP_BACKGROUND_COLOR, fg="black", 
                            font=FONT, justify="center")
         explanation.grid(row=0, column=0, columnspan=4, pady=2)
 
         # Row 1: Media and Media Brand
-        Label(form_frame, text="Media:", bg=APP_BACKGROUND_COLOR, fg="white", 
+        Label(form_frame, text="Media:", bg=APP_BACKGROUND_COLOR, fg="black", 
               font=FONT, anchor="w").grid(row=1, column=0, sticky="w", pady=1)
         Label(form_frame, textvariable=self.media_var, 
-              bg=APP_BACKGROUND_COLOR, fg="white", font=FONT).grid(row=1, column=1, sticky="w", pady=1)
+              bg=APP_BACKGROUND_COLOR, fg="black", font=FONT).grid(row=1, column=1, sticky="w", pady=1)
 
-        Label(form_frame, text="Media Brand:", bg=APP_BACKGROUND_COLOR, fg="white", 
+        Label(form_frame, text="Media Brand:", bg=APP_BACKGROUND_COLOR, fg="black", 
               font=FONT, anchor="w").grid(row=1, column=2, sticky="w", pady=1)
         Label(form_frame, textvariable=self.media_brand_var, 
-              bg=APP_BACKGROUND_COLOR, fg="white", font=FONT).grid(row=1, column=3, sticky="w", pady=1)
+              bg=APP_BACKGROUND_COLOR, fg="black", font=FONT).grid(row=1, column=3, sticky="w", pady=1)
 
         # Row 2: Terpene and Terpene Brand
-        Label(form_frame, text="Terpene:", bg=APP_BACKGROUND_COLOR, fg="white", 
+        Label(form_frame, text="Terpene:", bg=APP_BACKGROUND_COLOR, fg="black", 
               font=FONT, anchor="w").grid(row=2, column=0, sticky="w", pady=1)
         Label(form_frame, textvariable=self.terpene_var, 
-              bg=APP_BACKGROUND_COLOR, fg="white", font=FONT).grid(row=2, column=1, sticky="w", pady=1)
+              bg=APP_BACKGROUND_COLOR, fg="black", font=FONT).grid(row=2, column=1, sticky="w", pady=1)
 
-        Label(form_frame, text="Terpene Brand:", bg=APP_BACKGROUND_COLOR, fg="white", 
+        Label(form_frame, text="Terpene Brand:", bg=APP_BACKGROUND_COLOR, fg="black", 
               font=FONT, anchor="w").grid(row=2, column=2, sticky="w", pady=1)
         Label(form_frame, textvariable=self.terpene_brand_var, 
-              bg=APP_BACKGROUND_COLOR, fg="white", font=FONT).grid(row=2, column=3, sticky="w", pady=1)
+              bg=APP_BACKGROUND_COLOR, fg="black", font=FONT).grid(row=2, column=3, sticky="w", pady=1)
 
         # Row 3: Target Viscosity and Oil Mass
-        Label(form_frame, text="Target Viscosity:", bg=APP_BACKGROUND_COLOR, fg="white", 
+        Label(form_frame, text="Target Viscosity:", bg=APP_BACKGROUND_COLOR, fg="black", 
               font=FONT, anchor="w").grid(row=3, column=0, sticky="w", pady=1)
         Label(form_frame, textvariable=self.target_viscosity_var, 
-              bg=APP_BACKGROUND_COLOR, fg="white", font=FONT).grid(row=3, column=1, sticky="w", pady=1)
+              bg=APP_BACKGROUND_COLOR, fg="black", font=FONT).grid(row=3, column=1, sticky="w", pady=1)
 
-        Label(form_frame, text="Oil Mass (g):", bg=APP_BACKGROUND_COLOR, fg="white", 
+        Label(form_frame, text="Oil Mass (g):", bg=APP_BACKGROUND_COLOR, fg="black", 
               font=FONT, anchor="w").grid(row=3, column=2, sticky="w", pady=1)
         Label(form_frame, textvariable=self.mass_of_oil_var, 
-              bg=APP_BACKGROUND_COLOR, fg="white", font=FONT).grid(row=3, column=3, sticky="w", pady=1)
+              bg=APP_BACKGROUND_COLOR, fg="black", font=FONT).grid(row=3, column=3, sticky="w", pady=1)
 
         # Separator
         ttk.Separator(form_frame, orient='horizontal').grid(row=4, column=0, columnspan=4, sticky="ew", pady=5)
@@ -202,11 +203,11 @@ class UI_Methods:
         steps_frame.columnconfigure(2, weight=1)  # "terpenes" label
     
         # Step 1 row - Improve the flow with consistent spacing
-        Label(steps_frame, text="Step 1: Add", bg=APP_BACKGROUND_COLOR, fg="white", 
+        Label(steps_frame, text="Step 1: Add", bg=APP_BACKGROUND_COLOR, fg="black", 
               font=FONT).grid(row=0, column=0, sticky="e", padx=(5, 0), pady=3)
         Label(steps_frame, textvariable=self.step1_amount_var, 
-              bg=APP_BACKGROUND_COLOR, fg="#90EE90", font=FONT).grid(row=0, column=1, pady=3)
-        Label(steps_frame, text="of terpenes", bg=APP_BACKGROUND_COLOR, fg="white", 
+              bg=APP_BACKGROUND_COLOR, fg="#00b539", font=FONT).grid(row=0, column=1, pady=3)
+        Label(steps_frame, text="of terpenes", bg=APP_BACKGROUND_COLOR, fg="black", 
               font=FONT).grid(row=0, column=2, sticky="w", padx=(0, 5), pady=3)
     
         # Viscosity input row 1
@@ -215,16 +216,16 @@ class UI_Methods:
         visc_frame1.columnconfigure(0, weight=1)
         visc_frame1.columnconfigure(1, weight=1)
     
-        Label(visc_frame1, text="Viscosity @ 25C:", bg=APP_BACKGROUND_COLOR, fg="white", 
+        Label(visc_frame1, text="Viscosity @ 25C:", bg=APP_BACKGROUND_COLOR, fg="black", 
               font=FONT).grid(row=0, column=0, sticky="e", padx=(0, 5))
         Entry(visc_frame1, textvariable=self.step1_viscosity_var, width=10).grid(row=0, column=1, sticky="w")
     
         # Step 2 row - same consistent layout as Step 1
-        Label(steps_frame, text="Step 2: Add", bg=APP_BACKGROUND_COLOR, fg="white", 
+        Label(steps_frame, text="Step 2: Add", bg=APP_BACKGROUND_COLOR, fg="black", 
               font=FONT).grid(row=2, column=0, sticky="e", padx=(5, 0), pady=3)
         Label(steps_frame, textvariable=self.step2_amount_var, 
-              bg=APP_BACKGROUND_COLOR, fg="#90EE90", font=FONT).grid(row=2, column=1, pady=3)
-        Label(steps_frame, text="of terpenes", bg=APP_BACKGROUND_COLOR, fg="white", 
+              bg=APP_BACKGROUND_COLOR, fg="#00b539", font=FONT).grid(row=2, column=1, pady=3)
+        Label(steps_frame, text="of terpenes", bg=APP_BACKGROUND_COLOR, fg="black", 
               font=FONT).grid(row=2, column=2, sticky="w", padx=(0, 5), pady=3)
     
         # Viscosity input row 2
@@ -233,7 +234,7 @@ class UI_Methods:
         visc_frame2.columnconfigure(0, weight=1)
         visc_frame2.columnconfigure(1, weight=1)
     
-        Label(visc_frame2, text="Viscosity @ 25C:", bg=APP_BACKGROUND_COLOR, fg="white", 
+        Label(visc_frame2, text="Viscosity @ 25C:", bg=APP_BACKGROUND_COLOR, fg="black", 
               font=FONT).grid(row=0, column=0, sticky="e", padx=(0, 5))
         Entry(visc_frame2, textvariable=self.step2_viscosity_var, width=10).grid(row=0, column=1, sticky="w")
     
@@ -246,10 +247,10 @@ class UI_Methods:
         expected_container = Frame(expected_frame, bg=APP_BACKGROUND_COLOR)
         expected_container.grid(row=0, column=0)
     
-        Label(expected_container, text="Expected Viscosity: ", bg=APP_BACKGROUND_COLOR, fg="white", 
+        Label(expected_container, text="Expected Viscosity: ", bg=APP_BACKGROUND_COLOR, fg="black", 
               font=(FONT[0], FONT[1], "bold")).pack(side="left")
         Label(expected_container, textvariable=self.expected_viscosity_var, 
-              bg=APP_BACKGROUND_COLOR, fg="#90EE90", font=(FONT[0], FONT[1], "bold")).pack(side="left")
+              bg=APP_BACKGROUND_COLOR, fg="#00b539", font=(FONT[0], FONT[1], "bold")).pack(side="left")
     
         # Buttons with better spacing
         button_frame = Frame(steps_frame, bg=APP_BACKGROUND_COLOR)
@@ -285,7 +286,7 @@ class UI_Methods:
         Create a measurement tab with temperature blocks layout
         """
         FONT = ('Arial', 12)
-        APP_BACKGROUND_COLOR = '#0504AA'
+        APP_BACKGROUND_COLOR = 'white'
         
         tab3 = Frame(notebook, bg=APP_BACKGROUND_COLOR)
         notebook.add(tab3, text="Measure")
@@ -299,7 +300,7 @@ class UI_Methods:
         title_frame.pack(fill='x', pady=(0, 10))
         
         Label(title_frame, text="Raw Viscosity Measurement", 
-            bg=APP_BACKGROUND_COLOR, fg="white", font=(FONT[0], FONT[1]+2, "bold")).pack(pady=(0, 2))
+            bg=APP_BACKGROUND_COLOR, fg="black", font=(FONT[0], FONT[1]+2, "bold")).pack(pady=(0, 2))
         
         # Create a frame for input fields using grid layout
         input_frame = Frame(main_frame, bg=APP_BACKGROUND_COLOR)
@@ -310,7 +311,7 @@ class UI_Methods:
             input_frame.columnconfigure(i, weight=1)
         
         # Media section - now using grid consistently
-        Label(input_frame, text="Media:", bg=APP_BACKGROUND_COLOR, fg="white", 
+        Label(input_frame, text="Media:", bg=APP_BACKGROUND_COLOR, fg="black", 
             font=FONT).grid(row=0, column=0, sticky="w", padx=5, pady=2)
         
         media_dropdown = ttk.Combobox(
@@ -323,7 +324,7 @@ class UI_Methods:
         media_dropdown.grid(row=0, column=1, sticky="w", padx=5, pady=2)
         
         # Terpene section
-        Label(input_frame, text="Terpene:", bg=APP_BACKGROUND_COLOR, fg="white", 
+        Label(input_frame, text="Terpene:", bg=APP_BACKGROUND_COLOR, fg="black", 
             font=FONT).grid(row=0, column=2, sticky="w", padx=5, pady=2)
         
         # Initialize terpene variable if not already done
@@ -334,7 +335,7 @@ class UI_Methods:
         terpene_entry.grid(row=0, column=3, sticky="w", padx=5, pady=2)
         
         # Terpene percentage
-        Label(input_frame, text="Terpene %:", bg=APP_BACKGROUND_COLOR, fg="white", 
+        Label(input_frame, text="Terpene %:", bg=APP_BACKGROUND_COLOR, fg="black", 
             font=FONT).grid(row=0, column=4, sticky="w", padx=5, pady=2)
         
         # Initialize terpene percentage variable if not already done
@@ -392,29 +393,29 @@ class UI_Methods:
         ttk.Button(button_frame, text="Save Measurements", command=self.save_block_measurements).pack(side="right", padx=5)	
 
     def embed_in_frame(self, parent_frame):
-            """
-            Embed the calculator interface in a parent frame instead of creating a new window.
+        """
+        Embed the calculator interface in a parent frame instead of creating a new window.
     
-            Args:
-                parent_frame: The frame to embed the calculator in
-            """
-            # Create notebook (tabbed interface)
-            self.notebook = ttk.Notebook(parent_frame)
-            self.notebook.pack(fill='both', expand=True)
+        Args:
+            parent_frame: The frame to embed the calculator in
+        """
+        # Create notebook (tabbed interface)
+        self.notebook = ttk.Notebook(parent_frame)
+        self.notebook.pack(fill='both', expand=True)
     
-            # Create the tabs
-            self.create_calculator_tab(self.notebook)
-            self.create_advanced_tab(self.notebook)
-            self.create_measure_tab(self.notebook)
+        # Create the tabs
+        self.create_calculator_tab(self.notebook)
+        self.create_advanced_tab(self.notebook)
+        self.create_measure_tab(self.notebook)
     
-            # Bind tab change event
-            self.notebook.bind("<<NotebookTabChanged>>", 
-                              lambda e: self.update_advanced_tab_fields())
+        # Bind tab change event
+        self.notebook.bind("<<NotebookTabChanged>>", 
+                            lambda e: self.update_advanced_tab_fields())
     
-            # Since we're embedding, we won't create buttons for functions that are in the menu
-            # This allows the menu-driven approach similar to the screenshot
+        # Since we're embedding, we won't create buttons for functions that are in the menu
+        # This allows the menu-driven approach similar to the screenshot
     
-            return self.notebook
+        return self.notebook
 
     def update_advanced_tab_fields(self):
         """Update the fields in the advanced tab based on the calculator tab inputs."""

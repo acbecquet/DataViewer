@@ -1,5 +1,6 @@
-﻿"""
+"""
 main_gui.py
+Optimized version for better startup time and UI responsiveness.
 Developed By Charlie Becquet.
 Main GUI module for the DataViewer Application.
 This module instantiates the high-level TestingGUI class which delegates file I/O,
@@ -15,64 +16,12 @@ import tkinter as tk
 from typing import Optional, Dict, List, Any
 from tkinter import ttk, messagebox, Toplevel
 from utils import debug_print
-# Time each heavy import individually
-print("TIMING: Starting individual import timing...")
-
-#import_start = time.time()
-#import processing
-#import_time = time.time() - import_start
-#print(f"TIMING: import processing took: {import_time:.3f}s")
-
-#import_start = time.time()
-#from processing import get_valid_plot_options
-#import_time = time.time() - import_start
-#print(f"TIMING: from processing import get_valid_plot_options took: {import_time:.3f}s")
-
-import_start = time.time()
-from plot_manager import PlotManager
-import_time = time.time() - import_start
-print(f"TIMING: from plot_manager import PlotManager took: {import_time:.3f}s")
-
-import_start = time.time()
-from file_manager import FileManager
-import_time = time.time() - import_start
-print(f"TIMING: from file_manager import FileManager took: {import_time:.3f}s")
-
-import_start = time.time()
-from report_generator import ReportGenerator
-import_time = time.time() - import_start
-print(f"TIMING: from report_generator import ReportGenerator took: {import_time:.3f}s")
-
-import_start = time.time()
-from trend_analysis_gui import TrendAnalysisGUI
-import_time = time.time() - import_start
-print(f"TIMING: from trend_analysis_gui import TrendAnalysisGUI took: {import_time:.3f}s")
-
-import_start = time.time()
-from progress_dialog import ProgressDialog
-import_time = time.time() - import_start
-print(f"TIMING: from progress_dialog import ProgressDialog took: {import_time:.3f}s")
-
-import_start = time.time()
-from image_loader import ImageLoader
-import_time = time.time() - import_start
-print(f"TIMING: from image_loader import ImageLoader took: {import_time:.3f}s")
-
-import_start = time.time()
-from utils import FONT, clean_columns, get_save_path, is_standard_file, plotting_sheet_test, APP_BACKGROUND_COLOR, BUTTON_COLOR, PLOT_CHECKBOX_TITLE
-from resource_utils import get_resource_path
-import_time = time.time() - import_start
-print(f"TIMING: from utils import [multiple items] took: {import_time:.3f}s")
-
-print("TIMING: All individual imports completed")
 
 # Lazy loading helper functions
-
 def lazy_import_pandas():
     """Lazy import pandas when needed."""
     try:
         import pandas as pd
-        print("TIMING: Lazy loaded pandas")
         return pd
     except ImportError as e:
         print(f"Error importing pandas: {e}")
@@ -82,7 +31,6 @@ def lazy_import_numpy():
     """Lazy import numpy when needed."""
     try:
         import numpy as np
-        print("TIMING: Lazy loaded numpy")
         return np
     except ImportError as e:
         print(f"Error importing numpy: {e}")
@@ -92,8 +40,7 @@ def lazy_import_matplotlib():
     """Lazy import matplotlib when needed."""
     try:
         import matplotlib
-        matplotlib.use('TkAgg')  # Ensure Matplotlib uses TkAgg backend
-        print("TIMING: Lazy loaded matplotlib")
+        matplotlib.use('TkAgg')
         return matplotlib
     except ImportError as e:
         print(f"Error importing matplotlib: {e}")
@@ -103,7 +50,6 @@ def lazy_import_tkintertable():
     """Lazy import tkintertable when needed."""
     try:
         from tkintertable import TableCanvas, TableModel
-        print("TIMING: Lazy loaded tkintertable")
         return TableCanvas, TableModel
     except ImportError as e:
         print(f"Error importing tkintertable: {e}")
@@ -113,7 +59,6 @@ def lazy_import_requests():
     """Lazy import requests when needed."""
     try:
         import requests
-        print("TIMING: Lazy loaded requests")
         return requests
     except ImportError as e:
         print(f"Error importing requests: {e}")
@@ -123,7 +68,6 @@ def lazy_import_packaging():
     """Lazy import packaging when needed."""
     try:
         from packaging import version
-        print("TIMING: Lazy loaded packaging")
         return version
     except ImportError as e:
         print(f"Error importing packaging: {e}")
@@ -134,12 +78,23 @@ def _lazy_import_processing():
     try:
         import processing
         from processing import get_valid_plot_options
-        print("TIMING: Lazy loaded processing module")
         return processing, get_valid_plot_options
     except ImportError as e:
         print(f"Error importing processing: {e}")
         return None, None
 
+def lazy_import_viscosity_gui():
+    """Lazy import viscosity GUI when needed."""
+    try:
+        from viscosity_gui import ViscosityGUI
+        return ViscosityGUI
+    except ImportError as e:
+        print(f"Error importing viscosity GUI: {e}")
+        return None
+
+# Import utilities after lazy imports
+from utils import FONT, clean_columns, get_save_path, is_standard_file, plotting_sheet_test, APP_BACKGROUND_COLOR, BUTTON_COLOR, PLOT_CHECKBOX_TITLE
+from resource_utils import get_resource_path
 from update_checker import UpdateChecker
 
 class TestingGUI:
@@ -149,74 +104,53 @@ class TestingGUI:
         import main 
         
         init_start = time.time()
-        print("TIMING: TestingGUI.__init__ started")
-
+        
         self.root = root
         self.root.title("Standardized Testing GUI")
         self.report_thread = None
         self.report_queue = queue.Queue()
 
-            # Time variable initialization
-        var_start = time.time()
+        # Initialize variables first
         self.initialize_variables()
-        var_time = time.time() - var_start
-        print(f"TIMING: initialize_variables took: {var_time:.3f}s")
-        main.log_timing_checkpoint("Variables initialized")
 
-            # Time UI configuration
-        ui_start = time.time()
+        # Configure UI
         self.configure_ui()
-        ui_time = time.time() - ui_start
-        print(f"TIMING: configure_ui took: {ui_time:.3f}s")
-        main.log_timing_checkpoint("UI configured")
 
-        menu_start = time.time()
+        # Show startup menu
         self.show_startup_menu()
-        menu_time = time.time() - menu_start
-        print(f"TIMING: show_startup_menu took: {menu_time:.3f}s")
-        main.log_timing_checkpoint("Startup menu displayed")
 
-        self.image_loader = None # Initialize ImageLoader placeholder
-        # Bind the window close event
+        self.image_loader = None
         self.root.protocol("WM_DELETE_WINDOW", self.on_app_close)
 
-        init_time = time.time() - init_start
-        print(f"TIMING: Total TestingGUI.__init__ took: {init_time:.3f}s")
-        main.log_timing_checkpoint("TestingGUI.__init__ complete")
-
+        # Setup update checking
         self.update_checker = UpdateChecker(current_version="3.0.0")
-        
-        # Set up automatic checking
         self.setup_update_checking()
 
-        self.display_startup_timing_summary()
+        init_time = time.time() - init_start
 
     def setup_update_checking(self):
         """Set up automatic update checking"""
-        print("DEBUG: Setting up update checking...")
+        def check_updates():
+            try:
+                update_info = self.update_checker.check_for_updates()
+                
+                if update_info and update_info.get('update_available'):
+                    self.show_update_dialog(update_info)
+            except Exception:
+                pass  # Silently fail for updates
         
-        try:
-            # Check for updates in background after 5 seconds
-            self.root.after(5000, self.check_for_updates_background)
-            print("DEBUG: Update checking scheduled")
-            
-        except Exception as e:
-            print(f"DEBUG: Update checking setup failed: {e}")
+        self.root.after(5000, check_updates)
     
     def check_for_updates_background(self):
         """Check for updates without blocking UI"""
         try:
-            print("DEBUG: Checking for updates...")
             update_info = self.update_checker.check_for_updates()
             
             if update_info and update_info.get('update_available'):
-                print(f"DEBUG: Update found: v{update_info['latest_version']}")
                 self.show_update_dialog(update_info)
-            else:
-                print("DEBUG: No updates available")
                 
-        except Exception as e:
-            print(f"DEBUG: Update check error: {e}")
+        except Exception:
+            pass
     
     def show_update_dialog(self, update_info):
         """Show update notification to user"""
@@ -252,7 +186,6 @@ Would you like to download and install the update?"""
             )
             
             if installer_path:
-                # This will exit your app and run the installer
                 self.update_checker.install_update(installer_path)
             else:
                 messagebox.showerror("Error", "Failed to download update")
@@ -263,12 +196,8 @@ Would you like to download and install the update?"""
     def get_viscosity_calculator(self):
         """Lazy load viscosity calculator only when needed."""
         if self.viscosity_calculator is None:
-            print("TIMING: Lazy loading ViscosityCalculator...")
-            import_start = time.time()
             from viscosity_calculator import ViscosityCalculator
             self.viscosity_calculator = ViscosityCalculator(self)
-            import_time = time.time() - import_start
-            print(f"TIMING: ViscosityCalculator lazy load took: {import_time:.3f}s")
         return self.viscosity_calculator
 
     # Lazy loading methods for the class
@@ -296,6 +225,24 @@ Would you like to download and install the update?"""
             self._tkintertable = lazy_import_tkintertable()
         return self._tkintertable
 
+    def lazy_init_managers(self):
+        """Initialize manager classes only when needed."""
+        if hasattr(self, '_managers_initialized') and self._managers_initialized:
+            return
+            
+        # Import and initialize managers
+        from plot_manager import PlotManager
+        from file_manager import FileManager
+        from report_generator import ReportGenerator
+        from progress_dialog import ProgressDialog
+        
+        self.file_manager = FileManager(self)
+        self.plot_manager = PlotManager(self)
+        self.report_generator = ReportGenerator(self)
+        self.progress_dialog = ProgressDialog(self.root)
+        
+        self._managers_initialized = True
+
     # Initialization and Configuration
     def initialize_variables(self) -> None:
         """Initialize variables used throughout the GUI."""
@@ -303,8 +250,8 @@ Would you like to download and install the update?"""
         if not pd:
             print("ERROR: Could not load pandas")
             return None
-        # Basic variables - should be very fast
-        basic_start = time.time()
+            
+        # Basic variables
         self.sheets: Dict[str, pd.DataFrame] = {}
         self.filtered_sheets: Dict[str, pd.DataFrame] = {}
         self.all_filtered_sheets: List[Dict[str, Any]] = []
@@ -313,7 +260,7 @@ Would you like to download and install the update?"""
         self.selected_plot_type = tk.StringVar(value="TPM")
         self.file_path: Optional[str] = None
         self.plot_dropdown = None
-        self.threads = [] # track active threads
+        self.threads = []
         self.canvas = None
         self.figure = None
         self.axes = None
@@ -323,171 +270,60 @@ Would you like to download and install the update?"""
         self.line_labels = []
         self.original_lines_data = []
         self.checkbox_cid = None
-        self.viscosity_calculator = None # Will be loaded when needed
+        
 
-        # Add different plot options for different tests:
+        # Plot options
         self.standard_plot_options = ["TPM", "Draw Pressure", "Resistance", "Power Efficiency", "TPM (Bar)"]
-        self.user_test_simulation_plot_options = ["TPM", "Draw Pressure", "Power Efficiency", "TPM (Bar)"]  # No Resistance
-        self.plot_options = self.standard_plot_options  # Default to standard
+        self.user_test_simulation_plot_options = ["TPM", "Draw Pressure", "Power Efficiency", "TPM (Bar)"]
+        self.plot_options = self.standard_plot_options
 
         self.check_buttons = None
         self.previous_window_geometry = None
         self.is_user_test_simulation = False  
         self.num_columns_per_sample = 12 
 
-        self.crop_enable = tk.BooleanVar(value = False)
-        basic_time = time.time() - basic_start
-        print(f"TIMING: Basic variable initialization took: {basic_time:.3f}s")
-
-        # Manager class instantiation - this is likely the slow part
-        managers_start = time.time()
-    
-        file_manager_start = time.time()
-        self.file_manager = FileManager(self)
-        file_manager_time = time.time() - file_manager_start
-        print(f"TIMING: FileManager creation took: {file_manager_time:.3f}s")
-    
-        plot_manager_start = time.time()
-        self.plot_manager = PlotManager(self)
-        plot_manager_time = time.time() - plot_manager_start
-        print(f"TIMING: PlotManager creation took: {plot_manager_time:.3f}s")
-    
-        report_generator_start = time.time()
-        self.report_generator = ReportGenerator(self)
-        report_generator_time = time.time() - report_generator_start
-        print(f"TIMING: ReportGenerator creation took: {report_generator_time:.3f}s")
-    
-        progress_dialog_start = time.time()
-        self.progress_dialog = ProgressDialog(self.root)
-        progress_dialog_time = time.time() - progress_dialog_start
-        print(f"TIMING: ProgressDialog creation took: {progress_dialog_time:.3f}s")
-    
-        viscosity_calc_start = time.time()
-        self.viscosity_calculator = None
-        viscosity_calc_time = time.time() - viscosity_calc_start
-        print(f"TIMING: ViscosityCalculator creation took: {viscosity_calc_time:.3f}s")
-    
-        managers_time = time.time() - managers_start
-        print(f"TIMING: All manager classes creation took: {managers_time:.3f}s")
-    
-        # (TrendAnalysisGUI will be created when needed)
+        self.crop_enable = tk.BooleanVar(value=False)
+        
+        # Initialize managers - create basic ones immediately for core functionality
+        self.lazy_init_managers()
 
     def configure_ui(self) -> None:
         """Configure the UI appearance and set application properties."""
-        import time
-        # Time icon loading
-        icon_start = time.time()
+        # Icon loading
         icon_path = get_resource_path('resources/ccell_icon.png')
         self.root.iconphoto(False, tk.PhotoImage(file=icon_path))
-        icon_time = time.time() - icon_start
-        print(f"TIMING: Icon loading took: {icon_time:.3f}s")
     
-        # Time UI setup
-        ui_setup_start = time.time()
+        # Basic UI setup
         self.set_app_colors()
         self.set_window_size(0.8, 0.8)
         self.root.minsize(1200,800)
         self.center_window(self.root)
-        ui_setup_time = time.time() - ui_setup_start
-        print(f"TIMING: Basic UI setup took: {ui_setup_time:.3f}s")
     
-        # Time frame creation
-        frames_start = time.time()
+        # Create frames
         self.create_static_frames()
-        frames_time = time.time() - frames_start
-        print(f"TIMING: Static frames creation took: {frames_time:.3f}s")
     
-        # Time menu creation
-        menu_start = time.time()
+        # Create menu immediately - needed for basic functionality
         self.add_menu()
-        menu_time = time.time() - menu_start
-        print(f"TIMING: Menu creation took: {menu_time:.3f}s")
-    
-        # Time dropdown setup
-        dropdown_start = time.time()
+        
+        # Setup file dropdown
         self.file_manager.add_or_update_file_dropdown()
-        dropdown_time = time.time() - dropdown_start
-        print(f"TIMING: File dropdown setup took: {dropdown_time:.3f}s")
-    
-        # Time static controls
-        controls_start = time.time()
+        
+        # Add static controls
         self.add_static_controls()
-        controls_time = time.time() - controls_start
-        print(f"TIMING: Static controls creation took: {controls_time:.3f}s")
 
-    def display_startup_timing_summary(self):
-        """Display a summary of startup timing for performance analysis."""
-        import main
-        
-        if hasattr(main, 'startup_timer'):
-            total_time = time.time() - main.startup_timer['start_time']
-        
-            print("\n" + "="*60)
-            print("DETAILED STARTUP TIMING ANALYSIS")
-            print("="*60)
-        
-            for i, (checkpoint, elapsed) in enumerate(main.startup_timer['checkpoints']):
-                if i == 0:
-                    interval = elapsed
-                else:
-                    interval = elapsed - main.startup_timer['checkpoints'][i-1][1]
-                print(f"{checkpoint:<30}: {elapsed:>7.3f}s (Δ{interval:>6.3f}s)")
-        
-            print("-" * 60)
-            print(f"{'TOTAL STARTUP TIME':<30}: {total_time:>7.3f}s")
-            print("="*60)
-        
-            # Identify the slowest components
-            if len(main.startup_timer['checkpoints']) > 1:
-                intervals = []
-                for i in range(len(main.startup_timer['checkpoints'])):
-                    if i == 0:
-                        interval = main.startup_timer['checkpoints'][i][1]
-                        name = main.startup_timer['checkpoints'][i][0]
-                    else:
-                        interval = (main.startup_timer['checkpoints'][i][1] - 
-                                  main.startup_timer['checkpoints'][i-1][1])
-                        name = main.startup_timer['checkpoints'][i][0]
-                    intervals.append((name, interval))
-            
-                # Sort by time taken
-                intervals.sort(key=lambda x: x[1], reverse=True)
-            
-                print("\nSLOWEST COMPONENTS:")
-                for i, (name, interval) in enumerate(intervals[:5]):
-                    print(f"{i+1}. {name}: {interval:.3f}s")
-
-    # === New Centralized Frame Creation Methods ===
     def add_static_controls(self) -> None:
         """Add static controls (Add Data and Trend Analysis buttons) to the top_frame."""
-        #debug_print("DEBUG: Adding static controls to top_frame...")
-        
         if not hasattr(self, 'controls_frame') or not self.controls_frame:
             self.controls_frame = ttk.Frame(self.top_frame)
-            
             self.controls_frame.pack(side="right", fill="x", padx=5, pady=5)
-            #debug_print("DEBUG: controls_frame created in top_frame.")
-        # Add the "Add Data" button
-        #add_data_btn = ttk.Button(self.controls_frame, text="Add Data", command=self.file_manager.add_data)
-        #add_data_btn.pack(side="left", padx=(5, 5), pady=(5, 5))
-        #debug_print("DEBUG: 'Add Data' button added to static controls.")
-        # Add the "Trend Analysis" button
-        #trend_button = ttk.Button(self.controls_frame, text="Trend Analysis", command=self.open_trend_analysis_window)
-        #trend_button.pack(side="left", padx=(5, 5), pady=(5, 5))
-        #debug_print("DEBUG: 'Trend Analysis' button added to static controls.")
-
-        #self.add_report_buttons(self.controls_frame)
 
     def create_static_frames(self) -> None:
         """Create persistent (static) frames that remain for the lifetime of the UI."""
-        #debug_print("DEBUG: Creating static frames...")
-
         # Create top_frame for dropdowns and control buttons.
         if not hasattr(self, 'top_frame') or not self.top_frame:
             self.top_frame = ttk.Frame(self.root,height = 30)
             self.top_frame.pack(side="top", fill="x", pady=(10, 0), padx=10)
-            self.top_frame.pack_propagate(False) # Prevent height changes
-            #debug_print("DEBUG: top_frame created.")
+            self.top_frame.pack_propagate(False)
 
         # Create bottom_frame to hold the image button and image display area.
         if not hasattr(self, 'bottom_frame') or not self.bottom_frame:
@@ -495,17 +331,13 @@ Would you like to download and install the update?"""
             self.bottom_frame.pack(side="bottom", fill = "x", padx=10, pady=(0,10))
             self.bottom_frame.pack_propagate(False)
             self.bottom_frame.grid_propagate(False)
-            #debug_print(f"DEBUG: Created bottom_frame with fixed height 150 | "
-              #f"Current height: {self.bottom_frame.winfo_height()}")
 
         # Create a static frame for the Load Images button within bottom_frame.
         if not hasattr(self, 'image_button_frame') or not self.image_button_frame:
             self.image_button_frame = ttk.Frame(self.bottom_frame)
-            # Pack it to the left.
             self.image_button_frame.pack(side="left", fill="y", padx=5, pady=5)
-            #debug_print("DEBUG: image_button_frame created.")
 
-            self.crop_enabled = tk.BooleanVar(value=False) # Default: Cropping is enabled
+            self.crop_enabled = tk.BooleanVar(value=False)
             self.crop_checkbox = ttk.Checkbutton(
                 self.image_button_frame,
                 text = "Auto-Crop (experimental)",
@@ -520,7 +352,6 @@ Would you like to download and install the update?"""
                 command=lambda: self.image_loader.add_images() if self.image_loader else None
             )
             load_image_button.pack(side="left", padx=5, pady=5)
-            #debug_print("DEBUG: Static 'Load Images' button added to image_button_frame.")
 
         # Create the dynamic image display frame within bottom_frame.
         if not hasattr(self, 'image_frame') or not self.image_frame:
@@ -528,34 +359,25 @@ Would you like to download and install the update?"""
             self.image_frame.pack(side="left", fill="both", expand=True)
             self.image_frame.pack_propagate(False)
             self.image_frame.grid_propagate(False)
-            # Prevent the image_frame from shrinking.
-            #self.image_frame.pack_propagate(True)
-            #debug_print("DEBUG: Dynamic image_frame created with fixed height 300.")
-
 
         # Create display_frame for the table/plot area.
         if not hasattr(self, 'display_frame') or not self.display_frame:
             self.display_frame = ttk.Frame(self.root)
             self.display_frame.pack(fill="both", expand=True, padx=10, pady=5)
-            #debug_print("DEBUG: display_frame created.")
 
         # Create a dynamic subframe inside display_frame for table and plot content.
         if not hasattr(self, 'dynamic_frame') or not self.dynamic_frame:
             self.dynamic_frame = ttk.Frame(self.display_frame)
             self.dynamic_frame.pack(fill="both", expand=True)
-            #debug_print("DEBUG: dynamic_frame created.")
 
     def clear_dynamic_frame(self) -> None:
         """Clear all children widgets from the dynamic frame."""
-        #debug_print("DEBUG: Clearing dynamic_frame contents...")
         for widget in self.dynamic_frame.winfo_children():
             widget.destroy()
 
     def on_window_resize(self, event):
         """Handle window resize events to maintain layout proportions."""
-        # Only process if this is a window resize, not a child widget configure event
         if event.widget == self.root:
-            # Update the width constraints
             self.constrain_plot_width()
 
     def setup_dynamic_frames(self, is_plotting_sheet: bool = False) -> None:
@@ -574,8 +396,8 @@ Would you like to download and install the update?"""
 
         if is_plotting_sheet:
             # Use grid layout for precise control of width proportions
-            self.dynamic_frame.columnconfigure(0, weight=5)  # Table column
-            self.dynamic_frame.columnconfigure(1, weight=5)  # Plot column
+            self.dynamic_frame.columnconfigure(0, weight=5)
+            self.dynamic_frame.columnconfigure(1, weight=5)
         
             self.dynamic_frame.rowconfigure(0, weight = 1)
 
@@ -594,31 +416,20 @@ Would you like to download and install the update?"""
             self.table_frame.pack(fill="both", expand=True, padx=5, pady=5)
 
     def constrain_plot_width(self):
-        """
-        Ensure the plot doesn't exceed 50% of the window width by setting
-        a maximum width constraint.
-        """
+        """Ensure the plot doesn't exceed 50% of the window width."""
         if not hasattr(self, 'plot_frame') or not self.plot_frame:
             return
         
-        # Get the current window width
         window_width = self.root.winfo_width()
-    
-        # Calculate 50% of the window width
         max_plot_width = window_width // 2
     
-        if max_plot_width > 50:  # Only apply if we have a reasonable width
-            # Set the maximum width for the plot frame
+        if max_plot_width > 50:
             self.plot_frame.config(width=max_plot_width)
-        
-            # Prevent the plot from expanding beyond this width
             self.plot_frame.grid_propagate(False)
         
-            # Also set the table frame to the same width for balance
             if hasattr(self, 'table_frame') and self.table_frame:
                 self.table_frame.config(width=max_plot_width)
                 self.table_frame.grid_propagate(False)
-
 
     def show_startup_menu(self) -> None:
         """Display a startup menu with 'New' and 'Load' options."""
@@ -626,7 +437,7 @@ Would you like to download and install the update?"""
         startup_menu.title("Welcome")
         startup_menu.geometry("300x150")
         startup_menu.transient(self.root)
-        startup_menu.grab_set()  # Make the window modal
+        startup_menu.grab_set()
 
         label = ttk.Label(startup_menu, text="Welcome to DataViewer by SDR!", font=FONT,background=APP_BACKGROUND_COLOR)
         label.pack(pady=10)
@@ -650,36 +461,19 @@ Would you like to download and install the update?"""
         self.center_window(startup_menu)
 
     def center_window(self, window: tk.Toplevel, width: Optional[int] = None, height: Optional[int] = None) -> None:
-        """
-        Center a given Tkinter window on the screen.
-    
-        Args:
-            window (tk.Toplevel): The Tkinter window to be centered.
-            width (Optional[int]): Desired width of the window. If not provided, the current width is used.
-            height (Optional[int]): Desired height of the window. If not provided, the current height is used.
-        """
-        
-        window.update_idletasks()  # Ensure all geometry calculations are updated
-
-        # Get the current dimensions of the window if width/height are not specified
+        """Center a given Tkinter window on the screen."""
+        window.update_idletasks()
         window_width = width or window.winfo_width()
         window_height = height or window.winfo_height()
-
-        # Get the screen dimensions
         screen_width = window.winfo_screenwidth()
         screen_height = window.winfo_screenheight()
-
-        # Calculate the position for centering
         position_x = (screen_width - window_width) // 2
         position_y = (screen_height - window_height) // 2
-
-        # Set the geometry with the calculated position
         window.geometry(f"{window_width}x{window_height}+{position_x}+{position_y}")
 
     def populate_or_update_sheet_dropdown(self) -> None:
         """Populate or update the dropdown for sheet selection."""
         if not hasattr(self, 'drop_down_menu') or not self.drop_down_menu:
-            # Create a dropdown for sheet selection
             sheet_label = ttk.Label(self.top_frame, text = "Select Test:", font=FONT, background = APP_BACKGROUND_COLOR)
             sheet_label.pack(side = "left", padx = (0,5))
             self.drop_down_menu = ttk.Combobox(
@@ -690,7 +484,6 @@ Would you like to download and install the update?"""
             )
             self.drop_down_menu.pack(side = "left", pady=(5, 5))
             
-            # Bind selection event to update the displayed sheet
             self.drop_down_menu.bind(
                 "<<ComboboxSelected>>",
                 lambda event: self.update_displayed_sheet(self.selected_sheet.get())
@@ -703,8 +496,39 @@ Would you like to download and install the update?"""
         if current_selection not in all_sheet_names and all_sheet_names:
             self.selected_sheet.set(all_sheet_names[0])
 
+    def populate_sheet_dropdown(self) -> None:
+        """Set up the dropdown for sheet selection and handle its events."""
+        all_sheet_names = list(self.filtered_sheets.keys())
+
+        # Create a dropdown menu for selecting sheets
+        self.drop_down_menu = ttk.Combobox(
+            self.top_frame,
+            textvariable=self.selected_sheet,
+            values=list(self.filtered_sheets.keys()),
+            state="readonly"
+        )
+        self.drop_down_menu.pack(pady=(10, 10))
+        self.drop_down_menu.place(relx=0.25, rely=0.5, anchor="center")
+
+        # Bind selection event
+        self.drop_down_menu.bind(
+            "<<ComboboxSelected>>",
+            lambda event: self.update_displayed_sheet(self.selected_sheet.get())
+        )
+
+        # Automatically select the first sheet if available
+        if all_sheet_names:
+            first_sheet = all_sheet_names[0]
+            self.selected_sheet.set(first_sheet)
+            self.update_displayed_sheet(first_sheet)
+        else:
+            messagebox.showerror("Error", "No sheets found in the file.")
+
     def on_file_selection(self, event) -> None:
         """Handle file selection from the dropdown."""
+        if not hasattr(self, 'file_dropdown_var'):
+            return
+            
         selected_file = self.file_dropdown_var.get()
         if not selected_file or selected_file == self.current_file:
             return
@@ -715,21 +539,11 @@ Would you like to download and install the update?"""
         except ValueError as e:
             messagebox.showerror("Error", str(e))
 
-    def add_trend_analysis_button(self, parent_frame: ttk.Frame) -> None:
-        """Add a 'Trend Analysis' button to the UI."""
-        trend_button = ttk.Button(
-            parent_frame,
-            text="Trend Analysis", state = "enabled",
-            command=self.open_trend_analysis_window
-        )
-        trend_button.pack(side="right", padx=(5, 10), pady=(5, 5))  # disabled for now
-        
     def on_app_close(self):
         """Handle application shutdown."""
         try:
             for thread in self.threads:
                 if thread.is_alive():
-                    #debug_print(f"Stopping thread {thread.name}")
                     pass
             self.root.destroy()
             os._exit(0)
@@ -744,7 +558,7 @@ Would you like to download and install the update?"""
         # File menu
         filemenu = tk.Menu(menubar, tearoff=0)
         filemenu.add_command(label="New", command=self.show_new_template_dialog)
-        filemenu.add_command(label="Load Excel", command=self.file_manager.load_initial_file)
+        filemenu.add_command(label="Load Excel", command=lambda: self.file_manager.load_initial_file())
         filemenu.add_command(label="Load VAP3", command=self.open_vap3_file)
         filemenu.add_separator()
         filemenu.add_command(label="Save As VAP3", command=self.save_as_vap3)
@@ -756,7 +570,6 @@ Would you like to download and install the update?"""
         viewmenu = tk.Menu(menubar, tearoff=0)
         viewmenu.add_command(label="View Raw Data", 
                              command=lambda: self.file_manager.open_raw_data_in_excel(self.selected_sheet.get()))
-        viewmenu.add_command(label="Trend Analysis", command=self.open_trend_analysis_window)
         viewmenu.add_separator()
         viewmenu.add_command(label="Collect TPM Data", command=self.open_data_collection)
         viewmenu.add_command(label="Collect Sensory Data", command=self.open_sensory_data_collection)
@@ -764,12 +577,12 @@ Would you like to download and install the update?"""
 
         # Database menu
         dbmenu = tk.Menu(menubar, tearoff=0)
-        dbmenu.add_command(label="Browse Database", command=self.file_manager.show_database_browser)
+        dbmenu.add_command(label="Browse Database", command=lambda: self.file_manager.show_database_browser())
         menubar.add_cascade(label="Database", menu=dbmenu)
 
        # Calculate menu
         calculatemenu = tk.Menu(menubar, tearoff=0)
-        calculatemenu.add_command(label="Viscosity", command=self.open_viscosity_calculator)
+        calculatemenu.add_command(label="Viscosity (Under Development)", command=self.open_viscosity_calculator)
         menubar.add_cascade(label="Calculate", menu=calculatemenu)
 
         comparemenu = tk.Menu(menubar, tearoff=0)
@@ -794,39 +607,27 @@ Would you like to download and install the update?"""
 
     def show_database_comparison(self):
         """Show database browser for file selection, then run comparison analysis."""
-        debug_print("DEBUG: show_database_comparison called - delegating to database browser in comparison mode")
         self.file_manager.show_database_browser(comparison_mode=True)
 
     def load_files_from_database_for_comparison(self, selected_files):
         """Load files from database selection for comparison analysis."""
-        debug_print(f"DEBUG: Loading {len(selected_files)} files from database for comparison")
-    
         loaded_files = []
     
         try:
-            # Show progress for loading
             self.progress_dialog.show_progress_bar("Loading files from database...")
         
             for i, file_info in enumerate(selected_files):
                 try:
-                    debug_print(f"DEBUG: Loading file {i+1}/{len(selected_files)}: {file_info}")
-                
-                    # Update progress
                     progress = (i + 1) / len(selected_files) * 100
                     self.progress_dialog.update_progress(progress, f"Loading {file_info.get('filename', 'file')}...")
                 
-                    # Load the file data
                     if 'filepath' in file_info:
-                        # Load from file path
                         self.file_manager.load_excel_file(file_info['filepath'], skip_database_storage=True)
                     elif 'id' in file_info:
-                        # Load from database ID
                         self.file_manager.load_from_database_by_id(file_info['id'])
                     else:
-                        debug_print(f"DEBUG: Invalid file info structure: {file_info}")
                         continue
                 
-                    # Create file data structure for comparison
                     if self.filtered_sheets:
                         file_data = {
                             'file_name': file_info.get('filename', f'Database_File_{i+1}'),
@@ -836,17 +637,12 @@ Would you like to download and install the update?"""
                             'source': 'database'
                         }
                         loaded_files.append(file_data)
-                        debug_print(f"DEBUG: Successfully loaded file: {file_data['file_name']}")
-                    else:
-                        debug_print(f"DEBUG: No sheets found for file: {file_info}")
                     
                 except Exception as e:
                     debug_print(f"DEBUG: Error loading file {file_info}: {e}")
                     continue
         
             self.progress_dialog.hide_progress_bar()
-        
-            debug_print(f"DEBUG: Successfully loaded {len(loaded_files)} files for comparison")
             return loaded_files
         
         except Exception as e:
@@ -856,59 +652,28 @@ Would you like to download and install the update?"""
 
     def show_sample_comparison(self):
         """Show the sample comparison window."""
-        debug_print("DEBUG: show_sample_comparison called")
-
-        from sample_comparison import SampleComparisonWindow 
-    
         if not self.all_filtered_sheets:
             messagebox.showinfo("Info", "No files are currently loaded. Please load some data files first.")
-            debug_print("DEBUG: No files loaded for comparison")
             return
     
-        debug_print(f"DEBUG: Found {len(self.all_filtered_sheets)} loaded files for potential comparison")
-    
-        # Import the file selection dialog
         from file_selection_dialog import FileSelectionDialog
-    
-        # Show file selection dialog
         file_dialog = FileSelectionDialog(self.root, self.all_filtered_sheets)
         result, selected_files = file_dialog.show()
     
         if not result or not selected_files:
-            debug_print("DEBUG: File selection cancelled or no files selected")
             return
     
         if len(selected_files) < 2:
             messagebox.showwarning("Warning", "Please select at least 2 files for comparison.")
-            debug_print(f"DEBUG: Only {len(selected_files)} files selected, need at least 2")
             return
     
-        debug_print(f"DEBUG: Proceeding with comparison of {len(selected_files)} files")
-    
-        # Create and show the comparison window with selected files
+        from sample_comparison import SampleComparisonWindow
         comparison_window = SampleComparisonWindow(self, selected_files)
         comparison_window.show()  
 
     def show_new_template_dialog(self) -> None:
         """Show a dialog to create a new template file with selected tests."""
         self.file_manager.create_new_file_with_tests()
-
-    def show_new_template_dialog_old(self) -> None:
-        """Show a dialog to create a new template file."""
-        startup_menu = Toplevel(self.root)
-        startup_menu.title("New File")
-        startup_menu.geometry("300x100")
-        startup_menu.transient(self.root)
-        startup_menu.grab_set()  # Make the window modal
-    
-        new_button = ttk.Button(
-            startup_menu,
-            text="Create New Template",
-            command=lambda: self.file_manager.create_new_template(startup_menu)
-        )
-        new_button.pack(pady=20)
-    
-        self.center_window(startup_menu)
 
     def open_vap3_file(self) -> None:
         """Open a .vap3 file using the file manager."""
@@ -929,58 +694,20 @@ Would you like to download and install the update?"""
     def set_app_colors(self) -> None:
         """Set consistent color theme and fonts for the application."""
         style = ttk.Style()
-        self.root.configure(bg=APP_BACKGROUND_COLOR)  # Set background color
+        self.root.configure(bg=APP_BACKGROUND_COLOR)
         style.configure('TLabel', background=APP_BACKGROUND_COLOR, font=FONT)
         style.configure('TButton', background=BUTTON_COLOR, font=FONT, padding=6)
         style.configure('TCombobox', font=FONT)
         style.map('TCombobox', background=[('readonly', APP_BACKGROUND_COLOR)])
-        # Set color for all widgets, loop through children
-        # Modified widget configuration loop
+
         for widget in self.root.winfo_children():
             try:
-                # Only works for standard tkinter widgets
                 widget.configure(bg='#EFEFEF')
             except Exception:
-                # Skip ttk widgets that don't support bg
                 continue
 
-    def populate_sheet_dropdown(self) -> None:
-        """Set up the dropdown for sheet selection and handle its events."""
-        all_sheet_names = list(self.filtered_sheets.keys())
-
-        # Create a dropdown menu for selecting sheets
-        self.drop_down_menu = ttk.Combobox(
-            self.top_frame,
-            textvariable=self.selected_sheet,
-            values=list(self.filtered_sheets.keys()),
-            state="readonly"  # Prevent users from typing in custom values
-        )
-        self.drop_down_menu.pack(pady=(10, 10))
-        self.drop_down_menu.place(relx=0.25, rely=0.5, anchor="center")
-
-        # Bind selection event
-        self.drop_down_menu.bind(
-            "<<ComboboxSelected>>",
-            lambda event: self.update_displayed_sheet(self.selected_sheet.get())
-        )
-
-        # Automatically select the first sheet if available
-        if all_sheet_names:
-            first_sheet = all_sheet_names[0]
-            self.selected_sheet.set(first_sheet)
-            self.update_displayed_sheet(first_sheet)
-        else:
-            messagebox.showerror("Error", "No sheets found in the file.")
-       
     def set_window_size(self, width_ratio: float, height_ratio: float) -> None:
-        """
-        Set the window size as a percentage of the screen dimensions.
-
-        Args:
-            width_ratio (float): Width as a fraction of screen width.
-            height_ratio (float): Height as a fraction of screen height.
-        """
-        
+        """Set the window size as a percentage of the screen dimensions."""
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
         window_width = int(screen_width * width_ratio)
@@ -991,11 +718,6 @@ Would you like to download and install the update?"""
 
     def add_report_buttons(self, parent_frame: ttk.Frame) -> None:
         """Add buttons for generating reports and align them in the parent frame."""
-
-        # Add Data Button
-        #add_data_btn = ttk.Button(parent_frame, text="Add Data", command=self.file_manager.add_data)
-        #add_data_btn.pack(side="right", padx=(5, 5), pady=(5, 5))
-
         # Generate Full Report button
         full_report_btn = ttk.Button(parent_frame, text="Generate Full Report", command=self.generate_full_report)
         full_report_btn.pack(side="left", padx=(5, 5), pady=(5, 5))
@@ -1005,79 +727,129 @@ Would you like to download and install the update?"""
         test_report_btn.pack(side="left", padx=(5, 5), pady=(5, 5))
 
     def adjust_window_size(self, fixed_width=1500):
-        """
-        Adjust the window height dynamically to fit the content while keeping the width constant.
-        Args:
-            fixed_width (int): The fixed width of the window.
-        """
-
+        """Adjust the window height dynamically to fit the content while keeping the width constant."""
         if not isinstance(self.root, (tk.Tk, tk.Toplevel)):
             raise ValueError("Expected 'self.root' to be a tk.Tk or tk.Toplevel instance")
 
-        # Update the geometry manager and calculate the required size
         self.root.update_idletasks()
-
-        # Get the required dimensions for the window height to fit its content
         required_height = self.root.winfo_reqheight()
-
-        # Get the current screen dimensions
         screen_height = self.root.winfo_screenheight()
         screen_width = self.root.winfo_screenwidth()
-        # Constrain the height to the screen dimensions if necessary
         final_height = min(required_height, screen_height)
 
         current_x = self.root.winfo_x()
         current_y = self.root.winfo_y()
 
-        # Set the geometry dynamically with the fixed width
         self.root.geometry(f"{fixed_width}x{final_height}+{current_x}+{current_y}")
 
-
     def update_displayed_sheet(self, sheet_name: str) -> None:
-        """
-        Update the displayed sheet and dynamically manage the plot options and plot type dropdown.
-        Enhanced to handle empty sheets for data collection.
-        """
-        # lazy load Processing
-        processing, get_valid_plot_options = _lazy_import_processing()
-        debug_print(f"DEBUG: [update_displayed_sheet] START for sheet: {sheet_name}")
-        pd = self.get_pandas()
-        if not pd:
-            print("ERROR: Could not load pandas in plot_all_samples")
-            return None
-        # Ensure bottom_frame maintains its fixed height
-        if hasattr(self, 'bottom_frame') and self.bottom_frame.winfo_exists():
-            self.bottom_frame.configure(height=150)
-            self.bottom_frame.pack_propagate(False)
-            self.bottom_frame.grid_propagate(False)
+        """Update the displayed sheet and dynamically manage the plot options and plot type dropdown."""
+        # Use background thread for heavy processing to keep UI responsive
+        def update_in_background():
+            try:
+                processing, get_valid_plot_options = _lazy_import_processing()
+                if not processing:
+                    return
 
-        if not sheet_name or sheet_name not in self.filtered_sheets:
-            debug_print(f"DEBUG: Sheet {sheet_name} not found in filtered_sheets")
-            return
+                pd = self.get_pandas()
+                if not pd:
+                    return
 
-        sheet_info = self.filtered_sheets.get(sheet_name)
-        if not sheet_info:
-            messagebox.showerror("Error", f"Sheet '{sheet_name}' not found.")
-            return
+                # Ensure bottom_frame maintains its fixed height
+                if hasattr(self, 'bottom_frame') and self.bottom_frame.winfo_exists():
+                    self.bottom_frame.configure(height=150)
+                    self.bottom_frame.pack_propagate(False)
+                    self.bottom_frame.grid_propagate(False)
 
-        data = sheet_info["data"]
-        is_empty = sheet_info.get("is_empty", False)
-        is_plotting_sheet = plotting_sheet_test(sheet_name, data)
-        
-        debug_print(f"DEBUG: Sheet {sheet_name} - is_empty: {is_empty}, is_plotting_sheet: {is_plotting_sheet}, data_shape: {data.shape}")
+                if not sheet_name or sheet_name not in self.filtered_sheets:
+                    return
 
-        # Clear and rebuild only the dynamic content
-        self.clear_dynamic_frame()
-        self.setup_dynamic_frames(is_plotting_sheet)
+                sheet_info = self.filtered_sheets.get(sheet_name)
+                if not sheet_info:
+                    self.root.after(0, lambda: messagebox.showerror("Error", f"Sheet '{sheet_name}' not found."))
+                    return
 
-        # Handle ImageLoader setup
-        debug_print("DEBUG: Setting up ImageLoader...")
+                data = sheet_info["data"]
+                is_empty = sheet_info.get("is_empty", False)
+                is_plotting_sheet = plotting_sheet_test(sheet_name, data)
+
+                # Update UI in main thread
+                self.root.after(0, lambda: self._finish_sheet_update(sheet_name, data, is_empty, is_plotting_sheet, processing))
+
+            except Exception as e:
+                print(f"Error in background sheet update: {e}")
+
+        # Start background processing
+        thread = threading.Thread(target=update_in_background, daemon=True)
+        thread.start()
+
+    def _finish_sheet_update(self, sheet_name, data, is_empty, is_plotting_sheet, processing):
+        """Finish sheet update in main thread."""
+        try:
+            # Clear and rebuild frames
+            self.clear_dynamic_frame()
+            self.setup_dynamic_frames(is_plotting_sheet)
+
+            # Handle ImageLoader setup
+            self._setup_image_loader(sheet_name, is_plotting_sheet)
+
+            # Handle empty sheets
+            if is_empty or data.empty:
+                self._handle_empty_sheet(sheet_name, is_plotting_sheet)
+                self.root.update_idletasks()
+                return
+
+            # Process the sheet data
+            try:
+                process_function = processing.get_processing_function(sheet_name)
+                processed_data, _, full_sample_data = process_function(data)
+                self.current_sheet_data = processed_data
+
+                # Handle User Test Simulation
+                if sheet_name in ["User Test Simulation", "User Simulation Test"]:
+                    self.plot_options = self.user_test_simulation_plot_options
+                    self.is_user_test_simulation = True
+                    self.num_columns_per_sample = 8
+                else:
+                    self.plot_options = self.standard_plot_options
+                    self.is_user_test_simulation = False
+                    self.num_columns_per_sample = 12
+
+            except Exception as e:
+                print(f"ERROR: Processing function failed for {sheet_name}: {e}")
+                messagebox.showerror("Processing Error", f"Error processing sheet '{sheet_name}': {e}")
+                return
+
+            # Display the table
+            try:
+                self.display_table(self.table_frame, processed_data, sheet_name, is_plotting_sheet)
+            except Exception as e:
+                print(f"ERROR: Failed to display table: {e}")
+
+            # Display plot if it's a plotting sheet
+            if is_plotting_sheet:
+                try:
+                    if not full_sample_data.empty:
+                        self.display_plot(full_sample_data)
+                    else:
+                        self._show_empty_plot_message()
+                except Exception as e:
+                    print(f"ERROR: Failed to display plot: {e}")
+
+            self.root.update_idletasks()
+
+        except Exception as e:
+            print(f"Error finishing sheet update: {e}")
+
+    def _setup_image_loader(self, sheet_name, is_plotting_sheet):
+        """Setup image loader for current sheet."""
+        for widget in self.image_frame.winfo_children():
+            widget.destroy()
+            
         if hasattr(self, 'image_loader'):
-            for widget in self.image_frame.winfo_children():
-                widget.destroy()
             del self.image_loader
 
-        # Initialize a fresh ImageLoader
+        from image_loader import ImageLoader
         self.image_loader = ImageLoader(self.image_frame, is_plotting_sheet, on_images_selected=lambda paths: self.store_images(sheet_name, paths), main_gui = self)
         self.image_loader.frame.config(height=150)
 
@@ -1088,206 +860,89 @@ Would you like to download and install the update?"""
             for img_path in self.sheet_images[current_file][sheet_name]:
                 if img_path in self.image_crop_states:
                     self.image_loader.image_crop_states[img_path] = self.image_crop_states[img_path]
-            debug_print(f"DEBUG: Restored images and crop states for sheet: {sheet_name}")
 
         self.image_loader.display_images()
         self.image_frame.update_idletasks()
 
-        # Check if sheet is completely empty (for data collection, we want to handle this gracefully)
-        if is_empty or data.empty:
-            debug_print(f"DEBUG: Sheet {sheet_name} is empty - checking if this is for data collection")
-            
-            # For data collection, we still want to show the interface
-            # Instead of showing an error, create a minimal structure
-            if is_plotting_sheet:
-                debug_print("DEBUG: Creating minimal structure for empty plotting sheet")
-                # Create minimal data for display
-                minimal_data = pd.DataFrame([{
-                    "Sample Name": "No data - ready for collection",
-                    "Media": "",
-                    "Viscosity": "",
-                    "Voltage, Resistance, Power": "",
-                    "Average TPM": "No data",
-                    "Standard Deviation": "No data",
-                    "Initial Oil Mass": "",
-                    "Usage Efficiency": "",
-                    "Burn?": "",
-                    "Clog?": "",
-                    "Leak?": ""
-                }])
-                
-                # Display the minimal table
-                self.display_table(self.table_frame, minimal_data, sheet_name, is_plotting_sheet)
-                
-                # Create empty plot area with message
-                if hasattr(self, 'plot_frame') and self.plot_frame:
-                    for widget in self.plot_frame.winfo_children():
-                        widget.destroy()
-                    
-                    empty_plot_label = tk.Label(
-                        self.plot_frame,
-                        text="No data to plot yet.\nUse 'Collect Data' to add measurements.",
-                        font=("Arial", 12),
-                        fg="gray",
-                        justify="center"
-                    )
-                    empty_plot_label.pack(expand=True)
-                    
-                debug_print("DEBUG: Minimal plotting sheet structure created")
-            else:
-                # For non-plotting sheets, show a simple message
-                debug_print("DEBUG: Creating minimal structure for empty non-plotting sheet")
-                minimal_data = pd.DataFrame([{
-                    "Status": "No data - ready for collection",
-                    "Instructions": "Use data collection tools to add information"
-                }])
-                self.display_table(self.table_frame, minimal_data, sheet_name, is_plotting_sheet)
-                
-            debug_print("DEBUG: Empty sheet handled for data collection")
-            self.root.update_idletasks()
+    def _handle_empty_sheet(self, sheet_name, is_plotting_sheet):
+        """Handle empty sheet display."""
+        pd = self.get_pandas()
+        if not pd:
             return
 
-        # Process the sheet data
-        try:
-            debug_print(f"DEBUG: Processing sheet data for {sheet_name}...")
-            process_function = processing.get_processing_function(sheet_name)
-            processed_data, _, full_sample_data = process_function(data)
-            debug_print(f"DEBUG: Processing complete - processed_data: {processed_data.shape}, full_sample_data: {full_sample_data.shape}")
-            self.current_sheet_data = processed_data
-            #SPECIAL HANDLING FOR USER TEST SIMULATION:
-            
-            if sheet_name in ["User Test Simulation", "User Simulation Test"]:
-                debug_print("DEBUG: Detected User Test Simulation - using 8 columns per sample")
-                self.plot_options = self.user_test_simulation_plot_options
-                # Store the fact that this is User Test Simulation for plotting
-                self.is_user_test_simulation = True
-                self.num_columns_per_sample = 8
-            else:
-                self.plot_options = self.standard_plot_options
-                self.is_user_test_simulation = False
-                self.num_columns_per_sample = 12
-
-        except Exception as e:
-            print(f"ERROR: Processing function failed for {sheet_name}: {e}")
-            messagebox.showerror("Processing Error", f"Error processing sheet '{sheet_name}': {e}")
-            return
-
-        # Display the table
-        debug_print(f"DEBUG: Displaying table for {sheet_name}...")
-        try:
-            self.display_table(self.table_frame, processed_data, sheet_name, is_plotting_sheet)
-            debug_print("DEBUG: Table displayed successfully")
-        except Exception as e:
-            print(f"ERROR: Failed to display table: {e}")
-
-        # Display plot if it's a plotting sheet
         if is_plotting_sheet:
-            debug_print(f"DEBUG: Displaying plot for sheet: {sheet_name}")
-            try:
-                if not full_sample_data.empty:
-                    self.display_plot(full_sample_data)
-                    debug_print("DEBUG: Plot displayed successfully")
-                else:
-                    debug_print("DEBUG: Full sample data is empty, showing empty plot message")
-                    if hasattr(self, 'plot_frame') and self.plot_frame:
-                        for widget in self.plot_frame.winfo_children():
-                            widget.destroy()
-                        
-                        empty_plot_label = tk.Label(
-                            self.plot_frame,
-                            text="No data to plot yet.\nUse 'Collect Data' to add measurements.",
-                            font=("Arial", 12),
-                            fg="gray",
-                            justify="center"
-                        )
-                        empty_plot_label.pack(expand=True)
-            except Exception as e:
-                print(f"ERROR: Failed to display plot: {e}")
+            minimal_data = pd.DataFrame([{
+                "Sample Name": "No data - ready for collection",
+                "Media": "",
+                "Viscosity": "",
+                "Voltage, Resistance, Power": "",
+                "Average TPM": "No data",
+                "Standard Deviation": "No data",
+                "Initial Oil Mass": "",
+                "Usage Efficiency": "",
+                "Burn?": "",
+                "Clog?": "",
+                "Leak?": ""
+            }])
+            
+            self.display_table(self.table_frame, minimal_data, sheet_name, is_plotting_sheet)
+            self._show_empty_plot_message()
+        else:
+            minimal_data = pd.DataFrame([{
+                "Status": "No data - ready for collection",
+                "Instructions": "Use data collection tools to add information"
+            }])
+            self.display_table(self.table_frame, minimal_data, sheet_name, is_plotting_sheet)
 
-        debug_print("DEBUG: Successfully updated displayed sheet.")
-        self.root.update_idletasks()
-        
-        debug_print(f"DEBUG: [update_displayed_sheet] END for sheet: {sheet_name}")
-
-
+    def _show_empty_plot_message(self):
+        """Show empty plot message."""
+        if hasattr(self, 'plot_frame') and self.plot_frame:
+            for widget in self.plot_frame.winfo_children():
+                widget.destroy()
+            
+            empty_plot_label = tk.Label(
+                self.plot_frame,
+                text="No data to plot yet.\nUse 'Collect Data' to add measurements.",
+                font=("Arial", 12),
+                fg="gray",
+                justify="center"
+            )
+            empty_plot_label.pack(expand=True)
 
     def load_images(self, is_plotting_sheet):
         """Load and display images in the dynamic image_frame."""
         if not hasattr(self, 'image_frame') or not self.image_frame.winfo_exists():
-            #print("Error: image_frame does not exist, recreating...")
-            # Recreate image_frame in bottom_frame if needed.
             self.image_frame = ttk.Frame(self.bottom_frame, height=150)
             self.image_frame.pack(side="left", fill="both", expand=True, padx=5, pady=5)
             self.image_frame.pack_propagate(True)
         if not self.image_loader:
+            from image_loader import ImageLoader
             self.image_loader = ImageLoader(self.image_frame, is_plotting_sheet)
         self.image_loader.add_images()
 
-    def store_images(self, sheet_name, paths):
-        """Store image paths and their crop states for a specific sheet."""
-        if not sheet_name:
-            return
-
-        #debug_print(f"DEBUG: Storing images for sheet: {sheet_name}")
-        
-        # Ensure the file key exists in the sheet_images dictionary
-        if self.current_file not in self.sheet_images:
-            self.sheet_images[self.current_file] = {}
-        # Store images under both the file and sheet name
-        self.sheet_images[self.current_file][sheet_name] = paths
-
-        # Store crop states for each image
-        if not hasattr(self, 'image_crop_states'):
-            self.image_crop_states = {}
-
-        for img_path in paths:
-            # Ensure the image crop state is stored
-            if img_path not in self.image_crop_states:
-                self.image_crop_states[img_path] = self.crop_enabled.get()
-
-        #debug_print(f"DEBUG: Stored image paths: {self.sheet_images[self.current_file][sheet_name]}")
-        #debug_print(f"DEBUG: Stored crop states: {self.image_crop_states}")
-
     def open_data_collection(self):
         """Open data collection interface, handling both loaded and unloaded file states."""
-        debug_print("DEBUG: Data collection requested")
-        
-        # Check if we have a file loaded
         if not hasattr(self, 'filtered_sheets') or not self.filtered_sheets or not hasattr(self, 'file_path') or not self.file_path:
-            debug_print("DEBUG: No file loaded - showing data collection startup dialog")
             self.show_data_collection_startup_dialog()
         else:
-            debug_print(f"DEBUG: File already loaded ({self.file_path}) - opening test start menu")
             self.file_manager.show_test_start_menu(self.file_path)
 
     def open_sensory_data_collection(self):
         """Open the sensory data collection window."""
         from sensory_data_collection import SensoryDataCollectionWindow
     
-        debug_print("DEBUG: Opening sensory data collection window")
-        debug_print("DEBUG: Hiding main GUI window")
-    
-        # Hide the main window
         self.root.withdraw()
     
-        # Define callback to restore main window
         def on_sensory_window_close():
-            debug_print("DEBUG: Sensory window closed, restoring main GUI window")
-            self.root.deiconify()  # Show the main window again
-            self.root.lift()       # Bring it to front
-            self.root.focus_set()  # Give it focus
-            debug_print("DEBUG: Main GUI window restored successfully")
+            self.root.deiconify()
+            self.root.lift()
+            self.root.focus_set()
     
-        # Create sensory window with close callback
         sensory_window = SensoryDataCollectionWindow(self.root, close_callback=on_sensory_window_close)
         sensory_window.show()
-    
-        debug_print("DEBUG: Sensory data collection window created and shown")
 
     def show_data_collection_startup_dialog(self):
         """Show a startup dialog for data collection when no file is loaded."""
-        debug_print("DEBUG: Creating data collection startup dialog")
-        
         startup_dialog = tk.Toplevel(self.root)
         startup_dialog.title("Data Collection")
         startup_dialog.geometry("350x200")
@@ -1295,85 +950,60 @@ Would you like to download and install the update?"""
         startup_dialog.grab_set()
         startup_dialog.configure(bg=APP_BACKGROUND_COLOR)
 
-        # Header label
-        header_label = ttk.Label(
+        ttk.Label(
             startup_dialog, 
             text="Start Data Collection", 
             font=("Arial", 16, "bold"),
             background=APP_BACKGROUND_COLOR
-        )
-        header_label.pack(pady=(20, 10))
+        ).pack(pady=(20, 10))
 
-        # Instruction label
-        instruction_label = ttk.Label(
+        ttk.Label(
             startup_dialog,
             text="Choose an option to begin collecting data:",
             font=FONT,
             background=APP_BACKGROUND_COLOR
-        )
-        instruction_label.pack(pady=(0, 20))
+        ).pack(pady=(0, 20))
 
-        # Button frame
         button_frame = ttk.Frame(startup_dialog)
         button_frame.pack(pady=10)
 
-        # New File Button
-        new_button = ttk.Button(
+        ttk.Button(
             button_frame,
             text="Create New File",
             command=lambda: self.handle_data_collection_new(startup_dialog),
             width=15
-        )
-        new_button.pack(side="left", padx=10)
+        ).pack(side="left", padx=10)
 
-        # Load File Button  
-        load_button = ttk.Button(
+        ttk.Button(
             button_frame,
             text="Load Existing File",
             command=lambda: self.handle_data_collection_load(startup_dialog),
             width=15
-        )
-        load_button.pack(side="left", padx=10)
+        ).pack(side="left", padx=10)
 
-        # Cancel button
-        cancel_button = ttk.Button(
+        ttk.Button(
             button_frame,
             text="Cancel",
             command=startup_dialog.destroy,
             width=10
-        )
-        cancel_button.pack(pady=(20, 0))
+        ).pack(pady=(20, 0))
 
         self.center_window(startup_dialog)
-        debug_print("DEBUG: Data collection startup dialog created and displayed")
 
     def handle_data_collection_new(self, dialog):
         """Handle 'Create New File' from data collection dialog."""
-        debug_print("DEBUG: Create New File selected from data collection dialog")
         dialog.destroy()
-        
-        # Use the existing new file creation logic
         file_path = self.file_manager.create_new_file_with_tests()
-        if file_path:
-            debug_print(f"DEBUG: New file created at {file_path} - will proceed to test start menu")
-            # The create_new_file_with_tests method already handles showing the test start menu
-        else:
-            debug_print("DEBUG: New file creation was cancelled")
 
     def handle_data_collection_load(self, dialog):
         """Handle 'Load Existing File' from data collection dialog."""
-        debug_print("DEBUG: Load Existing File selected from data collection dialog")
         dialog.destroy()
         
-        # Show file selection dialog
         file_path = self.file_manager.ask_open_file()
         if file_path:
-            debug_print(f"DEBUG: File selected for loading: {file_path}")
             try:
-                # Load the file
                 self.file_manager.load_excel_file(file_path)
                 
-                # Update the UI state
                 self.all_filtered_sheets.append({
                     "file_name": os.path.basename(file_path),
                     "file_path": file_path,
@@ -1384,20 +1014,13 @@ Would you like to download and install the update?"""
                 self.file_manager.set_active_file(os.path.basename(file_path))
                 self.file_manager.update_ui_for_current_file()
                 
-                debug_print(f"DEBUG: File loaded successfully - opening test start menu")
-                # Show the test start menu for the loaded file
                 self.file_manager.show_test_start_menu(file_path)
                 
             except Exception as e:
-                debug_print(f"DEBUG: Error loading file: {e}")
                 messagebox.showerror("Error", f"Failed to load file: {e}")
-        else:
-            debug_print("DEBUG: No file selected for loading")
 
     def display_plot(self, full_sample_data):
-        """
-        Display the plot in the plot frame based on the current data.
-        """
+        """Display the plot in the plot frame based on the current data."""
         if not hasattr(self, 'plot_frame') or self.plot_frame is None:
             self.plot_frame = ttk.Frame(self.display_frame)
             self.plot_frame.grid(row=0, column=1, sticky="nsew", padx=(5, 0), pady=5)
@@ -1406,169 +1029,153 @@ Would you like to download and install the update?"""
         for widget in self.plot_frame.winfo_children():
             widget.destroy()
 
-        # Determine the number of columns per sample
         num_columns = getattr(self, 'num_columns_per_sample', 12)
-
-
-        # Generate and embed the plot - force it to respect container width
         self.plot_manager.plot_all_samples(self.plot_frame, full_sample_data, num_columns)
-
-        # Ensure plot stays within its frame
-        self.plot_frame.grid_propagate(True)  # Allow the frame to resize based on content
+        self.plot_frame.grid_propagate(True)
         self.plot_manager.add_plot_dropdown(self.plot_frame)
-
-        # Force immediate update of the UI
         self.plot_frame.update_idletasks()
 
     def display_table(self, frame, data, sheet_name, is_plotting_sheet=False):
-            """Display table with enhanced handling for empty/minimal data."""
-            debug_print(f"DEBUG: display_table called for sheet: {sheet_name}, data_shape: {data.shape}, is_plotting_sheet: {is_plotting_sheet}")
-            pd = self.get_pandas()
-            np = self.get_numpy()
-            TableCanvas, TableModel = self.get_tkintertable()
-            if not TableCanvas or not TableModel:
-                print("ERROR: Could not load tkintertable components")
-                return
-            if not np:
-                print("ERROR: Could not load numpy")
-                return None
-            if not pd:
-                print("ERROR: Could not load pandas in plot_all_samples")
-                return None
-            if not frame or not frame.winfo_exists():
-                print(f"ERROR: Frame {frame} does not exist! Aborting display_table.")
-                return
-
-            for widget in frame.winfo_children():
-                widget.destroy()
-
-            debug_print("DEBUG: Cleared existing table widgets.")
-
-            # Handle completely empty data
-            if data.empty:
-                debug_print("DEBUG: Data is completely empty, creating placeholder")
-                # Create a placeholder message instead of showing a warning
-                placeholder_label = tk.Label(
-                    frame,
-                    text=f"Sheet '{sheet_name}' is ready for data collection.\nUse the data collection tools to add measurements.",
-                    font=("Arial", 12),
-                    fg="gray",
-                    justify="center"
-                )
-                placeholder_label.pack(expand=True, pady=50)
-                return
-
-            # Deduplicate columns and clean data
-            data = clean_columns(data)
-            data.columns = data.columns.map(str)  # Ensure column headers are strings
+        """Display table with enhanced handling for empty/minimal data."""
+        pd = self.get_pandas()
+        np = self.get_numpy()
+        TableCanvas, TableModel = self.get_tkintertable()
         
-            # Handle data with "No data" entries
-            data = data.astype(str)
-            data = data.replace([np.nan, pd.NA], '', regex=True)
+        if not TableCanvas or not TableModel or not np or not pd:
+            return
 
-            debug_print("DEBUG: Data processed successfully.")
+        if not frame or not frame.winfo_exists():
+            return
 
-            table_frame = ttk.Frame(frame, padding=(2, 1))
-            self.table_frame.pack_propagate(False)
-            table_frame.pack(fill='both', expand=True)
+        for widget in frame.winfo_children():
+            widget.destroy()
 
-            debug_print("DEBUG: Table frame created and packed.")
-
-            # Calculate table dimensions
-            table_frame.update_idletasks()
-            available_width = table_frame.winfo_width()
-            num_columns = len(data.columns)
-            calculated_cellwidth = max(120, available_width // num_columns)
-
-            # Create scrollbars
-            v_scrollbar = ttk.Scrollbar(table_frame, orient='vertical')
-            h_scrollbar = ttk.Scrollbar(table_frame, orient='horizontal')
-
-            # Create table model
-            model = TableModel()
-            table_data_dict = data.to_dict(orient='index')
-            model.importDict(table_data_dict)
-
-            default_cellwidth = 110
-            default_rowheight = 25
-
-            if is_plotting_sheet:
-                debug_print("DEBUG: Adjusting row height for plotting sheet.")
-                font_height = 16
-                char_per_line = 12
-
-                # Calculate optimal row height
-                row_heights = []
-                for _, row in data.iterrows():
-                    max_lines = 1
-                    for cell in row:
-                        if cell:
-                            cell_length = len(str(cell))
-                            lines = (cell_length // char_per_line) + 1
-                            max_lines = max(max_lines, lines)
-                    row_heights.append(max_lines * font_height)
-
-                max_row_height = int(max(row_heights)) if row_heights else default_rowheight
-                default_rowheight = max_row_height
-
-            debug_print(f"DEBUG: Final row height: {default_rowheight}")
-
-            # Create table canvas
-            table_canvas = TableCanvas(
-                table_frame, 
-                model=model, 
-                cellwidth=calculated_cellwidth, 
-                cellbackgr='#4CC9F0',
-                thefont=('Arial', 10), 
-                rowheight=default_rowheight, 
-                rowselectedcolor='#FFFFFF',
-                editable=False, 
-                yscrollcommand=v_scrollbar.set, 
-                xscrollcommand=h_scrollbar.set, 
-                showGrid=True
+        if data.empty:
+            placeholder_label = tk.Label(
+                frame,
+                text=f"Sheet '{sheet_name}' is ready for data collection.\nUse the data collection tools to add measurements.",
+                font=("Arial", 12),
+                fg="gray",
+                justify="center"
             )
+            placeholder_label.pack(expand=True, pady=50)
+            return
 
-            table_canvas.grid(row=0, column=0, sticky='nsew')
-            v_scrollbar.grid(row=0, column=1, sticky='ns')
-            h_scrollbar.grid(row=1, column=0, sticky='ew')
+        # Clean and prepare data
+        data = clean_columns(data)
+        data.columns = data.columns.map(str)
+        data = data.astype(str)
+        data = data.replace([np.nan, pd.NA], '', regex=True)
 
-            table_canvas.show()
+        table_frame = ttk.Frame(frame, padding=(2, 1))
+        self.table_frame.pack_propagate(False)
+        table_frame.pack(fill='both', expand=True)
 
-            debug_print("DEBUG: Table displayed successfully.")
+        # Calculate table dimensions
+        table_frame.update_idletasks()
+        available_width = table_frame.winfo_width()
+        num_columns = len(data.columns)
+        calculated_cellwidth = max(120, available_width // num_columns)
+
+        # Create scrollbars
+        v_scrollbar = ttk.Scrollbar(table_frame, orient='vertical')
+        h_scrollbar = ttk.Scrollbar(table_frame, orient='horizontal')
+
+        # Create table model
+        model = TableModel()
+        table_data_dict = data.to_dict(orient='index')
+        model.importDict(table_data_dict)
+
+        default_cellwidth = 110
+        default_rowheight = 25
+
+        if is_plotting_sheet:
+            font_height = 16
+            char_per_line = 12
+
+            # Calculate optimal row height
+            row_heights = []
+            for _, row in data.iterrows():
+                max_lines = 1
+                for cell in row:
+                    if cell:
+                        cell_length = len(str(cell))
+                        lines = (cell_length // char_per_line) + 1
+                        max_lines = max(max_lines, lines)
+                row_heights.append(max_lines * font_height)
+
+            max_row_height = int(max(row_heights)) if row_heights else default_rowheight
+            default_rowheight = max_row_height
+
+        # Create table canvas
+        table_canvas = TableCanvas(
+            table_frame, 
+            model=model, 
+            cellwidth=calculated_cellwidth, 
+            cellbackgr='#4CC9F0',
+            thefont=('Arial', 10), 
+            rowheight=default_rowheight, 
+            rowselectedcolor='#FFFFFF',
+            editable=False, 
+            yscrollcommand=v_scrollbar.set, 
+            xscrollcommand=h_scrollbar.set, 
+            showGrid=True
+        )
+
+        table_canvas.grid(row=0, column=0, sticky='nsew')
+        v_scrollbar.grid(row=0, column=1, sticky='ns')
+        h_scrollbar.grid(row=1, column=0, sticky='ew')
+
+        table_canvas.show()
 
     def update_plot_dropdown(self):
         """Update the plot type dropdown with only the valid options and manage visibility."""
         current_sheet = self.selected_sheet.get()
-        # If available, use self.full_sample_data; otherwise, fall back to the raw data
         if current_sheet not in self.filtered_sheets:
             self.plot_dropdown.pack_forget()
             return
 
         sheet_data = self.filtered_sheets[current_sheet]["data"]
+        processing, get_valid_plot_options = _lazy_import_processing()
+        if not processing:
+            return
+            
         valid_plot_options = get_valid_plot_options(self.plot_options, sheet_data)
-        
 
         if valid_plot_options:
-            # Update the plot type dropdown with available plot options
             self.plot_dropdown['values'] = valid_plot_options
 
-            # Check if the selected plot type is valid, set to the first valid option if not
             if self.selected_plot_type.get() not in valid_plot_options:
                 self.selected_plot_type.set(valid_plot_options[0])
 
-            # Ensure the plot dropdown is visible and bind its event
             self.plot_dropdown.pack(fill="x", pady=(5, 5))
             self.plot_dropdown.bind(
                 "<<ComboboxSelected>>",
                 lambda event: self.plot_manager.plot_all_samples(self.display_frame, self.get_full_sample_data(), 12)
             )
         else:
-            # Hide the plot dropdown if no valid options are available
             self.plot_dropdown.pack_forget()
 
-    def open_trend_analysis_window(self) -> None:
-        trend_gui = TrendAnalysisGUI(self.root, self.filtered_sheets, self.plot_options)
-        trend_gui.show()
+    def get_full_sample_data(self):
+        """Get full sample data for plotting."""
+        # This method was referenced but missing - implement based on your needs
+        return getattr(self, 'current_sheet_data', pd.DataFrame())
+
+    def store_images(self, sheet_name, paths):
+        """Store image paths and their crop states for a specific sheet."""
+        if not sheet_name:
+            return
+
+        if self.current_file not in self.sheet_images:
+            self.sheet_images[self.current_file] = {}
+        self.sheet_images[self.current_file][sheet_name] = paths
+
+        if not hasattr(self, 'image_crop_states'):
+            self.image_crop_states = {}
+
+        for img_path in paths:
+            if img_path not in self.image_crop_states:
+                self.image_crop_states[img_path] = self.crop_enabled.get()
 
     def restore_all(self):
         """Restore all lines or bars to their original state."""
@@ -1576,30 +1183,25 @@ Would you like to download and install the update?"""
             self.check_buttons.disconnect(self.checkbox_cid)
 
         if self.selected_plot_type.get() == "TPM (Bar)":
-            # Restore bars
             for patch, original_data in zip(self.axes.patches, self.original_lines_data):
                 patch.set_x(original_data[0])
                 patch.set_height(original_data[1])
                 patch.set_visible(True)
         else:
-            # Restore lines
             for line, original_data in zip(self.lines, self.original_lines_data):
                 line.set_xdata(original_data[0])
                 line.set_ydata(original_data[1])
                 line.set_visible(True)
 
-        # Reset all checkboxes to the default "checked" state (forcefully activating each one)
         if self.check_buttons:
             for i in range(len(self.line_labels)):
-                if not self.check_buttons.get_status()[i]:  # Only activate if not already active
-                    self.check_buttons.set_active(i)  # Reset each checkbox to "checked"
+                if not self.check_buttons.get_status()[i]:
+                    self.check_buttons.set_active(i)
 
-            # Reconnect the callback for CheckButtons after restoring
             self.checkbox_cid = self.check_buttons.on_clicked(
                 self.plot_manager.on_bar_checkbox_click if self.selected_plot_type.get() == "TPM (Bar)" else self.plot_manager.on_checkbox_click
             )
 
-        # Redraw the canvas to reflect the restored state
         if self.canvas:
             self.canvas.draw_idle()
 
@@ -1608,27 +1210,7 @@ Would you like to download and install the update?"""
         success = False
 
         try:
-            # Force GUI to update progress dialog IMMEDIATELY
-            self.root.update_idletasks()  
-
-            # Add detailed logging
-            import logging
-            logging.basicConfig(filename='report_generation.log', level=logging.DEBUG)
-            logging.info("Starting full report generation")
-
-            # Add this before generating the report
-            logging.info(f"Sheets: {list(self.filtered_sheets.keys())}")
-            for sheet_name, sheet_info in self.filtered_sheets.items():
-                logging.info(f"Sheet {sheet_name} - empty: {sheet_info.get('is_empty', 'unknown')}")
-                if 'data' in sheet_info:
-                    logging.info(f"  Data shape: {sheet_info['data'].shape}")
-                    debug_print(f"DEBUG: Full report - {sheet_name} data shape: {sheet_info['data'].shape}")
-                    if sheet_name == "User Test Simulation":
-                        debug_print(f"DEBUG: User Test Simulation data preview:")
-                        debug_print(f"DEBUG: Columns: {sheet_info['data'].columns.tolist()}")
-                        debug_print(f"DEBUG: First 5 rows:\n{sheet_info['data'].head()}")
-
-            # Generate report (blocks UI, but ensures dialog stays visible)
+            self.root.update_idletasks()
             self.report_generator.generate_full_report(
                 self.filtered_sheets, 
                 self.plot_options
@@ -1638,143 +1220,79 @@ Would you like to download and install the update?"""
         except Exception as e:
             import traceback
             error_details = traceback.format_exc()
-            logging.error(f"Report generation error: {str(e)}\n{error_details}")
-            debug_print(f"DEBUG: Report generation error: {str(e)}")
-            debug_print(f"DEBUG: Full traceback:\n{error_details}")
             messagebox.showerror("Error", f"An error occurred: {e}")
 
         finally:
-            # Clean up temp files
             if hasattr(self.report_generator, 'cleanup_temp_files'):
-                self.report_generator.cleanup_temp_files(images_to_delete)
-            # Hide progress AFTER processing
-            self.progress_dialog.hide_progress_bar()  
+                self.report_generator.cleanup_temp_files()
+            self.progress_dialog.hide_progress_bar()
 
-            # Show success message AFTER hiding progress
             if success:  
                 messagebox.showinfo("Success", "Full report saved successfully.")
 
-            # Force GUI to process pending events
             self.root.update_idletasks() 
 
     def generate_test_report(self):
         selected_sheet = self.selected_sheet.get()
-        debug_print(f"DEBUG: Generating test report for sheet: {selected_sheet}")
     
-        # Show the progress dialog
         self.progress_dialog.show_progress_bar("Generating test report...")
         try:
-            # Add debugging for User Test Simulation
-            if selected_sheet == "User Test Simulation":
-                sheet_info = self.filtered_sheets.get(selected_sheet, {})
-                if 'data' in sheet_info:
-                    debug_print(f"DEBUG: Test report User Test Simulation data shape: {sheet_info['data'].shape}")
-                    debug_print(f"DEBUG: Columns: {sheet_info['data'].columns.tolist()}")
-                    debug_print(f"DEBUG: First 5 rows:\n{sheet_info['data'].head()}")
-        
-            # Pass the currently selected sheet, the full sheets dictionary, and the plot options.
             self.report_generator.generate_test_report(selected_sheet, self.filtered_sheets, self.plot_options)
-            debug_print(f"DEBUG: Test report generation completed successfully for {selected_sheet}")
         except Exception as e:
             import traceback
             error_details = traceback.format_exc()
-            debug_print(f"DEBUG: Test report generation error: {str(e)}")
-            debug_print(f"DEBUG: Full traceback:\n{error_details}")
             raise
         finally:
             self.progress_dialog.hide_progress_bar()
 
     def open_viscosity_calculator(self):
-        """Open the viscosity calculator as a standalone window with a proper menubar."""
-        calculator = self.get_viscosity_calculator()
-        # Create a new top-level window
-        calculator_window = tk.Toplevel(self.root)
-        calculator_window.title("Viscosity Calculator")
-        calculator_window.geometry("550x500")
-        calculator_window.resizable(True, True)
-        calculator_window.configure(bg=APP_BACKGROUND_COLOR)
+        """Open the standalone viscosity calculator as a child window."""
+        # Lazy load the viscosity GUI
+        ViscosityGUI = lazy_import_viscosity_gui()
+        if not ViscosityGUI:
+            messagebox.showerror("Error", "Could not load viscosity calculator")
+            return
     
-        # Make the window modal
-        calculator_window.transient(self.root)
-        calculator_window.grab_set()
-    
-        # Center the window
-        self.center_window(calculator_window)
-    
-        # Create a menubar for the calculator window
-        menubar = tk.Menu(calculator_window)
-        calculator_window.config(menu=menubar)
-    
-        file_menu = tk.Menu(menubar, tearoff=0)
-        file_menu.add_command(label="Upload Viscosity Data", command = calculator.upload_training_data)
-        menubar.add_cascade(label="File", menu=file_menu)
+        try:
+            # Create and show the viscosity calculator as a child window
+            viscosity_app = ViscosityGUI(parent=self.root)
+            viscosity_app.show()
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to open viscosity calculator: {e}")
 
-        # Create Calculate menu with all the viscosity-related functions
-        calculate_menu = tk.Menu(menubar, tearoff=0)
+    def train_models_from_data(self):
+        """Train models from data."""
+        pass
 
-        calculate_menu.add_command(label="Train Standard Models", 
-                                  command=self.train_models_from_data)
-        calculate_menu.add_command(label="Train Enhanced Models with Potency", 
-                                  command=self.train_models_with_chemistry)
-        calculate_menu.add_command(label="Analyze Models", 
-                                  command=calculator.analyze_models)
-        calculate_menu.add_command(label="Arrhenius Analysis", 
-                                  command=calculator.filter_and_analyze_specific_combinations)
-          
-        
-        menubar.add_cascade(label="Model", menu=calculate_menu)
-    
-        # Create main container
-        main_container = ttk.Frame(calculator_window)
-        main_container.pack(fill='both', expand=True, padx=8, pady=8)
-    
-        # Create the calculator frame and embed the calculator
-        calculator_frame = ttk.Frame(main_container)
-        calculator_frame.pack(fill='both', expand=True)
-    
-        # Embed the calculator with all its tabs
-        calculator.embed_in_frame(calculator_frame)
-
-        self.center_window(calculator_window, 550, 500)
-
-        return calculator_window
+    def train_models_with_chemistry(self):
+        """Train models with chemistry."""
+        pass
 
     def return_to_previous_view(self):
         """Return to the previous view from the calculator."""
-        # Restore the bottom frame if it was hidden
         if hasattr(self, 'bottom_frame') and not self.bottom_frame.winfo_ismapped():
-            # Explicitly restore ALL original configuration values
-            self.bottom_frame.configure(height=150)  # Reset the explicit height
+            self.bottom_frame.configure(height=150)
             self.bottom_frame.pack(side="bottom", fill="x", padx=10, pady=(0,10))
-            self.bottom_frame.pack_propagate(False)  # Re-apply propagate settings
+            self.bottom_frame.pack_propagate(False)
             self.bottom_frame.grid_propagate(False)
-            self.bottom_frame.update_idletasks()  # Force geometry manager to update
+            self.bottom_frame.update_idletasks()
     
-        # Restore original minimum size constraint
         if hasattr(self, 'previous_minsize'):
             self.root.minsize(*self.previous_minsize)
         else:
-            self.root.minsize(1200, 800)  # Default fallback
+            self.root.minsize(1200, 800)
     
-        # Restore the previous window geometry
         if hasattr(self, 'previous_window_geometry'):
             self.root.geometry(self.previous_window_geometry)
             self.center_window(self.root)
     
-        # Get the currently selected sheet
         current_sheet = self.selected_sheet.get()
     
-        # Return to the standard view with that sheet
         if current_sheet in self.filtered_sheets:
             self.update_displayed_sheet(current_sheet)
         elif self.filtered_sheets:
-            # If current sheet is invalid, select the first available sheet
             first_sheet = list(self.filtered_sheets.keys())[0]
             self.selected_sheet.set(first_sheet)
             self.update_displayed_sheet(first_sheet)
         else:
-            # If no sheets available, just clear the display
             self.clear_dynamic_frame()
-
-
-

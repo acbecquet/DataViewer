@@ -16,12 +16,8 @@ from typing import Optional
 from openpyxl import load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
-# =============================================================================
-# GLOBAL DEBUG SYSTEM
-# =============================================================================
-
 # Global debug flag - change this to control ALL debug output across the app
-DEBUG_ENABLED = False  # Set to True when you need debugging
+DEBUG_ENABLED = True  # Set to True when debugging is needed
 
 def debug_print(*args, **kwargs):
     """
@@ -56,9 +52,6 @@ def is_debug_enabled():
     """
     return DEBUG_ENABLED
 
-# =============================================================================
-# END DEBUG SYSTEM
-# =============================================================================
 
 FONT = ('Arial', 10)
 # Global constants

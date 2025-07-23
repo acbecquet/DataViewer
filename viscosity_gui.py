@@ -20,10 +20,16 @@ BUTTON_COLOR = '#4169E1'
 class ViscosityGUI:
     """A standalone GUI for viscosity calculations and analysis."""
     
-    def __init__(self):
+    def __init__(self, parent=None):
         """Initialize the Viscosity GUI with its own root window."""
-        # Create the main window
-        self.root = tk.Tk()
+        if parent:
+            self.root = tk.Toplevel(parent)
+            self.root.transient(parent)  # Make it stay on top of parent
+            self.root.grab_set()  # Make it modal
+        else:
+            self.root = tk.Tk()
+        
+
         self.root.title("Viscosity Calculator")
         self.root.geometry("550x550")
         self.root.configure(bg=APP_BACKGROUND_COLOR)
@@ -42,6 +48,8 @@ class ViscosityGUI:
                 self.root.iconphoto(False, tk.PhotoImage(file=icon_path))
         except Exception as e:
             print(f"Could not load icon: {e}")
+
+        self.parent = parent
         
         # Create an adapter class to provide the same interface expected by ViscosityCalculator
         self.gui_adapter = self.GUIAdapter(self.root)
@@ -60,6 +68,31 @@ class ViscosityGUI:
         
         # Center the window on screen
         self.center_window(self.root)
+
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+    
+    def on_closing(self):
+        """Handle window closing properly."""
+        if self.parent:
+            # If we have a parent, just destroy this window
+            self.root.destroy()
+        else:
+            # If no parent, this is standalone - exit the application
+            self.root.destroy()
+    
+    def show(self):
+        """Show the window (for when called from parent)."""
+        if self.parent:
+            # Don't call mainloop when embedded - parent handles it
+            pass
+        else:
+            # Standalone mode
+            self.run()
+    
+    def run(self):
+        """Run the application (for standalone mode)."""
+        self.root.mainloop()
+
     
     class GUIAdapter:
         """Adapter class to provide the interface expected by ViscosityCalculator."""
@@ -113,7 +146,7 @@ class ViscosityGUI:
                                command=self.calculator.create_potency_demo_model)
         models_menu.add_command(label="Analyze Model Response", 
                                command=self.calculator.analyze_model_feature_response)
-        menubar.add_cascade(label="Models", menu=models_menu)
+        menubar.add_cascade(label="Models (Experimental)", menu=models_menu)
         
         # Help menu
         help_menu = tk.Menu(menubar, tearoff=0)

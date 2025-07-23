@@ -18,7 +18,7 @@ class TemperatureBlock_Methods:
             temperature: Temperature value for this block
         """
         FONT = ('Arial', 12)
-        APP_BACKGROUND_COLOR = '#0504AA'
+        APP_BACKGROUND_COLOR = 'white'
         
         # Create a frame for this temperature block with a border
         block_frame = Frame(parent, bg=APP_BACKGROUND_COLOR, bd=1, relief="solid")
@@ -32,7 +32,7 @@ class TemperatureBlock_Methods:
         temp_header.pack(fill="x", padx=2, pady=2)
 
         temp_label = Label(temp_header, text=f"{temperature}C", 
-                        bg="#000080", fg="white", font=FONT, width=10)
+                        bg="#D3D3D3", fg="black", font=FONT, width=10)
         temp_label.pack(side="left", fill="x", expand=True)
 
         # Add a remove button for this block
@@ -48,14 +48,14 @@ class TemperatureBlock_Methods:
         speed_frame = Frame(block_frame, bg=APP_BACKGROUND_COLOR)
         speed_frame.pack(fill="x", padx=2, pady=2)
 
-        Label(speed_frame, text="Speed:", bg=APP_BACKGROUND_COLOR, fg="white", 
+        Label(speed_frame, text="Speed:", bg=APP_BACKGROUND_COLOR, fg="black", 
             font=FONT).pack(side="left", padx=5)
 
         speed_var = StringVar(value="")
         speed_entry = Entry(speed_frame, textvariable=speed_var, width=15)
         speed_entry.pack(side="left", padx=5)
 
-        Label(speed_frame, text="(manual input)", bg=APP_BACKGROUND_COLOR, fg="white", 
+        Label(speed_frame, text="(manual input)", bg=APP_BACKGROUND_COLOR, fg="black", 
             font=FONT).pack(side="left", padx=5)
 
         self.speed_vars.append((temperature, speed_var))
@@ -70,14 +70,14 @@ class TemperatureBlock_Methods:
 
         # Create header row
         for col, header in enumerate(headers):
-            Label(table_frame, text=header, bg="#000080", fg="white", 
+            Label(table_frame, text=header, bg="#D3D3D3", fg="black", 
                 font=FONT, width=col_widths[col], relief="raised").grid(
                 row=0, column=col, sticky="nsew", padx=1, pady=1)
 
         # Create rows for each run
         for run in range(3):
             # Row label (Run 1, Run 2, Run 3)
-            Label(table_frame, text=f"Run {run+1}", bg=APP_BACKGROUND_COLOR, fg="white", 
+            Label(table_frame, text=f"Run {run+1}", bg=APP_BACKGROUND_COLOR, fg="black", 
                 font=FONT, width=col_widths[0]).grid(
                 row=run+1, column=0, sticky="nsew", padx=1, pady=1)
         
@@ -108,7 +108,7 @@ class TemperatureBlock_Methods:
                             self.check_run_completion(temp))
 
         # Add average row
-        Label(table_frame, text="Average", bg="#000080", fg="white", 
+        Label(table_frame, text="Average", bg="#D3D3D3", fg="black", 
             font=FONT, width=col_widths[0]).grid(
             row=4, column=0, sticky="nsew", padx=1, pady=1)
 
@@ -126,9 +126,9 @@ class TemperatureBlock_Methods:
         self.avg_visc_vars.append((temperature, avg_visc_var))
 
         # Create labels for averages
-        Label(table_frame, textvariable=avg_torque_var, bg="#90EE90", 
+        Label(table_frame, textvariable=avg_torque_var, bg="white", 
             width=col_widths[1]).grid(row=4, column=1, sticky="nsew", padx=1, pady=1)
-        Label(table_frame, textvariable=avg_visc_var, bg="#90EE90", 
+        Label(table_frame, textvariable=avg_visc_var, bg="white", 
             width=col_widths[2]).grid(row=4, column=2, sticky="nsew", padx=1, pady=1)
 
     def check_run_completion(self, temperature):

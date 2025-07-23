@@ -921,9 +921,9 @@ class FileManager:
                         self.gui.all_filtered_sheets = original_all_filtered_sheets
         
             Button(button_frame, text="Load for Comparison", command=on_load_for_comparison, 
-                   bg="#4CAF50", fg="white", font=FONT).pack(side="left", padx=5)
+                   bg="#4CAF50", fg="black", font=FONT).pack(side="left", padx=5)
             Button(button_frame, text="Cancel", command=dialog.destroy, 
-                   bg="#f44336", fg="white", font=FONT).pack(side="right", padx=5)
+                   bg="#f44336", fg="black", font=FONT).pack(side="right", padx=5)
 
         else:
             # Normal mode: existing button behavior
@@ -951,9 +951,9 @@ class FileManager:
                     self.load_multiple_from_database(file_ids)
 
             Button(button_frame, text="Load Selected", command=on_load, 
-                   bg="#4CAF50", fg="white", font=FONT).pack(side="left", padx=5)
+                   bg="#4CAF50", fg="black", font=FONT).pack(side="left", padx=5)
             Button(button_frame, text="Close", command=dialog.destroy, 
-                   bg="#f44336", fg="white", font=FONT).pack(side="right", padx=5)
+                   bg="#f44336", fg="black", font=FONT).pack(side="right", padx=5)
 
         # Initialize selection info
         update_selection_info()

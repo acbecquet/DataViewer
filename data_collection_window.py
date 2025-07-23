@@ -173,6 +173,7 @@ class DataCollectionWindow:
         self.window.title(f"Data Collection - {test_name}")
         self.window.geometry("1375x750")
         self.window.minsize(1250, 625)
+        
     
         self.window.transient(self.root)  # Make it a child of the main window
         self.window.grab_set()  # Make it modal and bring to front
@@ -247,7 +248,6 @@ class DataCollectionWindow:
         file_menu.add_command(label="Save and Exit", 
                             command=lambda: self.save_data(exit_after=True))
         file_menu.add_separator()
-        file_menu.add_command(label="Open Raw Excel File", command=self.open_raw_excel)
         file_menu.add_separator()
         file_menu.add_command(label="Export CSV", command=self.export_csv)
         file_menu.add_separator()
@@ -281,7 +281,6 @@ class DataCollectionWindow:
         tools_menu.add_command(label="Change Puff Interval", command=self.change_puff_interval_dialog)
         tools_menu.add_command(label="Auto-Save Settings", command=self.auto_save_settings_dialog)
         tools_menu.add_separator()
-        tools_menu.add_command(label="Switch Test", command=self.switch_test_dialog)
         menubar.add_cascade(label="Tools", menu=tools_menu)
     
         # Help menu
@@ -985,12 +984,6 @@ class DataCollectionWindow:
             self.start_auto_save_timer()  # Restart with new interval
             debug_print(f"DEBUG: Changed auto-save interval to {new_minutes} minutes")
     
-    def switch_test_dialog(self):
-        """Show dialog to switch to a different test in the same file."""
-        # Future Integration with main gui to switch to other sheets in the file
-        # For now, just show an info message
-        messagebox.showinfo("Switch Test", 
-                          "To switch tests, please save your current work and use the main application menu.")
     
     def show_keyboard_shortcuts(self):
         """Show keyboard shortcuts help."""
@@ -1012,7 +1005,6 @@ Editing:
 
 File Operations:
 • Ctrl+S - Quick save
-• Ctrl+O - Open raw Excel file
 
 General:
 • F1 - Show this help
@@ -2359,9 +2351,6 @@ Developed by Charlie Becquet
         binding_id = self.window.bind("<Control-s>", lambda e: self.save_data(show_confirmation=False) if self.hotkeys_enabled else None)
         self.hotkey_bindings["<Control-s>"] = binding_id
     
-        # Bind Ctrl+O for open raw Excel
-        binding_id = self.window.bind("<Control-o>", lambda e: self.open_raw_excel() if self.hotkeys_enabled else None)
-        self.hotkey_bindings["<Control-o>"] = binding_id
     
         # Bind Ctrl+Left/Right for sample navigation
         binding_id = self.window.bind("<Control-Left>", lambda e: self.go_to_previous_sample() if self.hotkeys_enabled else None)
