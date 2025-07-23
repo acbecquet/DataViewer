@@ -44,6 +44,8 @@ plots/
 data/temp/
 data/cache/
 data/logs/
+bin/
+obj/
 
 # INCLUDE the main database - DO NOT ignore
 !dataviewer.db
