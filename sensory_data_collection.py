@@ -1,5 +1,4 @@
 ﻿"""
-sensory_data_collection.py
 Sensory Data Collection Window for DataViewer Application
 Developed by Charlie Becquet
 """
@@ -77,16 +76,14 @@ class SensoryDataCollectionWindow:
         self.close_callback = close_callback
         self.window = None
         self.data = {}
-        self.sessions = {}  # {'session_id': {'header': {}, 'samples': {}, 'timestamp': '', 'source_image': ''}}
+        self.sessions = {} 
         self.current_session_id = None
         self.session_counter = 1
         self.samples = {}
         self.current_sample = None
         debug_print("DEBUG: Initialized session-based data structure")
-        debug_print(f"DEBUG: self.sessions = {self.sessions}")
-        debug_print(f"DEBUG: self.current_session_id = {self.current_session_id}")
-        debug_print(f"DEBUG: self.session_counter = {self.session_counter}")
-        # Sensory metrics (5 attributes)
+
+        # Sensory metrics
         self.metrics = [
             "Burnt Taste",
             "Vapor Volume", 
@@ -98,11 +95,11 @@ class SensoryDataCollectionWindow:
         self.current_mode = "collection"
         self.all_sessions_data = {}
         self.average_samples = {}
-        debug_print("Initialized dual-mode functionality")
+
 
         self.ml_trainer = SensoryMLTrainer(self)
         self.ai_processor = SensoryAIProcessor(self)
-        debug_print("DEBUG: Initialized ML trainer and AI processor")
+
         
         # Header data fields
         self.header_fields = [
@@ -111,8 +108,7 @@ class SensoryDataCollectionWindow:
             "Puff Length",
             "Date"
         ]
-        debug_print("Updated header fields to 4 essential fields only")
-        debug_print(f"New header fields: {self.header_fields}")
+
         # SOP text
         self.sop_text = """
 SENSORY EVALUATION STANDARD OPERATING PROCEDURE
@@ -137,27 +133,22 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
    - Record any unusual observations
    - Note any technical issues with samples
         """
-    # Lazy import functions for image processing
-    
-
+   
     def show(self):
         """Create and display the sensory data collection window with optimized sizing."""
         self.window = tk.Toplevel(self.parent)
         self.window.title("Sensory Data Collection")
         self.window.resizable(True, True)
     
-        # Start with a reasonable initial size (will be optimized after content loads)
         initial_width = 1000
         initial_height = 600
         self.window.geometry(f"{initial_width}x{initial_height}")
         self.window.configure(bg=APP_BACKGROUND_COLOR)
-        #self.window.transient(self.parent)
     
         debug_print(f"DEBUG: Initial window size set to {initial_width}x{initial_height}")
 
         self.window.protocol("WM_DELETE_WINDOW", self.on_window_close)
     
-        # Create main layout (this will trigger size optimization)
         self.setup_layout()
         self.setup_menu()       
         self.center_window()
@@ -168,9 +159,11 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
     
         # Check for unsaved changes and handle auto-save if needed
         try:
-            # Your existing save logic here if any
+            # Need to add save logic on window close
             debug_print("DEBUG: Performing cleanup before window close")
-        
+
+            # update window background in case in comparison mode
+            self.update_window_background(APP_BACKGROUND_COLOR)
             # Close the window
             self.window.destroy()
             debug_print("DEBUG: Sensory window destroyed")
@@ -249,7 +242,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         
         ml_menu = tk.Menu(menubar, tearoff=0)
     
-       # Core ML workflow - no training structure creation (separate scripts handle this)
+        # Core ML workflow - no training structure creation (separate scripts handle this)
         ml_menu.add_command(label="Check Enhanced Data Balance", command=self.ml_trainer.check_enhanced_data_balance)
         ml_menu.add_command(label="Train Enhanced Model", command=self.ml_trainer.train_enhanced_model)
         ml_menu.add_separator()
@@ -270,24 +263,20 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         if event.widget != self.window:
             return
     
-        debug_print("DEBUG: === GENERAL WINDOW RESIZE HANDLER ===")
-    
         # Get current window dimensions
         window_width = self.window.winfo_width()
         window_height = self.window.winfo_height()
-        debug_print(f"DEBUG: Window resized to: {window_width}x{window_height}px")
-    
-        # Update paned window sash position proportionally
+
         if hasattr(self, 'main_paned'):
             # Force geometry update first
             self.main_paned.update_idletasks()
         
-            left_panel_proportion = 0.3  # 30% for left panel, 70% for right panel, this is updated later
+            left_panel_proportion = 0.3  
             new_sash_position = int(window_width * left_panel_proportion)
         
-            # Apply minimum and maximum constraints to keep usable
-            min_left_width = 350  # Minimum space for left panel functionality
-            max_left_width = window_width - 400  # Leave at least 400px for right panel
+           
+            min_left_width = 350  
+            max_left_width = window_width - 400  
         
             new_sash_position = max(min_left_width, min(new_sash_position, max_left_width))
         
@@ -317,8 +306,6 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         if hasattr(self, 'on_window_resize_plot'):
             # Add a small delay to let the sash repositioning complete
             self.window.after(50, lambda: self.on_window_resize_plot(event))
-    
-        debug_print("DEBUG: === END GENERAL WINDOW RESIZE ===")
 
     def merge_sessions_from_files(self):
         """Merge multiple session JSON files into a new session."""
@@ -411,13 +398,11 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
                 debug_print(f"DEBUG: No valid metrics found in sample {sample_name}")
                 return False
     
-        debug_print("DEBUG: Session data validation passed")
+        
         return True
 
     def show_merge_sessions_dialog(self, loaded_sessions):
         """Show dialog to configure session merging."""
-    
-        debug_print(f"DEBUG: Showing merge dialog for {len(loaded_sessions)} sessions")
     
         # Create dialog window
         merge_window = tk.Toplevel(self.window)
@@ -827,7 +812,6 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             first_sample = list(self.samples.keys())[0]
             self.sample_var.set(first_sample)
             self.load_sample_data(first_sample)
-            # REFRESH DISPLAYS AFTER LOADING DATA
             self.refresh_value_displays()
         else:
             self.sample_var.set('')
@@ -842,14 +826,9 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         session_names = list(self.sessions.keys())
         if hasattr(self, 'session_combo'):
             self.session_combo['values'] = session_names
-            debug_print(f"DEBUG: Updated session combo with {len(session_names)} sessions")
-
- 
 
     def setup_layout(self):
         """Create the main layout with proper canvas sizing."""
-        debug_print("DEBUG: Setting up layout with enhanced canvas sizing")
-
         # Create main paned window
         main_paned = tk.PanedWindow(self.window, orient='horizontal', sashrelief='raised', sashwidth=4)
         main_paned.pack(fill='both', expand=True, padx=5, pady=5)
@@ -857,7 +836,6 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         # Store reference to main_paned for resize handling
         self.main_paned = main_paned
 
-        # === LEFT PANEL SETUP ===
         left_canvas = tk.Canvas(main_paned, bg=APP_BACKGROUND_COLOR, highlightthickness=0)
         self.left_canvas = left_canvas
         left_scrollbar = ttk.Scrollbar(main_paned, orient="vertical", command=left_canvas.yview)
@@ -904,13 +882,10 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
 
         # Add to paned window
         main_paned.add(left_canvas, stretch="always")
-
-        # === RIGHT PANEL SETUP ===
         
         right_canvas = tk.Canvas(main_paned, bg=APP_BACKGROUND_COLOR, highlightthickness=0)
         right_scrollbar = ttk.Scrollbar(main_paned, orient="vertical", command=right_canvas.yview)
         self.right_frame = ttk.Frame(right_canvas)
-    
         
         self.right_canvas = right_canvas
 
@@ -921,8 +896,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             bbox = right_canvas.bbox("all")
             if bbox:
                 right_canvas.configure(scrollregion=bbox)
-            
-                
+                        
                 # Get the height of the paned window
                 if hasattr(self, 'main_paned'):
                     paned_height = self.main_paned.winfo_height()
@@ -933,11 +907,9 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
 
         self.right_frame.bind("<Configure>", configure_right_scroll)
 
-        # Create window with proper anchor
         self.right_canvas_window = right_canvas.create_window((0, 0), window=self.right_frame, anchor="nw")
         right_canvas.configure(yscrollcommand=right_scrollbar.set)
     
-        # Configure right canvas to expand interior frame and match height
         def on_right_canvas_configure(event):
             """Handle right canvas resize events and update interior frame."""
             if event.widget == right_canvas:
@@ -945,14 +917,10 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
                 canvas_height = event.height
                 debug_print(f"DEBUG: Right canvas resized to: {canvas_width}x{canvas_height}")
         
-                if canvas_width > 50 and canvas_height > 50:
-                    # CRITICAL: Set both width AND height for the interior frame
+                if canvas_width > 50 and canvas_height > 50:                   
                     right_canvas.itemconfig(self.right_canvas_window, width=canvas_width-4, height=canvas_height-4)
-            
-                    # Force the right frame to update its size
                     self.right_frame.configure(width=canvas_width-4, height=canvas_height-4)
-                    debug_print(f"DEBUG: Updated right_frame to {canvas_width-4}x{canvas_height-4}")
-            
+                       
                     # Force update of all children
                     self.right_frame.update_idletasks()
             
@@ -1011,7 +979,6 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
                 if paned_height > 100:
                     self.left_canvas.configure(height=paned_height - 10) 
                     self.right_canvas.configure(height=paned_height - 10)
-                    debug_print(f"DEBUG: Set both canvases to height: {paned_height - 10}px")
                 
                     # Force update
                     self.left_canvas.update_idletasks()
@@ -1019,7 +986,6 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
 
     def optimize_window_size(self):
         """Calculate window size based on actual frame dimensions after layout."""
-        debug_print("DEBUG: Starting precise window size optimization")
     
         # Force complete layout update
         self.window.update_idletasks()
@@ -1063,8 +1029,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
     
         final_width = max(final_width, 800)
         final_height = max(final_height, 500)
-    
-        
+           
         if final_height > screen_height*0.91:  
             final_height = screen_height*0.91
     
@@ -1074,7 +1039,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         self.window.geometry(f"{final_width}x{final_height}")
     
         # Pass the actual required height, not the full window height
-        available_height = governing_content_height  # Don't add window_chrome here
+        available_height = governing_content_height
         self.window.after(50, lambda: self.configure_canvas_sizing(available_height))
     
         self.center_window()
@@ -1097,7 +1062,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         # Set canvas to exactly match what the frame requires
         if hasattr(self, 'left_canvas'):
             # Add small padding but not excessive
-            canvas_height = required_frame_height  # Just 10px padding instead of full height
+            canvas_height = required_frame_height 
             self.left_canvas.configure(height=canvas_height)
             debug_print(f"DEBUG: Canvas set to frame's required height + padding: {canvas_height}px")
         
@@ -1139,9 +1104,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             debug_print(f"DEBUG: Right panel has {extra_space}px extra space - content will be naturally centered")
         else:
             debug_print(f"DEBUG: Right panel content fits exactly in available space")
-    
-        debug_print(f"DEBUG: Panel coordination complete - both panels optimized for {final_window_height}px window")
-        
+      
     def setup_data_entry_panel(self):
         """Setup the left panel for data entry."""
         # Header section
@@ -1200,18 +1163,18 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         self.mode_button.pack()
         debug_print("Added mode switch button to header section")
 
-        # Sample management section - SIMPLE NATURAL CENTERING
+        # Sample management sectionG
         sample_frame = ttk.LabelFrame(self.left_frame, text="Sample Management", padding=10)
         sample_frame.pack(fill='x', padx=5, pady=5)
         
         debug_print("Setting up sample management with simple centering")
         
-        # ROW 1: Sample selection - simple center using expand
+        # ROW 1: Sample selection
         sample_select_outer = ttk.Frame(sample_frame)
         sample_select_outer.pack(fill='x', pady=5)
         
         sample_select_frame = ttk.Frame(sample_select_outer)
-        sample_select_frame.pack(expand=True)  # This centers it naturally
+        sample_select_frame.pack(expand=True)
         
         ttk.Label(sample_select_frame, text="Current Sample:", font=FONT).pack(side='left')
         self.sample_var = tk.StringVar()
@@ -1227,7 +1190,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         button_outer.pack(fill='x', pady=5)
         
         button_frame = ttk.Frame(button_outer)
-        button_frame.pack(expand=True)  # This centers it naturally
+        button_frame.pack(expand=True) 
         
         ttk.Button(button_frame, text="Add Sample", 
                   command=self.add_sample).pack(side='left', padx=2)
@@ -1247,18 +1210,15 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         self.value_labels = {}
 
         for i, metric in enumerate(self.metrics):
-            # Create centered container for each metric row
             metric_container = ttk.Frame(eval_frame)
             metric_container.pack(fill='x', pady=4)
     
-            # Center the metric frame within the container
             metric_frame = ttk.Frame(metric_container)
             metric_frame.pack(anchor='center')
             
             # Metric label
             ttk.Label(metric_frame, text=f"{metric}:", font=FONT, width=12).pack(side='left')
-            
-            # Container for scale and value with fixed width (50% reduction)
+
             scale_container = ttk.Frame(metric_frame)
             scale_container.pack(side='left', padx=5)
             
@@ -1274,15 +1234,14 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             # Current value display
             value_label = ttk.Label(metric_frame, text="5", width=2)
             value_label.pack(side='left', padx=(10, 0))
-            
-            # STORE REFERENCE TO LABEL
+
             self.value_labels[metric] = value_label
             debug_print(f"DEBUG: Stored reference to value label for {metric}")
 
             # Update value display AND plot when scale changes (LIVE UPDATES)
             def update_live(val, label=value_label, var=self.rating_vars[metric], metric_name=metric):
                 label.config(text=str(var.get()))
-                self.auto_save_and_update()  # Add this method call
+                self.auto_save_and_update()
             scale.config(command=update_live)
             debug_print(f"DEBUG: Centered scale for {metric} configured with smaller pointer and tickmarks from 1-9")
             
@@ -1294,7 +1253,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         self.comments_text = tk.Text(comments_frame, height=4, font=FONT)
         self.comments_text.pack(fill='x', pady=2)
         
-       # Auto-save comments when user types
+        # Auto-save comments when user types
         def on_comment_change(event=None):
             """Auto-save comments when user types."""
             current_sample = self.sample_var.get()
@@ -1340,15 +1299,11 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
     def update_plot_size_for_resize(self):
         """Update plot size with artifact prevention and frame validation."""
         try:
-            debug_print("DEBUG: === PLOT SIZE UPDATE WITH VALIDATION ===")
-        
             # Check if we have the necessary components
             if not hasattr(self, 'canvas_frame') or not self.canvas_frame.winfo_exists():
-                debug_print("DEBUG: Canvas frame not available, skipping resize")
                 return
         
             if not hasattr(self, 'fig') or not self.fig:
-                debug_print("DEBUG: Figure not available, skipping resize")
                 return
         
             # Wait for frame geometry to stabilize
@@ -1365,23 +1320,18 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             # Validate that frames have reasonable dimensions before proceeding
             parent_width = parent_for_sizing.winfo_width()
             parent_height = parent_for_sizing.winfo_height()
-        
-            debug_print(f"DEBUG: Parent frame size: {parent_width}x{parent_height}px")
-        
-            # Don't defer if size is small - just skip this update
+                   
             if parent_width < 200 or parent_height < 200:
                 debug_print("DEBUG: Parent frame size too small, skipping this resize update")
                 return  # Just return, don't schedule another call
         
             # Calculate new size based on validated frame dimensions
             new_width, new_height = self.calculate_dynamic_plot_size(parent_for_sizing)
-            debug_print(f"DEBUG: Calculated plot size: {new_width:.2f}x{new_height:.2f} inches")
         
             # Get current figure size for comparison
             current_width, current_height = self.fig.get_size_inches()
-            debug_print(f"DEBUG: Current plot size: {current_width:.2f}x{current_height:.2f} inches")
         
-            # ARTIFACT PREVENTION: Only update if change is significant
+            # Only update if change is significant
             width_diff = abs(new_width - current_width)
             height_diff = abs(new_height - current_height)
             threshold = 1  # Threshold to reduce excessive updates
@@ -1393,12 +1343,9 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
                 self.fig.set_size_inches(new_width, new_height)
                             
                 self.canvas.draw_idle()
-                debug_print("DEBUG: Plot resize scheduled with draw_idle() to prevent artifacts")
             else:
                 debug_print("DEBUG: Size change below threshold, skipping update to prevent artifacts")
-        
-            debug_print("DEBUG: === END PLOT SIZE UPDATE ===")
-        
+               
         except Exception as e:
             debug_print(f"DEBUG: Error during plot resize: {str(e)}")
             import traceback
@@ -1406,7 +1353,6 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
 
     def setup_plot_panel(self):
         """Setup the right panel for spider plot visualization with proper resizing."""
-        debug_print("DEBUG: Setting up plot panel with enhanced resizing support")
    
         # Create the main plot frame with proper expansion settings
         plot_frame = ttk.LabelFrame(self.right_frame, text="Sensory Profile Comparison", padding=10)
@@ -1428,8 +1374,6 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         canvas_container = ttk.Frame(plot_frame)
         canvas_container.pack(side='top', fill='both', expand=True)
     
-        debug_print("DEBUG: Plot panel frame hierarchy configured for proper expansion")
-    
         # Store reference to the container for proper sizing
         self.plot_container = canvas_container
     
@@ -1438,24 +1382,18 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         
     def setup_plot_canvas(self, parent):
         """Create the matplotlib canvas for the spider plot with dynamic responsive sizing."""
-        debug_print("DEBUG: Setting up enhanced plot canvas with dynamic sizing")
     
         # Calculate dynamic plot size based on available space
         dynamic_width, dynamic_height = self.calculate_dynamic_plot_size(parent)
 
         # Create figure with calculated responsive sizing
         self.fig, self.ax = plt.subplots(figsize=(dynamic_width, dynamic_height), subplot_kw=dict(projection='polar'))
-        self.fig.patch.set_facecolor('white')
-        debug_print(f"DEBUG: Created spider plot with dynamic size: {dynamic_width:.2f}x{dynamic_height:.2f} inches")
-
-        # Adjust subplot to use more of the available figure space
-        
+        self.fig.patch.set_facecolor('white')       
         self.fig.subplots_adjust(left=0.1, right=0.9, top=0.85, bottom=0.1)
-        debug_print("DEBUG: Applied subplot adjustments for dynamic plot")
     
         # Create canvas with proper expansion configuration
         canvas_frame = ttk.Frame(parent)
-        canvas_frame.pack(fill='both', expand=True)  # CRITICAL: fill='both', expand=True
+        canvas_frame.pack(fill='both', expand=True) 
     
         # Store reference to canvas_frame for resize handling
         self.canvas_frame = canvas_frame
@@ -1467,14 +1405,12 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
 
         # Add toolbar for additional functionality
         self.setup_plot_context_menu(canvas_widget)
-        debug_print("DEBUG: Plot canvas setup complete with dynamic sizing and right-click context menu")
 
         # Initialize empty plot
         self.update_plot()
 
         # Bind window resize events to update plot size
         self.window.bind('<Configure>', self.on_window_resize_plot, add=True)
-        debug_print("DEBUG: Window resize binding added for dynamic plot updates")
 
     def ensure_canvas_expansion(self):
         """Ensure canvas frame expands to use full available height."""
@@ -1523,8 +1459,6 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         # Bind right-click to show context menu
         canvas_widget.bind("<Button-3>", show_context_menu)  
         canvas_widget.bind("<Button-2>", show_context_menu)  
-    
-        debug_print("Simplified right-click context menu set up for plot canvas")
         
     def toggle_mode(self):
         """Toggle between collection mode and comparison mode."""
@@ -1551,11 +1485,11 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         # Gray out sensory evaluation panel
         self.disable_sensory_evaluation()
     
-        # Load multiple sessions if needed (use your existing logic)
+        # Load multiple sessions if needed
         if not self.all_sessions_data:
             self.load_multiple_sessions()
     
-        # Calculate averages (use your existing method)
+        # Calculate averages
         self.calculate_sample_averages()
     
         # Update plot with averages
@@ -1651,8 +1585,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
     
         # Force a redraw
         self.window.update_idletasks()
-    
-    
+      
         debug_print(f"DEBUG: Window background updated to {color} and brought to front")
 
     def set_widget_state(self, parent, state):
@@ -1735,7 +1668,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             debug_print("DEBUG: Not enough sessions for comparison")
             return
     
-        sample_data = {}  # {sample_name: {metric: [values], 'comments': [comments]}}
+        sample_data = {}
     
         # Collect all values for each sample/metric combination
         for session_name, session_info in self.sessions.items():
@@ -2255,7 +2188,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
                 # Update the slider value
                 self.rating_vars[metric].set(value)
             
-                # MANUALLY UPDATE THE DISPLAY LABEL
+                # Manually update the display label
                 if hasattr(self, 'value_labels') and metric in self.value_labels:
                     self.value_labels[metric].config(text=str(value))
                     debug_print(f"DEBUG: Updated display label for {metric} to {value}")
@@ -2369,22 +2302,21 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
                 table = ax.table(cellText=table_data[1:], colLabels=table_data[0],
                                cellLoc='center', loc='center')
                 table.auto_set_font_size(False)
-                table.set_fontsize(9)  # Slightly smaller font to fit more content
-                table.scale(1.4, 2.2)  # Wider scale to accommodate comments
+                table.set_fontsize(9)  
+                table.scale(1.4, 2.2)
             
                 # Style the table
                 for i in range(len(headers)):
                     table[(0, i)].set_facecolor('#4CAF50')
                     table[(0, i)].set_text_props(weight='bold', color='white')
             
-                # Make comments column wider and left-aligned
                 comments_col_idx = len(headers) - 1
                 for row_idx in range(len(table_data)):
                     if row_idx == 0:  # Header
                         continue
                     cell = table[(row_idx, comments_col_idx)]
-                    cell.set_width(0.3)  # Make comments column wider
-                    cell.set_text_props(ha='left', va='top', wrap=True)  # Left align and wrap text
+                    cell.set_width(0.3) 
+                    cell.set_text_props(ha='left', va='top', wrap=True)
             
                 # Add title
                 ax.set_title("Sensory Evaluation Results", fontsize=16, fontweight='bold', pad=20)
@@ -2423,8 +2355,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
                 return
         
             debug_print(f"DEBUG: Creating PowerPoint report at {filename}")
-    
-            # Import required modules for PowerPoint generation
+
             from pptx import Presentation
             from pptx.util import Inches, Pt
             from pptx.enum.text import PP_ALIGN
@@ -2488,8 +2419,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
                 comments = sample_data.get("comments", "").strip()
                 row.append(comments if comments else "")
                 table_data.append(row)
-    
-            # Better layout - smaller table, larger plot area for legend
+
             if table_data:
                 table_shape = main_slide.shapes.add_table(
                     len(table_data) + 1, len(headers),  # +1 for header row
@@ -2522,7 +2452,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         
                 debug_print(f"DEBUG: Table with comments added - {len(table_data)} rows and {len(headers)} columns")
     
-            # Create plot with better legend positioning
+            # Create plot
             with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
                 plot_image_path = tmp_file.name
         
@@ -2575,7 +2505,6 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
                         # Fill the area
                         ax_ppt.fill(angles, values, alpha=0.1, color=color)
                 
-                    # legend positioning - inside the plot area
                     ax_ppt.legend(loc='upper right', bbox_to_anchor=(1.1, 1.1), fontsize=9)
                 
                     # Set title
@@ -2585,11 +2514,10 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
                 fig_ppt.savefig(plot_image_path, dpi=300, bbox_inches='tight',
                                facecolor='white', edgecolor='none')
                 plt.close(fig_ppt)
-        
-                # Better plot positioning and sizing - more space, legend won't be cut off
+
                 main_slide.shapes.add_picture(plot_image_path, 
-                                            Inches(7.2), Inches(1.5),    # MOVED: Further left
-                                            Inches(5.8), Inches(4.5))    # INCREASED: Wider plot
+                                            Inches(7.2), Inches(1.5),    
+                                            Inches(5.8), Inches(4.5))    
                 debug_print("DEBUG: Plot with proper legend positioning added to PowerPoint slide")
         
             finally:
@@ -2611,7 +2539,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
     
             # Save the presentation
             prs.save(filename)
-            debug_print(f"DEBUG: PowerPoint report with auto-saved comments and proper legend saved successfully to {filename}")
+            debug_print(f"DEBUG: PowerPoint saved successfully to {filename}")
             messagebox.showinfo("Success", f"PowerPoint report saved successfully as {os.path.basename(filename)}")
     
         except Exception as e:
@@ -3163,7 +3091,6 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
     
         # Add session management at the top
         self.setup_session_selector(main_frame)
-    
     
         # Initialize with default session
         if not self.sessions:
