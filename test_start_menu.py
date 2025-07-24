@@ -51,7 +51,7 @@ class TestStartMenu:
             frame, 
             text="What would you like to do?", 
             font=("Arial", 14),
-            foreground="white",
+            foreground="black",
             background=APP_BACKGROUND_COLOR
         )
         header_label.pack(pady=(0, 20))
@@ -94,7 +94,7 @@ class TestStartMenu:
         ttk.Label(
             self.test_selection_frame, 
             text="Select test to conduct:",
-            foreground="white",
+            foreground="black",
             background=APP_BACKGROUND_COLOR
         ).pack(side="left", padx=(0, 10))
         
