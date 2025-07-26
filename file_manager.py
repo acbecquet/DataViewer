@@ -30,6 +30,7 @@ from tkinter import filedialog, messagebox, Toplevel, Label, Button, ttk, Frame
 from test_selection_dialog import TestSelectionDialog
 from test_start_menu import TestStartMenu
 from header_data_dialog import HeaderDataDialog
+
 # Local imports
 import processing
 from resource_utils import get_resource_path
@@ -489,18 +490,6 @@ class FileManager:
             raw_database_filename = file_data['filename']
             debug_print(f"DEBUG: Raw database filename: {raw_database_filename}")
             created_at = file_data.get('created_at')
-
-            # DEBUG: debug_print all available data for troubleshooting
-            debug_print(f"DEBUG: Retrieved file data keys: {list(file_data.keys())}")
-            debug_print(f"DEBUG: Database filename field: '{file_data['filename']}'")
-            debug_print(f"DEBUG: Metadata exists: {'meta_data' in file_data}")
-        
-            if 'meta_data' in file_data and file_data['meta_data']:
-                debug_print(f"DEBUG: Metadata keys: {list(file_data['meta_data'].keys())}")
-                debug_print(f"DEBUG: display_filename in metadata: {file_data['meta_data'].get('display_filename')}")
-                debug_print(f"DEBUG: original_filename in metadata: {file_data['meta_data'].get('original_filename')}")
-            else:
-                debug_print("DEBUG: No metadata found")
         
             # Get the proper display filename - prioritize metadata, then fallback to database filename
             display_filename = None
@@ -523,12 +512,8 @@ class FileManager:
                 display_filename = file_data['filename']
                 debug_print(f"DEBUG: Using database filename as fallback: '{display_filename}'")
         
-            debug_print(f"DEBUG: Final display filename to use: '{display_filename}'")
-        
             # Check if we already have files loaded to determine if we should append
             append_to_existing = len(self.gui.all_filtered_sheets) > 0
-            debug_print(f"DEBUG: Current loaded files count: {len(self.gui.all_filtered_sheets)}")
-            debug_print(f"DEBUG: Will append to existing: {append_to_existing}")
         
             # Save the VAP3 file to a temporary location
             with tempfile.NamedTemporaryFile(suffix='.vap3', delete=False) as temp_file:
@@ -757,8 +742,7 @@ class FileManager:
             dialog.title("Select Files for Comparison")
         else:
             dialog.title("Database Browser")
-        
-        
+                
         dialog.transient(self.gui.root)
         self.center_window(dialog,900,700)
         # Create frames for UI elements
@@ -1384,39 +1368,31 @@ class FileManager:
                 'num_samples': 1
             }
     
-            # Extract common header data using your specified positions
-            try:
-                # Tester: row 2, col 2
+            try:              
                 if len(sheet_data) > 2 and len(sheet_data.columns) > 2:
                     tester_value = sheet_data.iloc[2, 2] if not pd.isna(sheet_data.iloc[2, 2]) else ""
                     header_data['common']['tester'] = str(tester_value).strip()
                     debug_print(f"DEBUG: Extracted tester: '{header_data['common']['tester']}'")
-        
-                # Media: row 1, col 0
+
                 if len(sheet_data) > 1 and len(sheet_data.columns) > 0:
                     media_value = sheet_data.iloc[1, 0] if not pd.isna(sheet_data.iloc[1, 0]) else ""
                     header_data['common']['media'] = str(media_value).strip()
                     debug_print(f"DEBUG: Extracted media: '{header_data['common']['media']}'")
-        
-                # Viscosity: row 1, col 1
+
                 if len(sheet_data) > 1 and len(sheet_data.columns) > 1:
                     viscosity_value = sheet_data.iloc[1, 1] if not pd.isna(sheet_data.iloc[1, 1]) else ""
                     header_data['common']['viscosity'] = str(viscosity_value).strip()
-                    debug_print(f"DEBUG: Extracted viscosity: '{header_data['common']['viscosity']}'")
-        
-                # Voltage: row 5, col 1
+
                 if len(sheet_data) > 5 and len(sheet_data.columns) > 1:
                     voltage_value = sheet_data.iloc[5, 1] if not pd.isna(sheet_data.iloc[5, 1]) else ""
                     header_data['common']['voltage'] = str(voltage_value).strip()
                     debug_print(f"DEBUG: Extracted voltage: '{header_data['common']['voltage']}'")
-        
-                # Oil mass: row 7, col 1
+
                 if len(sheet_data) > 7 and len(sheet_data.columns) > 1:
                     oil_mass_value = sheet_data.iloc[7, 1] if not pd.isna(sheet_data.iloc[7, 1]) else ""
                     header_data['common']['oil_mass'] = str(oil_mass_value).strip()
                     debug_print(f"DEBUG: Extracted oil_mass: '{header_data['common']['oil_mass']}'")
-            
-                # Puffing regime: row 7, col 0
+
                 if len(sheet_data) > 7 and len(sheet_data.columns) > 0:
                     puffing_regime_value = sheet_data.iloc[7, 0] if not pd.isna(sheet_data.iloc[7, 0]) else "Standard"
                     header_data['common']['puffing_regime'] = str(puffing_regime_value).strip()
@@ -1617,8 +1593,6 @@ class FileManager:
         debug_print("DEBUG: Header data validation passed")
         return True
 
-
-
     def start_data_collection_with_header_data(self, file_path, selected_test, header_data):
         """Start data collection directly with existing header data."""
         debug_print("DEBUG: Starting data collection with existing header data")
@@ -1688,7 +1662,7 @@ class FileManager:
                 debug_print("ERROR: .vap3 file should be loaded but no data found")
                 return False
     
-        # Regular Excel file handling (existing code)
+        # Regular Excel file handling
         # Validate file path
         if not file_path or not os.path.exists(file_path):
             debug_print(f"ERROR: Invalid file path: {file_path}")
