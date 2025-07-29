@@ -17,7 +17,7 @@ from openpyxl import load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
 # Global debug flag - change this to control ALL debug output across the app
-DEBUG_ENABLED = False  # Set to True when debugging is needed
+DEBUG_ENABLED = True # Set to True when debugging is needed
 
 def debug_print(*args, **kwargs):
     """
@@ -119,15 +119,38 @@ def clean_columns(data):
     - Renames columns with NaN headers to their column index (1-based).
     - Ensures all column names are unique by appending a counter to duplicates.
     """
+    print(f"DEBUG: clean_columns starting with {len(data.columns)} columns")
+    print(f"DEBUG: Original columns: {list(data.columns)}")
+    
     # Step 1: Replace NaN headers with column index (1-based)
-    data.columns = [
-        str(i + 1) if pd.isna(col) else col for i, col in enumerate(data.columns)
-    ]
+    new_column_names = []
+    for i, col in enumerate(data.columns):
+        if pd.isna(col):
+            new_column_names.append(str(i + 1))
+        else:
+            new_column_names.append(str(col))
+    
+    data.columns = new_column_names
     data.columns = data.columns.astype(str)
+    print(f"DEBUG: After renaming NaN headers: {list(data.columns)}")
 
-    # Step 2: Remove columns with NaN headers and completely empty data
-    non_empty_columns = ~((data.isna().all() | (data == '').all() | (data == 0).all()) & data.columns.str.isnumeric())
-    data = data.loc[:, non_empty_columns]
+    # Step 2: Only remove columns that are both unnamed AND completely empty
+    columns_to_keep = []
+    for i, col in enumerate(data.columns):
+        is_unnamed = col.isdigit() or col.startswith('Unnamed')
+        is_completely_empty = (data.iloc[:, i].isna().all() | 
+                              (data.iloc[:, i] == '').all() | 
+                              (data.iloc[:, i] == 0).all())
+        
+        # Keep column if it's named OR if it has any data
+        if not (is_unnamed and is_completely_empty):
+            columns_to_keep.append(i)
+            print(f"DEBUG: Keeping column {i} ({col}): unnamed={is_unnamed}, empty={is_completely_empty}")
+        else:
+            print(f"DEBUG: Removing column {i} ({col}): unnamed={is_unnamed}, empty={is_completely_empty}")
+    
+    data = data.iloc[:, columns_to_keep]
+    print(f"DEBUG: After removing empty unnamed columns: {list(data.columns)}")
 
     # Step 3: Deduplicate column names
     new_columns = pd.Series(data.columns)
@@ -139,10 +162,7 @@ def clean_columns(data):
     # Step 4: Replace NaN values with empty strings
     data = data.fillna('')
 
-    # step 5: Remove columns with headers like "Unnamed"
-
-    data = data.loc[:, ~data.columns.str.contains('^Unnamed')]
-
+    print(f"DEBUG: Final columns: {list(data.columns)}")
     return data
 
 def wrap_text(text, max_width=None):
@@ -558,3 +578,70 @@ def header_matches(cell_value, pattern: str) -> bool:
     if pd.isna(cell_value):
         return False
     return re.search(pattern, str(cell_value), re.IGNORECASE) is not None
+
+def clean_display_suffixes(data):
+    """
+    Remove pandas-generated suffixes (.1, .2, .3, etc.) from data for display purposes,
+    but preserve actual decimal numbers.
+    """
+    
+    def is_pandas_suffix(value_str):
+        """
+        Check if a string ends with a pandas-generated suffix.
+        Pandas suffixes are single digits (.1, .2, .3) on non-numeric text.
+        """
+        # Check if it ends with a period followed by a single digit
+        suffix_match = re.search(r'\.(\d+)$', value_str)
+        if not suffix_match:
+            return False
+        
+        # Get the part before the suffix
+        base_part = value_str[:suffix_match.start()]
+        suffix_part = suffix_match.group(1)
+        
+        # If the suffix is a single digit and the base part is not purely numeric, 
+        # it's likely a pandas suffix
+        if len(suffix_part) == 1:  # Single digit suffix
+            try:
+                # If the base part is a number, this is probably a decimal, not a pandas suffix
+                float(base_part)
+                return False  # It's a decimal number, don't remove
+            except ValueError:
+                # Base part is not a number, so .1, .2, etc. is likely a pandas suffix
+                return True
+        
+        return False
+    
+    def clean_cell_value(value):
+        if pd.isna(value) or value == "":
+            return value
+        
+        value_str = str(value).strip()
+        
+        # Only remove if it looks like a pandas suffix
+        if is_pandas_suffix(value_str):
+            # Remove the suffix
+            cleaned_value = re.sub(r'\.\d+$', '', value_str)
+            print(f"DEBUG: Cleaned pandas suffix: '{value_str}' -> '{cleaned_value}'")
+            return cleaned_value
+        
+        return value
+    
+    # Clean column names
+    if hasattr(data, 'columns'):
+        cleaned_columns = []
+        for col in data.columns:
+            col_str = str(col)
+            if is_pandas_suffix(col_str):
+                cleaned_col = re.sub(r'\.\d+$', '', col_str)
+                print(f"DEBUG: Cleaned column name: '{col_str}' -> '{cleaned_col}'")
+                cleaned_columns.append(cleaned_col)
+            else:
+                cleaned_columns.append(col_str)
+        data.columns = cleaned_columns
+    
+    # Clean cell values
+    for col in data.columns:
+        data[col] = data[col].apply(clean_cell_value)
+    
+    return data

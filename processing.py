@@ -775,37 +775,21 @@ def process_sheet(data, headers_row=3, data_start_row=4):
 
 def process_plot_sheet(data, headers_row=3, data_start_row=4, num_columns_per_sample=12, custom_extracted_data_fn=None):
     """
-    Generic function to process sheets with plotting data.
-    Modified to handle empty/minimal sheets for data collection.
-
-    Args:
-        data (pd.DataFrame): Input data from the sheet.
-        headers_row (int): Row index for headers. Defaults to 3.
-        data_start_row (int): Row index where data starts. Defaults to 4.
-        num_columns_per_sample (int): Number of columns per sample. Defaults to 12.
-        custom_extracted_data_fn (callable, optional): Custom function to extract additional data.
-
-    Returns:
-        tuple: (processed_data, sample_arrays, full_sample_data)
-            processed_data (pd.DataFrame): Processed data for display.
-            sample_arrays (dict): Extracted sample arrays for plotting.
-            full_sample_data (pd.DataFrame): Concatenated data for all samples.
+    Process plotting sheets with fixed burn/clog/leak extraction from raw data.
     """
-    debug_print(f"DEBUG: process_plot_sheet called with data shape: {data.shape}")
+    debug_print(f"DEBUG: process_plot_sheet_fixed called with data shape: {data.shape}")
+    
+    # Store reference to raw data before cleaning
+    raw_data = data.copy()
     
     # For data collection, allow minimal data (less strict validation)
-    min_required_rows = max(headers_row + 1, 3)  # At least header row + 1
+    min_required_rows = max(headers_row + 1, 3)
     if data.shape[0] < min_required_rows:
         debug_print(f"DEBUG: Data has {data.shape[0]} rows, minimum required is {min_required_rows}")
-        # Create empty structure for data collection
         return create_empty_plot_structure(data, headers_row, num_columns_per_sample)
     
-    if not validate_sheet_data(data, required_rows=min_required_rows):
-        debug_print("DEBUG: Sheet validation failed, creating empty structure")
-        return create_empty_plot_structure(data, headers_row, num_columns_per_sample)
-
     try:
-        # Clean up the data
+        # Clean up the data for processing but keep raw_data unchanged
         data = remove_empty_columns(data).replace(0, np.nan)
         debug_print(f"DEBUG: Data after cleaning: {data.shape}")
 
@@ -835,34 +819,17 @@ def process_plot_sheet(data, headers_row=3, data_start_row=4, num_columns_per_sa
                 sample_arrays[f"Sample_{i+1}_Puffs"] = sample_data.iloc[3:, 0].to_numpy()
                 sample_arrays[f"Sample_{i+1}_TPM"] = sample_data.iloc[3:, 8].to_numpy()
 
+                # Use custom function if provided, otherwise use our fixed function
                 if custom_extracted_data_fn:
-                    extracted_data = custom_extracted_data_fn(sample_data)
+                    # For compatibility, try to pass raw data if the function supports it
+                    try:
+                        extracted_data = custom_extracted_data_fn(sample_data, raw_data, i)
+                    except TypeError:
+                        # Fallback to old signature
+                        extracted_data = custom_extracted_data_fn(sample_data)
                 else:
-                    # Handle potentially empty TPM data
-                    tpm_data = pd.to_numeric(sample_data.iloc[3:, 8], errors='coerce').dropna()
-                    avg_tpm = round_values(tpm_data.mean()) if not tpm_data.empty else "No data"
-                    std_tpm = round_values(tpm_data.std()) if not tpm_data.empty else "No data"
-
-                    # Safe extraction with fallbacks
-                    sample_name = sample_data.columns[5] if len(sample_data.columns) > 5 else f"Sample {i+1}"
-                    media = sample_data.iloc[0, 1] if sample_data.shape[0] > 0 and sample_data.shape[1] > 1 else ""
-                    viscosity = sample_data.iloc[1, 1] if sample_data.shape[0] > 1 and sample_data.shape[1] > 1 else ""
-                    
-                    extracted_data = {
-                        "Sample Name": sample_name,
-                        "Media": media,
-                        "Viscosity": viscosity,
-                        "Voltage, Resistance, Power": f"{sample_data.iloc[1, 5] if sample_data.shape[0] > 1 and sample_data.shape[1] > 5 else ''} V, "
-                                                       f"{round_values(sample_data.iloc[0, 3]) if sample_data.shape[0] > 0 and sample_data.shape[1] > 3 else ''} ohm, "
-                                                       f"{round_values(sample_data.iloc[0, 5]) if sample_data.shape[0] > 0 and sample_data.shape[1] > 5 else ''} W",
-                        "Average TPM": avg_tpm,
-                        "Standard Deviation": std_tpm,
-                        "Initial Oil Mass": round_values(sample_data.iloc[1,7]) if sample_data.shape[0] > 1 and sample_data.shape[1] > 7 else "",
-                        "Usage Efficiency": round_values(sample_data.iloc[1,8]) if sample_data.shape[0] > 1 and sample_data.shape[1] > 8 else "",
-                        "Burn?": sample_data.columns[10] if len(sample_data.columns) > 10 else "",
-                        "Clog?": sample_data.iloc[0, 10] if sample_data.shape[0] > 0 and sample_data.shape[1] > 10 else "",
-                        "Leak?": sample_data.iloc[1, 10] if sample_data.shape[0] > 1 and sample_data.shape[1] > 10 else ""
-                    }
+                    # Use our new function that extracts from raw data
+                    extracted_data = updated_extracted_data_function_with_raw_data(sample_data, raw_data, i)
 
                 samples.append(extracted_data)
                 full_sample_data.append(sample_data)
@@ -891,10 +858,9 @@ def process_plot_sheet(data, headers_row=3, data_start_row=4, num_columns_per_sa
         # Create processed data and full sample data
         if samples:
             processed_data = pd.DataFrame(samples)
-            full_sample_data_df = data  # Use original data structure instead of concatenated
+            full_sample_data_df = pd.concat(full_sample_data, axis=1) if full_sample_data else data
         else:
             debug_print("DEBUG: No valid samples found, creating minimal structure")
-            # Create minimal structure for data collection
             processed_data = pd.DataFrame([{
                 "Sample Name": "Sample 1",
                 "Media": "",
@@ -908,27 +874,26 @@ def process_plot_sheet(data, headers_row=3, data_start_row=4, num_columns_per_sa
                 "Clog?": "",
                 "Leak?": ""
             }])
-            full_sample_data_df = data  # Use original data
+            full_sample_data_df = data
 
         debug_print(f"DEBUG: Final processed_data shape: {processed_data.shape}")
         debug_print(f"DEBUG: Final full_sample_data shape: {full_sample_data_df.shape}")
-        debug_print(f"DEBUG: process_plot_sheet - using concatenated data: {bool(samples)}")
-        debug_print(f"DEBUG: process_plot_sheet - samples count: {len(samples) if samples else 0}")
         return processed_data, sample_arrays, full_sample_data_df
         
     except Exception as e:
         debug_print(f"DEBUG: Error processing plot sheet: {e}")
-        # Return empty structure instead of failing completely
-        debug_print(f"DEBUG: process_plot_sheet - using concatenated data: {bool(samples)}")
-        debug_print(f"DEBUG: process_plot_sheet - samples count: {len(samples) if samples else 0}")
+        import traceback
+        traceback.print_exc()
         return create_empty_plot_structure(data, headers_row, num_columns_per_sample)
 
-def no_efficiency_extracted_data(sample_data):
+def no_efficiency_extracted_data(sample_data, raw_data, sample_index):
     """
-    Custom function to extract data without efficiency metrics.
+    Custom function to extract data without efficiency metrics, using new burn/clog/leak extraction.
 
     Args:
         sample_data (pd.DataFrame): The DataFrame containing the sample data.
+        raw_data (pd.DataFrame): The raw Excel data before processing.
+        sample_index (int): The index of the current sample.
 
     Returns:
         dict: Extracted data without efficiency metrics.
@@ -936,6 +901,10 @@ def no_efficiency_extracted_data(sample_data):
     tpm_data = pd.to_numeric(sample_data.iloc[3:, 8], errors='coerce').dropna()
     avg_tpm = round_values(tpm_data.mean()) if not tpm_data.empty else None
     std_tpm = round_values(tpm_data.std()) if not tpm_data.empty else None
+    
+    # Extract burn/clog/leak using the new method
+    burn, clog, leak = extract_burn_clog_leak_from_raw_data(raw_data, sample_index)
+    
     return {
         "Sample Name": sample_data.columns[5],
         "Media": sample_data.iloc[0, 1],
@@ -945,9 +914,9 @@ def no_efficiency_extracted_data(sample_data):
                                        f"{round_values(sample_data.iloc[0, 5])} W",
         "Average TPM": avg_tpm,
         "Standard Deviation": std_tpm,
-        "Burn?": sample_data.columns[10],
-        "Clog?": sample_data.iloc[0, 10],
-        "Leak?": sample_data.iloc[1, 10],
+        "Burn?": burn,   # Now uses new extraction
+        "Clog?": clog,   # Now uses new extraction  
+        "Leak?": leak    # Now uses new extraction
     }
 
 def process_generic_sheet(data, headers_row=3, data_start_row=4):
@@ -1575,6 +1544,91 @@ def create_empty_user_test_simulation_structure(data):
     
     debug_print(f"DEBUG: Created empty User Test Simulation structure - processed: {processed_data.shape}, full: {full_sample_data.shape}")
     return processed_data, sample_arrays, full_sample_data
+
+def extract_burn_clog_leak_from_raw_data(data, sample_index, num_columns_per_sample=12):
+    """
+    Simple, direct extraction of burn/clog/leak data.
+    - Burn: ALWAYS from column header at K (column 10 + offset)
+    - Clog: ALWAYS from row 0, column K (column 10 + offset) 
+    - Leak: ALWAYS from row 1, column K (column 10 + offset)
+    """
+    col_offset = sample_index * num_columns_per_sample
+    target_col = 10 + col_offset  # K column + offset
+    
+    print(f"DEBUG: Simple extraction for sample {sample_index + 1}, target column: {target_col}")
+    
+    def safe_get_cell(row, col, default=""):
+        try:
+            if row < len(data) and col < len(data.columns):
+                val = data.iloc[row, col]
+                if pd.isna(val):
+                    return ""
+                return str(val).strip()
+            return default
+        except:
+            return default
+    
+    def safe_get_header(col, default=""):
+        try:
+            if col < len(data.columns):
+                header = data.columns[col]
+                if pd.isna(header):
+                    return ""
+                header_str = str(header).strip()
+                # If it's "Unnamed", return empty - otherwise return the actual value
+                if header_str.startswith('Unnamed'):
+                    return ""
+                return header_str
+            return default
+        except:
+            return default
+    
+    # Direct extraction - no searching, no guessing
+    burn = safe_get_header(target_col)     # Column header
+    clog = safe_get_cell(0, target_col)    # Row 0, same column  
+    leak = safe_get_cell(1, target_col)    # Row 1, same column
+    
+    print(f"  - Column header: '{data.columns[target_col] if target_col < len(data.columns) else 'N/A'}'")
+    print(f"  - Row 0 value: '{safe_get_cell(0, target_col)}'")
+    print(f"  - Row 1 value: '{safe_get_cell(1, target_col)}'")
+    print(f"  - Extracted burn (header): '{burn}'")
+    print(f"  - Extracted clog (row 0): '{clog}'")
+    print(f"  - Extracted leak (row 1): '{leak}'")
+    
+    return burn, clog, leak
+
+def updated_extracted_data_function_with_raw_data(sample_data, raw_data, sample_index):
+    """
+    Updated extraction function that gets burn/clog/leak from raw data.
+    """
+    # Calculate TPM statistics from sample_data
+    tpm_data = pd.to_numeric(sample_data.iloc[3:, 8], errors='coerce').dropna()
+    avg_tpm = round_values(tpm_data.mean()) if not tpm_data.empty else None
+    std_tpm = round_values(tpm_data.std()) if not tpm_data.empty else None
+    
+    # Extract burn/clog/leak from raw data with proper offsets
+    burn, clog, leak = extract_burn_clog_leak_from_raw_data(raw_data, sample_index)
+    
+    # Safe extraction with fallbacks for other data from sample_data
+    sample_name = sample_data.columns[5] if len(sample_data.columns) > 5 else f"Sample {sample_index + 1}"
+    media = sample_data.iloc[0, 1] if sample_data.shape[0] > 0 and sample_data.shape[1] > 1 else ""
+    viscosity = sample_data.iloc[1, 1] if sample_data.shape[0] > 1 and sample_data.shape[1] > 1 else ""
+    
+    return {
+        "Sample Name": sample_name,
+        "Media": media,
+        "Viscosity": viscosity,
+        "Voltage, Resistance, Power": f"{sample_data.iloc[1, 5] if sample_data.shape[0] > 1 and sample_data.shape[1] > 5 else ''} V, "
+                                       f"{round_values(sample_data.iloc[0, 3]) if sample_data.shape[0] > 0 and sample_data.shape[1] > 3 else ''} ohm, "
+                                       f"{round_values(sample_data.iloc[0, 5]) if sample_data.shape[0] > 0 and sample_data.shape[1] > 5 else ''} W",
+        "Average TPM": avg_tpm,
+        "Standard Deviation": std_tpm,
+        "Initial Oil Mass": round_values(sample_data.iloc[1,7]) if sample_data.shape[0] > 1 and sample_data.shape[1] > 7 else "",
+        "Usage Efficiency": round_values(sample_data.iloc[1,8]) if sample_data.shape[0] > 1 and sample_data.shape[1] > 8 else "",
+        "Burn?": burn,  # From raw data with proper offset
+        "Clog?": clog,  # From raw data with proper offset
+        "Leak?": leak   # From raw data with proper offset
+    }
 
 # ==================== AGGREGATION FUNCTIONS ====================
 

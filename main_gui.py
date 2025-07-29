@@ -93,7 +93,7 @@ def lazy_import_viscosity_gui():
         return None
 
 # Import utilities after lazy imports
-from utils import FONT, clean_columns, get_save_path, is_standard_file, plotting_sheet_test, APP_BACKGROUND_COLOR, BUTTON_COLOR, PLOT_CHECKBOX_TITLE
+from utils import FONT, clean_columns, get_save_path, is_standard_file, plotting_sheet_test, APP_BACKGROUND_COLOR, BUTTON_COLOR, PLOT_CHECKBOX_TITLE, clean_display_suffixes
 from resource_utils import get_resource_path
 from update_checker import UpdateChecker
 
@@ -1060,17 +1060,24 @@ Would you like to download and install the update?"""
         pd = self.get_pandas()
         np = self.get_numpy()
         TableCanvas, TableModel = self.get_tkintertable()
-        
+    
+        debug_print("DEBUG: Starting display_table function")
+        debug_print(f"DEBUG: Sheet name: {sheet_name}, is_plotting_sheet: {is_plotting_sheet}")
+        debug_print(f"DEBUG: Data shape: {data.shape if not data.empty else 'empty'}")
+    
         if not TableCanvas or not TableModel or not np or not pd:
+            debug_print("DEBUG: Missing required modules")
             return
 
         if not frame or not frame.winfo_exists():
+            debug_print("DEBUG: Frame does not exist")
             return
 
         for widget in frame.winfo_children():
             widget.destroy()
 
         if data.empty:
+            debug_print("DEBUG: Data is empty, showing placeholder")
             placeholder_label = tk.Label(
                 frame,
                 text=f"Sheet '{sheet_name}' is ready for data collection.\nUse the data collection tools to add measurements.",
@@ -1084,18 +1091,48 @@ Would you like to download and install the update?"""
         # Clean and prepare data
         data = clean_columns(data)
         data.columns = data.columns.map(str)
+        data = clean_display_suffixes(data)
         data = data.astype(str)
         data = data.replace([np.nan, pd.NA], '', regex=True)
 
+        debug_print(f"DEBUG: Cleaned data columns: {list(data.columns)}")
+
         table_frame = ttk.Frame(frame, padding=(2, 1))
-        self.table_frame.pack_propagate(False)
-        table_frame.pack(fill='both', expand=True)
+        table_frame.pack(expand=True)
 
         # Calculate table dimensions
         table_frame.update_idletasks()
         available_width = table_frame.winfo_width()
         num_columns = len(data.columns)
-        calculated_cellwidth = max(120, available_width // num_columns)
+    
+        debug_print(f"DEBUG: Available width: {available_width}, num columns: {num_columns}")
+
+        # Calculate column widths based on content
+        column_widths = {}
+        min_cell_width = 80
+        max_cell_width = 300
+        char_width_multiplier = 8  # Approximate pixels per character
+        padding = 20  # Extra padding for cell borders and margins
+
+        for col in data.columns:
+            # Get max length from header and all data in column
+            header_length = len(str(col))
+            max_data_length = data[col].astype(str).str.len().max() if not data.empty else 0
+            max_length = max(header_length, max_data_length)
+        
+            # Calculate width with bounds
+            calculated_width = max_length * char_width_multiplier + padding
+            column_widths[col] = max(min_cell_width, min(max_cell_width, calculated_width))
+        
+            debug_print(f"DEBUG: Column '{col}' - header len: {header_length}, max data len: {max_data_length}, width: {column_widths[col]}")
+
+        # If total width exceeds available, scale down proportionally
+        total_width = sum(column_widths.values())
+        if available_width > 100 and total_width > available_width:
+            scale_factor = (available_width - 50) / total_width  # Leave some margin
+            for col in column_widths:
+                column_widths[col] = max(min_cell_width, int(column_widths[col] * scale_factor))
+            debug_print(f"DEBUG: Scaled down widths by factor {scale_factor:.2f}")
 
         # Create scrollbars
         v_scrollbar = ttk.Scrollbar(table_frame, orient='vertical')
@@ -1106,47 +1143,99 @@ Would you like to download and install the update?"""
         table_data_dict = data.to_dict(orient='index')
         model.importDict(table_data_dict)
 
-        default_cellwidth = 110
-        default_rowheight = 25
-
-        if is_plotting_sheet:
-            font_height = 16
-            char_per_line = 12
-
-            # Calculate optimal row height
-            row_heights = []
-            for _, row in data.iterrows():
-                max_lines = 1
-                for cell in row:
-                    if cell:
-                        cell_length = len(str(cell))
-                        lines = (cell_length // char_per_line) + 1
-                        max_lines = max(max_lines, lines)
-                row_heights.append(max_lines * font_height)
-
-            max_row_height = int(max(row_heights)) if row_heights else default_rowheight
-            default_rowheight = max_row_height
-
-        # Create table canvas
+        # Set row height - keep it reasonable
+        default_rowheight = 25  # Standard row height for all cases
+    
+        # Create table canvas with minimal header
         table_canvas = TableCanvas(
             table_frame, 
             model=model, 
-            cellwidth=calculated_cellwidth, 
-            cellbackgr='#4CC9F0',
+            cellwidth=120,  # Default width, will be overridden
+            cellbackgr='white',
+            alternaterows=True,
+            alternaterowcolor='#f0f0f0',
             thefont=('Arial', 10), 
             rowheight=default_rowheight, 
-            rowselectedcolor='#FFFFFF',
+            rowselectedcolor='#4CC9F0',
             editable=False, 
             yscrollcommand=v_scrollbar.set, 
             xscrollcommand=h_scrollbar.set, 
-            showGrid=True
+            showGrid=True,
+            align='center',
+            colheaderheight=default_rowheight  # Try to set column header height
         )
 
+        # Configure scrollbars
+        v_scrollbar.config(command=table_canvas.yview)
+        h_scrollbar.config(command=table_canvas.xview)
+
+        # Grid layout
+        table_frame.grid_rowconfigure(0, weight=1)
+        table_frame.grid_columnconfigure(0, weight=1)
+    
         table_canvas.grid(row=0, column=0, sticky='nsew')
         v_scrollbar.grid(row=0, column=1, sticky='ns')
         h_scrollbar.grid(row=1, column=0, sticky='ew')
 
+        # Override header height before showing
+        if hasattr(table_canvas, 'colheaderheight'):
+            table_canvas.colheaderheight = default_rowheight
+            debug_print(f"DEBUG: Set colheaderheight to {default_rowheight}")
+    
+        if hasattr(table_canvas, 'headerheight'):
+            table_canvas.headerheight = default_rowheight
+            debug_print(f"DEBUG: Set headerheight to {default_rowheight}")
+
+        # Show the table
         table_canvas.show()
+    
+        # Apply column widths
+        try:
+            if hasattr(model, 'columnwidths'):
+                for i, (col, width) in enumerate(column_widths.items()):
+                    model.columnwidths[col] = width
+                debug_print(f"DEBUG: Set column widths via model.columnwidths")
+        except Exception as e:
+            debug_print(f"DEBUG: Error setting column widths: {e}")
+    
+        # Immediately after show(), try to fix header height
+        try:
+            # Access the column header that was just created
+            if hasattr(table_canvas, 'tablecolheader'):
+                col_header = table_canvas.tablecolheader
+            
+                # Set the header's height attribute
+                if hasattr(col_header, 'height'):
+                    col_header.height = default_rowheight
+                    debug_print(f"DEBUG: Set tablecolheader.height to {default_rowheight}")
+                
+                # Try to configure the header's main window
+                if hasattr(col_header, 'main_win'):
+                    col_header.main_win.configure(height=default_rowheight)
+                    debug_print(f"DEBUG: Configured main_win height to {default_rowheight}")
+                
+                # Look for the header canvas
+                if hasattr(col_header, 'canvas'):
+                    col_header.canvas.configure(height=default_rowheight)
+                    debug_print(f"DEBUG: Configured header canvas height to {default_rowheight}")
+                
+                # Force the header to redraw with new height
+                if hasattr(col_header, 'redraw'):
+                    col_header.redraw()
+                
+        except Exception as e:
+            debug_print(f"DEBUG: Error adjusting header immediately: {e}")
+    
+        # Center alignment
+        try:
+            table_canvas.align = 'center'
+        except:
+            pass
+
+        # Force redraw
+        table_canvas.redraw()
+    
+        debug_print("DEBUG: Table display completed")
 
     def store_images(self, sheet_name, paths):
         """Store image paths and their crop states for a specific sheet."""
