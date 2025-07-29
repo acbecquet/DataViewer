@@ -24,8 +24,6 @@ from utils import (
     debug_print
 )
 
-#pd.set_option('future.no_silent_downcasting', True)
-
 def get_valid_plot_options(plot_options: List[str], full_sample_data: pd.DataFrame) -> List[str]:
     """
     Check which plot options have valid, non-empty data and return the valid options.
@@ -43,9 +41,6 @@ def get_valid_plot_options(plot_options: List[str], full_sample_data: pd.DataFra
         if y_data.dropna().astype(bool).any():  # Ensure there are non-NaN, non-zero values
             valid_options.append(plot_type)
     return valid_options
-
-
-# ==================== PLOTTING FUNCTIONS ====================
 
 def get_y_data_for_plot_type(sample_data, plot_type):
     """
@@ -339,11 +334,9 @@ def get_y_data_for_user_test_simulation_plot_type(sample_data, plot_type):
     if plot_type == "TPM":
         debug_print("DEBUG: User Test Simulation - Calculating TPM from weight differences with puffing intervals")
         
-        # For User Test Simulation: puffs in column 1, before weight in column ?, after weight in column ?
-        # You'll need to verify these column positions
         puffs = pd.to_numeric(sample_data.iloc[3:, 1], errors='coerce')  # Column 1 for User Test Simulation
-        before_weights = pd.to_numeric(sample_data.iloc[3:, 2], errors='coerce')  # Adjust as needed
-        after_weights = pd.to_numeric(sample_data.iloc[3:, 3], errors='coerce')   # Adjust as needed
+        before_weights = pd.to_numeric(sample_data.iloc[3:, 2], errors='coerce') 
+        after_weights = pd.to_numeric(sample_data.iloc[3:, 3], errors='coerce')  
         
         puffing_intervals = pd.Series(index=puffs.index, dtype=float)
         for i, idx in enumerate(puffs.index):

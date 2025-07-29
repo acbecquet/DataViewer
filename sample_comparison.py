@@ -44,14 +44,10 @@ class SampleComparisonWindow:
     
         # Load configuration from file or use defaults
         self.load_configuration()
-    
         self.model_keywords = {} 
         self.comparison_results = {}
-
         self.parse_keyword_variations()
-    
         debug_print(f"DEBUG: Sample comparison initialized with config from {self.config_file_path}")
-
         
     def show(self):
         """Show the comparison window."""
@@ -1287,14 +1283,9 @@ class SampleComparisonWindow:
                     final_position = file_base_position + timedelta(days=test_group_offset)
                     offset_dates.append(final_position)
     
-                debug_print(f"DEBUG: Applied grid-based offsets to {len(offset_dates)} data points")
-                debug_print(f"DEBUG: File regions: {region_width_days:.1f} days wide, test groups distributed within each region")
-    
                 return offset_dates, values_list, std_list, dp_list, combo_list, file_list
     
             except Exception as e:
-                debug_print(f"DEBUG: Error in grid-based offset: {e}")
-                debug_print("DEBUG: Returning original data due to error")
                 return dates_list, values_list, std_list, dp_list, combo_list, file_list
 
         # Apply date offsets
@@ -1327,9 +1318,6 @@ class SampleComparisonWindow:
         for combo in other_combos:
             combination_marker_map[combo] = markers[marker_idx % len(markers)]
             marker_idx += 1
-    
-        debug_print(f"DEBUG: Color mapping - {len(unique_files)} files get unique colors")
-        debug_print(f"DEBUG: Marker mapping - Performance Tests Group='o', {len(other_combos)} others get different markers")
 
         ax1.set_title('TPM Over Time (Multi-Selection)', fontsize=10)
 
@@ -1579,7 +1567,7 @@ class SampleComparisonWindow:
         fig.subplots_adjust(bottom=0.15)  # Reduced from 0.25 to 0.15 for tighter layout
 
         # Create the plot canvas with constrained size
-        plot_frame = ttk.Frame(main_container, height=650)  # Fixed height for plot area
+        plot_frame = ttk.Frame(main_container, height=650)  
         plot_frame.pack(fill="x", expand=False)  # Don't expand vertically
         plot_frame.pack_propagate(False)  # Maintain fixed height
 
@@ -1941,11 +1929,7 @@ class SampleComparisonWindow:
 
             # Bind click event to the label
             click_handler = create_combination_click_handler(combination, combo_label)
-            combo_label.bind("<Button-1>", click_handler)
-
-        debug_print(f"DEBUG: Added click handlers to {len(unique_combinations)} combination labels")
-
-        
+            combo_label.bind("<Button-1>", click_handler)        
 
         # Button frame for plot controls at the bottom
         button_frame = ttk.Frame(main_container)
