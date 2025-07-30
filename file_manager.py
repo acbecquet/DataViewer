@@ -412,6 +412,7 @@ class FileManager:
     
     def load_from_database(self, file_id=None, show_success_message=True, batch_operation=False):
         """Load a file from the database."""
+        debug_print(f"DEBUG: load_from_database called with file_id={file_id}, show_success_message={show_success_message}, batch_operation={batch_operation}")
         try:
             # Only show progress dialog if not part of a batch operation
             if not batch_operation:
@@ -556,6 +557,24 @@ class FileManager:
                 # Get the most recently added file
                 latest_file = self.gui.all_filtered_sheets[-1]
             
+                try:
+                    for sheet_name, sheet_info in self.gui.filtered_sheets.items():
+                        if 'data' in sheet_info:
+                            debug_print(f"DEBUG: Validating format for sheet: {sheet_name}")
+                            validated_data = self.validate_and_fix_table_format(sheet_name, sheet_info['data'])
+                            sheet_info['data'] = validated_data
+                        
+                            # Also update in all_filtered_sheets
+                            if 'filtered_sheets' in latest_file:
+                                if sheet_name in latest_file['filtered_sheets']:
+                                    latest_file['filtered_sheets'][sheet_name]['data'] = validated_data
+                                
+                    debug_print("DEBUG: All sheet formats validated successfully")
+                
+                except Exception as validation_error:
+                    debug_print(f"ERROR: Table format validation failed: {validation_error}")
+                    traceback.print_exc()
+
                 # Store the database filename and timestamp in the file metadata
                 latest_file['database_filename'] = raw_database_filename
                 latest_file['database_created_at'] = created_at
@@ -592,23 +611,106 @@ class FileManager:
 
     def ensure_ui_is_displayed(self):
         """Ensure the UI properly displays the loaded data."""
-        debug_print("DEBUG: Final UI display check")
+        debug_print("DEBUG: Final UI display check starting")
     
         try:
-            # Make sure we have a current sheet selected
-            if hasattr(self.gui, 'selected_sheet') and hasattr(self.gui, 'filtered_sheets'):
-                current_sheet = self.gui.selected_sheet.get()
-                if current_sheet and current_sheet in self.gui.filtered_sheets:
-                    debug_print(f"DEBUG: Forcing display update for sheet: {current_sheet}")
-                    self.gui.update_displayed_sheet(current_sheet)
-                else:
-                    debug_print("DEBUG: No valid sheet to display")
+            # Robust checking for GUI state
+            if not hasattr(self.gui, 'selected_sheet') or not hasattr(self.gui, 'filtered_sheets'):
+                debug_print("ERROR: GUI missing required attributes (selected_sheet or filtered_sheets)")
+                return
+            
+            if not self.gui.filtered_sheets:
+                debug_print("ERROR: No filtered_sheets available")
+                return
+            
+            # Get current sheet or default to first available
+            current_sheet = self.gui.selected_sheet.get()
+            available_sheets = list(self.gui.filtered_sheets.keys())
         
-            # Force final UI update
+            debug_print(f"DEBUG: Current sheet: '{current_sheet}'")
+            debug_print(f"DEBUG: Available sheets: {available_sheets}")
+        
+            if current_sheet not in available_sheets:
+                if available_sheets:
+                    current_sheet = available_sheets[0]
+                    self.gui.selected_sheet.set(current_sheet)
+                    debug_print(f"DEBUG: Set current sheet to first available: {current_sheet}")
+                else:
+                    debug_print("ERROR: No sheets available to display")
+                    return
+        
+            # Check if sheet has data
+            sheet_info = self.gui.filtered_sheets[current_sheet]
+            if 'data' not in sheet_info:
+                debug_print(f"ERROR: Sheet '{current_sheet}' has no data")
+                return
+            
+            sheet_data = sheet_info['data']
+            debug_print(f"DEBUG: Sheet data shape: {sheet_data.shape}")
+            debug_print(f"DEBUG: Sheet data columns: {list(sheet_data.columns)}")
+        
+            # Update dropdown to reflect available sheets
+            self.gui.populate_sheet_dropdown()
+        
+            # Force UI update with error handling
+            debug_print(f"DEBUG: Attempting to update display for sheet: {current_sheet}")
+            self.gui.update_displayed_sheet(current_sheet)
+            debug_print(f"DEBUG: Successfully updated display for sheet: {current_sheet}")
+        
+            # Force final UI refresh
             self.gui.root.update_idletasks()
+            debug_print("DEBUG: Final UI display check completed successfully")
         
         except Exception as e:
             debug_print(f"ERROR: Failed final UI display check: {e}")
+            traceback.print_exc()
+        
+            # Try fallback approach - just refresh the dropdown and let user manually select
+            try:
+                debug_print("DEBUG: Attempting fallback UI update")
+                if hasattr(self.gui, 'populate_sheet_dropdown'):
+                    self.gui.populate_sheet_dropdown()
+                self.gui.root.update_idletasks()
+                debug_print("DEBUG: Fallback UI update completed")
+            except Exception as fallback_error:
+                debug_print(f"ERROR: Even fallback UI update failed: {fallback_error}")
+
+    def validate_and_fix_table_format(self, sheet_name, sheet_data):
+        """Validate and fix table format issues for compatibility with new table structure."""
+        debug_print(f"DEBUG: Validating table format for sheet: {sheet_name}")
+    
+        try:
+            # Check if data is empty
+            if sheet_data.empty:
+                debug_print(f"DEBUG: Sheet {sheet_name} is empty")
+                return sheet_data
+            
+            # Log original structure
+            debug_print(f"DEBUG: Original data shape: {sheet_data.shape}")
+            debug_print(f"DEBUG: Original columns: {list(sheet_data.columns)}")
+        
+            # Apply clean_columns to ensure compatibility
+            from utils import clean_columns
+            cleaned_data = clean_columns(sheet_data.copy())
+        
+            debug_print(f"DEBUG: Cleaned data shape: {cleaned_data.shape}")
+            debug_print(f"DEBUG: Cleaned columns: {list(cleaned_data.columns)}")
+        
+            # Ensure all column headers are strings
+            cleaned_data.columns = cleaned_data.columns.map(str)
+        
+            # Replace any remaining NaN values with empty strings
+            cleaned_data = cleaned_data.fillna('')
+        
+            debug_print(f"DEBUG: Final validated data shape: {cleaned_data.shape}")
+            debug_print(f"DEBUG: Table format validation completed successfully for {sheet_name}")
+        
+            return cleaned_data
+        
+        except Exception as e:
+            debug_print(f"ERROR: Failed to validate table format for {sheet_name}: {e}")
+            traceback.print_exc()
+            return sheet_data  # Return original data if cleaning fails
 
     def load_multiple_from_database(self, file_ids):
         """Load multiple files from the database with a single progress dialog and success message."""
@@ -937,7 +1039,11 @@ class FileManager:
             # Normal mode: existing button behavior
             def on_load():
                 """Load selected files normally."""
+                debug_print("DEBUG: on_load() called")
+    
                 selected_items = file_listbox.curselection()
+                debug_print(f"DEBUG: Selected items count: {len(selected_items)}")
+    
                 if not selected_items:
                     messagebox.showwarning("Warning", "Please select at least one file to load.")
                     return
@@ -945,18 +1051,30 @@ class FileManager:
                 file_ids = []
                 for idx in selected_items:
                     display_text = file_listbox.get(idx)
+                    debug_print(f"DEBUG: Processing selection {idx}: {display_text}")
                     # Extract base name from display text
                     base_name = display_text.split(' (')[0]
                     if base_name in file_groups:
                         latest_file = max(file_groups[base_name], key=lambda x: x['created_at'])
                         file_ids.append(latest_file['id'])
+                        debug_print(f"DEBUG: Added file ID {latest_file['id']} for base name '{base_name}'")
+                    else:
+                        debug_print(f"ERROR: Base name '{base_name}' not found in file_groups")
 
+                debug_print(f"DEBUG: Total file IDs collected: {file_ids}")
+    
                 dialog.destroy()
-            
+                debug_print("DEBUG: Dialog destroyed, proceeding with loading...")
+
                 if len(file_ids) == 1:
+                    debug_print(f"DEBUG: Loading single file with ID: {file_ids[0]}")
                     self.load_from_database(file_ids[0])
-                else:
+                elif len(file_ids) > 1:
+                    debug_print(f"DEBUG: Loading multiple files with IDs: {file_ids}")
                     self.load_multiple_from_database(file_ids)
+                else:
+                    debug_print("ERROR: No valid file IDs to load")
+                    messagebox.showerror("Error", "No valid files selected for loading")
 
             Button(button_frame, text="Load Selected", command=on_load, 
                    bg="#4CAF50", fg="black", font=FONT).pack(side="left", padx=5)
