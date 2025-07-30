@@ -1095,17 +1095,76 @@ Would you like to download and install the update?"""
         table_frame.update_idletasks()
         available_width = table_frame.winfo_width()
 
-        # Calculate column widths
+        # Initial column widths calculation
         column_widths = {}
         min_cell_width = 80
         max_cell_width = 350
-        char_width_multiplier = 10
+        char_width_multiplier = 4
 
         for col in data.columns:
             header_length = len(str(col))
             max_data_length = data[col].astype(str).str.len().max() if not data.empty else 0
             max_length = max(header_length, max_data_length)
             calculated_width = max_length * char_width_multiplier
+            column_widths[col] = max(min_cell_width, min(max_cell_width, calculated_width))
+            if col == "Sample Name":
+                print(f"DEBUG: Sample Name max_length: {max_length}")
+                print(f"DEBUG: Sample Name initial width: {column_widths[col]}")
+
+        # Apply text wrapping based on initial column widths
+        from utils import wrap_text
+    
+        wrapped_data = data.copy()
+        max_lines_in_any_cell = 1
+        base_row_height = 20
+        line_height = 15
+        char_width = 4
+
+        print(f"DEBUG: Starting text wrapping with char_width={char_width}")
+        print(f"DEBUG: Initial column widths: {column_widths}")
+
+        for index, row in data.iterrows():
+            for col in data.columns:
+                cell_text = str(row[col])
+                if cell_text and len(cell_text) > 0:
+                    # Calculate available characters per line for this column
+                    available_width = column_widths[col] - 2  # Minimal margin
+                    chars_per_line = max(20, int(available_width / char_width))
+                
+                    # Wrap text
+                    wrapped_text = wrap_text(cell_text, chars_per_line)
+                
+                    # Count lines in this cell
+                    line_count = wrapped_text.count('\n') + 1
+                
+                    # Update the wrapped data
+                    if line_count > 1:
+                        wrapped_data.loc[index, col] = wrapped_text
+                
+                    # Track the maximum lines found in any single cell
+                    max_lines_in_any_cell = max(max_lines_in_any_cell, line_count)
+                
+                    if line_count > 1:  # Only debug cells that needed wrapping
+                        print(f"DEBUG: Row {index}, Col '{col}': '{cell_text}' -> {line_count} lines")
+                        print(f"DEBUG: Wrapped to: '{wrapped_text}'")
+
+                    wrapped_text = wrap_text(cell_text, chars_per_line)
+
+        # Recalculate column widths based on wrapped text
+        for col in data.columns:
+            header_length = len(str(col))
+            max_line_length = header_length
+        
+            for index, row in wrapped_data.iterrows():
+                cell_text = str(row[col])
+                if '\n' in cell_text:
+                    lines = cell_text.split('\n')
+                    longest_line = max(len(line) for line in lines)
+                    max_line_length = max(max_line_length, longest_line)
+                else:
+                    max_line_length = max(max_line_length, len(cell_text))
+        
+            calculated_width = max_line_length * 4
             column_widths[col] = max(min_cell_width, min(max_cell_width, calculated_width))
 
         # Scale down column widths if total exceeds available space
@@ -1117,43 +1176,6 @@ Would you like to download and install the update?"""
                 min_header_width = header_length * char_width_multiplier
                 scaled_width = int(column_widths[col] * scale_factor)
                 column_widths[col] = max(min_cell_width, min_header_width, scaled_width)
-
-        # Apply text wrapping and calculate per-row height
-        from utils import wrap_text
-    
-        wrapped_data = data.copy()
-        max_lines_in_any_cell = 1  # Track the maximum lines needed across ALL cells
-        base_row_height = 20
-        line_height = 15
-        char_width = 4
-
-        print(f"DEBUG: Starting text wrapping with char_width={char_width}")
-        print(f"DEBUG: Column widths: {column_widths}")
-
-        for index, row in data.iterrows():
-            for col in data.columns:
-                cell_text = str(row[col])
-                if cell_text and len(cell_text) > 0:
-                    # Calculate available characters per line for this column
-                    available_width = column_widths[col] - 2  # Minimal margin
-                    chars_per_line = max(20, int(available_width / char_width))
-                    
-                    # Wrap text
-                    wrapped_text = wrap_text(cell_text, chars_per_line)
-                    
-                    # Count lines in this cell
-                    line_count = wrapped_text.count('\n') + 1
-                    
-                    # Update the wrapped data
-                    if line_count > 1:
-                        wrapped_data.loc[index, col] = wrapped_text
-                    
-                    # Track the maximum lines found in any single cell
-                    max_lines_in_any_cell = max(max_lines_in_any_cell, line_count)
-                    
-                    if line_count > 1:  # Only debug cells that needed wrapping
-                        print(f"DEBUG: Row {index}, Col '{col}': '{cell_text}' -> {line_count} lines")
-                        print(f"DEBUG: Wrapped to: '{wrapped_text}'")
 
         # Calculate single row height to accommodate the maximum lines found
         table_row_height = base_row_height + ((max_lines_in_any_cell - 1) * line_height)
@@ -1178,7 +1200,7 @@ Would you like to download and install the update?"""
             alternaterows=True,
             alternaterowcolor='#f0f0f0',
             thefont=('Arial', 10), 
-            rowheight=table_row_height,  # Use calculated height for ALL rows
+            rowheight=table_row_height,
             rowselectedcolor='#4CC9F0',
             editable=False,
             yscrollcommand=v_scrollbar.set, 
@@ -1217,14 +1239,14 @@ Would you like to download and install the update?"""
             print(f"DEBUG: Error applying column widths: {e}")
 
         # Fix grid proportions and ensure all rows are visible
-        
+    
         def fix_proportions():
             try:
                 default_rowheight = 25
                 if hasattr(table_canvas, 'grid_rowconfigure'):
                     table_canvas.grid_rowconfigure(0, weight=0, minsize=default_rowheight)
                     table_canvas.grid_rowconfigure(1, weight=1)
-            
+        
                 if hasattr(table_canvas, 'grid_columnconfigure'):
                     table_canvas.grid_columnconfigure(0, weight=0, minsize=50)
                     table_canvas.grid_columnconfigure(1, weight=1)
@@ -1261,21 +1283,22 @@ Would you like to download and install the update?"""
                 # Force table to show all rows and update display
                 if hasattr(table_canvas, 'adjustColumnWidths'):
                     table_canvas.adjustColumnWidths()
-            
+        
                 # FIX: Use correct yview method instead of set_yviews('top')
                 if hasattr(table_canvas, 'yview_moveto'):
                     table_canvas.yview_moveto(0)  # Scroll to top
                 elif hasattr(table_canvas, 'yview'):
                     table_canvas.yview('moveto', 0)  # Alternative method
-            
+        
                 table_canvas.update_idletasks()
                 if hasattr(table_canvas, 'redraw'):
                     table_canvas.redraw()
-                
+            
             except Exception as e:
                 print(f"DEBUG: Error in fix_proportions: {e}")
 
         table_frame.after(100, fix_proportions)
+
     def store_images(self, sheet_name, paths):
         """Store image paths and their crop states for a specific sheet."""
         if not sheet_name:
