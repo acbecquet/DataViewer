@@ -10,6 +10,7 @@ import pandas as pd
 import numpy as np
 import os
 import copy
+import time
 import openpyxl
 import logging
 import matplotlib.pyplot as plt
@@ -1057,6 +1058,17 @@ Developed by Charlie Becquet
         else:
             debug_print("DEBUG: Detected Excel file, saving using openpyxl")
             self._save_to_excel_file()
+
+        debug_print("DEBUG: Excel save completed, updating main GUI...")
+
+        # For .vap3 files, the data is already updated in memory via _save_to_loaded_sheets
+        if self.file_path.endswith('.vap3') or not os.path.exists(self.file_path):
+            debug_print("DEBUG: .vap3 file detected, skipping file-based update")
+            # The _save_to_loaded_sheets method should have already updated the main GUI data
+        else:
+            debug_print("DEBUG: Excel file detected, updating from file")
+            self._update_excel_data_in_main_gui()
+
     
     def _save_to_excel_file(self):
         """Save data to the Excel file."""
@@ -1405,6 +1417,13 @@ Developed by Charlie Becquet
     
             debug_print("DEBUG: Successfully saved data to loaded sheets")
     
+            debug_print("DEBUG: Loaded sheets save completed - main GUI data should now be current")
+    
+            # Ensure the main GUI's current filtered_sheets reflects the updated data
+            if hasattr(self.parent, 'filtered_sheets') and self.test_name in self.parent.filtered_sheets:
+                # The data should already be updated, but let's ensure it's current
+                debug_print(f"DEBUG: Main GUI filtered_sheets for {self.test_name} is current")
+
         except Exception as e:
             debug_print(f"ERROR: Failed to save data to loaded sheets: {e}")
             import traceback
@@ -1607,7 +1626,7 @@ Developed by Charlie Becquet
     
         debug_print(f"DEBUG: Treeview updated for {sample_id} with {data_length} rows")
 
-    def refresh_main_gui_after_save(self):
+    def refresh_main_gui_after_save_old(self):
         """Refresh the main GUI to show updated data after saving."""
         debug_print("DEBUG: Starting main GUI refresh")
 
@@ -1702,6 +1721,107 @@ Developed by Charlie Becquet
             debug_print(f"ERROR: Refresh failed: {e}")
             import traceback
             traceback.print_exc()
+
+    def refresh_main_gui_after_save(self):
+        """Update the main GUI data structures after saving data."""
+        try:
+            debug_print("DEBUG: Refreshing main GUI after data collection save")
+        
+            # For .vap3 files or database files, the data is already updated in memory
+            # We just need to ensure the main GUI reflects the current state
+            if self.file_path.endswith('.vap3') or not os.path.exists(self.file_path):
+                self._update_vap3_data_in_main_gui()
+            else:
+                # For regular Excel files, reload from file
+                self._update_excel_data_in_main_gui()
+            
+            # Mark this file as modified in the staging area
+            self._mark_file_as_modified()
+        
+            debug_print("DEBUG: Main GUI refresh completed")
+        
+        except Exception as e:
+            debug_print(f"ERROR: Failed to refresh main GUI: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _update_excel_data_in_main_gui(self):
+        """Update main GUI data for Excel files."""
+        try:
+            # Only do this for actual Excel files that exist
+            if not os.path.exists(self.file_path) or not self.file_path.endswith(('.xlsx', '.xls')):
+                debug_print("DEBUG: File doesn't exist or isn't Excel, skipping Excel update")
+                return
+            
+            # Reload just this sheet from the Excel file
+            import pandas as pd
+            new_sheet_data = pd.read_excel(self.file_path, sheet_name=self.test_name)
+        
+            # Update the main GUI's filtered_sheets
+            if hasattr(self.parent, 'filtered_sheets') and self.test_name in self.parent.filtered_sheets:
+                self.parent.filtered_sheets[self.test_name]['data'] = new_sheet_data
+                self.parent.filtered_sheets[self.test_name]['is_empty'] = new_sheet_data.empty
+                debug_print(f"DEBUG: Updated sheet {self.test_name} in main GUI filtered_sheets")
+        
+            # Update all_filtered_sheets for the current file
+            if hasattr(self.parent, 'all_filtered_sheets') and hasattr(self.parent, 'current_file'):
+                for file_data in self.parent.all_filtered_sheets:
+                    if file_data["file_name"] == self.parent.current_file:
+                        if self.test_name in file_data["filtered_sheets"]:
+                            file_data["filtered_sheets"][self.test_name]['data'] = new_sheet_data
+                            file_data["filtered_sheets"][self.test_name]['is_empty'] = new_sheet_data.empty
+                            debug_print(f"DEBUG: Updated sheet {self.test_name} in all_filtered_sheets for file {self.parent.current_file}")
+                        break
+        
+        except Exception as e:
+            debug_print(f"ERROR: Failed to update Excel data in main GUI: {e}")
+            raise
+
+    def _update_vap3_data_in_main_gui(self):
+        """Update main GUI data for .vap3 files - data is already in memory."""
+        try:
+            debug_print("DEBUG: Updating .vap3 data in main GUI - data should already be current")
+        
+            # For .vap3 files, the data should have already been updated in the save process
+            # The _save_to_loaded_sheets method should have updated the main GUI data structures
+        
+            # Just ensure the all_filtered_sheets stays synchronized
+            if hasattr(self.parent, 'filtered_sheets') and hasattr(self.parent, 'all_filtered_sheets'):
+                current_file = getattr(self.parent, 'current_file', None)
+                if current_file:
+                    for file_data in self.parent.all_filtered_sheets:
+                        if file_data["file_name"] == current_file:
+                            # Ensure the all_filtered_sheets data matches current filtered_sheets
+                            file_data["filtered_sheets"] = copy.deepcopy(self.parent.filtered_sheets)
+                            debug_print(f"DEBUG: Synchronized .vap3 data for file {current_file}")
+                            break
+        
+            debug_print("DEBUG: .vap3 data update completed")
+        
+        except Exception as e:
+            debug_print(f"ERROR: Failed to update .vap3 data in main GUI: {e}")
+            raise
+
+    def _mark_file_as_modified(self):
+        """Mark the current file as modified in the staging area."""
+        try:
+            if hasattr(self.parent, 'all_filtered_sheets') and hasattr(self.parent, 'current_file'):
+                for file_data in self.parent.all_filtered_sheets:
+                    if file_data["file_name"] == self.parent.current_file:
+                        file_data["is_modified"] = True
+                        file_data["last_modified"] = time.time()
+                        debug_print(f"DEBUG: Marked file {self.parent.current_file} as modified")
+                        break
+        
+            # Update the main GUI window title to show modified status
+            if hasattr(self.parent, 'root') and hasattr(self.parent, 'current_file'):
+                current_title = self.parent.root.title()
+                if not current_title.endswith(" *"):
+                    self.parent.root.title(current_title + " *")
+                    debug_print("DEBUG: Updated window title to show modified status")
+                
+        except Exception as e:
+            debug_print(f"ERROR: Failed to mark file as modified: {e}")
 
     def calculate_tpm(self, sample_id):
         """Calculate TPM (Total Particulate Matter) for all rows with valid data."""

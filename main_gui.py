@@ -1,4 +1,4 @@
-"""
+﻿"""
 main_gui.py
 Optimized version for better startup time and UI responsiveness.
 Developed By Charlie Becquet.
@@ -743,6 +743,8 @@ Would you like to download and install the update?"""
         filemenu.add_separator()
         filemenu.add_command(label="Save As VAP3", command=self.save_as_vap3)
         filemenu.add_separator()
+        filemenu.add_command(label="Update Database", accelerator="Ctrl+U", command=self.update_database)
+        filemenu.add_separator()
         filemenu.add_command(label="Exit", command=self.on_app_close)
         menubar.add_cascade(label="File", menu=filemenu)
     
@@ -784,6 +786,8 @@ Would you like to download and install the update?"""
         menubar.add_cascade(label="Help", menu=helpmenu)
     
         self.root.config(menu=menubar)
+
+        self.root.bind_all("<Control-u>", lambda e: self.update_database())
 
     def show_database_comparison(self):
         """Show database browser for file selection, then run comparison analysis."""
@@ -1107,7 +1111,199 @@ Would you like to download and install the update?"""
             )
             empty_plot_label.pack(expand=True)
 
+    def get_modified_files(self):
+        """Get list of files that have been modified in the staging area."""
+        modified_files = []
+        if hasattr(self, 'all_filtered_sheets'):
+            for file_data in self.all_filtered_sheets:
+                if file_data.get('is_modified', False):
+                    modified_files.append(file_data)
+        return modified_files
+
+    def clear_modified_flags(self):
+        """Clear all modification flags after database update."""
+        if hasattr(self, 'all_filtered_sheets'):
+            for file_data in self.all_filtered_sheets:
+                file_data['is_modified'] = False
+                if 'last_modified' in file_data:
+                    del file_data['last_modified']
     
+        # Update window title to remove modified indicator
+        current_title = self.root.title()
+        if current_title.endswith(" *"):
+            self.root.title(current_title[:-2])
+
+    def update_database(self):
+        """Update the database with all staged changes."""
+        try:
+            modified_files = self.get_modified_files()
+        
+            if not modified_files:
+                messagebox.showinfo("No Changes", "No files have been modified. Nothing to update.")
+                return
+        
+            # Show confirmation dialog
+            file_names = [f["file_name"] for f in modified_files]
+            message = f"Update database with changes to the following files?\n\n"
+            message += "\n".join([f"• {name}" for name in file_names])
+        
+            if not messagebox.askyesno("Confirm Database Update", message):
+                return
+        
+            # Show progress dialog
+            self.progress_dialog.show_progress_bar("Updating database...")
+            self.root.update_idletasks()
+        
+            total_files = len(modified_files)
+            successful_updates = 0
+            failed_updates = []
+        
+            for i, file_data in enumerate(modified_files):
+                try:
+                    # Update progress
+                    progress = int(((i + 1) / total_files) * 100)
+                    self.progress_dialog.update_progress_bar(progress)
+                    self.root.update_idletasks()
+                
+                    debug_print(f"DEBUG: Updating database for file: {file_data['file_name']}")
+                
+                    # Save current file state as VAP3 and store in database
+                    self._update_file_in_database(file_data)
+                    successful_updates += 1
+                
+                except Exception as e:
+                    debug_print(f"ERROR: Failed to update file {file_data['file_name']}: {e}")
+                    failed_updates.append(file_data['file_name'])
+        
+            # Clean up
+            self.progress_dialog.hide_progress_bar()
+        
+            # Show results
+            if failed_updates:
+                if successful_updates > 0:
+                    message = f"Partial success:\n\n"
+                    message += f"✓ Successfully updated: {successful_updates} files\n"
+                    message += f"✗ Failed to update: {len(failed_updates)} files\n\n"
+                    message += "Failed files:\n" + "\n".join([f"• {name}" for name in failed_updates])
+                    messagebox.showwarning("Partial Success", message)
+                else:
+                    message = f"Failed to update all {len(failed_updates)} files:\n\n"
+                    message += "\n".join([f"• {name}" for name in failed_updates])
+                    messagebox.showerror("Update Failed", message)
+            else:
+                # Complete success
+                message = f"Successfully updated {successful_updates} file(s) in the database."
+                messagebox.showinfo("Database Updated", message)
+            
+                # Clear modification flags
+                self.clear_modified_flags()
+        
+        except Exception as e:
+            self.progress_dialog.hide_progress_bar()
+            messagebox.showerror("Error", f"Failed to update database: {e}")
+            debug_print(f"ERROR: Database update failed: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _update_file_in_database(self, file_data):
+        """Update a single file in the database."""
+        try:
+            # Create temporary VAP3 file
+            import tempfile
+            with tempfile.NamedTemporaryFile(suffix='.vap3', delete=False) as temp_file:
+                temp_vap3_path = temp_file.name
+        
+            # Prepare data for VAP3 save
+            filtered_sheets = file_data["filtered_sheets"]
+        
+            # Get associated images for this file
+            sheet_images = {}
+            if hasattr(self, 'sheet_images') and file_data["file_name"] in self.sheet_images:
+                sheet_images = {file_data["file_name"]: self.sheet_images[file_data["file_name"]]}
+        
+            # Get image crop states
+            image_crop_states = getattr(self, 'image_crop_states', {})
+        
+            # Plot settings
+            plot_settings = {}
+            if hasattr(self, 'selected_plot_type'):
+                plot_settings['selected_plot_type'] = self.selected_plot_type.get()
+        
+            # Save as VAP3
+            from vap_file_manager import VapFileManager
+            vap_manager = VapFileManager()
+        
+            success = vap_manager.save_to_vap3(
+                temp_vap3_path,
+                filtered_sheets,
+                sheet_images,
+                getattr(self, 'plot_options', []),
+                image_crop_states,
+                plot_settings
+            )
+        
+            if not success:
+                raise Exception("Failed to create temporary VAP3 file")
+        
+            # Update database
+            original_filename = file_data.get("original_filename", file_data["file_name"])
+            display_filename = file_data["file_name"]
+            if not display_filename.endswith('.vap3'):
+                display_filename = os.path.splitext(display_filename)[0] + '.vap3'
+        
+            meta_data = {
+                'display_filename': display_filename,
+                'original_filename': original_filename,
+                'original_path': file_data.get("file_path", ""),
+                'creation_date': time.strftime('%Y-%m-%d %H:%M:%S'),
+                'last_modified': time.strftime('%Y-%m-%d %H:%M:%S'),
+                'sheet_count': len(filtered_sheets),
+                'plot_options': getattr(self, 'plot_options', []),
+                'plot_settings': plot_settings
+            }
+        
+            # Store/update in database
+            file_id = self.file_manager.db_manager.store_vap3_file(temp_vap3_path, meta_data)
+        
+            # Store sheet metadata
+            processing_module, _ = _lazy_import_processing()
+            if processing_module:
+                for sheet_name, sheet_info in filtered_sheets.items():
+                    is_plotting = processing_module.plotting_sheet_test(sheet_name, sheet_info["data"])
+                    is_empty = sheet_info.get("is_empty", False)
+                
+                    self.file_manager.db_manager.store_sheet_info(
+                        file_id, 
+                        sheet_name, 
+                        is_plotting, 
+                        is_empty
+                    )
+            else:
+                # Fallback if processing can't be loaded
+                for sheet_name, sheet_info in filtered_sheets.items():
+                    # Simple heuristic check
+                    is_plotting = len(sheet_info["data"]) > 0 and len(sheet_info["data"].columns) > 5
+                    is_empty = sheet_info.get("is_empty", False)
+                
+                    self.file_manager.db_manager.store_sheet_info(
+                        file_id, 
+                        sheet_name, 
+                        is_plotting, 
+                        is_empty
+                    )
+        
+            # Clean up temporary file
+            try:
+                os.unlink(temp_vap3_path)
+            except Exception:
+                pass
+        
+            debug_print(f"DEBUG: Successfully updated file {file_data['file_name']} in database")
+        
+        except Exception as e:
+            debug_print(f"ERROR: Failed to update file {file_data['file_name']} in database: {e}")
+            raise
+   
     def load_images(self, is_plotting_sheet):
         """Load and display images in the dynamic image_frame."""
         if not hasattr(self, 'image_frame') or not self.image_frame.winfo_exists():

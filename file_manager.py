@@ -741,9 +741,10 @@ class FileManager:
             dialog.title("Select Files for Comparison")
         else:
             dialog.title("Database Browser")
-            
+        
         dialog.transient(self.gui.root)
-        self.center_window(dialog,900,700)
+        self.center_window(dialog, 900, 700)
+    
         # Create frames for UI elements
         top_frame = Frame(dialog)
         top_frame.pack(fill="x", padx=10, pady=10)
@@ -754,7 +755,7 @@ class FileManager:
         bottom_frame = Frame(dialog)
         bottom_frame.pack(fill="x", padx=10, pady=10)
 
-        # Store grouped files data AND create a mapping from listbox index to file data
+        # Store grouped files data
         file_groups = {}  # Key: base filename, Value: list of file records
         listbox_to_file_mapping = {}  # Key: listbox index, Value: file record
 
@@ -793,7 +794,7 @@ class FileManager:
             header_text = "Select files for comparison analysis (minimum 2 required)"
         else:
             header_text = "Database Files (grouped by base name, showing latest version)"
-    
+
         Label(top_frame, text=header_text, font=("Arial", 12, "bold")).pack()
 
         # Create listbox with scrollbar
@@ -809,20 +810,18 @@ class FileManager:
         file_listbox.pack(side="left", fill="both", expand=True)
         scrollbar.config(command=file_listbox.yview)
 
-        # Populate listbox with grouped files AND create the mapping
+        # Populate listbox with grouped files
         listbox_index = 0
         for base_name in sorted(file_groups.keys()):
             latest_file = file_groups[base_name][0]  # First item is newest
             count = len(file_groups[base_name])
-    
+
             if count > 1:
                 display_text = f"{base_name} ({count} versions, latest: {latest_file['created_at'].strftime('%Y-%m-%d %H:%M')})"
             else:
                 display_text = f"{base_name} ({latest_file['created_at'].strftime('%Y-%m-%d %H:%M')})"
-        
+    
             file_listbox.insert(tk.END, display_text)
-        
-            # Store the mapping from listbox index to the latest file record
             listbox_to_file_mapping[listbox_index] = latest_file
             debug_print(f"DEBUG: Mapped listbox index {listbox_index} to file ID {latest_file['id']} for base name '{base_name}'")
             listbox_index += 1
@@ -844,7 +843,194 @@ class FileManager:
             else:
                 selection_info.config(text=f"Selected: {selected_count} files", fg="black")
 
-        file_listbox.bind("<<ListboxSelect>>", lambda e: update_selection_info())
+        def show_version_history_dialog(base_name, versions, main_listbox_index):
+            """Show dialog with version history and allow version selection."""
+            history_dialog = Toplevel(dialog)
+            history_dialog.title(f"Version History - {base_name}")
+    
+            # Hide the window immediately to prevent stutter during positioning
+            history_dialog.withdraw()
+    
+            history_dialog.transient(dialog)
+            history_dialog.grab_set()
+    
+            # Create frames
+            top_frame_hist = Frame(history_dialog)
+            top_frame_hist.pack(fill="x", padx=10, pady=10)
+    
+            list_frame_hist = Frame(history_dialog)
+            list_frame_hist.pack(fill="both", expand=True, padx=10, pady=10)
+    
+            bottom_frame_hist = Frame(history_dialog)
+            bottom_frame_hist.pack(fill="x", padx=10, pady=10)
+    
+            # Header
+            Label(top_frame_hist, text=f"Version History: {base_name}", 
+                  font=("Arial", 14, "bold")).pack()
+            Label(top_frame_hist, text="Double-click a version to select it for loading", 
+                  font=("Arial", 10)).pack(pady=5)
+    
+            # Version listbox with scrollbar
+            hist_listbox_frame = Frame(list_frame_hist)
+            hist_listbox_frame.pack(fill="both", expand=True)
+    
+            hist_scrollbar = tk.Scrollbar(hist_listbox_frame)
+            hist_scrollbar.pack(side="right", fill="y")
+    
+            version_listbox = tk.Listbox(hist_listbox_frame, yscrollcommand=hist_scrollbar.set, font=FONT)
+            version_listbox.pack(side="left", fill="both", expand=True)
+            hist_scrollbar.config(command=version_listbox.yview)
+    
+            # Populate with versions (newest first)
+            for i, version in enumerate(versions):
+                created_str = version['created_at'].strftime('%Y-%m-%d %H:%M:%S')
+                is_current = i == 0
+                status = " [CURRENT]" if is_current else f" [v{len(versions)-i}]"
+                display_text = f"{version['filename']}{status} - {created_str}"
+                version_listbox.insert(tk.END, display_text)
+    
+            def on_version_double_click(event):
+                """Handle double-click on version to replace in main browser."""
+                selection = version_listbox.curselection()
+                if not selection:
+                    return
+        
+                selected_version_idx = selection[0]
+                selected_version = versions[selected_version_idx]
+        
+                # Update the main listbox display
+                created_str = selected_version['created_at'].strftime('%Y-%m-%d %H:%M')
+                if selected_version_idx == 0:
+                    # Current version selected - restore normal display
+                    count = len(versions)
+                    if count > 1:
+                        display_text = f"{base_name} ({count} versions, latest: {created_str})"
+                    else:
+                        display_text = f"{base_name} ({created_str})"
+                    # Remove from restoration tracking if it exists
+                    if hasattr(dialog, 'original_mappings') and main_listbox_index in dialog.original_mappings:
+                        del dialog.original_mappings[main_listbox_index]
+                else:
+                    # Older version selected - show with indicator
+                    version_num = len(versions) - selected_version_idx
+                    display_text = f"{base_name} [v{version_num}: {created_str}] ★"
+            
+                    # Store original mapping for restoration if not already stored
+                    if not hasattr(dialog, 'original_mappings'):
+                        dialog.original_mappings = {}
+                    if main_listbox_index not in dialog.original_mappings:
+                        dialog.original_mappings[main_listbox_index] = versions[0]  # Store original (newest)
+        
+                # Update main listbox
+                file_listbox.delete(main_listbox_index)
+                file_listbox.insert(main_listbox_index, display_text)
+        
+                # Update mapping to point to selected version
+                listbox_to_file_mapping[main_listbox_index] = selected_version
+        
+                # Keep the item selected in main listbox
+                file_listbox.selection_clear(0, tk.END)
+                file_listbox.selection_set(main_listbox_index)
+        
+                debug_print(f"DEBUG: Temporarily replaced {base_name} with version {selected_version_idx + 1}")
+        
+                history_dialog.destroy()
+    
+            # Bind double-click to version listbox
+            version_listbox.bind("<Double-Button-1>", on_version_double_click)
+    
+            # Close button
+            def on_close():
+                history_dialog.destroy()
+    
+            Button(bottom_frame_hist, text="Close", command=on_close, 
+                   bg="#f44336", fg="black", font=FONT).pack(side="right", padx=5)
+    
+            # Center the window and then show it (prevents stutter)
+            self.center_window(history_dialog, 600, 400)
+            history_dialog.deiconify()
+
+        def on_double_click(event):
+            """Handle double-click to show version history for selected files."""
+            selected_items = list(file_listbox.curselection())
+            if not selected_items:
+                return
+        
+            # Process each selected file one by one
+            def process_next_file(file_indices):
+                if not file_indices:
+                    return  # All done
+            
+                idx = file_indices[0]
+                remaining = file_indices[1:]
+            
+                if idx not in listbox_to_file_mapping:
+                    # Skip this one and process next
+                    if remaining:
+                        dialog.after(100, lambda: process_next_file(remaining))
+                    return
+                
+                selected_file = listbox_to_file_mapping[idx]
+                base_name = extract_base_filename(selected_file['filename'])
+            
+                # Check if this file has multiple versions
+                if base_name not in file_groups or len(file_groups[base_name]) <= 1:
+                    # Single version - skip to next file
+                    if remaining:
+                        dialog.after(100, lambda: process_next_file(remaining))
+                    return
+            
+                # Show version history dialog
+                # We need to ensure the dialog is modal and wait for it to close before proceeding
+                def show_dialog_and_continue():
+                    show_version_history_dialog(base_name, file_groups[base_name], idx)
+                    # After dialog closes, process next file
+                    if remaining:
+                        dialog.after(100, lambda: process_next_file(remaining))
+            
+                show_dialog_and_continue()
+        
+            # Start processing the first file
+            process_next_file(selected_items)
+
+        file_listbox.bind("<Double-Button-1>", on_double_click)
+
+        def on_selection_change(event):
+            """Restore original versions for deselected items."""
+            if hasattr(dialog, 'original_mappings'):
+                current_selection = set(file_listbox.curselection())
+            
+                # Check each item that has been temporarily replaced
+                items_to_restore = []
+                for idx, original_version in dialog.original_mappings.items():
+                    if idx not in current_selection:
+                        items_to_restore.append((idx, original_version))
+            
+                # Restore items that were deselected
+                for idx, original_version in items_to_restore:
+                    base_name = extract_base_filename(original_version['filename'])
+                    count = len(file_groups[base_name])
+                    created_str = original_version['created_at'].strftime('%Y-%m-%d %H:%M')
+                
+                    if count > 1:
+                        display_text = f"{base_name} ({count} versions, latest: {created_str})"
+                    else:
+                        display_text = f"{base_name} ({created_str})"
+                
+                    # Restore display and mapping
+                    file_listbox.delete(idx)
+                    file_listbox.insert(idx, display_text)
+                    listbox_to_file_mapping[idx] = original_version
+                
+                    debug_print(f"DEBUG: Restored {base_name} to latest version (deselected)")
+            
+                # Remove restored items from tracking
+                for idx, _ in items_to_restore:
+                    del dialog.original_mappings[idx]
+        
+            update_selection_info()
+
+        file_listbox.bind("<<ListboxSelect>>", on_selection_change)
 
         # Create buttons
         button_frame = Frame(bottom_frame)
@@ -857,7 +1043,7 @@ class FileManager:
         def select_all():
             file_listbox.select_set(0, tk.END)
             update_selection_info()
-    
+
         def select_none():
             file_listbox.selection_clear(0, tk.END)
             update_selection_info()
@@ -865,91 +1051,61 @@ class FileManager:
         Button(select_frame, text="Select All", command=select_all, font=FONT).pack(side="left", padx=5)
         Button(select_frame, text="Select None", command=select_none, font=FONT).pack(side="left", padx=5)
 
+        # Add info label
+        info_label = Label(select_frame, text="Double-click files to view version history", 
+                          font=("Arial", 9), fg="gray")
+        info_label.pack(side="right", padx=5)
+
         if comparison_mode:
-            # Comparison mode: different button text and behavior
+            # Comparison mode buttons
             def on_load_for_comparison():
-                """Load selected files and immediately start comparison."""
                 selected_items = file_listbox.curselection()
                 if len(selected_items) < 2:
                     messagebox.showwarning("Warning", "Please select at least 2 files for comparison.")
                     return
-            
-                # Collect file IDs using the mapping
+        
                 file_ids = []
                 for idx in selected_items:
                     if idx in listbox_to_file_mapping:
                         file_record = listbox_to_file_mapping[idx]
                         file_ids.append(file_record['id'])
-                        debug_print(f"DEBUG: Added file ID {file_record['id']} from mapping for index {idx}")
-        
-                debug_print(f"DEBUG: Loading {len(file_ids)} files for comparison")
-        
-                # Close the dialog
+    
                 dialog.destroy()
-        
-                # Load files and start comparison
                 if len(file_ids) >= 2:
-                    # Store current state
                     original_all_filtered_sheets = self.gui.all_filtered_sheets.copy()
-            
-                    # Load the selected files
                     self.load_multiple_from_database(file_ids)
-            
-                    # Check if files were loaded successfully
                     if len(self.gui.all_filtered_sheets) >= 2:
-                        debug_print(f"DEBUG: Successfully loaded {len(self.gui.all_filtered_sheets)} files, starting comparison")
-                
-                        # Import and create the comparison window directly
                         from sample_comparison import SampleComparisonWindow
                         comparison_window = SampleComparisonWindow(self.gui, self.gui.all_filtered_sheets)
                         comparison_window.show()
                     else:
                         messagebox.showwarning("Warning", "Failed to load enough files for comparison.")
-                        # Restore original state if loading failed
                         self.gui.all_filtered_sheets = original_all_filtered_sheets
-    
+
             Button(button_frame, text="Load for Comparison", command=on_load_for_comparison, 
                    bg="#4CAF50", fg="black", font=FONT).pack(side="left", padx=5)
             Button(button_frame, text="Cancel", command=dialog.destroy, 
                    bg="#f44336", fg="black", font=FONT).pack(side="right", padx=5)
 
         else:
-            # Normal mode: existing button behavior
+            # Normal mode buttons
             def on_load():
-                """Load selected files normally."""
-                debug_print("DEBUG: on_load() called")
-
                 selected_items = file_listbox.curselection()
-                debug_print(f"DEBUG: Selected items count: {len(selected_items)}")
-
                 if not selected_items:
                     messagebox.showwarning("Warning", "Please select at least one file to load.")
                     return
 
-                # Use the direct mapping instead of parsing display text
                 file_ids = []
                 for idx in selected_items:
                     if idx in listbox_to_file_mapping:
                         file_record = listbox_to_file_mapping[idx]
                         file_ids.append(file_record['id'])
-                        debug_print(f"DEBUG: Added file ID {file_record['id']} from mapping for index {idx}")
-                    else:
-                        debug_print(f"ERROR: Listbox index {idx} not found in mapping")
-
-                debug_print(f"DEBUG: Total file IDs collected: {file_ids}")
 
                 dialog.destroy()
-                debug_print("DEBUG: Dialog destroyed, proceeding with loading...")
-
                 if len(file_ids) == 1:
-                    debug_print(f"DEBUG: Loading single file with ID: {file_ids[0]}")
                     self.load_from_database(file_ids[0])
                 elif len(file_ids) > 1:
-                    debug_print(f"DEBUG: Loading multiple files with IDs: {file_ids}")
                     self.load_multiple_from_database(file_ids)
-                else:
-                    debug_print("ERROR: No valid file IDs to load")
-                    messagebox.showerror("Error", "No valid files selected for loading")
 
             Button(button_frame, text="Load Selected", command=on_load, 
                    bg="#4CAF50", fg="black", font=FONT).pack(side="left", padx=5)
@@ -1673,23 +1829,23 @@ class FileManager:
     def start_data_collection_with_header_data(self, file_path, selected_test, header_data):
         """Start data collection directly with existing header data."""
         debug_print("DEBUG: Starting data collection with existing header data")
-    
+
         try:
             # Show the data collection window directly
             from data_collection_window import DataCollectionWindow
-        
+    
             # Pass the original filename to the data collection window
             original_filename = getattr(self, 'current_original_filename', None)
             data_collection = DataCollectionWindow(self.gui, file_path, selected_test, header_data, original_filename=original_filename)
             data_result = data_collection.show()
-    
-            if data_result == "load_file":
-                debug_print("DEBUG: Data collection completed - file should already be loaded, updating UI only")
-                self.ensure_file_is_loaded_in_ui(file_path)
-            elif data_result == "cancel":
-                debug_print("DEBUG: Data collection was cancelled - file should already be loaded, updating UI only")
-                self.ensure_file_is_loaded_in_ui(file_path)
-            
+
+            if data_result in ["load_file", "cancel"]:
+                debug_print("DEBUG: Data collection completed - data should already be updated in main GUI")
+                # The data collection window should have already updated the main GUI
+                # Just refresh the currently displayed sheet if needed
+                if hasattr(self.gui, 'selected_sheet') and self.gui.selected_sheet.get() == selected_test:
+                    self.gui.root.after(100, lambda: self.gui.update_displayed_sheet(selected_test))
+        
         except Exception as e:
             debug_print(f"DEBUG: Error starting data collection: {e}")
             traceback.print_exc()
