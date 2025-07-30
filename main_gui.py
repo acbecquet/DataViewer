@@ -97,6 +97,174 @@ from utils import FONT, clean_columns, get_save_path, is_standard_file, plotting
 from resource_utils import get_resource_path
 from update_checker import UpdateChecker
 
+def is_empty_sample(sample_data):
+    """
+    Check if a sample is empty based only on plotting data:
+    - No TPM data
+    - No Average TPM
+    - No Draw Pressure  
+    - No Resistance
+    
+    Args:
+        sample_data (dict or pd.Series): Sample data to check
+        
+    Returns:
+        bool: True if sample is empty, False otherwise
+    """
+    try:
+        # Convert to dict if it's a pandas Series
+        if hasattr(sample_data, 'to_dict'):
+            sample_dict = sample_data.to_dict()
+        else:
+            sample_dict = sample_data
+            
+        # Only check these plotting fields
+        plotting_fields = ['Average TPM', 'Draw Pressure', 'Resistance']
+        
+        for field in plotting_fields:
+            value = str(sample_dict.get(field, '')).strip()
+            debug_print(f"DEBUG: Checking field '{field}': '{value}'")
+            
+            # Skip completely empty values
+            if not value or value in ['', 'nan', 'No data', 'None']:
+                continue
+                
+            # Check if it's a meaningful numeric value
+            try:
+                numeric_val = float(value)
+                # Remove pd.isna() call and use math.isnan() or simple check
+                import math
+                if numeric_val != 0 and not math.isnan(numeric_val):
+                    debug_print(f"DEBUG: Sample has plotting data in '{field}': {numeric_val}")
+                    return False  # Has data, not empty
+            except (ValueError, TypeError):
+                # If it's not numeric but has meaningful content, it's not empty
+                if len(value) > 0 and value not in ['nan', 'None', 'No data', '']:
+                    debug_print(f"DEBUG: Sample has non-numeric plotting data in '{field}': '{value}'")
+                    return False
+        
+        debug_print("DEBUG: Sample has no plotting data - is empty")
+        return True  # No plotting data found
+        
+    except Exception as e:
+        debug_print(f"DEBUG: Error checking sample: {e}")
+        return False  # If error, assume not empty
+
+
+def filter_empty_samples_from_dataframe(df):
+    """
+    Filter out samples with no plotting data from processed DataFrame.
+    """
+    if df.empty:
+        debug_print("DEBUG: DataFrame is already empty")
+        return df
+        
+    try:
+        debug_print(f"DEBUG: Checking {len(df)} samples for plotting data")
+        
+        # Create mask for samples with plotting data
+        has_data_mask = []
+        
+        for index, row in df.iterrows():
+            is_empty = is_empty_sample(row)
+            has_data_mask.append(not is_empty)
+            debug_print(f"DEBUG: Sample {index} ({'empty' if is_empty else 'has data'}): {row.get('Sample Name', 'Unknown')}")
+            
+        # Filter the dataframe
+        filtered_df = df[has_data_mask].reset_index(drop=True)
+        
+        debug_print(f"DEBUG: Filtered from {len(df)} to {len(filtered_df)} samples with plotting data")
+        return filtered_df
+        
+    except Exception as e:
+        debug_print(f"DEBUG: Error filtering samples: {e}")
+        import traceback
+        traceback.print_exc()
+        return df
+
+
+def filter_empty_samples_from_full_data(full_sample_data, num_columns_per_sample=12):
+    """
+    Filter out samples with no TPM plotting data from full sample data.
+    """
+    pd = lazy_import_pandas()
+    if not pd or full_sample_data.empty:
+        debug_print("DEBUG: No pandas or empty full_sample_data")
+        return full_sample_data
+        
+    try:
+        debug_print(f"DEBUG: Full data shape: {full_sample_data.shape}, columns per sample: {num_columns_per_sample}")
+        
+        # For User Test Simulation (8 columns), we need to match the processed data filtering
+        if num_columns_per_sample == 8:
+            debug_print("DEBUG: User Test Simulation detected - preserving all data since processed data was already filtered")
+            # The processed data filtering already removed empty samples
+            # So we keep the full data as-is for User Test Simulation
+            return full_sample_data
+        
+        # For regular tests (12 columns), do the normal filtering
+        num_samples = full_sample_data.shape[1] // num_columns_per_sample
+        debug_print(f"DEBUG: Checking {num_samples} samples in full plotting data")
+        
+        if num_samples == 0:
+            return full_sample_data
+            
+        # Find samples with actual TPM data
+        samples_with_data = []
+        
+        for i in range(num_samples):
+            start_col = i * num_columns_per_sample
+            end_col = start_col + num_columns_per_sample
+            sample_data = full_sample_data.iloc[:, start_col:end_col]
+            
+            debug_print(f"DEBUG: Checking sample {i+1} columns {start_col}-{end_col-1}")
+            
+            # Check TPM column (usually column 8 in 12-column format)
+            has_tpm_data = False
+            if num_columns_per_sample >= 9:
+                tpm_col_idx = 8 if num_columns_per_sample == 12 else min(8, num_columns_per_sample - 1)
+                if sample_data.shape[1] > tpm_col_idx and sample_data.shape[0] > 3:
+                    # Get TPM data from row 3 onwards
+                    tpm_data = sample_data.iloc[3:, tpm_col_idx]
+                    
+                    # Convert to numeric and check for real values
+                    numeric_tpm = pd.to_numeric(tpm_data, errors='coerce')
+                    valid_tpm = numeric_tpm.dropna()
+                    
+                    if len(valid_tpm) > 0 and (valid_tpm > 0).any():
+                        has_tpm_data = True
+                        debug_print(f"DEBUG: Sample {i+1} has TPM data: {valid_tpm.head().tolist()}")
+            
+            if has_tpm_data:
+                samples_with_data.append(i)
+        
+        debug_print(f"DEBUG: Found {len(samples_with_data)} samples with TPM data out of {num_samples}")
+        
+        # If no samples have data, return empty DataFrame
+        if not samples_with_data:
+            debug_print("DEBUG: No samples with plotting data, returning empty DataFrame")
+            return pd.DataFrame()
+            
+        # Reconstruct with only samples that have data
+        filtered_columns = []
+        for sample_idx in samples_with_data:
+            start_col = sample_idx * num_columns_per_sample
+            end_col = start_col + num_columns_per_sample
+            sample_cols = list(range(start_col, min(end_col, full_sample_data.shape[1])))
+            filtered_columns.extend(sample_cols)
+            debug_print(f"DEBUG: Including sample {sample_idx+1} columns {start_col}-{end_col-1}")
+            
+        filtered_data = full_sample_data.iloc[:, filtered_columns]
+        debug_print(f"DEBUG: Filtered plotting data from {full_sample_data.shape[1]} to {filtered_data.shape[1]} columns")
+        return filtered_data
+            
+    except Exception as e:
+        debug_print(f"DEBUG: Error filtering plotting data: {e}")
+        import traceback
+        traceback.print_exc()
+        return full_sample_data
+
+
 class TestingGUI:
     """Main GUI class for the Standardized Testing application."""
 
@@ -812,9 +980,21 @@ Would you like to download and install the update?"""
                 return
 
             # Process the sheet data
-            try:
+            try:        
                 process_function = processing.get_processing_function(sheet_name)
                 processed_data, _, full_sample_data = process_function(data)
+                
+                # Apply empty sample filtering to processed data only
+                debug_print(f"DEBUG: Before filtering - processed_data shape: {processed_data.shape}, full_sample_data shape: {full_sample_data.shape}")
+                
+                # Filter empty samples from processed data
+                filtered_processed_data = filter_empty_samples_from_dataframe(processed_data)
+                
+                debug_print(f"DEBUG: After filtering - processed_data shape: {filtered_processed_data.shape}")
+                
+                # For display, use the filtered processed data but keep the original full_sample_data
+                # The plot manager will handle filtering during plot generation
+                processed_data = filtered_processed_data
                 self.current_sheet_data = processed_data
 
                 # Handle User Test Simulation
@@ -839,6 +1019,7 @@ Would you like to download and install the update?"""
                 debug_print(f"ERROR: Failed to display table: {e}")
 
             # Display plot if it's a plotting sheet
+
             if is_plotting_sheet:
                 try:
                     if not full_sample_data.empty:
@@ -852,6 +1033,16 @@ Would you like to download and install the update?"""
 
         except Exception as e:
             debug_print(f"Error finishing sheet update: {e}")
+    def _force_plot_redraw(self):
+        """Force a complete plot redraw to ensure filtered data displays correctly."""
+        try:
+            if hasattr(self, 'plot_manager') and hasattr(self.plot_manager, 'canvas'):
+                if self.plot_manager.canvas:
+                    debug_print("DEBUG: Forcing complete plot redraw")
+                    self.plot_manager.canvas.draw_idle()
+                    self.plot_frame.update_idletasks()
+        except Exception as e:
+            debug_print(f"DEBUG: Error in plot redraw: {e}")
 
     def _setup_image_loader(self, sheet_name, is_plotting_sheet):
         """Setup image loader for current sheet."""
@@ -883,21 +1074,16 @@ Would you like to download and install the update?"""
             return
 
         if is_plotting_sheet:
-            minimal_data = pd.DataFrame([{
-                "Sample Name": "No data - ready for collection",
-                "Media": "",
-                "Viscosity": "",
-                "Voltage, Resistance, Power": "",
-                "Average TPM": "No data",
-                "Standard Deviation": "No data",
-                "Initial Oil Mass": "",
-                "Usage Efficiency": "",
-                "Burn?": "",
-                "Clog?": "",
-                "Leak?": ""
-            }])
+            # Create completely empty DataFrame with proper columns for empty state
+            columns = [
+                "Sample Name", "Media", "Viscosity", "Voltage, Resistance, Power",
+                "Average TPM", "Standard Deviation", "Initial Oil Mass", 
+                "Usage Efficiency", "Burn?", "Clog?", "Leak?"
+            ]
+            empty_data = pd.DataFrame(columns=columns)
             
-            self.display_table(self.table_frame, minimal_data, sheet_name, is_plotting_sheet)
+            debug_print("DEBUG: Displaying empty plotting sheet with no samples")
+            self.display_table(self.table_frame, empty_data, sheet_name, is_plotting_sheet)
             self._show_empty_plot_message()
         else:
             minimal_data = pd.DataFrame([{
@@ -921,6 +1107,7 @@ Would you like to download and install the update?"""
             )
             empty_plot_label.pack(expand=True)
 
+    
     def load_images(self, is_plotting_sheet):
         """Load and display images in the dynamic image_frame."""
         if not hasattr(self, 'image_frame') or not self.image_frame.winfo_exists():
@@ -1061,6 +1248,12 @@ Would you like to download and install the update?"""
         for widget in self.plot_frame.winfo_children():
             widget.destroy()
 
+        # Check if data is empty after filtering
+        if full_sample_data.empty or full_sample_data.shape[1] == 0:
+            debug_print("DEBUG: No plottable data available after filtering empty samples")
+            self._show_empty_plot_message()
+            return
+
         num_columns = getattr(self, 'num_columns_per_sample', 12)
         self.plot_manager.plot_all_samples(self.plot_frame, full_sample_data, num_columns)
         self.plot_frame.grid_propagate(True)
@@ -1079,6 +1272,21 @@ Would you like to download and install the update?"""
 
         for widget in frame.winfo_children():
             widget.destroy()
+
+        # Handle completely empty data (after filtering)
+        if data.empty:
+            debug_print(f"DEBUG: Data is completely empty after filtering for sheet '{sheet_name}'")
+            
+            # Create placeholder indicating ready for data collection
+            placeholder_label = tk.Label(
+                frame,
+                text=f"No samples to display.\nAll samples were empty or placeholder data.\nReady for data collection.",
+                font=("Arial", 12),
+                fg="gray",
+                justify="center"
+            )
+            placeholder_label.pack(expand=True, pady=50)
+            return
 
         print("DEBUG: Cleared existing table widgets.")
 
@@ -1254,245 +1462,6 @@ Would you like to download and install the update?"""
                 justify="center"
             )
             error_label.pack(expand=True, pady=50)
-
-    def display_table_old(self, frame, data, sheet_name, is_plotting_sheet=False):
-        """Display table with enhanced handling for empty/minimal data."""
-        pd = self.get_pandas()
-        np = self.get_numpy()
-        TableCanvas, TableModel = self.get_tkintertable()
-
-        if not TableCanvas or not TableModel or not np or not pd:
-            return
-
-        if not frame or not frame.winfo_exists():
-            return
-
-        for widget in frame.winfo_children():
-            widget.destroy()
-
-        if data.empty:
-            placeholder_label = tk.Label(
-                frame,
-                text=f"Sheet '{sheet_name}' is ready for data collection.\nUse the data collection tools to add measurements.",
-                font=("Arial", 12),
-                fg="gray",
-                justify="center"
-            )
-            placeholder_label.pack(expand=True, pady=50)
-            return
-
-        # Clean and prepare data
-        data = clean_columns(data)
-        data.columns = data.columns.map(str)
-        data = clean_display_suffixes(data)
-        data = data.astype(str)
-        data = data.replace([np.nan, pd.NA], '', regex=True)
-
-        table_frame = ttk.Frame(frame, padding=(0, 0))
-        table_frame.pack(fill='both', expand=True)
-
-        # Calculate table dimensions
-        table_frame.update_idletasks()
-        available_width = table_frame.winfo_width()
-
-        # Initial column widths calculation
-        column_widths = {}
-        min_cell_width = 80
-        max_cell_width = 350
-        char_width_multiplier = 10
-
-        for col in data.columns:
-            header_length = len(str(col))
-            max_data_length = data[col].astype(str).str.len().max() if not data.empty else 0
-            max_length = max(header_length, max_data_length)
-            calculated_width = max_length * char_width_multiplier
-            column_widths[col] = max(min_cell_width, min(max_cell_width, calculated_width))
-
-        # Apply text wrapping based on initial column widths
-        from utils import wrap_text
-    
-        wrapped_data = data.copy()
-        max_lines_in_any_cell = 1
-        base_row_height = 20
-        line_height = 20
-        char_width = 6
-
-        print(f"DEBUG: Starting text wrapping with char_width={char_width}")
-        print(f"DEBUG: Initial column widths: {column_widths}")
-
-        for index, row in data.iterrows():
-            for col in data.columns:
-                cell_text = str(row[col])
-                if cell_text and len(cell_text) > 0:
-                    # Calculate available characters per line for this column
-                    available_width = column_widths[col] - 2  # Minimal margin
-                    chars_per_line = max(20, int(available_width / char_width))
-                
-                    # Wrap text
-                    wrapped_text = wrap_text(cell_text, chars_per_line)
-                
-                    # Count lines in this cell
-                    line_count = wrapped_text.count('\n') + 1
-                
-                    # Update the wrapped data
-                    if line_count > 1:
-                        wrapped_data.loc[index, col] = wrapped_text
-                
-                    # Track the maximum lines found in any single cell
-                    max_lines_in_any_cell = max(max_lines_in_any_cell, line_count)
-                
-                    if line_count > 1:  # Only debug cells that needed wrapping
-                        print(f"DEBUG: Row {index}, Col '{col}': '{cell_text}' -> {line_count} lines")
-                        print(f"DEBUG: Wrapped to: '{wrapped_text}'")
-
-        # Recalculate column widths based on wrapped text
-        for col in data.columns:
-            header_length = len(str(col))
-            max_line_length = header_length
-        
-            for index, row in wrapped_data.iterrows():
-                cell_text = str(row[col])
-                if '\n' in cell_text:
-                    lines = cell_text.split('\n')
-                    longest_line = max(len(line) for line in lines)
-                    max_line_length = max(max_line_length, longest_line)
-                else:
-                    max_line_length = max(max_line_length, len(cell_text))
-        
-            calculated_width = max_line_length * char_width_multiplier
-            column_widths[col] = max(min_cell_width, min(max_cell_width, calculated_width))
-
-        # Scale down column widths if total exceeds available space
-        total_width = sum(column_widths.values())
-        if available_width > 100 and total_width > available_width:
-            scale_factor = (available_width - 50) / total_width
-            for col in column_widths:
-                header_length = len(str(col))
-                min_header_width = header_length * char_width_multiplier
-                scaled_width = int(column_widths[col] * scale_factor)
-                column_widths[col] = max(min_cell_width, min_header_width, scaled_width)
-
-        # Calculate single row height to accommodate the maximum lines found
-        table_row_height = base_row_height + ((max_lines_in_any_cell - 1) * line_height)
-        print(f"DEBUG: Maximum lines in any cell: {max_lines_in_any_cell}")
-        print(f"DEBUG: Setting table row height to: {table_row_height}")
-
-        # Create scrollbars
-        v_scrollbar = ttk.Scrollbar(table_frame, orient='vertical')
-        h_scrollbar = ttk.Scrollbar(table_frame, orient='horizontal')
-
-        # Create table model with wrapped data
-        model = TableModel()
-        table_data_dict = wrapped_data.to_dict(orient='index')
-        model.importDict(table_data_dict)
-
-        # Create table canvas with calculated row height
-        table_canvas = TableCanvas(
-            table_frame, 
-            model=model, 
-            cellwidth=120,
-            cellbackgr='white',
-            alternaterows=True,
-            alternaterowcolor='#f0f0f0',
-            thefont=('Arial', 10), 
-            rowheight=table_row_height,
-            rowselectedcolor='#4CC9F0',
-            editable=False,
-            yscrollcommand=v_scrollbar.set, 
-            xscrollcommand=h_scrollbar.set, 
-            showGrid=True,
-            align='center',
-            colheaderheight=25,
-            rowheaderwidth=50,
-            cellpadx=1,
-            cellpady=2,
-            inset=0      
-        )
-
-        # Configure scrollbars
-        v_scrollbar.config(command=table_canvas.yview)
-        h_scrollbar.config(command=table_canvas.xview)
-
-        # Grid layout
-        table_frame.grid_rowconfigure(0, weight=1)
-        table_frame.grid_columnconfigure(0, weight=1)
-
-        table_canvas.grid(row=0, column=0, sticky='nsew', padx=0, pady=0)
-        v_scrollbar.grid(row=0, column=1, sticky='ns')
-        h_scrollbar.grid(row=1, column=0, sticky='ew')
-
-        # Show the table
-        table_canvas.show()
-
-        # Apply column widths
-        try:
-            if hasattr(model, 'columnwidths'):
-                for col, width in column_widths.items():
-                    model.columnwidths[col] = width
-                print(f"DEBUG: Applied column widths successfully")
-        except Exception as e:
-            print(f"DEBUG: Error applying column widths: {e}")
-
-        # Fix grid proportions and ensure all rows are visible
-    
-        def fix_proportions():
-            try:
-                default_rowheight = 25
-                if hasattr(table_canvas, 'grid_rowconfigure'):
-                    table_canvas.grid_rowconfigure(0, weight=0, minsize=default_rowheight)
-                    table_canvas.grid_rowconfigure(1, weight=1)
-        
-                if hasattr(table_canvas, 'grid_columnconfigure'):
-                    table_canvas.grid_columnconfigure(0, weight=0, minsize=50)
-                    table_canvas.grid_columnconfigure(1, weight=1)
-
-                for attr_name in ['main_frame', 'interior', 'content_frame', 'table_frame']:
-                    if hasattr(table_canvas, attr_name):
-                        internal_frame = getattr(table_canvas, attr_name)
-                        if internal_frame:
-                            if hasattr(internal_frame, 'grid_rowconfigure'):
-                                internal_frame.grid_rowconfigure(0, weight=0, minsize=default_rowheight)
-                                internal_frame.grid_rowconfigure(1, weight=1)
-                            if hasattr(internal_frame, 'grid_columnconfigure'):
-                                internal_frame.grid_columnconfigure(0, weight=0, minsize=50)
-                                internal_frame.grid_columnconfigure(1, weight=1)
-
-                if hasattr(table_canvas, 'tablecolheader'):
-                    col_header = table_canvas.tablecolheader
-                    if col_header and hasattr(col_header, 'master'):
-                        header_parent = col_header.master
-                        if header_parent:
-                            grid_info = col_header.grid_info()
-                            if 'row' in grid_info:
-                                header_parent.grid_rowconfigure(grid_info['row'], weight=0, minsize=default_rowheight)
-
-                if hasattr(table_canvas, 'tablerowheader'):
-                    row_header = table_canvas.tablerowheader
-                    if row_header and hasattr(row_header, 'master'):
-                        header_parent = row_header.master
-                        if header_parent:
-                            grid_info = row_header.grid_info()
-                            if 'column' in grid_info:
-                                header_parent.grid_columnconfigure(grid_info['column'], weight=0, minsize=50)
-
-                # Force table to show all rows and update display
-                if hasattr(table_canvas, 'adjustColumnWidths'):
-                    table_canvas.adjustColumnWidths()
-        
-                # FIX: Use correct yview method instead of set_yviews('top')
-                if hasattr(table_canvas, 'yview_moveto'):
-                    table_canvas.yview_moveto(0)  # Scroll to top
-                elif hasattr(table_canvas, 'yview'):
-                    table_canvas.yview('moveto', 0)  # Alternative method
-        
-                table_canvas.update_idletasks()
-                if hasattr(table_canvas, 'redraw'):
-                    table_canvas.redraw()
-            
-            except Exception as e:
-                print(f"DEBUG: Error in fix_proportions: {e}")
-
-        table_frame.after(100, fix_proportions)
 
     def store_images(self, sheet_name, paths):
         """Store image paths and their crop states for a specific sheet."""
