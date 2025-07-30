@@ -435,7 +435,7 @@ Would you like to download and install the update?"""
         """Display a startup menu with 'New' and 'Load' options."""
         startup_menu = Toplevel(self.root)
         startup_menu.title("Welcome")
-        startup_menu.geometry("300x150")
+        startup_menu.geometry("400x150")
         startup_menu.transient(self.root)
         startup_menu.grab_set()
 
@@ -450,13 +450,25 @@ Would you like to download and install the update?"""
         )
         new_button.pack(pady=5)
 
-        # Load Button
-        load_button = ttk.Button(
-            startup_menu,
-            text="Load",
+        # Create a frame to hold the load buttons side by side
+        load_button_frame = ttk.Frame(startup_menu)
+        load_button_frame.pack(pady=5)
+
+        # Load from Database Button
+        load_database_button = ttk.Button(
+            load_button_frame,
+            text="Load from Database",
+            command=lambda: self.file_manager.start_file_loading_database_wrapper(startup_menu)
+        )
+        load_database_button.pack(side="left", padx=5)
+
+        # Load from Excel Button  
+        load_excel_button = ttk.Button(
+            load_button_frame,
+            text="Load from File",
             command=lambda: self.file_manager.start_file_loading_wrapper(startup_menu)
         )
-        load_button.pack(pady=5)
+        load_excel_button.pack(side="left", padx=5)
 
         self.center_window(startup_menu)
 
@@ -1099,7 +1111,7 @@ Would you like to download and install the update?"""
         column_widths = {}
         min_cell_width = 80
         max_cell_width = 350
-        char_width_multiplier = 4
+        char_width_multiplier = 10
 
         for col in data.columns:
             header_length = len(str(col))
@@ -1107,9 +1119,6 @@ Would you like to download and install the update?"""
             max_length = max(header_length, max_data_length)
             calculated_width = max_length * char_width_multiplier
             column_widths[col] = max(min_cell_width, min(max_cell_width, calculated_width))
-            if col == "Sample Name":
-                print(f"DEBUG: Sample Name max_length: {max_length}")
-                print(f"DEBUG: Sample Name initial width: {column_widths[col]}")
 
         # Apply text wrapping based on initial column widths
         from utils import wrap_text
@@ -1117,8 +1126,8 @@ Would you like to download and install the update?"""
         wrapped_data = data.copy()
         max_lines_in_any_cell = 1
         base_row_height = 20
-        line_height = 15
-        char_width = 4
+        line_height = 20
+        char_width = 6
 
         print(f"DEBUG: Starting text wrapping with char_width={char_width}")
         print(f"DEBUG: Initial column widths: {column_widths}")
@@ -1148,8 +1157,6 @@ Would you like to download and install the update?"""
                         print(f"DEBUG: Row {index}, Col '{col}': '{cell_text}' -> {line_count} lines")
                         print(f"DEBUG: Wrapped to: '{wrapped_text}'")
 
-                    wrapped_text = wrap_text(cell_text, chars_per_line)
-
         # Recalculate column widths based on wrapped text
         for col in data.columns:
             header_length = len(str(col))
@@ -1164,7 +1171,7 @@ Would you like to download and install the update?"""
                 else:
                     max_line_length = max(max_line_length, len(cell_text))
         
-            calculated_width = max_line_length * 4
+            calculated_width = max_line_length * char_width_multiplier
             column_widths[col] = max(min_cell_width, min(max_cell_width, calculated_width))
 
         # Scale down column widths if total exceeds available space

@@ -572,6 +572,10 @@ class FileManager:
                     messagebox.showinfo("Success", f"VAP3 file loaded successfully: {display_filename}\nTotal files loaded: {total_files}")
                 else:
                     messagebox.showinfo("Success", f"VAP3 file loaded successfully: {display_filename}")
+
+                    # Add a small delay to ensure UI is fully ready before final update
+                if not batch_operation:
+                    self.gui.root.after(200, self.ensure_ui_is_displayed)
         
             return True
         
@@ -585,6 +589,26 @@ class FileManager:
             # Hide progress dialog only if not in batch mode
             if not batch_operation:
                 self.gui.progress_dialog.hide_progress_bar()
+
+    def ensure_ui_is_displayed(self):
+        """Ensure the UI properly displays the loaded data."""
+        debug_print("DEBUG: Final UI display check")
+    
+        try:
+            # Make sure we have a current sheet selected
+            if hasattr(self.gui, 'selected_sheet') and hasattr(self.gui, 'filtered_sheets'):
+                current_sheet = self.gui.selected_sheet.get()
+                if current_sheet and current_sheet in self.gui.filtered_sheets:
+                    debug_print(f"DEBUG: Forcing display update for sheet: {current_sheet}")
+                    self.gui.update_displayed_sheet(current_sheet)
+                else:
+                    debug_print("DEBUG: No valid sheet to display")
+        
+            # Force final UI update
+            self.gui.root.update_idletasks()
+        
+        except Exception as e:
+            debug_print(f"ERROR: Failed final UI display check: {e}")
 
     def load_multiple_from_database(self, file_ids):
         """Load multiple files from the database with a single progress dialog and success message."""
@@ -942,6 +966,44 @@ class FileManager:
         # Initialize selection info
         update_selection_info()
 
+    def ensure_main_gui_initialized(self):
+        """Ensure the main GUI components are properly initialized before displaying data."""
+        debug_print("DEBUG: Ensuring main GUI is properly initialized")
+    
+        try:
+            # Force the main window to update and initialize
+            self.gui.root.update_idletasks()
+        
+            # Ensure basic frames exist
+            if not hasattr(self.gui, 'top_frame') or not self.gui.top_frame:
+                debug_print("DEBUG: Creating missing top_frame")
+                self.gui.create_static_frames()
+        
+            # Ensure file dropdown exists
+            if not hasattr(self.gui, 'file_dropdown') or not self.gui.file_dropdown:
+                debug_print("DEBUG: Creating missing file dropdown")
+                self.add_or_update_file_dropdown()
+        
+            # Ensure sheet dropdown exists
+            if not hasattr(self.gui, 'drop_down_menu') or not self.gui.drop_down_menu:
+                debug_print("DEBUG: Creating missing sheet dropdown")
+                self.gui.populate_or_update_sheet_dropdown()
+        
+            # Ensure display frame exists
+            if not hasattr(self.gui, 'display_frame') or not self.gui.display_frame:
+                debug_print("DEBUG: Creating missing display_frame")
+                self.gui.create_static_frames()
+        
+            # Force another update
+            self.gui.root.update_idletasks()
+        
+            debug_print("DEBUG: Main GUI initialization check complete")
+        
+        except Exception as e:
+            debug_print(f"ERROR: Failed to ensure main GUI initialization: {e}")
+            import traceback
+            traceback.print_exc()
+
     def set_active_file(self, file_name: str) -> None:
         """Set the active file based on the given file name."""
         for file_data in self.gui.all_filtered_sheets:
@@ -959,16 +1021,38 @@ class FileManager:
         """Update UI components to reflect the currently active file."""
         if not self.gui.current_file:
             return
-        self.gui.file_dropdown_var.set(self.gui.current_file)
+        
+        debug_print(f"DEBUG: Updating UI for current file: {self.gui.current_file}")
+    
+        # Ensure main GUI is properly initialized first
+        self.ensure_main_gui_initialized()
+    
+        # Update file dropdown
+        if hasattr(self.gui, 'file_dropdown_var'):
+            self.gui.file_dropdown_var.set(self.gui.current_file)
+            debug_print(f"DEBUG: Set file dropdown to: {self.gui.current_file}")
+    
+        # Update sheet dropdown
         self.gui.populate_or_update_sheet_dropdown()
+        debug_print("DEBUG: Updated sheet dropdown")
+    
+        # Update displayed sheet
         current_sheet = self.gui.selected_sheet.get()
         if current_sheet not in self.gui.filtered_sheets:
             first_sheet = list(self.gui.filtered_sheets.keys())[0] if self.gui.filtered_sheets else None
             if first_sheet:
                 self.gui.selected_sheet.set(first_sheet)
-                self.gui.update_displayed_sheet(first_sheet)
+                debug_print(f"DEBUG: Set selected sheet to first sheet: {first_sheet}")
+                # Add a small delay to ensure UI is ready
+                self.gui.root.after(100, lambda: self.gui.update_displayed_sheet(first_sheet))
+            else:
+                debug_print("ERROR: No sheets available to display")
         else:
-            self.gui.update_displayed_sheet(current_sheet)
+            debug_print(f"DEBUG: Using current sheet: {current_sheet}")
+            # Add a small delay to ensure UI is ready
+            self.gui.root.after(100, lambda: self.gui.update_displayed_sheet(current_sheet))
+    
+        debug_print("DEBUG: UI update for current file complete")
 
     def add_data(self) -> None:
         """Handle adding a new data file directly and update UI accordingly."""
@@ -1914,6 +1998,11 @@ class FileManager:
         """Handle the 'Load' button click in the startup menu."""
         startup_menu.destroy()
         self.load_initial_file()
+
+    def start_file_loading_database_wrapper(self, startup_menu: tk.Toplevel) -> None:
+        """Handle the 'Load from Database' button click in the startup menu."""
+        startup_menu.destroy()
+        self.show_database_browser()
 
     def update_file_dropdown(self) -> None:
         """Update the file dropdown with loaded file names."""
