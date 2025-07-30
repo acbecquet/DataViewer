@@ -166,27 +166,58 @@ def clean_columns(data):
     return data
 
 def wrap_text(text, max_width=None):
-        """
-        Wrap text for labels to fit within a given width.
-
-        Args:
-            text (str): The text to wrap.
-            max_width (int): The maximum number of characters per line. If None, it will calculate dynamically.
-
-        Returns:
-            str: The wrapped text with line breaks.
-        """
-        if max_width is None:
-            # Dynamically calculate max_width based on widget size
-            axes_width = self.figure.get_size_inches()[0] * self.figure.dpi  # Width in pixels
-            button_width = axes_width * 0.12  # Fraction of the figure allocated to checkboxes (from `add_axes`)
-            char_width = 8  # Approximate width of a character in pixels (adjust as needed)
-            max_width = int(button_width / char_width)
-
-        if len(text) <= max_width:
-            return text
+    """
+    Wrap text for labels to fit within a given width, preserving whole words.
+    Args:
+        text (str): The text to wrap.
+        max_width (int): The maximum number of characters per line. If None, it will calculate dynamically.
+    Returns:
+        str: The wrapped text with line breaks.
+    """
+    if max_width is None:
+        # Dynamically calculate max_width based on widget size
+        axes_width = self.figure.get_size_inches()[0] * self.figure.dpi  # Width in pixels
+        button_width = axes_width * 0.12  # Fraction of the figure allocated to checkboxes (from `add_axes`)
+        char_width = 8  # Approximate width of a character in pixels (adjust as needed)
+        max_width = int(button_width / char_width)
+    
+    if len(text) <= max_width:
+        return text
+    
+    # Word-preserving wrapping
+    words = text.split()
+    lines = []
+    current_line = ""
+    
+    for word in words:
+        # Check if adding this word would exceed the line length
+        test_line = current_line + " " + word if current_line else word
+        
+        if len(test_line) <= max_width:
+            # Word fits, add it to current line
+            current_line = test_line
         else:
-            return '\n'.join([text[i:i+max_width] for i in range(0, len(text), max_width)])
+            # Word doesn't fit
+            if current_line:
+                # Save current line and start new line with this word
+                lines.append(current_line)
+                current_line = word
+            else:
+                # Word itself is longer than max_width, we need to break it
+                if len(word) > max_width:
+                    # Break the long word at character boundaries
+                    while len(word) > max_width:
+                        lines.append(word[:max_width])
+                        word = word[max_width:]
+                    current_line = word if word else ""
+                else:
+                    current_line = word
+    
+    # Add the last line if it's not empty
+    if current_line:
+        lines.append(current_line)
+    
+    return '\n'.join(lines)
 
 def autofit_columns_in_excel(file_path):
     """
