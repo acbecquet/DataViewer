@@ -113,8 +113,8 @@ def remove_empty_columns(data: pd.DataFrame) -> pd.DataFrame:
 
 def clean_columns(data):
     """
-    Cleans DataFrame columns by handling NaN headers and duplicate columns:
-    - Removes columns where the header is NaN and the column is completely empty.
+    Clean column names and remove only truly empty columns.
+    This function:
     - Retains columns with valid headers, even if they are empty.
     - Renames columns with NaN headers to their column index (1-based).
     - Ensures all column names are unique by appending a counter to duplicates.
@@ -138,9 +138,18 @@ def clean_columns(data):
     columns_to_keep = []
     for i, col in enumerate(data.columns):
         is_unnamed = col.isdigit() or col.startswith('Unnamed')
-        is_completely_empty = (data.iloc[:, i].isna().all() | 
-                              (data.iloc[:, i] == '').all() | 
-                              (data.iloc[:, i] == 0).all())
+        
+        # Fix: Ensure each condition returns a single boolean value
+        try:
+            column_data = data.iloc[:, i]
+            is_all_na = bool(column_data.isna().all())
+            is_all_empty_string = bool((column_data == '').all())
+            is_all_zero = bool((column_data == 0).all())
+            
+            is_completely_empty = is_all_na or is_all_empty_string or is_all_zero
+        except Exception as e:
+            print(f"DEBUG: Error checking column {i} ({col}), keeping it: {e}")
+            is_completely_empty = False
         
         # Keep column if it's named OR if it has any data
         if not (is_unnamed and is_completely_empty):
@@ -159,7 +168,19 @@ def clean_columns(data):
         new_columns[dups] = [f"{dup}.{i}" if i != 0 else dup for i in range(len(dups))]
     data.columns = new_columns
 
-    # Step 4: Replace NaN values with empty strings
+    # Step 4: Clean up generated column names that are just dots and numbers
+    final_columns = []
+    for col in data.columns:
+        cleaned_col = str(col)
+        # If column name is just dots and numbers (like '.1', '.2'), convert to empty string
+        if cleaned_col.startswith('.') and cleaned_col[1:].isdigit():
+            cleaned_col = ''
+            print(f"DEBUG: Cleaned column name: '{col}' -> '{cleaned_col}'")
+        final_columns.append(cleaned_col)
+    
+    data.columns = final_columns
+
+    # Step 5: Replace NaN values with empty strings
     data = data.fillna('')
 
     print(f"DEBUG: Final columns: {list(data.columns)}")

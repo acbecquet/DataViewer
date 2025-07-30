@@ -418,45 +418,45 @@ class FileManager:
             if not batch_operation:
                 self.gui.progress_dialog.show_progress_bar("Loading from database...")
                 self.gui.root.update_idletasks()
-        
+    
             if file_id is None:
                 # Show a dialog to select from available files
                 file_list = self.db_manager.list_files()
                 if not file_list:
                     messagebox.showinfo("Info", "No files found in the database.")
                     return False
-            
+        
                 # Create a simple dialog to choose a file
                 dialog = Toplevel(self.gui.root)
                 dialog.title("Select File from Database")
                 dialog.geometry("600x400")
                 dialog.transient(self.gui.root)
                 dialog.grab_set()
-            
+        
                 # Create a frame for the listbox and scrollbar
                 frame = Frame(dialog)
                 frame.pack(fill="both", expand=True, padx=10, pady=10)
-            
+        
                 # Create a Listbox to display the files
                 listbox = tk.Listbox(frame, font=FONT)
                 listbox.pack(side="left", fill="both", expand=True)
-            
+        
                 # Add a scrollbar
                 scrollbar = tk.Scrollbar(frame, orient="vertical", command=listbox.yview)
                 scrollbar.pack(side="right", fill="y")
                 listbox.config(yscrollcommand=scrollbar.set)
-            
+        
                 # Populate the listbox
                 for file in file_list:
                     created_at = file["created_at"].strftime("%Y-%m-%d %H:%M:%S")
                     listbox.insert(tk.END, f"{file['id']}: {file['filename']} - {created_at}")
-            
+        
                 # Add buttons
                 button_frame = Frame(dialog)
                 button_frame.pack(fill="x", padx=10, pady=10)
-            
+        
                 selected_file_id = [None]  # Use a list to store the selected file ID
-            
+        
                 def on_select():
                     selection = listbox.curselection()
                     if selection:
@@ -464,24 +464,24 @@ class FileManager:
                         file_id = file_list[index]["id"]
                         selected_file_id[0] = file_id
                         dialog.destroy()
-            
+        
                 def on_cancel():
                     dialog.destroy()
-            
+        
                 select_button = Button(button_frame, text="Select", command=on_select)
                 select_button.pack(side="right", padx=5)
-            
+        
                 cancel_button = Button(button_frame, text="Cancel", command=on_cancel)
                 cancel_button.pack(side="right", padx=5)
-            
+        
                 # Wait for the dialog to close
                 self.gui.root.wait_window(dialog)
-            
+        
                 # Check if a file was selected
                 file_id = selected_file_id[0]
                 if file_id is None:
                     return False
-        
+    
             # Load the file from the database
             file_data = self.db_manager.get_file_by_id(file_id)
             if not file_data:
@@ -491,15 +491,15 @@ class FileManager:
             raw_database_filename = file_data['filename']
             debug_print(f"DEBUG: Raw database filename: {raw_database_filename}")
             created_at = file_data.get('created_at')
-        
+    
             # Get the proper display filename - prioritize metadata, then fallback to database filename
             display_filename = None
-        
+    
             # First, try to get display_filename from metadata
             if 'meta_data' in file_data and file_data['meta_data']:
                 display_filename = file_data['meta_data'].get('display_filename')
                 debug_print(f"DEBUG: display_filename from metadata: '{display_filename}'")
-            
+        
                 # If not found, try original_filename from metadata and construct .vap3 name
                 if not display_filename:
                     original_filename = file_data['meta_data'].get('original_filename')
@@ -507,36 +507,36 @@ class FileManager:
                         # Remove extension and add .vap3
                         display_filename = os.path.splitext(original_filename)[0] + '.vap3'
                         debug_print(f"DEBUG: Constructed filename from original_filename: '{display_filename}'")
-        
+    
             # Final fallback to database filename field
             if not display_filename:
                 display_filename = file_data['filename']
                 debug_print(f"DEBUG: Using database filename as fallback: '{display_filename}'")
-        
+    
             # Check if we already have files loaded to determine if we should append
             append_to_existing = len(self.gui.all_filtered_sheets) > 0
-        
+    
             # Save the VAP3 file to a temporary location
             with tempfile.NamedTemporaryFile(suffix='.vap3', delete=False) as temp_file:
                 temp_vap3_path = temp_file.name
                 temp_file.write(file_data['file_content'])
-        
+    
             debug_print(f"DEBUG: Created temporary file for loading: {temp_vap3_path}")
-        
+    
             # Load the VAP3 file using the existing method with the correct display name and append flag
             success = self.load_vap3_file(temp_vap3_path, display_name=display_filename, append_to_existing=append_to_existing)
-        
+    
             if not success:
                 debug_print("DEBUG: Failed to load VAP3 file")
                 return False
-        
+    
             # Clean up the temporary file
             try:
                 os.unlink(temp_vap3_path)
                 debug_print(f"DEBUG: Cleaned up temporary file: {temp_vap3_path}")
             except Exception as cleanup_error:
                 debug_print(f"DEBUG: Warning - failed to cleanup temp file: {cleanup_error}")
-        
+    
             # Update the UI to indicate the file was loaded from the database - USE THE PROPER DISPLAY FILENAME
             total_files = len(self.gui.all_filtered_sheets)
             if not batch_operation:  # Only update title if not in batch mode
@@ -544,38 +544,18 @@ class FileManager:
                     self.gui.root.title(f"DataViewer - {display_filename} (from Database) - {total_files} files loaded")
                 else:
                     self.gui.root.title(f"DataViewer - {display_filename} (from Database)")
-        
+    
             # Update progress only if not in batch mode
             if not batch_operation:
                 self.gui.progress_dialog.update_progress_bar(100)
                 self.gui.root.update_idletasks()
-        
+    
             debug_print(f"DEBUG: Successfully loaded file with display name: '{display_filename}'")
             debug_print(f"DEBUG: Total files now loaded: {len(self.gui.all_filtered_sheets)}")
-        
+    
+            # Store metadata in the latest file entry
             if self.gui.all_filtered_sheets:
-                # Get the most recently added file
                 latest_file = self.gui.all_filtered_sheets[-1]
-            
-                try:
-                    for sheet_name, sheet_info in self.gui.filtered_sheets.items():
-                        if 'data' in sheet_info:
-                            debug_print(f"DEBUG: Validating format for sheet: {sheet_name}")
-                            validated_data = self.validate_and_fix_table_format(sheet_name, sheet_info['data'])
-                            sheet_info['data'] = validated_data
-                        
-                            # Also update in all_filtered_sheets
-                            if 'filtered_sheets' in latest_file:
-                                if sheet_name in latest_file['filtered_sheets']:
-                                    latest_file['filtered_sheets'][sheet_name]['data'] = validated_data
-                                
-                    debug_print("DEBUG: All sheet formats validated successfully")
-                
-                except Exception as validation_error:
-                    debug_print(f"ERROR: Table format validation failed: {validation_error}")
-                    traceback.print_exc()
-
-                # Store the database filename and timestamp in the file metadata
                 latest_file['database_filename'] = raw_database_filename
                 latest_file['database_created_at'] = created_at
             
@@ -591,13 +571,9 @@ class FileManager:
                     messagebox.showinfo("Success", f"VAP3 file loaded successfully: {display_filename}\nTotal files loaded: {total_files}")
                 else:
                     messagebox.showinfo("Success", f"VAP3 file loaded successfully: {display_filename}")
-
-                    # Add a small delay to ensure UI is fully ready before final update
-                if not batch_operation:
-                    self.gui.root.after(200, self.ensure_ui_is_displayed)
-        
+    
             return True
-        
+    
         except Exception as e:
             if show_success_message:  # Only show error dialog if not in batch mode
                 messagebox.showerror("Error", f"Error loading file from database: {e}")
@@ -608,109 +584,6 @@ class FileManager:
             # Hide progress dialog only if not in batch mode
             if not batch_operation:
                 self.gui.progress_dialog.hide_progress_bar()
-
-    def ensure_ui_is_displayed(self):
-        """Ensure the UI properly displays the loaded data."""
-        debug_print("DEBUG: Final UI display check starting")
-    
-        try:
-            # Robust checking for GUI state
-            if not hasattr(self.gui, 'selected_sheet') or not hasattr(self.gui, 'filtered_sheets'):
-                debug_print("ERROR: GUI missing required attributes (selected_sheet or filtered_sheets)")
-                return
-            
-            if not self.gui.filtered_sheets:
-                debug_print("ERROR: No filtered_sheets available")
-                return
-            
-            # Get current sheet or default to first available
-            current_sheet = self.gui.selected_sheet.get()
-            available_sheets = list(self.gui.filtered_sheets.keys())
-        
-            debug_print(f"DEBUG: Current sheet: '{current_sheet}'")
-            debug_print(f"DEBUG: Available sheets: {available_sheets}")
-        
-            if current_sheet not in available_sheets:
-                if available_sheets:
-                    current_sheet = available_sheets[0]
-                    self.gui.selected_sheet.set(current_sheet)
-                    debug_print(f"DEBUG: Set current sheet to first available: {current_sheet}")
-                else:
-                    debug_print("ERROR: No sheets available to display")
-                    return
-        
-            # Check if sheet has data
-            sheet_info = self.gui.filtered_sheets[current_sheet]
-            if 'data' not in sheet_info:
-                debug_print(f"ERROR: Sheet '{current_sheet}' has no data")
-                return
-            
-            sheet_data = sheet_info['data']
-            debug_print(f"DEBUG: Sheet data shape: {sheet_data.shape}")
-            debug_print(f"DEBUG: Sheet data columns: {list(sheet_data.columns)}")
-        
-            # Update dropdown to reflect available sheets
-            self.gui.populate_sheet_dropdown()
-        
-            # Force UI update with error handling
-            debug_print(f"DEBUG: Attempting to update display for sheet: {current_sheet}")
-            self.gui.update_displayed_sheet(current_sheet)
-            debug_print(f"DEBUG: Successfully updated display for sheet: {current_sheet}")
-        
-            # Force final UI refresh
-            self.gui.root.update_idletasks()
-            debug_print("DEBUG: Final UI display check completed successfully")
-        
-        except Exception as e:
-            debug_print(f"ERROR: Failed final UI display check: {e}")
-            traceback.print_exc()
-        
-            # Try fallback approach - just refresh the dropdown and let user manually select
-            try:
-                debug_print("DEBUG: Attempting fallback UI update")
-                if hasattr(self.gui, 'populate_sheet_dropdown'):
-                    self.gui.populate_sheet_dropdown()
-                self.gui.root.update_idletasks()
-                debug_print("DEBUG: Fallback UI update completed")
-            except Exception as fallback_error:
-                debug_print(f"ERROR: Even fallback UI update failed: {fallback_error}")
-
-    def validate_and_fix_table_format(self, sheet_name, sheet_data):
-        """Validate and fix table format issues for compatibility with new table structure."""
-        debug_print(f"DEBUG: Validating table format for sheet: {sheet_name}")
-    
-        try:
-            # Check if data is empty
-            if sheet_data.empty:
-                debug_print(f"DEBUG: Sheet {sheet_name} is empty")
-                return sheet_data
-            
-            # Log original structure
-            debug_print(f"DEBUG: Original data shape: {sheet_data.shape}")
-            debug_print(f"DEBUG: Original columns: {list(sheet_data.columns)}")
-        
-            # Apply clean_columns to ensure compatibility
-            from utils import clean_columns
-            cleaned_data = clean_columns(sheet_data.copy())
-        
-            debug_print(f"DEBUG: Cleaned data shape: {cleaned_data.shape}")
-            debug_print(f"DEBUG: Cleaned columns: {list(cleaned_data.columns)}")
-        
-            # Ensure all column headers are strings
-            cleaned_data.columns = cleaned_data.columns.map(str)
-        
-            # Replace any remaining NaN values with empty strings
-            cleaned_data = cleaned_data.fillna('')
-        
-            debug_print(f"DEBUG: Final validated data shape: {cleaned_data.shape}")
-            debug_print(f"DEBUG: Table format validation completed successfully for {sheet_name}")
-        
-            return cleaned_data
-        
-        except Exception as e:
-            debug_print(f"ERROR: Failed to validate table format for {sheet_name}: {e}")
-            traceback.print_exc()
-            return sheet_data  # Return original data if cleaning fails
 
     def load_multiple_from_database(self, file_ids):
         """Load multiple files from the database with a single progress dialog and success message."""
@@ -862,13 +735,13 @@ class FileManager:
         """Show a dialog to browse files stored in the database with multi-select support."""
         # Create a dialog to browse the database
         dialog = Toplevel(self.gui.root)
-    
+
         # Update title based on mode
         if comparison_mode:
             dialog.title("Select Files for Comparison")
         else:
             dialog.title("Database Browser")
-                
+            
         dialog.transient(self.gui.root)
         self.center_window(dialog,900,700)
         # Create frames for UI elements
@@ -881,8 +754,9 @@ class FileManager:
         bottom_frame = Frame(dialog)
         bottom_frame.pack(fill="x", padx=10, pady=10)
 
-        # Store grouped files data
+        # Store grouped files data AND create a mapping from listbox index to file data
         file_groups = {}  # Key: base filename, Value: list of file records
+        listbox_to_file_mapping = {}  # Key: listbox index, Value: file record
 
         def extract_base_filename(filename):
             """Extract base filename without timestamp and extension."""
@@ -919,7 +793,7 @@ class FileManager:
             header_text = "Select files for comparison analysis (minimum 2 required)"
         else:
             header_text = "Database Files (grouped by base name, showing latest version)"
-        
+    
         Label(top_frame, text=header_text, font=("Arial", 12, "bold")).pack()
 
         # Create listbox with scrollbar
@@ -935,17 +809,23 @@ class FileManager:
         file_listbox.pack(side="left", fill="both", expand=True)
         scrollbar.config(command=file_listbox.yview)
 
-        # Populate listbox with grouped files
+        # Populate listbox with grouped files AND create the mapping
+        listbox_index = 0
         for base_name in sorted(file_groups.keys()):
             latest_file = file_groups[base_name][0]  # First item is newest
             count = len(file_groups[base_name])
-        
+    
             if count > 1:
                 display_text = f"{base_name} ({count} versions, latest: {latest_file['created_at'].strftime('%Y-%m-%d %H:%M')})"
             else:
                 display_text = f"{base_name} ({latest_file['created_at'].strftime('%Y-%m-%d %H:%M')})"
-            
+        
             file_listbox.insert(tk.END, display_text)
+        
+            # Store the mapping from listbox index to the latest file record
+            listbox_to_file_mapping[listbox_index] = latest_file
+            debug_print(f"DEBUG: Mapped listbox index {listbox_index} to file ID {latest_file['id']} for base name '{base_name}'")
+            listbox_index += 1
 
         # Selection info
         selection_info = Label(list_frame, text="", font=("Arial", 10))
@@ -973,11 +853,11 @@ class FileManager:
         # Add select all/none buttons
         select_frame = Frame(button_frame)
         select_frame.pack(fill="x", pady=(0, 10))
-    
+
         def select_all():
             file_listbox.select_set(0, tk.END)
             update_selection_info()
-        
+    
         def select_none():
             file_listbox.selection_clear(0, tk.END)
             update_selection_info()
@@ -993,34 +873,32 @@ class FileManager:
                 if len(selected_items) < 2:
                     messagebox.showwarning("Warning", "Please select at least 2 files for comparison.")
                     return
-                
-                # Collect file IDs
+            
+                # Collect file IDs using the mapping
                 file_ids = []
                 for idx in selected_items:
-                    display_text = file_listbox.get(idx)
-                    # Extract base name from display text
-                    base_name = display_text.split(' (')[0]
-                    if base_name in file_groups:
-                        latest_file = max(file_groups[base_name], key=lambda x: x['created_at'])
-                        file_ids.append(latest_file['id'])
-            
+                    if idx in listbox_to_file_mapping:
+                        file_record = listbox_to_file_mapping[idx]
+                        file_ids.append(file_record['id'])
+                        debug_print(f"DEBUG: Added file ID {file_record['id']} from mapping for index {idx}")
+        
                 debug_print(f"DEBUG: Loading {len(file_ids)} files for comparison")
-            
+        
                 # Close the dialog
                 dialog.destroy()
-            
+        
                 # Load files and start comparison
                 if len(file_ids) >= 2:
                     # Store current state
                     original_all_filtered_sheets = self.gui.all_filtered_sheets.copy()
-                
+            
                     # Load the selected files
                     self.load_multiple_from_database(file_ids)
-                
+            
                     # Check if files were loaded successfully
                     if len(self.gui.all_filtered_sheets) >= 2:
                         debug_print(f"DEBUG: Successfully loaded {len(self.gui.all_filtered_sheets)} files, starting comparison")
-                    
+                
                         # Import and create the comparison window directly
                         from sample_comparison import SampleComparisonWindow
                         comparison_window = SampleComparisonWindow(self.gui, self.gui.all_filtered_sheets)
@@ -1029,7 +907,7 @@ class FileManager:
                         messagebox.showwarning("Warning", "Failed to load enough files for comparison.")
                         # Restore original state if loading failed
                         self.gui.all_filtered_sheets = original_all_filtered_sheets
-        
+    
             Button(button_frame, text="Load for Comparison", command=on_load_for_comparison, 
                    bg="#4CAF50", fg="black", font=FONT).pack(side="left", padx=5)
             Button(button_frame, text="Cancel", command=dialog.destroy, 
@@ -1040,29 +918,26 @@ class FileManager:
             def on_load():
                 """Load selected files normally."""
                 debug_print("DEBUG: on_load() called")
-    
+
                 selected_items = file_listbox.curselection()
                 debug_print(f"DEBUG: Selected items count: {len(selected_items)}")
-    
+
                 if not selected_items:
                     messagebox.showwarning("Warning", "Please select at least one file to load.")
                     return
 
+                # Use the direct mapping instead of parsing display text
                 file_ids = []
                 for idx in selected_items:
-                    display_text = file_listbox.get(idx)
-                    debug_print(f"DEBUG: Processing selection {idx}: {display_text}")
-                    # Extract base name from display text
-                    base_name = display_text.split(' (')[0]
-                    if base_name in file_groups:
-                        latest_file = max(file_groups[base_name], key=lambda x: x['created_at'])
-                        file_ids.append(latest_file['id'])
-                        debug_print(f"DEBUG: Added file ID {latest_file['id']} for base name '{base_name}'")
+                    if idx in listbox_to_file_mapping:
+                        file_record = listbox_to_file_mapping[idx]
+                        file_ids.append(file_record['id'])
+                        debug_print(f"DEBUG: Added file ID {file_record['id']} from mapping for index {idx}")
                     else:
-                        debug_print(f"ERROR: Base name '{base_name}' not found in file_groups")
+                        debug_print(f"ERROR: Listbox index {idx} not found in mapping")
 
                 debug_print(f"DEBUG: Total file IDs collected: {file_ids}")
-    
+
                 dialog.destroy()
                 debug_print("DEBUG: Dialog destroyed, proceeding with loading...")
 

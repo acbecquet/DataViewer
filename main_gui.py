@@ -1067,7 +1067,195 @@ Would you like to download and install the update?"""
         self.plot_manager.add_plot_dropdown(self.plot_frame)
         self.plot_frame.update_idletasks()
 
-    def display_table(self, frame, data, sheet_name, is_plotting_sheet=False):
+    def display_table(self, frame, data, sheet_name, is_plotting_sheet):
+        """Display table data in the given frame with robust error handling."""
+        pd = self.get_pandas()
+        np = self.get_numpy()
+        TableCanvas, TableModel = self.get_tkintertable()
+
+        if not TableCanvas or not TableModel or not np or not pd:
+            print("DEBUG: Required libraries not available. Aborting display_table.")
+            return
+
+        for widget in frame.winfo_children():
+            widget.destroy()
+
+        print("DEBUG: Cleared existing table widgets.")
+
+        # Clean and prepare data with enhanced error handling
+        try:
+            data = clean_columns(data)
+            data.columns = data.columns.map(str)  # Ensure column headers are strings
+            print("DEBUG: Column cleaning completed successfully.")
+
+            # Fix: More robust empty check
+            try:
+                is_data_empty = len(data) == 0 or data.shape[0] == 0
+            except Exception as e:
+                print(f"DEBUG: Error checking if data is empty, assuming not empty: {e}")
+                is_data_empty = False
+
+            if is_data_empty:
+                print("DEBUG: Data is empty. Displaying warning.")
+                messagebox.showwarning("Warning", f"Sheet '{sheet_name}' contains no data to display.")
+                return
+
+            # Fix: More robust data type conversion
+            try:
+                # First, handle any problematic data types
+                for col in data.columns:
+                    try:
+                        # Convert each column individually to catch specific issues
+                        data[col] = data[col].astype(str)
+                    except Exception as col_error:
+                        print(f"DEBUG: Error converting column '{col}' to string: {col_error}")
+                        # Fallback - handle each cell individually
+                        data[col] = data[col].apply(lambda x: str(x) if pd.notna(x) else '')
+            
+                print("DEBUG: Data type conversion completed successfully.")
+            except Exception as type_error:
+                print(f"DEBUG: Error in data type conversion: {type_error}")
+                # Final fallback - create a clean copy
+                try:
+                    clean_data = pd.DataFrame()
+                    for col in data.columns:
+                        clean_data[col] = data[col].apply(lambda x: str(x) if pd.notna(x) else '')
+                    data = clean_data
+                    print("DEBUG: Used fallback data conversion method.")
+                except Exception as fallback_error:
+                    print(f"ERROR: Even fallback conversion failed: {fallback_error}")
+                    return
+
+            # Fix: More robust NaN replacement
+            try:
+                # Replace NaN values more carefully
+                data = data.fillna('')
+            
+                # Additional cleanup for any remaining problematic values
+                for col in data.columns:
+                    try:
+                        data[col] = data[col].replace([np.nan, pd.NA, 'nan', 'NaN', 'None'], '', regex=False)
+                    except Exception as replace_error:
+                        print(f"DEBUG: Error replacing values in column '{col}': {replace_error}")
+                        # Handle each cell individually if needed
+                        data[col] = data[col].apply(lambda x: '' if pd.isna(x) or str(x).lower() in ['nan', 'none'] else str(x))
+            
+                print("DEBUG: NaN replacement completed successfully.")
+            except Exception as replace_error:
+                print(f"DEBUG: Error in NaN replacement: {replace_error}")
+                # Fallback - ensure all values are strings
+                try:
+                    for col in data.columns:
+                        data[col] = data[col].apply(lambda x: str(x) if x is not None and not pd.isna(x) else '')
+                    print("DEBUG: Used fallback NaN replacement method.")
+                except Exception as fallback_replace_error:
+                    print(f"ERROR: Even fallback NaN replacement failed: {fallback_replace_error}")
+                    return
+
+            print("DEBUG: Data processed successfully.")
+
+        except Exception as data_prep_error:
+            print(f"ERROR: Critical error in data preparation: {data_prep_error}")
+            import traceback
+            traceback.print_exc()
+        
+            # Show error message to user
+            error_label = tk.Label(
+                frame,
+                text=f"Error displaying table data for '{sheet_name}'.\nPlease check the console for details.",
+                font=("Arial", 12),
+                fg="red",
+                justify="center"
+            )
+            error_label.pack(expand=True, pady=50)
+            return
+
+        # Continue with table creation
+        try:
+            table_frame = ttk.Frame(frame, padding=(2, 1))
+            table_frame.pack(fill='both', expand=True)
+
+            print("DEBUG: Table frame created and packed.")
+
+            # Force the frame to update its geometry
+            table_frame.update_idletasks()
+            available_width = table_frame.winfo_width()
+            num_columns = len(data.columns)
+
+            # Calculate a new cell width based on available width
+            calculated_cellwidth = max(120, available_width // num_columns) if num_columns > 0 else 120
+
+            v_scrollbar = ttk.Scrollbar(table_frame, orient='vertical')
+            h_scrollbar = ttk.Scrollbar(table_frame, orient='horizontal')
+
+            model = TableModel()
+        
+            # Convert to dictionary more safely
+            try:
+                table_data_dict = data.to_dict(orient='index')
+                model.importDict(table_data_dict)
+                print("DEBUG: Table model created successfully.")
+            except Exception as model_error:
+                print(f"ERROR: Failed to create table model: {model_error}")
+                return
+
+            default_cellwidth = 110
+            default_rowheight = 25
+
+            if is_plotting_sheet:
+                print("DEBUG: Adjusting row height for plotting sheet.")
+                font_height = 16
+                char_per_line = 12
+
+                # Calculate optimal row height more safely
+                try:
+                    max_row_height = default_rowheight
+                    for _, row in data.iterrows():
+                        max_lines = 1
+                        for cell in row:
+                            if cell and len(str(cell)) > 0:
+                                cell_length = len(str(cell))
+                                lines = (cell_length // char_per_line) + 1
+                                max_lines = max(max_lines, lines)
+                        row_height = max_lines * font_height
+                        max_row_height = max(max_row_height, row_height)
+                
+                    default_rowheight = int(max_row_height)
+                    print(f"DEBUG: Calculated row height: {default_rowheight}")
+                except Exception as height_error:
+                    print(f"DEBUG: Error calculating row height, using default: {height_error}")
+                    default_rowheight = 25
+
+            print(f"DEBUG: Final row height: {default_rowheight}")
+
+            table_canvas = TableCanvas(table_frame, model=model, cellwidth=calculated_cellwidth, cellbackgr='#4CC9F0',
+                                       thefont=('Arial', 10), rowheight=default_rowheight, rowselectedcolor='#FFFFFF',
+                                       editable=False, yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set, showGrid=True)
+
+            table_canvas.grid(row=0, column=0, sticky='nsew')
+            v_scrollbar.grid(row=0, column=1, sticky='ns')
+            h_scrollbar.grid(row=1, column=0, sticky='ew')
+
+            table_canvas.show()
+
+            print("DEBUG: Table displayed successfully.")
+
+        except Exception as table_error:
+            print(f"ERROR: Failed to create table: {table_error}")
+            import traceback
+            traceback.print_exc()
+        
+            # Show error message to user
+            error_label = tk.Label(
+                frame,
+                text=f"Error creating table for '{sheet_name}'.\nPlease check the console for details.",
+                font=("Arial", 12),
+                fg="red",
+                justify="center"
+            )
+            error_label.pack(expand=True, pady=50)
+
+    def display_table_old(self, frame, data, sheet_name, is_plotting_sheet=False):
         """Display table with enhanced handling for empty/minimal data."""
         pd = self.get_pandas()
         np = self.get_numpy()
