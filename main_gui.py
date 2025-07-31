@@ -150,7 +150,6 @@ def is_empty_sample(sample_data):
         debug_print(f"DEBUG: Error checking sample: {e}")
         return False  # If error, assume not empty
 
-
 def filter_empty_samples_from_dataframe(df):
     """
     Filter out samples with no plotting data from processed DataFrame.
@@ -181,7 +180,6 @@ def filter_empty_samples_from_dataframe(df):
         import traceback
         traceback.print_exc()
         return df
-
 
 def filter_empty_samples_from_full_data(full_sample_data, num_columns_per_sample=12):
     """
@@ -264,7 +262,6 @@ def filter_empty_samples_from_full_data(full_sample_data, num_columns_per_sample
         traceback.print_exc()
         return full_sample_data
 
-
 class TestingGUI:
     """Main GUI class for the Standardized Testing application."""
 
@@ -274,7 +271,7 @@ class TestingGUI:
         init_start = time.time()
         
         self.root = root
-        self.root.title("Standardized Testing GUI")
+        self.root.title("DataViewer")
         self.report_thread = None
         self.report_queue = queue.Queue()
 
@@ -463,9 +460,9 @@ Would you like to download and install the update?"""
     
         # Basic UI setup
         self.set_app_colors()
-        self.set_window_size(0.8, 0.8)
+        self.root.state('zoomed')
+        self.set_window_size(1, 1)
         self.root.minsize(1200,800)
-        self.center_window(self.root)
     
         # Create frames
         self.create_static_frames()

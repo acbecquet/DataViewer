@@ -538,13 +538,13 @@ class FileManager:
             except Exception as cleanup_error:
                 debug_print(f"DEBUG: Warning - failed to cleanup temp file: {cleanup_error}")
     
-            # Update the UI to indicate the file was loaded from the database - USE THE PROPER DISPLAY FILENAME
+            # Update the UI to indicate the file was loaded from the database
             total_files = len(self.gui.all_filtered_sheets)
             if not batch_operation:  # Only update title if not in batch mode
                 if total_files > 1:
-                    self.gui.root.title(f"DataViewer - {display_filename} (from Database) - {total_files} files loaded")
+                    self.gui.root.title(f"DataViewer - {total_files} files loaded")
                 else:
-                    self.gui.root.title(f"DataViewer - {display_filename} (from Database)")
+                    self.gui.root.title("DataViewer - 1 file loaded")
     
             # Update progress only if not in batch mode
             if not batch_operation:
@@ -645,12 +645,9 @@ class FileManager:
             # Update window title with final count
             total_loaded = len(self.gui.all_filtered_sheets)
             if total_loaded > 1:
-                last_loaded = loaded_files[-1] if loaded_files else "Multiple Files"
-                self.gui.root.title(f"DataViewer - {last_loaded} (from Database) - {total_loaded} files loaded")
+                self.gui.root.title(f"DataViewer - {total_loaded} files loaded")
             elif total_loaded == 1:
-                self.gui.root.title(f"DataViewer - {loaded_files[0]} (from Database)")
-        
-            debug_print(f"DEBUG: Batch load complete. Loaded: {len(loaded_files)}, Failed: {len(failed_files)}")
+                self.gui.root.title("DataViewer - 1 file loaded")
         
             # Show single summary message
             if failed_files:

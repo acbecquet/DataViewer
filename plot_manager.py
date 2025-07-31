@@ -297,7 +297,7 @@ class PlotManager:
             debug_print(f"DEBUG: Could not extract sample names from processed data: {e}")
     
         try:
-            # FIXED: Correct argument order - plot_type comes second, then num_columns_per_sample, then sample_names
+            # Correct argument order - plot_type comes second, then num_columns_per_sample, then sample_names
             result = processing.plot_all_samples(
                 full_sample_data, 
                 self.selected_plot_type.get(), 

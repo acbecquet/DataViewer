@@ -226,7 +226,7 @@ def plot_user_test_simulation_samples(full_sample_data: pd.DataFrame, num_column
         # Extract puffs data (column index 1 in User Test Simulation)
         x_data = pd.to_numeric(sample_data.iloc[3:, 1], errors='coerce').dropna()
         debug_print(f"DEBUG: Sample {i+1} puffs data length: {len(x_data)}, values: {x_data.head().tolist()}")
-        
+
         # Extract y-data based on plot type
         y_data = get_y_data_for_user_test_simulation_plot_type(sample_data, plot_type)
         y_data = pd.to_numeric(y_data, errors='coerce').dropna()
@@ -241,7 +241,11 @@ def plot_user_test_simulation_samples(full_sample_data: pd.DataFrame, num_column
         x_data = x_data.loc[common_index]
         y_data = y_data.loc[common_index]
         
-        # FIXED: Use provided sample names if available, otherwise use default
+        x_data = fix_x_axis_sequence(x_data)
+        debug_print(f"DEBUG: Sample {i+1} fixed puffs data length: {len(x_data)}, values: {x_data.head().tolist()}")
+        
+
+        # Use provided sample names if available, otherwise use default
         if sample_names and i < len(sample_names):
             sample_name = sample_names[i]
             debug_print(f"DEBUG: Using provided sample name: '{sample_name}'")
@@ -300,12 +304,14 @@ def plot_user_test_simulation_samples(full_sample_data: pd.DataFrame, num_column
     ax1.set_title(f'{plot_type} - Phase 1 (Puffs 0-50)')
     ax1.legend(loc='upper right')
     ax1.set_xlim(0, 60)  # Slightly wider than 50 for better visualization
-    
+    prevent_x_label_overlap(ax1)
+
     # Configure Phase 2 plot  
     ax2.set_xlabel('Puffs')
     ax2.set_ylabel(get_y_label_for_plot_type(plot_type))
     ax2.set_title(f'{plot_type} - Phase 2 (Extended Puffs)')
     ax2.legend(loc='upper right')
+    prevent_x_label_overlap(ax2)
 
     # Set consistent y-axis limits
     if y_max > 9 and y_max <= 50:
@@ -455,6 +461,13 @@ def plot_user_test_simulation_bar_chart(ax1, ax2, full_sample_data, num_samples,
         
         debug_print(f"DEBUG: Sample {i+1} TPM data length: {len(tpm_numeric)}, values: {tpm_numeric.head().tolist()}")
         
+        # Extract puffs data to understand the sequence
+        puffs_data = pd.to_numeric(sample_data.iloc[3:, 1], errors='coerce').dropna()
+        if not puffs_data.empty:
+            # Fix the puff sequence
+            fixed_puffs = fix_x_axis_sequence(puffs_data)
+            debug_print(f"DEBUG: Sample {i+1} fixed puffs sequence for phase splitting")
+        
         if tpm_numeric.empty:
             debug_print(f"DEBUG: Sample {i+1} has no valid TPM data, skipping")
             continue
@@ -534,6 +547,61 @@ def plot_user_test_simulation_bar_chart(ax1, ax2, full_sample_data, num_samples,
     debug_print(f"DEBUG: Created User Test Simulation bar charts with {len(extracted_sample_names)} samples")
     return extracted_sample_names
 
+def fix_x_axis_sequence(x_data):
+    """
+    Fix x-axis data to ensure it's always increasing.
+    If x2-x1 < 0, set x2 = x1+10 to avoid plotting issues.
+    This is critical for User Test Simulation where puff counts can reset.
+    
+    Args:
+        x_data (pd.Series): The x-axis data (usually puffs)
+        
+    Returns:
+        pd.Series: Fixed x-axis data with monotonic increasing values
+    """
+    try:
+        if len(x_data) <= 1:
+            return x_data
+            
+        # Convert to numeric first if it's not already
+        if x_data.dtype == 'object':  # String data
+            x_numeric = pd.to_numeric(x_data, errors='coerce').dropna()
+            debug_print(f"DEBUG: Converted string x_data to numeric: {len(x_numeric)} values")
+        else:
+            x_numeric = x_data.copy()
+            
+        if len(x_numeric) <= 1:
+            return x_numeric
+            
+        # Convert to list for easier manipulation
+        x_values = x_numeric.values.copy()
+        
+        # Fix any decreasing sequences
+        fixes_applied = 0
+        for i in range(1, len(x_values)):
+            if x_values[i] - x_values[i-1] < 0:
+                # If current value is less than previous, set it to previous + 10
+                old_value = x_values[i]
+                x_values[i] = x_values[i-1] + 10
+                fixes_applied += 1
+                debug_print(f"DEBUG: Fixed x-axis sequence at index {i}: {old_value} -> {x_values[i]} (was decreasing)")
+            elif x_values[i] == x_values[i-1]:
+                # If values are equal, add small increment to maintain increasing sequence
+                old_value = x_values[i]
+                x_values[i] = x_values[i-1] + 5
+                fixes_applied += 1
+                debug_print(f"DEBUG: Fixed duplicate x-axis value at index {i}: {old_value} -> {x_values[i]}")
+        
+        if fixes_applied > 0:
+            debug_print(f"DEBUG: Applied {fixes_applied} fixes to x-axis sequence")
+        
+        # Return as pandas Series with original index
+        return pd.Series(x_values, index=x_numeric.index)
+        
+    except Exception as e:
+        debug_print(f"DEBUG: Error fixing x-axis sequence: {e}")
+        return x_data  # Return original data if fixing fails
+
 def plot_all_samples(full_sample_data: pd.DataFrame, plot_type: str, num_columns_per_sample: int = 12, sample_names: List[str] = None) -> Tuple[plt.Figure, List[str]]:
     """
     Generate plots for all samples in the provided data.
@@ -587,7 +655,7 @@ def plot_all_samples(full_sample_data: pd.DataFrame, plot_type: str, num_columns
     
             x_data = sample_data.iloc[3:, 0].dropna()
             debug_print(f"DEBUG: Sample {i+1} x_data (puffs) length: {len(x_data)}, first few values: {x_data.head().tolist()}")
-    
+
             y_data = get_y_data_for_plot_type(sample_data, plot_type)
             debug_print(f"DEBUG: Sample {i+1} raw y_data length: {len(y_data)}, first few values: {y_data.head().tolist()}")
     
@@ -600,6 +668,9 @@ def plot_all_samples(full_sample_data: pd.DataFrame, plot_type: str, num_columns
             x_data = x_data.loc[common_index]
             y_data = y_data.loc[common_index]
     
+            x_data = fix_x_axis_sequence(x_data)
+            debug_print(f"DEBUG: Sample {i+1} fixed x_data length: {len(x_data)}, first few values: {x_data.head().tolist()}")
+
             debug_print(f"DEBUG: Sample {i+1} final x_data length: {len(x_data)}, y_data length: {len(y_data)}")
 
             if not x_data.empty and not y_data.empty:
@@ -621,6 +692,8 @@ def plot_all_samples(full_sample_data: pd.DataFrame, plot_type: str, num_columns
         ax.set_ylabel(get_y_label_for_plot_type(plot_type))
         ax.set_title(plot_type)
         ax.legend(loc='upper right')
+
+        prevent_x_label_overlap(ax)
 
         if y_max > 9 and y_max <= 50:
             ax.set_ylim(0, y_max)
@@ -699,6 +772,51 @@ def plot_tpm_bar_chart(ax, full_sample_data, num_samples, num_columns_per_sample
 
     return extracted_sample_names
 
+def prevent_x_label_overlap(ax):
+    """
+    Hide overlapping x-axis labels to improve readability.
+    Simple solution that doesn't modify tick positions, just visibility.
+    """
+    try:
+        # Get current labels and their positions
+        labels = ax.get_xticklabels()
+        if len(labels) <= 1:
+            return
+        
+        # Calculate approximate label widths
+        fig = ax.get_figure()
+        if fig is None:
+            return
+            
+        # Get the axis width in points
+        bbox = ax.get_window_extent()
+        axis_width_points = bbox.width
+        
+        # Estimate average label width (rough approximation)
+        avg_label_length = sum(len(label.get_text()) for label in labels) / len(labels)
+        estimated_label_width = avg_label_length * 12  # roughly 12 points per character
+        
+        # Calculate how many labels can fit without overlap
+        if estimated_label_width > 0:
+            max_labels = max(1, int(axis_width_points / (estimated_label_width * 1.3)))  # 1.2 for spacing
+            
+            if len(labels) > max_labels:
+                # Calculate step to show evenly distributed labels
+                step = max(1, len(labels) // max_labels)
+                
+                # Hide labels that would cause overlap
+                for i, label in enumerate(labels):
+                    if i % step != 0:
+                        label.set_visible(False)
+                
+                debug_print(f"DEBUG: Prevented x-label overlap - showing every {step} labels ({max_labels} total)")
+            else:
+                debug_print(f"DEBUG: No x-label overlap detected - showing all {len(labels)} labels")
+    except Exception as e:
+        debug_print(f"DEBUG: Error in prevent_x_label_overlap: {e}")
+        # If anything goes wrong, just leave labels as they are
+        pass
+
 def clean_presentation_tables(presentation):
     """
     Clean all tables in the given PowerPoint presentation by:
@@ -765,7 +883,7 @@ def process_sheet(data, headers_row=3, data_start_row=4):
     Returns:
         tuple: (processed_data, table_data)
     """
-    data = remove_empty_columns(data)
+    # data = remove_empty_columns(data) - for now, let's not remove empty columns for non-plotting sheets.
     headers = data.iloc[headers_row, :].tolist()
     table_data = data.iloc[data_start_row:, :]
     table_data = table_data.replace(0, np.nan)
