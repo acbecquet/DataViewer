@@ -8,6 +8,7 @@ import sys
 import os
 import json
 from pathlib import Path
+from utils import show_success_message
 
 # Import the viscosity calculator functionality
 from viscosity_calculator import ViscosityCalculator
@@ -160,7 +161,7 @@ class ViscosityGUI:
         """Save the terpene formulation database."""
         try:
             self.calculator.save_formulation_database()
-            messagebox.showinfo("Success", "Database saved successfully.")
+            show_success_message("Success", "Database saved successfully.", self.gui.root)
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save database: {str(e)}")
     
@@ -185,7 +186,7 @@ class ViscosityGUI:
     
     def show_about(self):
         """Show the about dialog."""
-        messagebox.showinfo("About", "Viscosity Calculator\nVersion 1.0\nDeveloped by Charlie Becquet")
+        show_success_message("About", "Viscosity Calculator\nVersion 1.0\nDeveloped by Charlie Becquet", self.gui.root)
     
     def show_help(self):
         """Show the help dialog."""
@@ -197,7 +198,7 @@ class ViscosityGUI:
             "Measure Tab: Record viscosity measurements at different temperatures.\n\n"
             "Use the Models menu to train machine learning models on your data."
         )
-        messagebox.showinfo("Help", help_text)
+        show_success_message("Help", help_text, self.gui.root)
     
     def center_window(self, window, width=None, height=None):
         """Center a window on the screen."""

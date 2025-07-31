@@ -93,7 +93,7 @@ def lazy_import_viscosity_gui():
         return None
 
 # Import utilities after lazy imports
-from utils import FONT, clean_columns, get_save_path, is_standard_file, plotting_sheet_test, APP_BACKGROUND_COLOR, BUTTON_COLOR, PLOT_CHECKBOX_TITLE, clean_display_suffixes
+from utils import FONT, clean_columns, get_save_path, is_standard_file, plotting_sheet_test, APP_BACKGROUND_COLOR, BUTTON_COLOR, PLOT_CHECKBOX_TITLE, clean_display_suffixes, show_success_message
 from resource_utils import get_resource_path
 from update_checker import UpdateChecker
 
@@ -346,7 +346,7 @@ Would you like to download and install the update?"""
             return
         
         try:
-            messagebox.showinfo("Downloading", "Downloading update... This may take a moment.")
+            show_success_message("Downloading", "Downloading update... This may take a moment.", self.root)
             
             installer_path = self.update_checker.download_update(
                 update_info['download_url'],
@@ -837,7 +837,7 @@ Would you like to download and install the update?"""
     def show_sample_comparison(self):
         """Show the sample comparison window."""
         if not self.all_filtered_sheets:
-            messagebox.showinfo("Info", "No files are currently loaded. Please load some data files first.")
+            show_success_message("Info", "No files are currently loaded. Please load some data files first.", self.root)
             return
     
         from file_selection_dialog import FileSelectionDialog
@@ -869,11 +869,11 @@ Would you like to download and install the update?"""
 
     def show_help(self):
         """Display help dialog."""
-        messagebox.showinfo("Help", "This program is designed to be used with excel data according to the SDR Standardized Testing Template.\n \nClick 'Generate Test Report' to create an excel report of a single test, or click 'Generate Full Report' to generate both an excel file and powerpoint file of all the contents within the file.")
+        show_success_message("Help", "This program is designed to be used with excel data according to the SDR Standardized Testing Template.\n \nClick 'Generate Test Report' to create an excel report of a single test, or click 'Generate Full Report' to generate both an excel file and powerpoint file of all the contents within the file.", self.root)
 
     def show_about(self) -> None:
         """Display about dialog."""
-        messagebox.showinfo("About", "SDR DataViewer Beta Version 3.0\nDeveloped by Charlie Becquet")
+        show_success_message("About", "SDR DataViewer Beta Version 3.0\nDeveloped by Charlie Becquet", self.root)
 
     def set_app_colors(self) -> None:
         """Set consistent color theme and fonts for the application."""
@@ -1139,7 +1139,7 @@ Would you like to download and install the update?"""
             modified_files = self.get_modified_files()
         
             if not modified_files:
-                messagebox.showinfo("No Changes", "No files have been modified. Nothing to update.")
+                show_success_message("No Changes", "No files have been modified. Nothing to update.", self.root)
                 return
         
             # Show confirmation dialog
@@ -1193,7 +1193,7 @@ Would you like to download and install the update?"""
             else:
                 # Complete success
                 message = f"Successfully updated {successful_updates} file(s) in the database."
-                messagebox.showinfo("Database Updated", message)
+                show_success_message("Database Updated", message, self.root)
             
                 # Clear modification flags
                 self.clear_modified_flags()
@@ -1726,7 +1726,7 @@ Would you like to download and install the update?"""
             self.progress_dialog.hide_progress_bar()
 
             if success:  
-                messagebox.showinfo("Success", "Full report saved successfully.")
+                show_success_message("Success", "Full report saved successfully.", self.root)
 
             self.root.update_idletasks() 
 

@@ -42,7 +42,8 @@ from utils import (
     FONT,
     APP_BACKGROUND_COLOR,
     load_excel_file_with_formulas,
-    debug_print
+    debug_print,
+    show_success_message
 )
 from database_manager import DatabaseManager
 
@@ -233,7 +234,7 @@ class FileManager:
             filetypes=[("Excel files", "*.xlsx *.xls")]
         )
         if not file_paths:
-            messagebox.showinfo("Info", "No files were selected")
+            show_success_message("Info", "No files were selected", self.gui.root)
             return
 
         self.gui.progress_dialog.show_progress_bar("Loading files...")
@@ -410,9 +411,9 @@ class FileManager:
             # Hide progress dialog
             self.gui.progress_dialog.hide_progress_bar()
     
-    def load_from_database(self, file_id=None, show_success_message=True, batch_operation=False):
+    def load_from_database(self, file_id=None, show_success_msg=True, batch_operation=False):
         """Load a file from the database."""
-        debug_print(f"DEBUG: load_from_database called with file_id={file_id}, show_success_message={show_success_message}, batch_operation={batch_operation}")
+        debug_print(f"DEBUG: load_from_database called with file_id={file_id}, show_success_message={show_success_msg}, batch_operation={batch_operation}")
         try:
             # Only show progress dialog if not part of a batch operation
             if not batch_operation:
@@ -423,7 +424,7 @@ class FileManager:
                 # Show a dialog to select from available files
                 file_list = self.db_manager.list_files()
                 if not file_list:
-                    messagebox.showinfo("Info", "No files found in the database.")
+                    show_success_message("Info", "No files found in the database.", self.gui.root)
                     return False
         
                 # Create a simple dialog to choose a file
@@ -485,7 +486,7 @@ class FileManager:
             # Load the file from the database
             file_data = self.db_manager.get_file_by_id(file_id)
             if not file_data:
-                if show_success_message:  # Only show error if not in batch mode
+                if show_success_msg:  # Only show error if not in batch mode
                     messagebox.showerror("Error", f"File with ID {file_id} not found in the database.")
                 return False
             raw_database_filename = file_data['filename']
@@ -566,16 +567,16 @@ class FileManager:
                 debug_print(f"DEBUG: Stored database filename in metadata: {raw_database_filename}")
 
             # Show the success message only if requested and not in batch mode
-            if show_success_message and not batch_operation:
+            if show_success_msg and not batch_operation:
                 if total_files > 1:
-                    messagebox.showinfo("Success", f"VAP3 file loaded successfully: {display_filename}\nTotal files loaded: {total_files}")
+                    show_success_message("Success", f"VAP3 file loaded successfully: {display_filename}\nTotal files loaded: {total_files}", self.gui.root)
                 else:
-                    messagebox.showinfo("Success", f"VAP3 file loaded successfully: {display_filename}")
+                    show_success_message("Success", f"VAP3 file loaded successfully: {display_filename}", self.gui.root)
     
             return True
     
         except Exception as e:
-            if show_success_message:  # Only show error dialog if not in batch mode
+            if show_success_msg:  # Only show error dialog if not in batch mode
                 messagebox.showerror("Error", f"Error loading file from database: {e}")
             debug_print(f"ERROR: Error loading file from database: {e}")
             traceback.print_exc()
@@ -611,7 +612,7 @@ class FileManager:
                     debug_print(f"DEBUG: Loading file {i + 1}/{total_files} (ID: {file_id})")
                 
                     # Load this file (suppress individual success messages and progress dialogs)
-                    success = self.load_from_database(file_id, show_success_message=False, batch_operation=True)
+                    success = self.load_from_database(file_id, show_success_msg=False, batch_operation=True)
                 
                     if success:
                         # Get the file info for the success message
@@ -680,7 +681,7 @@ class FileManager:
                 
                     message += f"\n\nTotal files now loaded: {len(self.gui.all_filtered_sheets)}"
             
-                messagebox.showinfo("Success", message)
+                show_success_message("Success", message, self.gui.root)
         
         except Exception as e:
             messagebox.showerror("Error", f"Error during batch loading: {e}")
@@ -1209,7 +1210,7 @@ class FileManager:
             title="Select Excel File(s)", filetypes=[("Excel files", "*.xlsx *.xls")]
         )
         if not file_paths:
-            messagebox.showinfo("Info", "No files were selected")
+            show_success_message("Info", "No files were selected", self.gui.root)
             return
 
         for file_path in file_paths:
@@ -1223,7 +1224,7 @@ class FileManager:
         last_file = self.gui.all_filtered_sheets[-1]
         self.set_active_file(last_file["file_name"])
         self.update_ui_for_current_file()
-        messagebox.showinfo("Success", f"Data from {len(file_paths)} file(s) added successfully.")
+        show_success_message("Success", f"Data from {len(file_paths)} file(s) added successfully.", self.gui.root)
 
     def ask_open_file(self) -> str:
         """Prompt the user to select an Excel file."""
@@ -1421,7 +1422,7 @@ class FileManager:
                     traceback.print_exc()
                     messagebox.showerror("Error", f"Failed to read modified Excel file: {e}")
             elif file_changed and not os.path.exists(temp_file):
-                messagebox.showinfo("Information", "Excel file was modified but appears to have been moved or renamed. Changes could not be imported.")
+                show_success_message("Information", "Excel file was modified but appears to have been moved or renamed. Changes could not be imported.", self.gui.root)
             else:
                 info_label = ttk.Label(
                     self.gui.root, 
@@ -2225,7 +2226,7 @@ class FileManager:
             self.root.update_idletasks()
         
             if success:
-                messagebox.showinfo("Success", f"Data saved successfully to {filepath}")
+                show_success_message("Success", f"Data saved successfully to {filepath}", self.gui.root)
             else:
                 messagebox.showerror("Error", "Failed to save data")
             
@@ -2333,7 +2334,7 @@ class FileManager:
     
             # Only show success message if this wasn't called from load_from_database
             if not display_name:
-                messagebox.showinfo("Success", f"VAP3 file loaded successfully: {current_file_name}")
+                show_success_message("Success", f"VAP3 file loaded successfully: {current_file_name}", self.gui.root)
             else:
                 debug_print(f"DEBUG: VAP3 file loaded with display name: {current_file_name}")
             

@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import statistics
 from openpyxl.styles import PatternFill
-from utils import FONT, debug_print
+from utils import FONT, debug_print, show_success_message
 import threading
 import subprocess
 
@@ -600,7 +600,7 @@ class DataCollectionWindow:
                 csv_path = os.path.join(directory, csv_filename)
                 df.to_csv(csv_path, index=False)
                 
-            messagebox.showinfo("Export Complete", f"Exported {self.num_samples} CSV files to {directory}")
+            show_success_message("Export Complete", f"Exported {self.num_samples} CSV files to {directory}", self.gui.root)
             
         except Exception as e:
             messagebox.showerror("Export Error", f"Failed to export CSV files: {e}")
@@ -931,7 +931,7 @@ class DataCollectionWindow:
         
         self.update_stats_panel()
         self.mark_unsaved_changes()
-        messagebox.showinfo("Recalculation Complete", "TPM values have been recalculated for all samples.")
+        show_success_message("Recalculation Complete", "TPM values have been recalculated for all samples.", self.gui.root)
     
     def go_to_sample_dialog(self):
         """Show dialog to jump to a specific sample."""
@@ -1045,7 +1045,7 @@ Features:
 
 Developed by Charlie Becquet
         """
-        messagebox.showinfo("About Data Collection", about_text)
+        show_success_message("About Data Collection", about_text, self.gui.root)
     
     def _save_to_excel(self):
         """Save data to the appropriate file format."""
@@ -2570,7 +2570,7 @@ Developed by Charlie Becquet
         
             # Show confirmation if requested (not for auto-save)
             if show_confirmation and not auto_save and not exit_after:
-                messagebox.showinfo("Save Complete", "Data saved successfully.")
+                show_success_message("Save Complete", "Data saved successfully.", self.gui.root)
         
             # Clean up auto-save flag
             if auto_save:

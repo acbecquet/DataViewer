@@ -12,7 +12,7 @@ from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
 from datetime import datetime
 import processing
-from utils import get_save_path, plotting_sheet_test, get_plot_sheet_names, debug_print
+from utils import get_save_path, plotting_sheet_test, get_plot_sheet_names, debug_print, show_success_message
 from resource_utils import get_resource_path
 from tkinter import messagebox  # For showing info/errors
 
@@ -175,7 +175,7 @@ class ReportGenerator:
                                                   processed_data, full_sample_data, plot_options)
 
             self.cleanup_images(images_to_delete)
-            messagebox.showinfo("Success", f"Test report saved successfully to:\nExcel: {save_path}\nPowerPoint: {ppt_save_path}")
+            show_success_message("Success", f"Test report saved successfully to:\nExcel: {save_path}\nPowerPoint: {ppt_save_path}", self.gui.root)
         except Exception as e:
             debug_print(f"DEBUG: Test report generation error: {e}")
             import traceback

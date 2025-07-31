@@ -1,4 +1,4 @@
-"""
+﻿"""
 Utility module for the DataViewer Application. Developed by Charlie Becquet.
 Provides a Tkinter-based interface for interacting with Excel data, generating reports,
 and plotting graphs.
@@ -699,3 +699,71 @@ def clean_display_suffixes(data):
     return data
 
 
+def show_success_message(title, message, parent=None):
+    """Show a success message without system sound."""
+    import tkinter as tk
+    from tkinter import ttk
+    
+    # Create a custom dialog
+    success_dialog = tk.Toplevel(parent) if parent else tk.Toplevel()
+    success_dialog.title(title)
+    success_dialog.resizable(False, False)
+    success_dialog.transient(parent) if parent else None
+    success_dialog.grab_set()
+    
+    # Hide initially to prevent stutter
+    success_dialog.withdraw()
+    
+    # Create main frame
+    main_frame = ttk.Frame(success_dialog, padding="20")
+    main_frame.pack(fill="both", expand=True)
+    
+    # Success icon (using Unicode checkmark)
+    icon_label = ttk.Label(main_frame, text="✓", font=("Arial", 24), foreground="green")
+    icon_label.pack(pady=(0, 10))
+    
+    # Title
+    title_label = ttk.Label(main_frame, text=title, font=("Arial", 12, "bold"))
+    title_label.pack(pady=(0, 5))
+    
+    # Message
+    message_label = ttk.Label(main_frame, text=message, font=("Arial", 10), 
+                             wraplength=400, justify="center")
+    message_label.pack(pady=(0, 15))
+    
+    # OK button
+    def on_ok():
+        success_dialog.destroy()
+    
+    ok_button = ttk.Button(main_frame, text="OK", command=on_ok)
+    ok_button.pack()
+    
+    # Bind Enter key to OK
+    success_dialog.bind('<Return>', lambda e: on_ok())
+    success_dialog.bind('<Escape>', lambda e: on_ok())
+    
+    # Center and show the dialog
+    success_dialog.update_idletasks()
+    width = success_dialog.winfo_reqwidth()
+    height = success_dialog.winfo_reqheight()
+    
+    if parent:
+        # Center relative to parent
+        parent_x = parent.winfo_rootx()
+        parent_y = parent.winfo_rooty()
+        parent_width = parent.winfo_width()
+        parent_height = parent.winfo_height()
+        x = parent_x + (parent_width - width) // 2
+        y = parent_y + (parent_height - height) // 2
+    else:
+        # Center on screen
+        screen_width = success_dialog.winfo_screenwidth()
+        screen_height = success_dialog.winfo_screenheight()
+        x = (screen_width - width) // 2
+        y = (screen_height - height) // 2
+    
+    success_dialog.geometry(f"{width}x{height}+{x}+{y}")
+    success_dialog.deiconify()
+    
+    # Focus the OK button
+    ok_button.focus_set()

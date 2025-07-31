@@ -10,7 +10,7 @@ import pandas as pd
 import numpy as np
 import re
 from typing import Dict, List, Any, Tuple
-from utils import debug_print, FONT
+from utils import debug_print, FONT, show_success_message
 import processing
 import os
 import json
@@ -52,7 +52,7 @@ class SampleComparisonWindow:
     def show(self):
         """Show the comparison window."""
         if not self.selected_files:
-            messagebox.showinfo("Info", "No files are selected for comparison.")
+            show_success_message("Info", "No files are selected for comparison.", self.gui.root)
             debug_print("DEBUG: No files selected for comparison")
             return
         
@@ -291,7 +291,7 @@ class SampleComparisonWindow:
 
         # Refresh analysis
         self.perform_analysis()
-        messagebox.showinfo("Success", success_message)
+        show_success_message("Success", success_message, self.gui.root)
     
     def create_config_tab(self):
         """Create the configuration tab for customizing keywords and groupings."""
@@ -454,7 +454,7 @@ class SampleComparisonWindow:
         
             # Refresh analysis
             self.perform_analysis()
-            messagebox.showinfo("Reset Complete", success_message)
+            show_success_message("Reset Complete", success_message, self.gui.root)
         
             debug_print("DEBUG: Configuration reset to defaults")
         
@@ -1067,7 +1067,7 @@ class SampleComparisonWindow:
             df = pd.DataFrame(export_data)
             df.to_csv(file_path, index=False)
         
-            messagebox.showinfo("Success", f"Results exported successfully to:\n{file_path}")
+            show_success_message("Success", f"Results exported successfully to:\n{file_path}", self.gui.root)
         
         except Exception as e:
             messagebox.showerror("Error", f"Failed to export results:\n{str(e)}")
@@ -1081,9 +1081,9 @@ class SampleComparisonWindow:
 
         selected_items = self.summary_tree.selection()
         if not selected_items:
-            messagebox.showinfo("Info", "Please select one or more test groups from the summary table.\n\n"
+            show_success_message("Info", "Please select one or more test groups from the summary table.\n\n"
                                       "Use Ctrl+Click to select multiple individual items\n"
-                                      "Use Shift+Click to select a range of items")
+                                      "Use Shift+Click to select a range of items", self.gui.root)
             debug_print("DEBUG: No test groups selected for plotting")
             return
 
@@ -1140,7 +1140,7 @@ class SampleComparisonWindow:
                         break
 
         if not combined_plot_data['dates']:
-            messagebox.showinfo("Info", f"No time-series data found for the selected combinations")
+            show_success_message("Info", f"No time-series data found for the selected combinations", self.gui.root)
             return
 
         # Create plot title
@@ -1947,7 +1947,7 @@ class SampleComparisonWindow:
             )
             if file_path:
                 fig.savefig(file_path, dpi=300, bbox_inches='tight', facecolor='white', edgecolor='none')
-                messagebox.showinfo("Success", f"Multi-selection plot saved to {file_path}")
+                show_success_message("Success", f"Multi-selection plot saved to {file_path}", self.gui.root)
 
         # Enhanced statistics button
         def show_multi_selection_statistics():

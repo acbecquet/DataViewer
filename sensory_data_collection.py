@@ -14,7 +14,7 @@ import math
 from datetime import datetime
 import json
 import os
-from utils import APP_BACKGROUND_COLOR, BUTTON_COLOR, FONT, debug_print
+from utils import APP_BACKGROUND_COLOR, BUTTON_COLOR, FONT, debug_print, show_success_message
 
 from sensory_ml_training import SensoryMLTrainer, SensoryAIProcessor
 
@@ -319,8 +319,8 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         )
     
         if not filenames or len(filenames) < 2:
-            messagebox.showinfo("Insufficient Files", 
-                              "Please select at least 2 session files to merge.")
+            show_success_message("Insufficient Files", 
+                              "Please select at least 2 session files to merge.", self.gui.root)
             return
     
         debug_print(f"DEBUG: Selected {len(filenames)} files for merging")
@@ -553,9 +553,9 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         
             if success:
                 merge_window.destroy()
-                messagebox.showinfo("Merge Complete", 
+                show_success_message("Merge Complete", 
                                   f"Successfully merged {len(selected_sessions)} sessions!\n"
-                                  f"New session: {new_session_name}")
+                                  f"New session: {new_session_name}", self.gui.root)
         
         def select_all():
             for session_info in session_vars.values():
@@ -1499,7 +1499,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         self.bring_to_front()
     
         debug_print("Switched to comparison mode - showing averaged data across users")
-        messagebox.showinfo("Comparison Mode", "Now showing averaged data across multiple users.\nSensory evaluation is disabled in this mode.")
+        show_success_message("Comparison Mode", "Now showing averaged data across multiple users.\nSensory evaluation is disabled in this mode.", self.gui.root)
 
     def switch_to_collection_mode(self):
         """Switch to collection mode - normal single user operation."""
@@ -1525,7 +1525,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         self.bring_to_front()
     
         debug_print("Switched to collection mode - showing single user data")
-        messagebox.showinfo("Collection Mode", "Now showing single user data collection mode.\nSensory evaluation is enabled.")
+        show_success_message("Collection Mode", "Now showing single user data collection mode.\nSensory evaluation is enabled.", self.gui.root)
 
     def update_widget_backgrounds(self, parent, color):
         """Recursively update background colors for tkinter widgets."""
@@ -1652,7 +1652,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
     
         if successful_loads >= 2:
             debug_print(f"DEBUG: Successfully loaded {successful_loads} sessions for comparison")
-            messagebox.showinfo("Success", f"Loaded {successful_loads} sessions for comparison.")
+            show_success_message("Success", f"Loaded {successful_loads} sessions for comparison.", self.gui.root)
             return True
         else:
             messagebox.showerror("Error", "Failed to load enough sessions for comparison (minimum 2 required).")
@@ -1796,7 +1796,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             self.update_plot()
         
             debug_print(f"Renamed sample '{current_sample}' to '{new_name}'")
-            messagebox.showinfo("Success", f"Sample renamed to '{new_name}'")
+            show_success_message("Success", f"Sample renamed to '{new_name}'", self.gui.root)
 
     def batch_rename_samples(self):
         """Rename multiple samples at once."""
@@ -1932,7 +1932,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             self.update_plot()
         
             rename_window.destroy()
-            messagebox.showinfo("Success", f"Successfully renamed {len(original_names)} samples.")
+            show_success_message("Success", f"Successfully renamed {len(original_names)} samples.", self.gui.root)
     
         ttk.Button(button_frame, text="Apply Changes", command=apply_changes).pack(side='left', padx=5)
         ttk.Button(button_frame, text="Cancel", command=rename_window.destroy).pack(side='right', padx=5)
@@ -2249,7 +2249,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
                                facecolor='white', edgecolor='none')
             
                 debug_print(f"DEBUG: Plot saved successfully to {filename}")
-                messagebox.showinfo("Success", f"Plot saved successfully as {os.path.basename(filename)}")
+                show_success_message("Success", f"Plot saved successfully as {os.path.basename(filename)}", self.gui.root)
             
         except Exception as e:
             debug_print(f"DEBUG: Error saving plot: {e}")
@@ -2327,7 +2327,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
                 plt.close(fig)
             
                 debug_print(f"DEBUG: Table with comments saved successfully to {filename}")
-                messagebox.showinfo("Success", f"Table saved successfully as {os.path.basename(filename)}")
+                show_success_message("Success", f"Table saved successfully as {os.path.basename(filename)}", self.gui.root)
             
         except Exception as e:
             debug_print(f"DEBUG: Error saving table: {e}")
@@ -2540,7 +2540,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             # Save the presentation
             prs.save(filename)
             debug_print(f"DEBUG: PowerPoint saved successfully to {filename}")
-            messagebox.showinfo("Success", f"PowerPoint report saved successfully as {os.path.basename(filename)}")
+            show_success_message("Success", f"PowerPoint report saved successfully as {os.path.basename(filename)}", self.gui.root)
     
         except Exception as e:
             debug_print(f"DEBUG: Error generating PowerPoint report: {e}")
@@ -2569,7 +2569,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         
         self.update_plot()
         debug_print(f"Saved data for sample: {current_sample}")
-        messagebox.showinfo("Success", f"Data saved for {current_sample}")
+        show_success_message("Success", f"Data saved for {current_sample}", self.gui.root)
         
     def clear_form(self):
         """Clear all form fields."""
@@ -2657,9 +2657,9 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
                     json.dump(session_data, f, indent=2)
                 
                 debug_print(f"DEBUG: Saved session {self.current_session_id} to {filename}")
-                messagebox.showinfo("Success", 
+                show_success_message("Success", 
                                   f"Session '{self.current_session_id}' saved to {os.path.basename(filename)}\n"
-                                  f"Saved {len(current_session['samples'])} samples")
+                                  f"Saved {len(current_session['samples'])} samples", self.gui.root)
                 debug_print(f"Saved sensory session to: {filename}")
             
             except Exception as e:
@@ -2768,7 +2768,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             success_msg += "\nUse session selector to switch between sessions."
 
             debug_print(f"DEBUG: Successfully loaded {successful_loads} sessions")
-            messagebox.showinfo("Sessions Loaded", success_msg)
+            show_success_message("Sessions Loaded", success_msg, self.gui.root)
 
         # Report any failures
         if failed_loads:
@@ -2825,7 +2825,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
                     plot_filename = filename.replace('.xlsx', '_spider_plot.png')
                     self.fig.savefig(plot_filename, dpi=300, bbox_inches='tight')
                     
-                messagebox.showinfo("Success", f"Data exported to {filename}\nSpider plot saved as {plot_filename}")
+                show_success_message("Success", f"Data exported to {filename}\nSpider plot saved as {plot_filename}", self.gui.root)
                 debug_print(f"Exported sensory data to: {filename}")
                 
             except Exception as e:
@@ -2936,7 +2936,7 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             debug_print(f"DEBUG: Creating new session: {session_name}")
             self.create_new_session(session_name)
             self.session_var.set(session_name)
-            messagebox.showinfo("Success", f"Created new session: {session_name}")
+            show_success_message("Success", f"Created new session: {session_name}", self.gui.root)
 
     def delete_current_session(self):
         """Delete the current session."""
@@ -2965,13 +2965,13 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             self.update_session_combo()
         
             debug_print(f"DEBUG: Session {session_to_delete} deleted successfully")
-            messagebox.showinfo("Success", f"Session '{session_to_delete}' deleted.")
+            show_success_message("Success", f"Session '{session_to_delete}' deleted.", self.gui.root)
 
     def show_combine_sessions_dialog(self):
         """Show dialog to select and combine multiple sessions."""
         if len(self.sessions) < 2:
-            messagebox.showinfo("Insufficient Sessions", 
-                              "Need at least 2 sessions to combine.")
+            show_success_message("Insufficient Sessions", 
+                              "Need at least 2 sessions to combine.", self.gui.root)
             return
     
         # Create dialog window
@@ -3072,9 +3072,9 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             debug_print(f"DEBUG: Successfully combined {len(selected_sessions)} sessions")
             debug_print(f"DEBUG: New session has {total_sample_count} samples")
         
-            messagebox.showinfo("Success", 
+            show_success_message("Success", 
                               f"Combined {len(selected_sessions)} sessions into '{new_session_name}'!\n"
-                              f"Total samples: {total_sample_count}")
+                              f"Total samples: {total_sample_count}", self.gui.root)
     
         ttk.Button(button_frame, text="Combine Sessions", 
                    command=combine_selected_sessions).pack(side='left', padx=5)

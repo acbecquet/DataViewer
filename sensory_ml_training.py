@@ -10,8 +10,7 @@ import os
 import json
 from datetime import datetime
 import numpy as np
-from utils import debug_print
-
+from utils import debug_print, show_success_message
 
 class SensoryMLTrainer:
     """Handles all ML training and AI processing functionality."""
@@ -131,7 +130,7 @@ class SensoryMLTrainer:
                 else:
                     dialog_msg += "✓ Data is ready for enhanced model training!"
                 
-                messagebox.showinfo("Enhanced Data Analysis", dialog_msg)
+                show_success_message("Enhanced Data Analysis", dialog_msg, self.gui.root)
             else:
                 messagebox.showwarning("No Training Data", 
                                      "No enhanced training images found.\n"
@@ -250,7 +249,7 @@ class SensoryMLTrainer:
                                  f"• Production-ready accuracy\n\n"
                                  f"Next: Test Enhanced Model")
                 
-                    messagebox.showinfo("Enhanced Training Complete", success_msg)
+                    show_success_message("Enhanced Training Complete", success_msg, self.gui.root)
                 
                     print("="*80)
                     print("ENHANCED TRAINING COMPLETED SUCCESSFULLY")
@@ -432,7 +431,7 @@ class SensoryMLTrainer:
                              f"Recommendation:\n{recommendation}\n\n"
                              f"Check console for detailed per-class results.")
             
-                messagebox.showinfo("Enhanced Model Test Complete", result_msg)
+                show_success_message("Enhanced Model Test Complete", result_msg, self.gui.root)
             else:
                 messagebox.showwarning("No Test Data", 
                                      "No test data available.\n"
@@ -445,7 +444,7 @@ class SensoryMLTrainer:
 
     def validate_enhanced_performance(self):
         """Comprehensive enhanced model validation."""
-        messagebox.showinfo("Enhanced Validation", 
+        show_success_message("Enhanced Validation", 
                           "Comprehensive Enhanced Model Validation\n\n"
                           "Features to be implemented:\n\n"
                           "• Cross-validation analysis\n"
@@ -455,7 +454,7 @@ class SensoryMLTrainer:
                           "• Model uncertainty quantification\n"
                           "• Production readiness assessment\n\n"
                           "This advanced validation suite will be available\n"
-                          "in the next update for production deployment.")
+                          "in the next update for production deployment.", self.gui.root)
 
     def update_processor_config(self):
         """Update processor configuration with enhanced settings."""
@@ -486,18 +485,18 @@ class SensoryMLTrainer:
                             updater = MLProcessorUpdater()
                             updater.update_ml_processor_boundaries(config_file)
                         
-                            messagebox.showinfo("Enhanced Update Complete",
+                            show_success_message("Enhanced Update Complete",
                                               f"Enhanced processor updated!\n\n"
                                               f"Configuration: {os.path.basename(config_file)}\n"
                                               f"Backup: {updater.backup_path}\n\n"
-                                              f"Test the updated enhanced processor.")
+                                              f"Test the updated enhanced processor.", self.gui.root)
                 else:
-                    messagebox.showinfo("No Enhanced Configs", 
+                    show_success_message("No Enhanced Configs", 
                                       "No enhanced configurations found.\n"
-                                      "Use enhanced extraction tools first.")
+                                      "Use enhanced extraction tools first.", self.gui.root)
             else:
-                messagebox.showinfo("No Analysis Directory", 
-                                  "Enhanced analysis directory not found.")
+                show_success_message("No Analysis Directory", 
+                                  "Enhanced analysis directory not found.", self.gui.root)
             
         except Exception as e:
             messagebox.showerror("Update Error", f"Failed to update enhanced processor: {e}")
@@ -825,9 +824,9 @@ class SensoryAIProcessor:
                         if hasattr(self.parent, 'session_var'):
                             self.parent.session_var.set(session_id)
                         
-                        messagebox.showinfo("Success", 
+                        show_success_message("Success", 
                                           f"Data loaded into new session: {session_id}\n"
-                                          f"Loaded {len(final_data)} samples")
+                                          f"Loaded {len(final_data)} samples", self.gui.root)
                         preview_window.destroy()
                     else:
                         print("DEBUG: switch_to_session method not found")
@@ -1066,11 +1065,11 @@ class SensoryAIProcessor:
                     total_samples = sum(len(data['extracted_data']) for data in reviewed_results.values() 
                                       if data['status'] == 'success')
                 
-                    messagebox.showinfo("Review Complete", 
+                    show_success_message("Review Complete", 
                                       f"Successfully loaded reviewed data!\n"
                                       f"Total sessions: {len(reviewed_results)}\n"
                                       f"Total samples: {total_samples}\n"
-                                      f"Use the session selector to switch between sessions.")
+                                      f"Use the session selector to switch between sessions.", self.gui.root)
                 else:
                     print("DEBUG: No reviewed results found")
                     messagebox.showwarning("No Data", "No reviewed data to load.")
@@ -1171,10 +1170,10 @@ class SensoryAIProcessor:
         print(f"DEBUG: Loaded {loaded_sessions} sessions with total {loaded_samples} samples")
 
         if loaded_sessions > 0:
-            messagebox.showinfo("Batch Load Complete", 
+            show_success_message("Batch Load Complete", 
                               f"Loaded {loaded_sessions} sessions with {loaded_samples} total samples!\n"
                               f"Each image is now a separate session (max 4 samples each).\n"
-                              f"Use the session selector to switch between sessions.")
+                              f"Use the session selector to switch between sessions.", self.gui.root)
         else:
             messagebox.showwarning("No Data Loaded", 
                                  "No valid samples found in batch results.")
