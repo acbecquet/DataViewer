@@ -3129,7 +3129,7 @@ Developed by Charlie Becquet
         self.log("Control buttons created", "debug")
 
     def finish_edit(self, event=None):
-        """Finalize editing of a cell, update data and UI, and optionally navigate."""
+        """Finish editing and save the value."""
         if not self.editing or not hasattr(self, 'current_edit'):
             return
 
@@ -3148,13 +3148,24 @@ Developed by Charlie Becquet
         # Update internal data if changed
         if row_idx < len(self.data[sample_id][column_name]):
             old_value = self.data[sample_id][column_name][row_idx]
+            debug_print(f"DEBUG: finish_edit - old_value: '{old_value}', new_value: '{value}', column: {column_name}")
+        
             if old_value != value:
                 self.data[sample_id][column_name][row_idx] = value
                 self.mark_unsaved_changes()
 
-                # Auto-progression features
+                # Auto-progression features with conditional logic for after_weight
                 if column_name == "after_weight":
-                    self.auto_progress_weight(tree, sample_id, row_idx, value)
+                    # Only auto-progress if the old value was empty (new data entry)
+                    # Don't auto-progress if we're editing existing data
+                    old_value_empty = old_value in ["", None, 0] or (isinstance(old_value, str) and old_value.strip() == "")
+                    debug_print(f"DEBUG: after_weight change - old_value_empty: {old_value_empty}")
+                
+                    if old_value_empty:
+                        debug_print(f"DEBUG: Auto-progressing weight because old value was empty")
+                        self.auto_progress_weight(tree, sample_id, row_idx, value)
+                    else:
+                        debug_print(f"DEBUG: Skipping auto-progression because old value was not empty (editing existing data)")
                 elif column_name == "puffs":
                     self.auto_progress_puffs(tree, sample_id, row_idx, value)
 
@@ -3167,16 +3178,16 @@ Developed by Charlie Becquet
         # Live TPM calculation and display update
         if column_name in ["before_weight", "after_weight", "puffs"]:
             debug_print(f"DEBUG: Triggering live TPM calculation for {sample_id} due to {column_name} change")
-        
+    
             # Calculate TPM for this specific row and potentially affected rows
             self.calculate_tpm_for_row(sample_id, row_idx)
-        
+    
             # Update the entire treeview to reflect TPM changes
             self.update_treeview(tree, sample_id)
-        
+    
             # Update stats panel
             self.update_stats_panel()
-        
+    
             debug_print(f"DEBUG: Live TPM update completed for {sample_id}")
 
         # Finish edit mode before navigating
