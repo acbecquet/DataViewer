@@ -540,42 +540,39 @@ class DataCollectionWindow:
         """Create the data collection UI with a cleaner structure."""
         # Configure window
         self.window.configure(background='SystemButtonFace')
-    
+
         # Create a main frame with padding
         main_frame = ttk.Frame(self.window, padding=10)
         main_frame.pack(fill="both", expand=True)
-    
+
         # Create header section
         self.create_header_section(main_frame)
-    
+
         # Create SOP section
         self.create_sop_section(main_frame)
-    
+
         # Create main content area with horizontal split
         content_frame = ttk.PanedWindow(main_frame, orient="horizontal")
         content_frame.pack(fill="both", expand=True)
-    
+
         # Create data entry area (left side)
         data_frame = ttk.Frame(content_frame)
         content_frame.add(data_frame, weight=3)  # 75% width
-    
+
         # Create stats panel (right side)
         self.stats_frame = ttk.Frame(content_frame)
         content_frame.add(self.stats_frame, weight=1)  # 25% width
-    
+
         # Create notebook with sample tabs
         self.notebook = ttk.Notebook(data_frame)
-        self.notebook.pack(fill="both", expand=True)
-    
+        self.notebook.pack(fill="both", expand=True, pady=(0, 10))  # Add bottom padding
+
         # Create sample tabs
         self.create_sample_tabs()
-    
+
         # Create stats panel
         self.create_tpm_stats_panel()
-    
-        # Create control buttons at bottom
-        self.create_control_buttons(main_frame)
-    
+
         # Bind notebook tab change event
         self.notebook.bind("<<NotebookTabChanged>>", self.update_stats_panel)
    
@@ -1032,53 +1029,77 @@ class DataCollectionWindow:
     def add_row(self):
         """Add a new row to all samples."""
         debug_print("DEBUG: Adding new row to all samples")
-    
-        # Calculate the next puff count by finding the maximum across all samples
-        # Convert puff values to integers before finding max
-        max_puffs = []
-        for i in range(self.num_samples):
-            sample_id = f"Sample {i+1}"
-            # Convert non-empty puff values to integers
-            sample_puffs = []
-            for puff_val in self.data[sample_id]["puffs"]:
-                if puff_val and str(puff_val).strip():  # Check if not empty
-                    try:
-                        sample_puffs.append(int(float(puff_val)))  # Convert to int via float to handle string numbers
-                    except (ValueError, TypeError):
-                        debug_print(f"DEBUG: Skipping invalid puff value: {puff_val}")
-                        continue
-        
-            if sample_puffs:  # Only add if we found valid puff values
-                max_puffs.append(max(sample_puffs))
-    
-        # Calculate new puff value
-        if max_puffs:
-            new_puff = max(max_puffs) + self.puff_interval
-            debug_print(f"DEBUG: Calculated new_puff: {new_puff} (max across samples: {max(max_puffs)}, interval: {self.puff_interval})")
-        else:
-            new_puff = self.puff_interval  # Default if no existing puffs found
-            debug_print(f"DEBUG: No existing puffs found, using default: {new_puff}")
 
+        # Get the current sample instead of checking all samples
+        try:
+            current_tab_index = self.notebook.index(self.notebook.select())
+            current_sample_id = f"Sample {current_tab_index + 1}"
+            debug_print(f"DEBUG: Current sample for add row: {current_sample_id}")
+        except:
+            current_sample_id = "Sample 1"
+            current_tab_index = 0
+            debug_print("DEBUG: Defaulting to Sample 1 for add row")
+
+        # Find the last non-empty puff value in the current sample
+        last_puff = 0
+        for puff_val in reversed(self.data[current_sample_id]["puffs"]):
+            if puff_val and str(puff_val).strip():
+                try:
+                    last_puff = int(float(puff_val))
+                    debug_print(f"DEBUG: Found last puff in {current_sample_id}: {last_puff}")
+                    break
+                except (ValueError, TypeError):
+                    continue
+
+        # Calculate new puff value for current sample
+        new_puff = last_puff + self.puff_interval
+        debug_print(f"DEBUG: Calculated new_puff: {new_puff} (last puff: {last_puff}, interval: {self.puff_interval})")
+
+        # Add row to all samples, but use appropriate puff values for each
         for i in range(self.num_samples):
             sample_id = f"Sample {i + 1}"
-            self.data[sample_id]["puffs"].append(new_puff)
+        
+            if sample_id == current_sample_id:
+                # Use calculated puff for current sample
+                self.data[sample_id]["puffs"].append(new_puff)
+            else:
+                # For other samples, find their last puff and add interval
+                last_sample_puff = 0
+                for puff_val in reversed(self.data[sample_id]["puffs"]):
+                    if puff_val and str(puff_val).strip():
+                        try:
+                            last_sample_puff = int(float(puff_val))
+                            break
+                        except (ValueError, TypeError):
+                            continue
+            
+                other_sample_new_puff = last_sample_puff + self.puff_interval
+                self.data[sample_id]["puffs"].append(other_sample_new_puff)
+                debug_print(f"DEBUG: Added puff {other_sample_new_puff} to {sample_id}")
+
+            # Add empty values for other columns
             self.data[sample_id]["before_weight"].append("")
             self.data[sample_id]["after_weight"].append("")
             self.data[sample_id]["draw_pressure"].append("")
             self.data[sample_id]["smell"].append("")
             self.data[sample_id]["notes"].append("")
             self.data[sample_id]["tpm"].append(None)
-    
+
+            # Add resistance and clog for standard tests
+            if self.test_name not in ["User Test Simulation", "User Simulation Test"]:
+                self.data[sample_id]["resistance"].append("")
+                self.data[sample_id]["clog"].append("")
+        
             # Add chronography for User Test Simulation
             if self.test_name in ["User Test Simulation", "User Simulation Test"]:
                 self.data[sample_id]["chronography"].append("")
-    
+
             # Update treeview
             tree = self.sample_trees[i]
             self.update_treeview(tree, sample_id)
 
         self.mark_unsaved_changes()
-        debug_print(f"DEBUG: Added new row with puff count {new_puff}")
+        debug_print(f"DEBUG: Added new row with puff count {new_puff} to {current_sample_id}")
 
     def remove_last_row(self):
         """Remove the last row from all samples."""
@@ -3315,53 +3336,6 @@ Developed by Charlie Becquet
             self.sample_trees.append(tree)
     
         self.log(f"Created {self.num_samples} sample tabs", "debug")
-
-    def create_control_buttons(self, parent_frame):
-        """Create control buttons at the bottom of the window."""
-        button_frame = ttk.Frame(parent_frame, style='TFrame')
-        button_frame.pack(fill="x", pady=(10, 0))
-
-        # Left side controls
-        left_controls = ttk.Frame(button_frame, style='TFrame')
-        left_controls.pack(side="left", fill="x")
-
-        ttk.Label(left_controls, text="Puff Interval:", style='TLabel').pack(side="left")
-        self.puff_interval_var = tk.IntVar(value=self.puff_interval)
-    
-        # Define update function inline
-        def update_interval():
-            try:
-                self.puff_interval = self.puff_interval_var.get()
-                debug_print(f"DEBUG: Updated puff interval to {self.puff_interval}")
-            except:
-                messagebox.showerror("Error", "Invalid puff interval. Please enter a positive number.")
-                self.puff_interval_var.set(self.puff_interval)
-    
-        puff_spinbox = ttk.Spinbox(
-            left_controls, 
-            from_=1, 
-            to=100, 
-            textvariable=self.puff_interval_var, 
-            width=5,
-            command=update_interval 
-        )
-        puff_spinbox.pack(side="left", padx=5)
-
-        # Sample navigation
-        nav_frame = ttk.Frame(button_frame, style='TFrame')
-        nav_frame.pack(side="left", padx=20)
-
-        ttk.Button(nav_frame, text="← Prev Sample", command=self.go_to_previous_sample).pack(side="left")
-        ttk.Button(nav_frame, text="Next Sample →", command=self.go_to_next_sample).pack(side="left", padx=5)
-
-        # Right side controls - consolidated save methods
-        ttk.Button(button_frame, text="Quick Save", 
-                  command=lambda: self.save_data(show_confirmation=False)).pack(side="right", padx=(10, 0))
-        ttk.Button(button_frame, text="Save & Exit", 
-                  command=lambda: self.save_data(exit_after=True)).pack(side="right")
-        ttk.Button(button_frame, text="Cancel", command=self.on_cancel).pack(side="right", padx=(0, 10))
-
-        self.log("Control buttons created", "debug")
 
     def finish_edit(self, event=None):
         """Finish editing and save the value."""
