@@ -600,7 +600,7 @@ class DataCollectionWindow:
                 csv_path = os.path.join(directory, csv_filename)
                 df.to_csv(csv_path, index=False)
                 
-            show_success_message("Export Complete", f"Exported {self.num_samples} CSV files to {directory}", self.gui.root)
+            show_success_message("Export Complete", f"Exported {self.num_samples} CSV files to {directory}", self.window)
             
         except Exception as e:
             messagebox.showerror("Export Error", f"Failed to export CSV files: {e}")
@@ -931,7 +931,7 @@ class DataCollectionWindow:
         
         self.update_stats_panel()
         self.mark_unsaved_changes()
-        show_success_message("Recalculation Complete", "TPM values have been recalculated for all samples.", self.gui.root)
+        show_success_message("Recalculation Complete", "TPM values have been recalculated for all samples.", self.window)
     
     def go_to_sample_dialog(self):
         """Show dialog to jump to a specific sample."""
@@ -1045,7 +1045,7 @@ Features:
 
 Developed by Charlie Becquet
         """
-        show_success_message("About Data Collection", about_text, self.gui.root)
+        show_success_message("About Data Collection", about_text, self.window)
     
     def _save_to_excel(self):
         """Save data to the appropriate file format."""
@@ -2570,7 +2570,7 @@ Developed by Charlie Becquet
         
             # Show confirmation if requested (not for auto-save)
             if show_confirmation and not auto_save and not exit_after:
-                show_success_message("Save Complete", "Data saved successfully.", self.gui.root)
+                show_success_message("Save Complete", "Data saved successfully.", self.window)
         
             # Clean up auto-save flag
             if auto_save:

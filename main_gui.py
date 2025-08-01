@@ -1342,14 +1342,39 @@ Would you like to download and install the update?"""
     def open_sensory_data_collection(self):
         """Open the sensory data collection window."""
         from sensory_data_collection import SensoryDataCollectionWindow
+
+        # Store current window state before hiding
+        print("DEBUG: Storing main window state before opening sensory window")
+        current_state = self.root.state()
+        print(f"DEBUG: Current window state: {current_state}")
     
         self.root.withdraw()
-    
+
         def on_sensory_window_close():
+            print("DEBUG: Sensory window close callback triggered")
+            print("DEBUG: Restoring main window...")
+        
+            # Restore the main window
             self.root.deiconify()
+            print("DEBUG: Main window deiconified")
+        
+            # Restore fullscreen state 
+            self.root.state('zoomed')
+            print("DEBUG: Main window restored to fullscreen/zoomed state")
+        
+            # Restore app colors and styling
+            self.set_app_colors()
+            print("DEBUG: App colors and styling restored")
+        
+            # Bring window to front and focus
             self.root.lift()
             self.root.focus_set()
-    
+            print("DEBUG: Main window brought to front and focused")
+        
+            # Force a complete redraw of the interface
+            self.root.update_idletasks()
+            print("DEBUG: Main window redraw completed")
+
         sensory_window = SensoryDataCollectionWindow(self.root, close_callback=on_sensory_window_close)
         sensory_window.show()
 

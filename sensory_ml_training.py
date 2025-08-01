@@ -130,7 +130,7 @@ class SensoryMLTrainer:
                 else:
                     dialog_msg += "✓ Data is ready for enhanced model training!"
                 
-                show_success_message("Enhanced Data Analysis", dialog_msg, self.gui.root)
+                show_success_message("Enhanced Data Analysis", dialog_msg, self.parent.window)
             else:
                 messagebox.showwarning("No Training Data", 
                                      "No enhanced training images found.\n"
@@ -249,7 +249,7 @@ class SensoryMLTrainer:
                                  f"• Production-ready accuracy\n\n"
                                  f"Next: Test Enhanced Model")
                 
-                    show_success_message("Enhanced Training Complete", success_msg, self.gui.root)
+                    show_success_message("Enhanced Training Complete", success_msg, self.parent.window)
                 
                     print("="*80)
                     print("ENHANCED TRAINING COMPLETED SUCCESSFULLY")
@@ -431,7 +431,7 @@ class SensoryMLTrainer:
                              f"Recommendation:\n{recommendation}\n\n"
                              f"Check console for detailed per-class results.")
             
-                show_success_message("Enhanced Model Test Complete", result_msg, self.gui.root)
+                show_success_message("Enhanced Model Test Complete", result_msg, self.parent.window)
             else:
                 messagebox.showwarning("No Test Data", 
                                      "No test data available.\n"
@@ -454,7 +454,7 @@ class SensoryMLTrainer:
                           "• Model uncertainty quantification\n"
                           "• Production readiness assessment\n\n"
                           "This advanced validation suite will be available\n"
-                          "in the next update for production deployment.", self.gui.root)
+                          "in the next update for production deployment.", self.parent.window)
 
     def update_processor_config(self):
         """Update processor configuration with enhanced settings."""
@@ -489,14 +489,14 @@ class SensoryMLTrainer:
                                               f"Enhanced processor updated!\n\n"
                                               f"Configuration: {os.path.basename(config_file)}\n"
                                               f"Backup: {updater.backup_path}\n\n"
-                                              f"Test the updated enhanced processor.", self.gui.root)
+                                              f"Test the updated enhanced processor.", self.parent.window)
                 else:
                     show_success_message("No Enhanced Configs", 
                                       "No enhanced configurations found.\n"
-                                      "Use enhanced extraction tools first.", self.gui.root)
+                                      "Use enhanced extraction tools first.", self.parent.window)
             else:
                 show_success_message("No Analysis Directory", 
-                                  "Enhanced analysis directory not found.", self.gui.root)
+                                  "Enhanced analysis directory not found.", self.parent.window)
             
         except Exception as e:
             messagebox.showerror("Update Error", f"Failed to update enhanced processor: {e}")
@@ -826,7 +826,7 @@ class SensoryAIProcessor:
                         
                         show_success_message("Success", 
                                           f"Data loaded into new session: {session_id}\n"
-                                          f"Loaded {len(final_data)} samples", self.gui.root)
+                                          f"Loaded {len(final_data)} samples", self.parent.window)
                         preview_window.destroy()
                     else:
                         print("DEBUG: switch_to_session method not found")
@@ -1069,7 +1069,7 @@ class SensoryAIProcessor:
                                       f"Successfully loaded reviewed data!\n"
                                       f"Total sessions: {len(reviewed_results)}\n"
                                       f"Total samples: {total_samples}\n"
-                                      f"Use the session selector to switch between sessions.", self.gui.root)
+                                      f"Use the session selector to switch between sessions.", self.parent.window)
                 else:
                     print("DEBUG: No reviewed results found")
                     messagebox.showwarning("No Data", "No reviewed data to load.")
@@ -1173,7 +1173,7 @@ class SensoryAIProcessor:
             show_success_message("Batch Load Complete", 
                               f"Loaded {loaded_sessions} sessions with {loaded_samples} total samples!\n"
                               f"Each image is now a separate session (max 4 samples each).\n"
-                              f"Use the session selector to switch between sessions.", self.gui.root)
+                              f"Use the session selector to switch between sessions.", self.parent.window)
         else:
             messagebox.showwarning("No Data Loaded", 
                                  "No valid samples found in batch results.")
