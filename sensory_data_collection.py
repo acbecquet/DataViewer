@@ -159,8 +159,6 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             # Need to add save logic on window close
             debug_print("DEBUG: Performing cleanup before window close")
 
-            # update window background in case in comparison mode
-            self.update_window_background(APP_BACKGROUND_COLOR)
             # Close the window
             self.window.destroy()
             debug_print("DEBUG: Sensory window destroyed")
@@ -1473,9 +1471,6 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         self.current_mode = "comparison"
         self.mode_button.config(text="Switch to Collection Mode")
     
-        # Change to bright white background for comparison mode
-        self.update_window_background('#FFFFFF')
-    
         # Add comparison title
         self.setup_comparison_title()
     
@@ -1505,9 +1500,6 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
         self.current_mode = "collection" 
         self.mode_button.config(text="Switch to Comparison Mode")
     
-        # Change back to light gray background for collection mode
-        self.update_window_background(APP_BACKGROUND_COLOR)
-    
         # Remove comparison title if it exists
         if hasattr(self, 'comparison_title_frame'):
             self.comparison_title_frame.destroy()
@@ -1523,20 +1515,6 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
     
         debug_print("Switched to collection mode - showing single user data")
         show_success_message("Collection Mode", "Now showing single user data collection mode.\nSensory evaluation is enabled.", self.window)
-
-    def update_widget_backgrounds(self, parent, color):
-        """Recursively update background colors for tkinter widgets."""
-        for child in parent.winfo_children():
-            try:
-                # Only update standard tkinter widgets (not ttk)
-                widget_class = child.winfo_class()
-                if widget_class in ['Frame', 'Label', 'Button', 'Entry', 'Text', 'Listbox']:
-                    child.configure(bg=color)
-            except:
-                pass  # Skip widgets that don't support bg parameter
-        
-            # Recursively update children
-            self.update_widget_backgrounds(child, color)
 
     def disable_sensory_evaluation(self):
         """Gray out and disable all sensory evaluation controls."""
@@ -1562,28 +1540,6 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
             self.window.lift()
             self.window.focus_set()
             debug_print("DEBUG: Brought sensory window to front")
-
-    def update_window_background(self, color):
-        """Update the window background color and all child widgets."""
-        debug_print(f"DEBUG: Updating window background to {color}")
-    
-        # Update the main window background
-        self.window.configure(bg=color)
-    
-        # Update ttk style for the new background
-        style = ttk.Style()
-        style.configure('TLabel', background=color)
-        style.configure('TLabelFrame', background=color)
-        style.configure('TLabelFrame.Label', background=color)
-        style.configure('TFrame', background=color)
-    
-        # Update any direct tkinter widgets recursively
-        self.update_widget_backgrounds(self.window, color)
-    
-        # Force a redraw
-        self.window.update_idletasks()
-      
-        debug_print(f"DEBUG: Window background updated to {color} and brought to front")
 
     def set_widget_state(self, parent, state):
         """Recursively set state of all child widgets."""
@@ -2863,8 +2819,6 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
                 self.comparison_title_frame, 
                 text="Comparing Average Sensory Results",
                 font=("Arial", 16, "bold"),
-                background='#FFFFFF',  # Now bright white
-                foreground="black",
                 anchor='center'
             )
             title_label.pack(expand=True)
