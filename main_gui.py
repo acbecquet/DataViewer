@@ -984,18 +984,20 @@ Would you like to download and install the update?"""
             try:        
                 process_function = processing.get_processing_function(sheet_name)
                 processed_data, _, full_sample_data = process_function(data)
-                
-                # Apply empty sample filtering to processed data only
+            
+                # Apply empty sample filtering ONLY to plotting sheets
                 debug_print(f"DEBUG: Before filtering - processed_data shape: {processed_data.shape}, full_sample_data shape: {full_sample_data.shape}")
-                
-                # Filter empty samples from processed data
-                filtered_processed_data = filter_empty_samples_from_dataframe(processed_data)
-                
-                debug_print(f"DEBUG: After filtering - processed_data shape: {filtered_processed_data.shape}")
-                
-                # For display, use the filtered processed data but keep the original full_sample_data
-                # The plot manager will handle filtering during plot generation
-                processed_data = filtered_processed_data
+                debug_print(f"DEBUG: is_plotting_sheet: {is_plotting_sheet}")
+            
+                if is_plotting_sheet:
+                    # Filter empty samples from processed data for plotting sheets
+                    filtered_processed_data = filter_empty_samples_from_dataframe(processed_data)
+                    debug_print(f"DEBUG: After filtering plotting sheet - processed_data shape: {filtered_processed_data.shape}")
+                    processed_data = filtered_processed_data
+                else:
+                    # For non-plotting sheets, keep all data as-is
+                    debug_print(f"DEBUG: Non-plotting sheet - preserving all data as-is")
+            
                 self.current_sheet_data = processed_data
 
                 # Handle User Test Simulation

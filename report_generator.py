@@ -526,7 +526,7 @@ class ReportGenerator:
             for i, plot_option in enumerate(valid_plot_options):
                 plot_image_path = f"{sheet_name}_{plot_option}_plot.png"
                 try:
-                    # FIXED: Correct argument order
+                    # Correct argument order
                     fig, sample_names_returned = processing.plot_all_samples(numeric_data, plot_option, num_columns_per_sample, sample_names)
                 
                     if is_user_test_simulation and hasattr(fig, 'is_split_plot') and fig.is_split_plot:
