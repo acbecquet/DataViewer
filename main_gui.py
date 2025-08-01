@@ -15,7 +15,7 @@ import time
 import tkinter as tk
 from typing import Optional, Dict, List, Any
 from tkinter import ttk, messagebox, Toplevel
-from utils import debug_print
+from utils import debug_print, wrap_text
 
 # Lazy loading helper functions
 def lazy_import_pandas():
@@ -1628,33 +1628,67 @@ Would you like to download and install the update?"""
                 return
 
             default_cellwidth = 110
-            default_rowheight = 25
+            default_rowheight = 20
 
-            if is_plotting_sheet:
-                print("DEBUG: Adjusting row height for plotting sheet.")
-                font_height = 16
-                char_per_line = 12
-
-                # Calculate optimal row height more safely
-                try:
-                    max_row_height = default_rowheight
-                    for _, row in data.iterrows():
-                        max_lines = 1
-                        for cell in row:
-                            if cell and len(str(cell)) > 0:
-                                cell_length = len(str(cell))
-                                lines = (cell_length // char_per_line) + 1
-                                max_lines = max(max_lines, lines)
-                        row_height = max_lines * font_height
-                        max_row_height = max(max_row_height, row_height)
-                
-                    default_rowheight = int(max_row_height)
-                    print(f"DEBUG: Calculated row height: {default_rowheight}")
-                except Exception as height_error:
-                    print(f"DEBUG: Error calculating row height, using default: {height_error}")
-                    default_rowheight = 25
-
+            # Pre-process data to add actual newlines for text wrapping using existing wrap_text function
+            print("DEBUG: Pre-processing text for table display with wrapping using utils.wrap_text.")
+        
+            # More reasonable parameters
+            char_per_line = 40  # 30-40 chars as suggested
+            font_height = 12
+        
+            # Apply text wrapping to all cells in the dataframe using existing wrap_text function
+            wrapped_data = data.copy()
+            max_lines_found = 1
+        
+            for col in wrapped_data.columns:
+                for idx in wrapped_data.index:
+                    try:
+                        original_text = wrapped_data.loc[idx, col]
+                    
+                        # Pandas-safe way to check for non-empty values
+                        if pd.notna(original_text) and original_text != '':
+                            # Convert to string safely
+                            text_str = str(original_text).strip()
+                        
+                            if text_str:  # Only process non-empty strings
+                                # Use the existing wrap_text function from utils
+                                wrapped_text = wrap_text(text_str, max_width=char_per_line)
+                                wrapped_data.loc[idx, col] = wrapped_text
+                            
+                                # Count lines to determine row height
+                                if wrapped_text and isinstance(wrapped_text, str):
+                                    line_count = wrapped_text.count('\n') + 1
+                                    max_lines_found = max(max_lines_found, line_count)
+                            else:
+                                wrapped_data.loc[idx, col] = original_text
+                        else:
+                            wrapped_data.loc[idx, col] = original_text
+                        
+                    except Exception as cell_error:
+                        # If any cell causes issues, leave it as-is and continue
+                        print(f"DEBUG: Error processing cell at ({idx}, {col}): {cell_error}")
+                        wrapped_data.loc[idx, col] = original_text
+                        continue
+        
+            # Calculate row height based on maximum lines found, but cap it reasonably
+            max_reasonable_lines = 4  # Cap at 4 lines to prevent excessive height
+            actual_max_lines = min(max_lines_found, max_reasonable_lines)
+            default_rowheight = max(25, actual_max_lines * font_height)
+        
+            print(f"DEBUG: Max lines found: {max_lines_found}, capped at: {actual_max_lines}")
             print(f"DEBUG: Final row height: {default_rowheight}")
+            print(f"DEBUG: Using {char_per_line} characters per line with utils.wrap_text")
+
+            # Create table model with wrapped data
+            try:
+                model = TableModel()
+                table_data_dict = wrapped_data.to_dict(orient='index')
+                model.importDict(table_data_dict)
+                print("DEBUG: Table model created with wrapped text using utils.wrap_text.")
+            except Exception as model_error:
+                print(f"ERROR: Failed to create table model: {model_error}")
+                return
 
             table_canvas = TableCanvas(table_frame, model=model, cellwidth=calculated_cellwidth, cellbackgr='#4CC9F0',
                                        thefont=('Arial', 10), rowheight=default_rowheight, rowselectedcolor='#FFFFFF',
