@@ -179,12 +179,9 @@ class DataCollectionWindow:
         # Create the window
         self.window = tk.Toplevel(self.root)
         self.window.title(f"Data Collection - {test_name}")
-        self.window.geometry("1375x750")
+        self.window.state('zoomed')
         self.window.minsize(1250, 625)
         
-    
-        self.window.transient(self.root)  # Make it a child of the main window
-        self.window.grab_set()  # Make it modal and bring to front
         self.window.lift()  # Bring to top of window stack
         self.window.focus_force()  # Force focus to this window
     
@@ -341,6 +338,158 @@ class DataCollectionWindow:
 
         debug_print("DEBUG: Enhanced styles configured with better visual separation")
     
+    def on_window_resize_plot(self, event):
+        """Handle window resize events with debouncing for plot updates."""
+        debug_print(f"DEBUG: RESIZE EVENT DETECTED - Widget: {event.widget}, Window: {self.window}")
+        debug_print(f"DEBUG: Event widget type: {type(event.widget)}")
+        debug_print(f"DEBUG: Window type: {type(self.window)}")
+        debug_print(f"DEBUG: Event widget == window? {event.widget == self.window}")
+    
+        # Only handle main window resize events, not child widgets
+        if event.widget != self.window:
+            debug_print(f"DEBUG: Ignoring resize event from child widget: {event.widget}")
+            return
+    
+        debug_print("DEBUG: MAIN WINDOW RESIZE CONFIRMED - Processing...")
+    
+        # Get current window dimensions for verification
+        current_width = self.window.winfo_width()
+        current_height = self.window.winfo_height()
+        debug_print(f"DEBUG: Current window dimensions: {current_width}x{current_height}")
+    
+        # Debounce rapid resize events
+        if hasattr(self, '_resize_timer'):
+            self.window.after_cancel(self._resize_timer)
+            debug_print("DEBUG: Cancelled previous resize timer")
+    
+        # Schedule plot size update with a small delay to avoid excessive updates
+        self._resize_timer = self.window.after(1000, self.update_plot_size_for_resize)
+        debug_print("DEBUG: Scheduled plot resize update in 1000ms")
+
+    def update_plot_size_for_resize(self):
+        """Update plot size with artifact prevention and frame validation."""
+        try:
+            # Check if we have the necessary components
+            if not hasattr(self, 'stats_canvas') or not self.stats_canvas.get_tk_widget().winfo_exists():
+                debug_print("DEBUG: Stats canvas not available for resize")
+                return
+    
+            if not hasattr(self, 'stats_fig') or not self.stats_fig:
+                debug_print("DEBUG: Stats figure not available for resize")
+                return
+    
+            # Wait for frame geometry to stabilize
+            self.window.update_idletasks()
+    
+            # Use the actual stats container for sizing
+            if hasattr(self, 'stats_frame_container') and self.stats_frame_container.winfo_exists():
+                parent_for_sizing = self.stats_frame_container
+            else:
+                debug_print("DEBUG: Stats frame container not available, skipping resize")
+                return
+    
+            parent_for_sizing.update_idletasks()
+    
+            # Validate that frames have reasonable dimensions before proceeding
+            parent_width = parent_for_sizing.winfo_width()
+            parent_height = parent_for_sizing.winfo_height()
+    
+            debug_print(f"DEBUG: Parent frame size for stats: {parent_width}x{parent_height}")
+    
+            if parent_width < 200 or parent_height < 200:
+                debug_print("DEBUG: Parent frame size too small, skipping this resize update")
+                return
+    
+            # Calculate new size based on validated frame dimensions
+            new_width, new_height = self.calculate_dynamic_plot_size(parent_for_sizing)
+    
+            # Get current figure size for comparison
+            current_width, current_height = self.stats_fig.get_size_inches()
+    
+            # Only update if change is significant
+            width_diff = abs(new_width - current_width)
+            height_diff = abs(new_height - current_height)
+            threshold = 0.5  # Threshold to reduce excessive updates
+    
+            if width_diff > threshold or height_diff > threshold:
+                debug_print(f"DEBUG: Significant size change detected - updating plot from {current_width:.2f}x{current_height:.2f} to {new_width:.2f}x{new_height:.2f}")
+        
+                # Apply the new size
+                self.stats_fig.set_size_inches(new_width, new_height)
+        
+                # Redraw the canvas
+                self.stats_canvas.draw_idle()
+                debug_print("DEBUG: Plot resize completed")
+            else:
+                debug_print("DEBUG: Size change below threshold, skipping update to prevent artifacts")
+        
+        except Exception as e:
+            debug_print(f"DEBUG: Error during plot resize: {str(e)}")
+            import traceback
+            debug_print(f"DEBUG: Full traceback: {traceback.format_exc()}")
+
+    def calculate_dynamic_plot_size(self, parent_frame):
+        """Calculate plot size that directly scales with window size."""
+        debug_print("DEBUG: Starting dynamic plot size calculation")
+    
+        # Force geometry update to get current dimensions
+        self.window.update_idletasks()
+    
+        if hasattr(self, 'stats_frame') and self.stats_frame.winfo_exists():
+            parent_frame = self.stats_frame
+            parent_frame.update_idletasks()
+    
+        # Get the actual dimensions
+        available_width = parent_frame.winfo_width()
+        available_height = parent_frame.winfo_height()
+    
+        debug_print(f"DEBUG: Parent frame: {parent_frame.__class__.__name__}")
+        debug_print(f"DEBUG: Available dimensions - Width: {available_width}px, Height: {available_height}px")
+    
+        # Simple fallback for initial sizing or very small windows
+        if available_width < 200 or available_height < 200:
+            debug_print("DEBUG: Using fallback size for small window")
+            return (6, 4)
+    
+        # Reserve space for stats text and controls
+        text_space = 120  # Space for text statistics
+        control_space = 50  # Space for labels and padding
+    
+        # Calculate available space for the plot
+        plot_height_available = available_height - text_space - control_space
+        plot_width_available = available_width - 40  # 20px margin on each side
+    
+        # Use most of the available space for the plot
+        plot_width_pixels = max(plot_width_available, 200)
+        plot_height_pixels = max(plot_height_available, 150)
+    
+        debug_print(f"DEBUG: Plot space in pixels - Width: {plot_width_pixels}px, Height: {plot_height_pixels}px")
+    
+        # Convert to inches for matplotlib (using standard 100 DPI)
+        plot_width_inches = plot_width_pixels / 100.0
+        plot_height_inches = plot_height_pixels / 100.0
+    
+        # Apply minimum and maximum sizes
+        plot_width_inches = max(min(plot_width_inches, 12.0), 3.0)
+        plot_height_inches = max(min(plot_height_inches, 8.0), 2.0)
+    
+        debug_print(f"DEBUG: FINAL plot size - Width: {plot_width_inches:.2f} inches, Height: {plot_height_inches:.2f} inches")
+    
+        return (plot_width_inches, plot_height_inches)
+
+    def initialize_plot_size(self):
+        """Initialize plot size after window is fully rendered."""
+        debug_print("DEBUG: Initializing plot size after window render")
+    
+        # Give window time to fully render
+        self.window.update_idletasks()
+    
+        # Update plot size if available
+        if hasattr(self, 'update_plot_size_for_resize'):
+            self.window.after(500, self.update_plot_size_for_resize)
+    
+        debug_print("DEBUG: Initial plot size set")
+
     def center_window(self):
         """Center the window on the screen."""
         # Force the window to update and calculate its actual size
@@ -882,8 +1031,34 @@ class DataCollectionWindow:
     
     def add_row(self):
         """Add a new row to all samples."""
-        new_puff = max([max(self.data[f"Sample {i+1}"]["puffs"]) for i in range(self.num_samples)]) + self.puff_interval
+        debug_print("DEBUG: Adding new row to all samples")
     
+        # Calculate the next puff count by finding the maximum across all samples
+        # Convert puff values to integers before finding max
+        max_puffs = []
+        for i in range(self.num_samples):
+            sample_id = f"Sample {i+1}"
+            # Convert non-empty puff values to integers
+            sample_puffs = []
+            for puff_val in self.data[sample_id]["puffs"]:
+                if puff_val and str(puff_val).strip():  # Check if not empty
+                    try:
+                        sample_puffs.append(int(float(puff_val)))  # Convert to int via float to handle string numbers
+                    except (ValueError, TypeError):
+                        debug_print(f"DEBUG: Skipping invalid puff value: {puff_val}")
+                        continue
+        
+            if sample_puffs:  # Only add if we found valid puff values
+                max_puffs.append(max(sample_puffs))
+    
+        # Calculate new puff value
+        if max_puffs:
+            new_puff = max(max_puffs) + self.puff_interval
+            debug_print(f"DEBUG: Calculated new_puff: {new_puff} (max across samples: {max(max_puffs)}, interval: {self.puff_interval})")
+        else:
+            new_puff = self.puff_interval  # Default if no existing puffs found
+            debug_print(f"DEBUG: No existing puffs found, using default: {new_puff}")
+
         for i in range(self.num_samples):
             sample_id = f"Sample {i + 1}"
             self.data[sample_id]["puffs"].append(new_puff)
@@ -893,18 +1068,18 @@ class DataCollectionWindow:
             self.data[sample_id]["smell"].append("")
             self.data[sample_id]["notes"].append("")
             self.data[sample_id]["tpm"].append(None)
-        
+    
             # Add chronography for User Test Simulation
             if self.test_name in ["User Test Simulation", "User Simulation Test"]:
                 self.data[sample_id]["chronography"].append("")
-        
+    
             # Update treeview
             tree = self.sample_trees[i]
             self.update_treeview(tree, sample_id)
-    
+
         self.mark_unsaved_changes()
         debug_print(f"DEBUG: Added new row with puff count {new_puff}")
-    
+
     def remove_last_row(self):
         """Remove the last row from all samples."""
         if messagebox.askyesno("Confirm Remove", "Remove the last row from all samples?"):
@@ -913,11 +1088,11 @@ class DataCollectionWindow:
                 for key in self.data[sample_id]:
                     if self.data[sample_id][key]:  # Only remove if list is not empty
                         self.data[sample_id][key].pop()
-                
+            
                 # Update treeview
                 tree = self.sample_trees[i]
                 self.update_treeview(tree, sample_id)
-            
+        
             self.update_stats_panel()
             self.mark_unsaved_changes()
             debug_print("DEBUG: Removed last row from all samples")
@@ -2479,11 +2654,20 @@ Developed by Charlie Becquet
 
     def setup_event_handlers(self):
         """Set up event handlers for the window."""
-        # Handle window close with auto-save
+        # Window close protocol
         self.window.protocol("WM_DELETE_WINDOW", self.on_window_close)
-        
-        # Set up hotkeys
+    
+        # Keyboard shortcuts
         self.setup_hotkeys()
+    
+        # Bind window resize events to update plot size
+        self.window.bind('<Configure>', self.on_window_resize_plot, add=True)
+        debug_print("DEBUG: Window resize event handler bound")
+    
+        # Initialize plot sizing after window is fully set up
+        self.window.after(1000, self.initialize_plot_size)
+    
+        debug_print("DEBUG: Event handlers set up")
     
     def setup_hotkeys(self):
         """Set up keyboard shortcuts for navigation."""
@@ -2664,93 +2848,178 @@ Developed by Charlie Becquet
         return self.result  
 
     def create_tpm_stats_panel(self):
-        """Create the enhanced TPM statistics panel with plot on the right side."""
-        debug_print("DEBUG: Creating enhanced TPM statistics panel")
+        """Create the enhanced TPM statistics panel with responsive resizing."""
+        debug_print("DEBUG: Creating enhanced TPM statistics panel with resize support")
 
         # Clear existing widgets
         for widget in self.stats_frame.winfo_children():
             widget.destroy()
 
-        # Create scrollable frame for the stats panel
-        canvas = tk.Canvas(self.stats_frame, bg='white')
-        scrollbar = ttk.Scrollbar(self.stats_frame, orient="vertical", command=canvas.yview)
-        scrollable_stats_frame = ttk.Frame(canvas)
-
-        scrollable_stats_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
-
-        canvas.create_window((0, 0), window=scrollable_stats_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-
-        # Pack scrollbar and canvas
-        scrollbar.pack(side="right", fill="y")
-        canvas.pack(side="left", fill="both", expand=True)
-
-        # Create a title with minimal padding
-        title_label = ttk.Label(scrollable_stats_frame, text="TPM Statistics", 
-                               font=("Arial", 12, "bold"), style='TLabel')
-        title_label.pack(pady=(2, 5)) 
-
-        # Create frame for current sample statistics - 1/3 of height
-        stats_container = ttk.Frame(scrollable_stats_frame, style='TFrame')
-        stats_container.pack(fill="x", padx=5, pady=2) 
-
-        # Initialize TPM labels dictionary
-        self.tpm_labels = {}
-
-        # Create placeholder for current sample stats (will be updated in update_stats_panel)
-        self.current_sample_stats_frame = ttk.Frame(stats_container, style='TFrame')
-        self.current_sample_stats_frame.pack(fill="x", pady=2)  
-
-        # Create frame for TPM plot - 2/3 of height with minimal padding
-        plot_frame = ttk.LabelFrame(scrollable_stats_frame, text="TPM Over Time", style='TLabelframe')
-        plot_frame.pack(fill="both", expand=True, padx=5, pady=(5, 2)) 
+        # Create the main stats frame with proper expansion
+        main_stats_frame = ttk.LabelFrame(self.stats_frame, text="TPM Statistics", padding=10)
+        main_stats_frame.pack(fill='both', expand=True, padx=5, pady=5)
     
-        # Add resize handling for the plot frame
-        plot_frame.bind('<Configure>', self._on_plot_frame_resize)
+        # Store reference for resize handling
+        self.plot_container = main_stats_frame
     
-        # Store reference to plot_frame for resize handling
-        self.plot_frame = plot_frame
-
-        # Create matplotlib figure for TPM plot with responsive sizing
-        plt.style.use('default')  # Ensure we're using default style
+        # Sample selection for stats display (fixed height section)
+        control_frame = ttk.Frame(main_stats_frame)
+        control_frame.pack(side='top', fill='x', pady=(0, 5))
     
-        # Calculate initial size based on frame - will be updated on resize
-        initial_width = 4  # Fallback width in inches
-        initial_height = 3  # Fallback height in inches
+        # Current sample label
+        self.current_sample_label = ttk.Label(control_frame, text="Sample 1: Unknown Sample", 
+                                             font=('Arial', 12, 'bold'))
+        self.current_sample_label.pack(anchor='w')
     
-        debug_print(f"DEBUG: Creating TPM figure with initial size: {initial_width}x{initial_height}")
+        # Stats text frame (fixed height section)  
+        text_frame = ttk.Frame(main_stats_frame)
+        text_frame.pack(side='top', fill='x', pady=(5, 10))
     
-        self.tpm_figure = plt.Figure(figsize=(initial_width, initial_height), dpi=80, 
-                                    facecolor='white', tight_layout=True)
-        self.tpm_ax = self.tpm_figure.add_subplot(111)
-
-        # Create canvas with minimal padding and center it
-        canvas_frame = ttk.Frame(plot_frame)
-        canvas_frame.pack(fill="both", expand=True)
+        # Stats display
+        self.avg_tpm_label = ttk.Label(text_frame, text="Average TPM: 0.000", font=('Arial', 10))
+        self.avg_tpm_label.pack(anchor='w')
     
-        self.tpm_canvas = FigureCanvasTkAgg(self.tpm_figure, canvas_frame)
-        self.tpm_canvas.get_tk_widget().pack(fill="both", expand=True, padx=1, pady=1)  
-
-        # Configure the plot with tight layout
-        self.tpm_figure.tight_layout(pad=0.1)  
-
-        # Initialize empty plot
-        self.tpm_ax.set_xlabel('Puffs', fontsize=9)
-        self.tpm_ax.set_ylabel('TPM', fontsize=9)
-        self.tpm_ax.set_title('TPM Over Time', fontsize=10)
-        self.tpm_ax.grid(True, alpha=0.3)
-
-        # Apply tight layout and draw
-        self.tpm_figure.tight_layout(pad=0.1)
-        self.tpm_canvas.draw()
-
+        self.latest_tpm_label = ttk.Label(text_frame, text="Latest TPM: 0.000", font=('Arial', 10))
+        self.latest_tpm_label.pack(anchor='w')
+    
+        self.std_dev_label = ttk.Label(text_frame, text="Std Dev (last 5 sessions): 0.000", font=('Arial', 10))
+        self.std_dev_label.pack(anchor='w')
+    
+        self.current_puffs_label = ttk.Label(text_frame, text="Current Puffs: 0", font=('Arial', 10))
+        self.current_puffs_label.pack(anchor='w')
+    
+        # Plot container frame (expandable section)
+        plot_container = ttk.Frame(main_stats_frame)
+        plot_container.pack(side='top', fill='both', expand=True)
+    
+        # Store reference to the container for proper sizing
+        self.stats_frame_container = plot_container
+    
+        # Create the matplotlib plot with dynamic sizing
+        self.setup_stats_plot_canvas(plot_container)
+    
+        # Initialize TPM labels dictionary if not exists
+        if not hasattr(self, 'tpm_labels'):
+            self.tpm_labels = {}
+    
         # Update the statistics for the current sample
         self.update_stats_panel()
+    
+        debug_print("DEBUG: Enhanced TPM statistics panel created with resize support")
 
-        debug_print("DEBUG: Enhanced TPM statistics panel created successfully")
+    def setup_stats_plot_canvas(self, parent):
+        """Create the matplotlib canvas for the TPM plot with dynamic responsive sizing."""
+        import matplotlib.pyplot as plt
+        from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+    
+        # Calculate dynamic plot size based on available space
+        dynamic_width, dynamic_height = self.calculate_dynamic_plot_size(parent)
+    
+        # Create figure with calculated responsive sizing
+        self.stats_fig, self.stats_ax = plt.subplots(figsize=(dynamic_width, dynamic_height))
+        self.stats_fig.patch.set_facecolor('white')
+        self.stats_fig.subplots_adjust(left=0.15, right=0.95, top=0.90, bottom=0.15)
+    
+        # Create canvas with proper expansion configuration
+        canvas_frame = ttk.Frame(parent)
+        canvas_frame.pack(fill='both', expand=True)
+    
+        # Store reference to canvas_frame for resize handling
+        self.canvas_frame = canvas_frame
+    
+        # Create canvas
+        self.stats_canvas = FigureCanvasTkAgg(self.stats_fig, canvas_frame)
+        canvas_widget = self.stats_canvas.get_tk_widget()
+        canvas_widget.pack(fill='both', expand=True)
+    
+        # Initialize empty plot
+        self.update_tpm_plot_for_current_sample()
+    
+        debug_print("DEBUG: Stats plot canvas created with responsive sizing")
+
+    def update_tpm_plot_for_current_sample(self):
+        """Update the TPM plot for the currently selected sample with smart y-axis bounds."""
+        try:
+            # Get currently selected sample
+            current_tab_index = self.notebook.index(self.notebook.select())
+            current_sample_id = f"Sample {current_tab_index + 1}"
+        except:
+            current_sample_id = "Sample 1"  
+            current_tab_index = 0
+
+        debug_print(f"DEBUG: Updating TPM plot for {current_sample_id}")
+    
+        # Clear the plot
+        self.stats_ax.clear()
+    
+        # Get data for the sample
+        tpm_values = [v for v in self.data[current_sample_id]["tpm"] if v is not None]
+        puff_values = []
+    
+        # Get corresponding puff values for non-None TPM values
+        for i, tpm in enumerate(self.data[current_sample_id]["tpm"]):
+            if tpm is not None and i < len(self.data[current_sample_id]["puffs"]):
+                puff_values.append(self.data[current_sample_id]["puffs"][i])
+    
+        if tpm_values and puff_values and len(tpm_values) == len(puff_values):
+            # Plot TPM over puffs
+            self.stats_ax.plot(puff_values, tpm_values, marker='o', linewidth=2, markersize=4, color='blue')
+            self.stats_ax.set_xlabel('Puffs', fontsize=10)
+            self.stats_ax.set_ylabel('TPM (mg/puff)', fontsize=10)
+            self.stats_ax.set_title(f'TPM Over Time - {current_sample_id}', fontsize=11)
+            self.stats_ax.grid(True, alpha=0.3)
+        
+            # Smart y-axis bounds logic
+            if len(tpm_values) >= 2:
+                sorted_tpm = sorted(tpm_values, reverse=True)  # Sort descending
+                max_tpm = sorted_tpm[0]
+                second_max_tpm = sorted_tpm[1]
+            
+                if max_tpm <= 20:
+                    # Use max + 2 when max <= 20
+                    y_max = max_tpm + 2
+                    debug_print(f"DEBUG: Setting y-axis bounds 0 to {y_max} (max {max_tpm} + 2)")
+                elif second_max_tpm <= 20:
+                    # Use second largest value when max > 20 but second max <= 20
+                    y_max = second_max_tpm + 2
+                    debug_print(f"DEBUG: Setting y-axis bounds 0 to {y_max} (second max {second_max_tpm} + 2, ignoring outlier {max_tpm})")
+                else:
+                    # Both values > 20, default to 20
+                    y_max = 20
+                    debug_print(f"DEBUG: Setting y-axis bounds 0 to 20 (both max {max_tpm} and second max {second_max_tpm} > 20)")
+            elif len(tpm_values) == 1:
+                # Single value
+                max_tpm = tpm_values[0]
+                if max_tpm <= 20:
+                    y_max = max_tpm + 2
+                else:
+                    y_max = 20  # Single outlier, cap at 20
+                debug_print(f"DEBUG: Setting y-axis bounds 0 to {y_max} (single value {max_tpm})")
+            else:
+                # No values, use default
+                y_max = 9
+                debug_print(f"DEBUG: Setting default y-axis bounds 0 to 9")
+        
+            self.stats_ax.set_ylim(0, y_max)
+        
+            # Adjust tick label sizes for better fit
+            self.stats_ax.tick_params(axis='both', which='major', labelsize=9)
+        
+        else:
+            # Show empty plot with labels
+            self.stats_ax.set_xlabel('Puffs', fontsize=10)
+            self.stats_ax.set_ylabel('TPM (mg/puff)', fontsize=10)
+            self.stats_ax.set_title(f'TPM Over Time - {current_sample_id}', fontsize=11)
+            self.stats_ax.grid(True, alpha=0.3)
+            self.stats_ax.text(0.5, 0.5, 'No TPM data available', 
+                              transform=self.stats_ax.transAxes, ha='center', va='center', fontsize=10)
+            self.stats_ax.set_ylim(0, 9)  # Default bounds for empty plot
+    
+        # Apply layout and draw
+        self.stats_fig.tight_layout(pad=1.0)
+        self.stats_canvas.draw()
+    
+        debug_print(f"DEBUG: TPM plot updated for {current_sample_id} with smart y-axis bounds")
 
     def _on_plot_frame_resize(self, event):
         """Handle plot frame resize to maintain responsive plot sizing."""
@@ -2833,14 +3102,14 @@ Developed by Charlie Becquet
             current_sample_id = "Sample 1"  
             current_tab_index = 0
 
-        # Clear current sample stats frame
-        for widget in self.current_sample_stats_frame.winfo_children():
-            widget.destroy()
-
         # Get sample name
         sample_name = "Unknown Sample"
         if current_tab_index < len(self.header_data.get('samples', [])):
             sample_name = self.header_data['samples'][current_tab_index].get('id', f"Sample {current_tab_index + 1}")
+
+        # Update sample label
+        if hasattr(self, 'current_sample_label'):
+            self.current_sample_label.config(text=f"{current_sample_id}: {sample_name}")
 
         # Calculate TPM values if needed
         self.calculate_tpm(current_sample_id)
@@ -2848,31 +3117,15 @@ Developed by Charlie Becquet
         # Get TPM values and data for current sample (filtering out None values)
         tpm_values = [v for v in self.data[current_sample_id]["tpm"] if v is not None]
 
-        # Create sample header with minimal padding
-        sample_header = ttk.Label(self.current_sample_stats_frame, 
-                                 text=f"{current_sample_id}: {sample_name}",
-                                 font=("Arial", 11, "bold"), style='TLabel')
-        sample_header.pack(anchor="w", pady=(0, 2))  
-
-        ttk.Separator(self.current_sample_stats_frame, orient="horizontal").pack(fill="x", pady=1) 
-
-        # Create statistics grid with minimal padding
-        stat_grid = ttk.Frame(self.current_sample_stats_frame, style='TFrame')
-        stat_grid.pack(fill="x", pady=2)  
-
-        # Configure grid columns
-        stat_grid.columnconfigure(0, weight=1)
-        stat_grid.columnconfigure(1, weight=0)
-
         if tpm_values:
             # Calculate statistics
             avg_tpm = sum(tpm_values) / len(tpm_values)
             latest_tpm = tpm_values[-1]
-    
+
             # Calculate standard deviation of last 5 sessions (or all if < 5)
             recent_tpm_values = tpm_values[-5:] if len(tpm_values) >= 5 else tpm_values
             std_dev = statistics.stdev(recent_tpm_values) if len(recent_tpm_values) > 1 else 0.0
-    
+
             # Find current puff count (furthest down row with after_weight data)
             current_puff_count = 0
             for i in range(len(self.data[current_sample_id]["after_weight"]) - 1, -1, -1):
@@ -2880,7 +3133,7 @@ Developed by Charlie Becquet
                     str(self.data[current_sample_id]["after_weight"][i]).strip()):
                     current_puff_count = self.data[current_sample_id]["puffs"][i] if i < len(self.data[current_sample_id]["puffs"]) else 0
                     break
-    
+
             self.data[current_sample_id]["avg_tpm"] = avg_tpm
         else:
             avg_tpm = 0.0
@@ -2889,40 +3142,22 @@ Developed by Charlie Becquet
             current_puff_count = 0
             recent_tpm_values = []
 
-        # Row 1: Average TPM
-        ttk.Label(stat_grid, text="Average TPM:", style='TLabel').grid(row=0, column=0, sticky="w", pady=1)  
-        avg_tpm_label = ttk.Label(stat_grid, text=f"{avg_tpm:.6f}" if tpm_values else "N/A", 
-                                 font=("Arial", 10, "bold"), style='TLabel')
-        avg_tpm_label.grid(row=0, column=1, sticky="e", pady=1)
-
-        # Row 2: Latest TPM
-        ttk.Label(stat_grid, text="Latest TPM:", style='TLabel').grid(row=1, column=0, sticky="w", pady=1)
-        latest_tpm_label = ttk.Label(stat_grid, text=f"{latest_tpm:.6f}" if tpm_values else "N/A", 
-                                    font=("Arial", 10), style='TLabel')
-        latest_tpm_label.grid(row=1, column=1, sticky="e", pady=1)
-
-        # Row 3: Standard Deviation (last 5 sessions)
-        sessions_text = f"(last {len(recent_tpm_values)} sessions)" if tpm_values else ""
-        ttk.Label(stat_grid, text=f"Std Dev {sessions_text}:", style='TLabel').grid(row=2, column=0, sticky="w", pady=1)
-        std_dev_label = ttk.Label(stat_grid, text=f"{std_dev:.6f}" if tpm_values else "N/A", 
-                                 font=("Arial", 10), style='TLabel')
-        std_dev_label.grid(row=2, column=1, sticky="e", pady=1)
-
-        # Row 4: Current Puff Count
-        ttk.Label(stat_grid, text="Current Puffs:", style='TLabel').grid(row=3, column=0, sticky="w", pady=1)
-        puff_count_label = ttk.Label(stat_grid, text=str(current_puff_count), style='TLabel')
-        puff_count_label.grid(row=3, column=1, sticky="e", pady=1)
-
-        # Store references to labels for current sample
-        self.tpm_labels[current_sample_id] = {
-            "avg_tpm": avg_tpm_label,
-            "latest_tpm": latest_tpm_label,
-            "std_dev": std_dev_label,
-            "puff_count": puff_count_label
-        }
+        # Update labels
+        if hasattr(self, 'avg_tpm_label'):
+            self.avg_tpm_label.config(text=f"Average TPM: {avg_tpm:.6f}" if tpm_values else "Average TPM: N/A")
+    
+        if hasattr(self, 'latest_tpm_label'):
+            self.latest_tpm_label.config(text=f"Latest TPM: {latest_tpm:.6f}" if tpm_values else "Latest TPM: N/A")
+    
+        if hasattr(self, 'std_dev_label'):
+            sessions_text = f"(last {len(recent_tpm_values)} sessions)" if tpm_values else ""
+            self.std_dev_label.config(text=f"Std Dev {sessions_text}: {std_dev:.6f}" if tpm_values else "Std Dev: N/A")
+    
+        if hasattr(self, 'current_puffs_label'):
+            self.current_puffs_label.config(text=f"Current Puffs: {current_puff_count}")
 
         # Update TPM plot for current sample
-        self.update_tpm_plot(current_sample_id)
+        self.update_tpm_plot_for_current_sample()
 
         debug_print(f"DEBUG: Enhanced stats updated for {current_sample_id}")
 
