@@ -6,6 +6,7 @@ Interface for rapid test data collection with enhanced saving and menu functiona
 
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
+from tksheet import Sheet
 import pandas as pd
 import numpy as np
 import os
@@ -557,11 +558,11 @@ class DataCollectionWindow:
 
         # Create data entry area (left side)
         data_frame = ttk.Frame(content_frame)
-        content_frame.add(data_frame, weight=3)  # 75% width
+        content_frame.add(data_frame, weight=2)  # 50% width
 
         # Create stats panel (right side)
         self.stats_frame = ttk.Frame(content_frame)
-        content_frame.add(self.stats_frame, weight=1)  # 25% width
+        content_frame.add(self.stats_frame, weight=2)  # 50% width
 
         # Create notebook with sample tabs
         self.notebook = ttk.Notebook(data_frame)
@@ -993,7 +994,7 @@ class DataCollectionWindow:
         
             # Update the display
             tree = self.sample_trees[current_tab]
-            self.update_treeview(tree, sample_id)
+            self.update_tksheet(tree, sample_id)
             self.update_stats_panel()
             self.mark_unsaved_changes()
         
@@ -1020,7 +1021,7 @@ class DataCollectionWindow:
             
                 # Update the display for this sample
                 tree = self.sample_trees[i]
-                self.update_treeview(tree, sample_id)
+                self.update_tksheet(tree, sample_id)
         
             self.update_stats_panel()
             self.mark_unsaved_changes()
@@ -1096,7 +1097,7 @@ class DataCollectionWindow:
 
             # Update treeview
             tree = self.sample_trees[i]
-            self.update_treeview(tree, sample_id)
+            self.update_tksheet(tree, sample_id)
 
         self.mark_unsaved_changes()
         debug_print(f"DEBUG: Added new row with puff count {new_puff} to {current_sample_id}")
@@ -1112,7 +1113,7 @@ class DataCollectionWindow:
             
                 # Update treeview
                 tree = self.sample_trees[i]
-                self.update_treeview(tree, sample_id)
+                self.update_tksheet(tree, sample_id)
         
             self.update_stats_panel()
             self.mark_unsaved_changes()
@@ -1663,7 +1664,7 @@ Developed by Charlie Becquet
                     debug_print(f"DEBUG: Error updating VAP3 file: {e}")
     
     def create_sample_tab(self, parent_frame, sample_id, sample_index):
-        """Create a tab for a single sample with data entry controls."""
+        """Create a tab for a single sample with tksheet instead of treeview."""
         debug_print(f"DEBUG: Creating sample tab for {sample_id}")
         debug_print(f"DEBUG: Test name: '{self.test_name}'")
 
@@ -1678,9 +1679,8 @@ Developed by Charlie Becquet
         # Determine columns based on test type
         if self.test_name in ["User Test Simulation", "User Simulation Test"]:
             debug_print(f"DEBUG: Setting up User Test Simulation columns with chronography")
-            columns = ["Chronography", "Puffs", "Before Weight", "After Weight", "Draw Pressure", "Failure", "Notes", "TPM"]
-            column_widths = [100, 80, 100, 100, 100, 80, 150, 80]
-            self.tree_columns = len(columns)
+            headers = ["Chronography", "Puffs", "Before Weight", "After Weight", "Draw Pressure", "Failure", "Notes", "TPM"]
+            self.tree_columns = len(headers)
 
             # Ensure chronography data exists
             if "chronography" not in self.data[sample_id]:
@@ -1690,48 +1690,248 @@ Developed by Charlie Becquet
                 for j in range(existing_length):
                     self.data[sample_id]["chronography"].append("")
         
-            debug_print(f"DEBUG: User Test Simulation columns: {columns}")
+            debug_print(f"DEBUG: User Test Simulation columns: {headers}")
         else:
-            columns = ["Puffs", "Before Weight", "After Weight", "Draw Pressure", "Resistance", "Smell", "Clog", "Notes", "TPM"]
-            column_widths = [80, 100, 100, 100, 100, 80, 80, 150, 80]
-            self.tree_columns = len(columns)
-            debug_print(f"DEBUG: Standard test columns: {columns}")
+            headers = ["Puffs", "Before Weight", "After Weight", "Draw Pressure", "Resistance", "Smell", "Clog", "Notes", "TPM"]
+            self.tree_columns = len(headers)
+            debug_print(f"DEBUG: Standard test columns: {headers}")
 
-        # Create the Treeview directly in the main container
-        tree = ttk.Treeview(main_container, columns=columns, show="headings")
+        # Create the tksheet widget
+        sheet = Sheet(
+            main_container,
+            headers=headers,
+            height=400,
+            width=900,
+            show_table=True,
+            show_top_left=True,
+            show_row_index=True,
+            show_header=True,
+            show_x_scrollbar=True,
+            show_y_scrollbar=True,
+            empty_horizontal=0,
+            empty_vertical=50  # Pre-create 50 empty rows like your original
+        )
     
-        # Configure columns
-        for i, (col, width) in enumerate(zip(columns, column_widths)):
-            tree.heading(col, text=col)
-            tree.column(col, width=width, minwidth=50, anchor='center')
-            debug_print(f"DEBUG: Configured column {i}: {col} with width {width}")
+        # Configure sheet appearance to match your treeview style
+        sheet.set_options(
+            table_bg="#FFFFFF",
+            table_fg="#000000",
+            header_bg="#D0D0D0", 
+            header_fg="#000000",
+            index_bg="#F0F0F0",
+            index_fg="#000000",
+            selected_cells_bg="#CCE5FF",
+            selected_cells_fg="#000000",
+            table_selected_cells_border_fg="#4472C4",
+            table_selected_cells_bg="#CCE5FF",
+            table_selected_rows_bg="#E8F4FD",
+            table_selected_rows_fg="#000000"
+        )
 
-        # Configure highlighting tags
-        tree.tag_configure('highlight_selected', background='#CCE5FF', foreground='black')
-        tree.tag_configure('tpm_calculated', background='#C6EFCE', foreground='black')
-        tree.tag_configure('evenrow', background='#F8F8F8')
-        tree.tag_configure('oddrow', background='white')
+        # Set column widths to match your original treeview (FIXED: use set_column_widths)
+        if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+            column_widths = [100, 80, 100, 100, 100, 80, 150, 80]
+        else:
+            column_widths = [80, 100, 100, 100, 100, 80, 80, 150, 80]
+    
+        # FIXED: Use set_column_widths (plural) with dictionary
+        width_dict = {}
+        for i, width in enumerate(column_widths):
+            width_dict[i] = width
+        sheet.set_column_widths(width_dict)
 
-        # Create scrollbars for the treeview
-        tree_v_scrollbar = ttk.Scrollbar(main_container, orient="vertical", command=tree.yview)
-        tree_h_scrollbar = ttk.Scrollbar(main_container, orient="horizontal", command=tree.xview)
-        tree.configure(yscrollcommand=tree_v_scrollbar.set, xscrollcommand=tree_h_scrollbar.set)
+        # Enable all bindings for full functionality
+        sheet.enable_bindings([
+            "single_select",
+            "drag_select", 
+            "column_select",
+            "row_select",
+            "column_width_resize",
+            "double_click_column_resize",
+            "row_height_resize",
+            "arrowkeys",
+            "tab",
+            "delete",
+            "backspace",
+            "f2",
+            "ctrl_c",
+            "ctrl_v",
+            "ctrl_x",
+            "ctrl_z",
+            "right_click_popup_menu",
+            "rc_select",
+            "rc_insert_row",
+            "rc_delete_row",
+            "copy",
+            "cut",
+            "paste",
+            "delete",
+            "select_all",
+            "edit_cell",
+            "begin_edit_cell"
+        ])
 
-        # Grid everything to fill the container
-        tree.grid(row=0, column=0, sticky="nsew", padx=2, pady=2)
-        tree_v_scrollbar.grid(row=0, column=1, sticky="ns")
-        tree_h_scrollbar.grid(row=1, column=0, sticky="ew")
+        # Grid the sheet to fill the container
+        sheet.grid(row=0, column=0, sticky="nsew", padx=2, pady=2)
 
-        # Populate treeview with initial data
-        self.update_treeview(tree, sample_id)
+        # Populate sheet with initial data
+        self.populate_tksheet_data(sheet, sample_id)
 
-        # Bind events for editing
-        tree.bind("<Button-1>", lambda event: self.on_tree_click(event, tree, sample_id))
-        tree.bind("<Double-1>", lambda event: self.on_tree_click(event, tree, sample_id))
-        tree.bind("<KeyPress>", lambda event: self.on_tree_key_press(event, tree, sample_id))
+        # Set up event bindings
+        sheet.bind("<<SheetModified>>", lambda event: self.on_tksheet_modified(event, sheet, sample_id))
+        sheet.bind("<<SheetSelect>>", lambda event: self.on_tksheet_select(event, sheet, sample_id))
+    
+        # Make TPM column read-only (last column)
+        tpm_col_idx = len(headers) - 1
+        sheet.readonly_columns([tpm_col_idx])
 
-        debug_print(f"DEBUG: Sample tab created for {sample_id} with {len(columns)} columns")
-        return tree
+        # CENTER ALIGN all columns
+        for i in range(len(headers)):
+            sheet.align_columns([i], align="center")
+
+        debug_print(f"DEBUG: Sample tab created for {sample_id} with {len(headers)} columns using tksheet")
+        return sheet
+
+    def populate_tksheet_data(self, sheet, sample_id):
+        """Populate tksheet with data from self.data"""
+        debug_print(f"DEBUG: Populating tksheet for {sample_id}")
+    
+        data_rows = []
+        data_length = len(self.data[sample_id]["puffs"])
+    
+        for i in range(data_length):
+            if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+                row = [
+                    self.data[sample_id]["chronography"][i] if i < len(self.data[sample_id]["chronography"]) else "",
+                    self.data[sample_id]["puffs"][i] if i < len(self.data[sample_id]["puffs"]) else "",
+                    self.data[sample_id]["before_weight"][i] if i < len(self.data[sample_id]["before_weight"]) else "",
+                    self.data[sample_id]["after_weight"][i] if i < len(self.data[sample_id]["after_weight"]) else "",
+                    self.data[sample_id]["draw_pressure"][i] if i < len(self.data[sample_id]["draw_pressure"]) else "",
+                    self.data[sample_id]["smell"][i] if i < len(self.data[sample_id]["smell"]) else "",  # Failure column
+                    self.data[sample_id]["notes"][i] if i < len(self.data[sample_id]["notes"]) else "",
+                    f"{self.data[sample_id]['tpm'][i]:.6f}" if i < len(self.data[sample_id]["tpm"]) and self.data[sample_id]["tpm"][i] is not None else ""
+                ]
+            else:
+                row = [
+                    self.data[sample_id]["puffs"][i] if i < len(self.data[sample_id]["puffs"]) else "",
+                    self.data[sample_id]["before_weight"][i] if i < len(self.data[sample_id]["before_weight"]) else "",
+                    self.data[sample_id]["after_weight"][i] if i < len(self.data[sample_id]["after_weight"]) else "",
+                    self.data[sample_id]["draw_pressure"][i] if i < len(self.data[sample_id]["draw_pressure"]) else "",
+                    self.data[sample_id]["resistance"][i] if i < len(self.data[sample_id]["resistance"]) else "",
+                    self.data[sample_id]["smell"][i] if i < len(self.data[sample_id]["smell"]) else "",
+                    self.data[sample_id]["clog"][i] if i < len(self.data[sample_id]["clog"]) else "",
+                    self.data[sample_id]["notes"][i] if i < len(self.data[sample_id]["notes"]) else "",
+                    f"{self.data[sample_id]['tpm'][i]:.6f}" if i < len(self.data[sample_id]["tpm"]) and self.data[sample_id]["tpm"][i] is not None else ""
+                ]
+            data_rows.append(row)
+    
+        # Add empty rows to reach the standard 50 rows
+        while len(data_rows) < 50:
+            if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+                empty_row = ["", "", "", "", "", "", "", ""]
+            else:
+                empty_row = ["", "", "", "", "", "", "", "", ""]
+            data_rows.append(empty_row)
+    
+        sheet.set_sheet_data(data_rows)
+        debug_print(f"DEBUG: Populated tksheet with {len(data_rows)} rows")
+
+    def sync_tksheet_to_data(self, sheet, sample_id):
+        """Sync tksheet data back to internal data structure"""
+        debug_print(f"DEBUG: Syncing tksheet data to internal structure for {sample_id}")
+    
+        try:
+            sheet_data = sheet.get_sheet_data()
+        
+            # Clear existing data arrays
+            for key in self.data[sample_id]:
+                if key not in ["current_row_index", "avg_tpm"]:
+                    self.data[sample_id][key] = []
+        
+            # Rebuild data from sheet
+            for row_idx, row_data in enumerate(sheet_data):
+                # Ensure row_data is a list and handle empty/None values
+                if not isinstance(row_data, list):
+                    row_data = list(row_data) if row_data is not None else []
+            
+                # Helper function to safely get cell value
+                def safe_get_cell(data_row, col_idx):
+                    if col_idx < len(data_row) and data_row[col_idx] is not None:
+                        val = str(data_row[col_idx]).strip()
+                        return val if val else ""
+                    return ""
+            
+                if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+                    # Map columns to data structure for User Test Simulation
+                    self.data[sample_id]["chronography"].append(safe_get_cell(row_data, 0))
+                    self.data[sample_id]["puffs"].append(safe_get_cell(row_data, 1))
+                    self.data[sample_id]["before_weight"].append(safe_get_cell(row_data, 2))
+                    self.data[sample_id]["after_weight"].append(safe_get_cell(row_data, 3))
+                    self.data[sample_id]["draw_pressure"].append(safe_get_cell(row_data, 4))
+                    self.data[sample_id]["smell"].append(safe_get_cell(row_data, 5))  # Failure
+                    self.data[sample_id]["notes"].append(safe_get_cell(row_data, 6))
+                    self.data[sample_id]["tpm"].append(None)  # Will be recalculated
+                else:
+                    # Standard format mapping
+                    self.data[sample_id]["puffs"].append(safe_get_cell(row_data, 0))
+                    self.data[sample_id]["before_weight"].append(safe_get_cell(row_data, 1))
+                    self.data[sample_id]["after_weight"].append(safe_get_cell(row_data, 2))
+                    self.data[sample_id]["draw_pressure"].append(safe_get_cell(row_data, 3))
+                    self.data[sample_id]["resistance"].append(safe_get_cell(row_data, 4))
+                    self.data[sample_id]["smell"].append(safe_get_cell(row_data, 5))
+                    self.data[sample_id]["clog"].append(safe_get_cell(row_data, 6))
+                    self.data[sample_id]["notes"].append(safe_get_cell(row_data, 7))
+                    self.data[sample_id]["tpm"].append(None)  # Will be recalculated
+        
+            debug_print(f"DEBUG: Synced {len(sheet_data)} rows to internal data structure")
+        
+        except Exception as e:
+            debug_print(f"DEBUG: Error syncing tksheet data: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def on_tksheet_modified(self, event, sheet, sample_id):
+        """Handle changes in tksheet and update internal data"""
+        debug_print(f"DEBUG: tksheet modified for {sample_id}")
+    
+        # Sync data from sheet to internal structure
+        self.sync_tksheet_to_data(sheet, sample_id)
+    
+        # Recalculate TPM for this sample
+        self.calculate_tpm(sample_id)
+    
+        # Update the TPM column in the sheet with calculated values
+        self.update_tpm_in_sheet(sheet, sample_id)
+    
+        # Update stats panel
+        self.update_stats_panel()
+    
+        # Mark as having unsaved changes
+        self.mark_unsaved_changes()
+
+    def on_tksheet_select(self, event, sheet, sample_id):
+        """Handle cell selection in tksheet"""
+        
+        pass
+
+    def update_tpm_in_sheet(self, sheet, sample_id):
+        """Update the TPM column in the sheet with calculated values"""
+        # Get the number of headers to find TPM column index
+        if hasattr(sheet, 'headers'):
+            tpm_col_idx = len(sheet.headers) - 1  # TPM is always the last column
+        else:
+            # Fallback if headers attribute not available
+            if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+                tpm_col_idx = 7  # TPM column index for user simulation
+            else:
+                tpm_col_idx = 8  # TPM column index for standard tests
+    
+        for row_idx in range(len(self.data[sample_id]["tpm"])):
+            tpm_value = self.data[sample_id]["tpm"][row_idx]
+            if tpm_value is not None:
+                sheet.set_cell_data(row_idx, tpm_col_idx, f"{tpm_value:.6f}")
+            else:
+                sheet.set_cell_data(row_idx, tpm_col_idx, "")
 
     def on_tree_key_press(self, event, tree, sample_id):
         """Handle key press events in the treeview."""
@@ -1744,83 +1944,37 @@ Developed by Charlie Becquet
     
         return None
 
-    def update_treeview(self, tree, sample_id):
-        """Update the treeview with current data, highlighting only TPM cells."""
-        debug_print(f"DEBUG: Updating treeview for {sample_id}")
-
-        # Clear existing items
-        for item in tree.get_children():
-            tree.delete(item)
+    def update_tksheet(self, sheet, sample_id):
+        """Update the tksheet with current data (replaces update_treeview)"""
+        debug_print(f"DEBUG: Updating tksheet for {sample_id}")
     
-        # Get data length
-        data_length = len(self.data[sample_id]["puffs"])
-        debug_print(f"DEBUG: Data length for {sample_id}: {data_length}")
+        try:
+            # Populate the sheet with current data
+            self.populate_tksheet_data(sheet, sample_id)
         
-        has_real_data = False
-        for i in range(data_length):
-            if (self.data[sample_id]["puffs"][i] or 
-                self.data[sample_id]["before_weight"][i] or 
-                self.data[sample_id]["after_weight"][i]):
-                has_real_data = True
-                break
-        debug_print(f"DEBUG: {sample_id} has real data: {has_real_data}")
+            # Highlight TPM cells that have calculated values
+            self.highlight_tpm_cells(sheet, sample_id)
+        
+            debug_print(f"DEBUG: tksheet updated for {sample_id}")
+        except Exception as e:
+            debug_print(f"DEBUG: Error updating tksheet: {e}")
 
-        # Insert data rows with alternating colors for better visual separation
-        for i in range(data_length):
+    def highlight_tpm_cells(self, sheet, sample_id):
+        """Highlight TPM cells that have calculated values (like the green highlighting in treeview)"""
+        # Get TPM column index
+        if hasattr(sheet, 'headers'):
+            tpm_col_idx = len(sheet.headers) - 1
+        else:
             if self.test_name in ["User Test Simulation", "User Simulation Test"]:
-                # User Test Simulation format: [Chronography, Puffs, Before Weight, After Weight, Draw Pressure, Failure, Notes, TPM]
-                tpm_value = ""
-                has_tpm = False
-                if i < len(self.data[sample_id]["tpm"]) and self.data[sample_id]["tpm"][i] is not None:
-                    tpm_value = f"{self.data[sample_id]['tpm'][i]:.6f}"
-                    has_tpm = True
-            
-                values = [
-                    self.data[sample_id]["chronography"][i] if i < len(self.data[sample_id]["chronography"]) else "",
-                    self.data[sample_id]["puffs"][i] if i < len(self.data[sample_id]["puffs"]) else "",
-                    self.data[sample_id]["before_weight"][i] if i < len(self.data[sample_id]["before_weight"]) else "",
-                    self.data[sample_id]["after_weight"][i] if i < len(self.data[sample_id]["after_weight"]) else "",
-                    self.data[sample_id]["draw_pressure"][i] if i < len(self.data[sample_id]["draw_pressure"]) else "",
-                    self.data[sample_id]["smell"][i] if i < len(self.data[sample_id]["smell"]) else "",  # Failure column (stored in smell field)
-                    self.data[sample_id]["notes"][i] if i < len(self.data[sample_id]["notes"]) else "",
-                    tpm_value  # TPM column
-                ]
+                tpm_col_idx = 7
             else:
-                # Standard format: [Puffs, Before Weight, After Weight, Draw Pressure, Resistance, Smell, Clog, Notes, TPM]
-                tpm_value = ""
-                has_tpm = False
-                if i < len(self.data[sample_id]["tpm"]) and self.data[sample_id]["tpm"][i] is not None:
-                    tpm_value = f"{self.data[sample_id]['tpm'][i]:.6f}"
-                    has_tpm = True
-            
-                values = [
-                    self.data[sample_id]["puffs"][i] if i < len(self.data[sample_id]["puffs"]) else "",
-                    self.data[sample_id]["before_weight"][i] if i < len(self.data[sample_id]["before_weight"]) else "",
-                    self.data[sample_id]["after_weight"][i] if i < len(self.data[sample_id]["after_weight"]) else "",
-                    self.data[sample_id]["draw_pressure"][i] if i < len(self.data[sample_id]["draw_pressure"]) else "",
-                    self.data[sample_id]["resistance"][i] if i < len(self.data[sample_id]["resistance"]) else "",
-                    self.data[sample_id]["smell"][i] if i < len(self.data[sample_id]["smell"]) else "",
-                    self.data[sample_id]["clog"][i] if i < len(self.data[sample_id]["clog"]) else "",
-                    self.data[sample_id]["notes"][i] if i < len(self.data[sample_id]["notes"]) else "",
-                    tpm_value  # TPM column
-                ]
-          
-                if i < 3:
-                    debug_print(f"DEBUG: Row {i} values being inserted: {values}")
-            # Determine row coloring and TPM highlighting
-            tags = []
-            if i % 2 == 0:
-                tags.append('evenrow')
-            else:
-                tags.append('oddrow')
-        
-            # Only add TPM highlighting if this row has calculated TPM
-            if has_tpm:
-                tags.append('tpm_calculated')
-        
-            item = tree.insert("", "end", values=values, tags=tags)
+                tpm_col_idx = 8
     
-        debug_print(f"DEBUG: Treeview updated for {sample_id} with {data_length} rows")
+        for row_idx in range(len(self.data[sample_id]["tpm"])):
+            tpm_value = self.data[sample_id]["tpm"][row_idx]
+            if tpm_value is not None:
+                # Highlight the cell with green background (like your original TPM highlighting)
+                sheet.highlight_cells(row=row_idx, column=tpm_col_idx, bg="#C6EFCE", fg="black")
 
     def refresh_main_gui_after_save_old(self):
         """Refresh the main GUI to show updated data after saving."""
@@ -2413,7 +2567,7 @@ Developed by Charlie Becquet
             # Update all treeviews to show the loaded data
             for i, sample_tree in enumerate(self.sample_trees):
                 sample_id = f"Sample {i + 1}"
-                self.update_treeview(sample_tree, sample_id)
+                self.update_tksheet(sample_tree, sample_id)
                 debug_print(f"DEBUG: Updated treeview for {sample_id}")
 
             # Update the stats panel
@@ -2637,7 +2791,7 @@ Developed by Charlie Becquet
                     for i, sample_tree in enumerate(self.sample_trees):
                         if i < self.num_samples:
                             sample_id = f"Sample {i + 1}"
-                            self.update_treeview(sample_tree, sample_id)  # FIXED: Pass both tree and sample_id
+                            self.update_tksheet(sample_tree, sample_id)  # FIXED: Pass both tree and sample_id
                             debug_print(f"DEBUG: Updated treeview for {sample_id} with TPM values")
                 else:
                     debug_print("DEBUG: sample_trees not available yet, TPM calculation completed")
@@ -2666,7 +2820,7 @@ Developed by Charlie Becquet
             # Update the treeview to show calculated TPM with highlighting
             if i < len(self.sample_trees):
                 tree = self.sample_trees[i]
-                self.update_treeview(tree, sample_id)
+                self.update_tksheet(tree, sample_id)
     
         # Update stats panel to show current TPM data
         self.update_stats_panel()
@@ -2697,7 +2851,10 @@ Developed by Charlie Becquet
     
         # Clear any existing bindings
         for key, binding_id in self.hotkey_bindings.items():
-            self.window.unbind(key, binding_id)
+            try:
+                self.window.unbind(key, binding_id)
+            except:
+                pass
     
         self.hotkey_bindings.clear()
     
@@ -2705,13 +2862,27 @@ Developed by Charlie Becquet
         binding_id = self.window.bind("<Control-s>", lambda e: self.save_data(show_confirmation=False) if self.hotkeys_enabled else None)
         self.hotkey_bindings["<Control-s>"] = binding_id
     
+        # Debug the Ctrl+Left/Right bindings
+        def debug_left(e):
+            debug_print("DEBUG: Ctrl+Left pressed!")
+            if self.hotkeys_enabled:
+                self.go_to_previous_sample()
+            return "break"  # Try to prevent further propagation
     
-        # Bind Ctrl+Left/Right for sample navigation
-        binding_id = self.window.bind("<Control-Left>", lambda e: self.go_to_previous_sample() if self.hotkeys_enabled else None)
+        def debug_right(e):
+            debug_print("DEBUG: Ctrl+Right pressed!")
+            if self.hotkeys_enabled:
+                self.go_to_next_sample()
+            return "break"  # Try to prevent further propagation
+    
+        # Bind Ctrl+Left/Right with debugging
+        binding_id = self.window.bind_all("<Control-Left>", debug_left)
         self.hotkey_bindings["<Control-Left>"] = binding_id
     
-        binding_id = self.window.bind("<Control-Right>", lambda e: self.go_to_next_sample() if self.hotkeys_enabled else None)
+        binding_id = self.window.bind_all("<Control-Right>", debug_right)
         self.hotkey_bindings["<Control-Right>"] = binding_id
+    
+        debug_print("DEBUG: Hotkeys set up with Control+Left/Right for sample navigation")
     
     def on_window_close(self):
         """Handle window close event with auto-save."""
@@ -3392,7 +3563,7 @@ Developed by Charlie Becquet
             self.calculate_tpm_for_row(sample_id, row_idx)
     
             # Update the entire treeview to reflect TPM changes
-            self.update_treeview(tree, sample_id)
+            self.update_tksheet(tree, sample_id)
     
             # Update stats panel
             self.update_stats_panel()
