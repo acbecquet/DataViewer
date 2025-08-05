@@ -168,8 +168,7 @@ class DataCollectionWindow:
         self.original_filename = original_filename
         if self.original_filename:
             debug_print(f"DEBUG: DataCollectionWindow initialized with original filename: {self.original_filename}")
-    
-
+   
         # Validate num_samples
         if self.num_samples <= 0:
             self.num_samples = len(header_data.get('samples', []))
@@ -198,7 +197,8 @@ class DataCollectionWindow:
         # Default puff interval
         self.puff_interval = 10  # Default to 10
     
-    
+        self.old_row_value = None
+
         # Set up keyboard shortcut flags
         self.hotkeys_enabled = True
         self.hotkey_bindings = {}
@@ -265,9 +265,9 @@ class DataCollectionWindow:
     
         # Navigate menu
         navigate_menu = tk.Menu(menubar, tearoff=0)
-        navigate_menu.add_command(label="Previous Sample", accelerator="Ctrl+Left", 
+        navigate_menu.add_command(label="Previous Sample", accelerator="Alt+Left", 
                                 command=self.go_to_previous_sample)
-        navigate_menu.add_command(label="Next Sample", accelerator="Ctrl+Right", 
+        navigate_menu.add_command(label="Next Sample", accelerator="Alt+Right", 
                                 command=self.go_to_next_sample)
         navigate_menu.add_separator()
         navigate_menu.add_command(label="Go to Sample...", command=self.go_to_sample_dialog)
@@ -935,29 +935,30 @@ class DataCollectionWindow:
         if messagebox.askyesno("Confirm Clear", f"Are you sure you want to clear all data for {sample_id}?"):
             # Clear all data except puffs
             clear_keys = ["before_weight", "after_weight", "draw_pressure", "smell", "notes", "tpm"]
-        
+    
             # Add chronography for User Test Simulation
             if self.test_name in ["User Test Simulation", "User Simulation Test"]:
                 clear_keys.append("chronography")
             else:
                 # Add resistance and clog for standard tests
                 clear_keys.extend(["resistance", "clog"])
-        
+    
             for key in clear_keys:
                 for i in range(len(self.data[sample_id][key])):
                     if key == "tpm":
                         self.data[sample_id][key][i] = None
                     else:
                         self.data[sample_id][key][i] = ""
-        
+    
             # Update the display
-            tree = self.sample_trees[current_tab]
-            self.update_tksheet(tree, sample_id)
+            if hasattr(self, 'sample_sheets') and current_tab < len(self.sample_sheets):
+                sheet = self.sample_sheets[current_tab]
+                self.update_tksheet(sheet, sample_id)
             self.update_stats_panel()
             self.mark_unsaved_changes()
-        
-            debug_print(f"DEBUG: Cleared data for {sample_id}")
     
+            debug_print(f"DEBUG: Cleared data for {sample_id}")
+
     def clear_all_data(self):
         """Clear all data for all samples."""
         if messagebox.askyesno("Confirm Clear All", 
@@ -965,22 +966,23 @@ class DataCollectionWindow:
             for i in range(self.num_samples):
                 sample_id = f"Sample {i + 1}"
                 clear_keys = ["before_weight", "after_weight", "draw_pressure", "smell", "notes", "tpm"]
-            
+        
                 # Add chronography for User Test Simulation
                 if self.test_name in ["User Test Simulation", "User Simulation Test"]:
                     clear_keys.append("chronography")
-            
+        
                 for key in clear_keys:
                     for j in range(len(self.data[sample_id][key])):
                         if key == "tpm":
                             self.data[sample_id][key][j] = None
                         else:
                             self.data[sample_id][key][j] = ""
-            
-                # Update the display for this sample
-                tree = self.sample_trees[i]
-                self.update_tksheet(tree, sample_id)
         
+                # Update the display for this sample
+                if hasattr(self, 'sample_sheets') and i < len(self.sample_sheets):
+                    sheet = self.sample_sheets[i]
+                    self.update_tksheet(sheet, sample_id)
+    
             self.update_stats_panel()
             self.mark_unsaved_changes()
             debug_print("DEBUG: Cleared all data for all samples")
@@ -1054,8 +1056,9 @@ class DataCollectionWindow:
                 self.data[sample_id]["chronography"].append("")
 
             # Update treeview
-            tree = self.sample_trees[i]
-            self.update_tksheet(tree, sample_id)
+            if hasattr(self, 'sample_sheets') and i < len(self.sample_sheets):
+                sheet = self.sample_sheets[i]
+                self.update_tksheet(sheet, sample_id)
 
         self.mark_unsaved_changes()
         debug_print(f"DEBUG: Added new row with puff count {new_puff} to {current_sample_id}")
@@ -1069,9 +1072,9 @@ class DataCollectionWindow:
                     if self.data[sample_id][key]:  # Only remove if list is not empty
                         self.data[sample_id][key].pop()
             
-                # Update treeview
-                tree = self.sample_trees[i]
-                self.update_tksheet(tree, sample_id)
+                if hasattr(self, 'sample_sheets') and i < len(self.sample_sheets):
+                    sheet = self.sample_sheets[i]
+                    self.update_tksheet(sheet, sample_id)
         
             self.update_stats_panel()
             self.mark_unsaved_changes()
@@ -1648,7 +1651,7 @@ Developed by Charlie Becquet
         # Create main container that will hold everything
         main_container = ttk.Frame(parent_frame)
         main_container.pack(fill="both", expand=True)
-    
+
         # Configure main container to expand properly
         main_container.grid_rowconfigure(0, weight=1)
         main_container.grid_columnconfigure(0, weight=1)
@@ -1666,7 +1669,7 @@ Developed by Charlie Becquet
                 existing_length = len(self.data[sample_id]["puffs"])
                 for j in range(existing_length):
                     self.data[sample_id]["chronography"].append("")
-        
+    
             debug_print(f"DEBUG: User Test Simulation columns: {headers}")
         else:
             headers = ["Puffs", "Before Weight", "After Weight", "Draw Pressure", "Resistance", "Smell", "Clog", "Notes", "TPM"]
@@ -1686,10 +1689,10 @@ Developed by Charlie Becquet
             show_x_scrollbar=True,
             show_y_scrollbar=True,
             empty_horizontal=0,
-            empty_vertical=50  # Pre-create 50 empty rows like your original
+            empty_vertical=50
         )
-    
-        # Configure sheet appearance to match your treeview style
+
+        # Configure sheet appearance
         sheet.set_options(
             table_bg="#FFFFFF",
             table_fg="#000000",
@@ -1705,63 +1708,30 @@ Developed by Charlie Becquet
             table_selected_rows_fg="#000000"
         )
 
-        sheet.bind("<Return>", lambda event: self.hand_enter_key(event, sheet, sample_id))
-        sheet.bind("<<SheetCellEdited>>", lambda event: self.on_cell_edited(event, sheet, sample_id))
-
-        # Set column widths to match your original treeview (FIXED: use set_column_widths)
-        if self.test_name in ["User Test Simulation", "User Simulation Test"]:
-            column_widths = [100, 80, 100, 100, 100, 80, 150, 80]
-        else:
-            column_widths = [80, 100, 100, 100, 100, 80, 80, 150, 80]
-    
-        # FIXED: Use set_column_widths (plural) with dictionary
-        width_dict = {}
-        for i, width in enumerate(column_widths):
-            width_dict[i] = width
-        sheet.set_column_widths(width_dict)
-
-        # Enable all bindings for full functionality
         sheet.enable_bindings([
             "single_select",
             "drag_select", 
             "column_select",
             "row_select",
-            "column_width_resize",
-            "double_click_column_resize",
-            "row_height_resize",
             "arrowkeys",
             "tab",
             "delete",
             "backspace",
             "f2",
+            "edit_cell",
+            "begin_edit_cell",
             "ctrl_c",
             "ctrl_v",
             "ctrl_x",
-            "ctrl_z",
-            "right_click_popup_menu",
-            "rc_select",
-            "rc_insert_row",
-            "rc_delete_row",
-            "copy",
-            "cut",
-            "paste",
-            "delete",
-            "select_all",
-            "edit_cell",
-            "begin_edit_cell"
+            "column_width_resize",
+            "row_height_resize",
+            "right_click_popup_menu"
         ])
 
         # Grid the sheet to fill the container
         sheet.grid(row=0, column=0, sticky="nsew", padx=2, pady=2)
 
-        # Populate sheet with initial data
-        self.populate_tksheet_data(sheet, sample_id)
-
-        # Set up event bindings
-        sheet.bind("<<SheetModified>>", lambda event: self.on_tksheet_modified(event, sheet, sample_id))
-        sheet.bind("<<SheetSelect>>", lambda event: self.on_tksheet_select(event, sheet, sample_id))
-    
-        # Make TPM column read-only (last column)
+        # Make TPM column read-only and pin it to the right
         tpm_col_idx = len(headers) - 1
         sheet.readonly_columns([tpm_col_idx])
 
@@ -1769,8 +1739,21 @@ Developed by Charlie Becquet
         for i in range(len(headers)):
             sheet.align_columns([i], align="center")
 
+        # Set up enhanced event bindings for Excel-like behavior
+        self.setup_enhanced_sheet_bindings(sheet, sample_id, sample_index)
+
+        # Populate sheet with initial data  
+        self.populate_tksheet_data(sheet, sample_id)
+
         debug_print(f"DEBUG: Sample tab created for {sample_id} with {len(headers)} columns using tksheet")
         return sheet
+
+    def end_editing(self):
+        """End any active editing in tksheets."""
+        # For tksheet, we don't need to explicitly end editing like with treeview
+        # This method is kept for compatibility with the save process
+        debug_print("DEBUG: Ending any active editing (tksheet)")
+        pass
 
     def on_cell_edited(self, event, sheet, sample_id):
         """Handle cell edit completion."""
@@ -1782,6 +1765,63 @@ Developed by Charlie Becquet
                 self.check_and_populate_puffs(sheet, sample_id, row)
         except Exception as e:
             debug_print(f"DEBUG: Error in on_cell_edited: {e}")
+
+    def setup_enhanced_sheet_bindings(self, sheet, sample_id, sample_index):
+        """Set up simplified event bindings for reliable cell editing."""
+    
+        # Simple event handler for when cells are modified
+        def on_cell_modified(event):
+            """Handle any cell modification."""
+            try:
+                debug_print(f"DEBUG: Cell modified in {sample_id}")
+            
+                # Small delay to ensure edit is complete
+                self.window.after(50, lambda: self.process_sheet_changes(sheet, sample_id))
+        
+            except Exception as e:
+                debug_print(f"DEBUG: Error in cell modified handler: {e}")
+
+        # Bind to the sheet's built-in events
+        sheet.bind("<<SheetModified>>", on_cell_modified)
+    
+        # Handle selection changes to auto-populate puffs
+        def on_selection_changed(event):
+            try:
+                selections = sheet.get_selected_cells()
+                if selections:
+                    row, col = selections[0]
+                    self.old_row_value = row
+                    self.check_and_populate_puffs(sheet, sample_id, row)
+            except Exception as e:
+                debug_print(f"DEBUG: Error in selection handler: {e}")
+    
+        sheet.bind("<<SheetSelectCell>>", on_selection_changed)
+    
+        debug_print(f"DEBUG: Simplified sheet bindings set up for {sample_id}")
+
+    def process_sheet_changes(self, sheet, sample_id):
+        """Process all changes to the sheet data."""
+        debug_print(f"DEBUG: Processing sheet changes for {sample_id}")
+    
+        try:
+            # Sync sheet data to internal structure
+            self.sync_tksheet_to_data(sheet, sample_id)
+        
+            # Recalculate TPM
+            self.calculate_tpm(sample_id)
+        
+            # Update TPM column in sheet
+            self.update_tpm_in_sheet(sheet, sample_id)
+        
+            # Update stats panel
+            self.window.after(100, self.update_stats_panel)
+        
+            # Mark as changed
+            self.mark_unsaved_changes()
+        
+        except Exception as e:
+            debug_print(f"DEBUG: Error processing sheet changes: {e}")
+
 
     def populate_tksheet_data(self, sheet, sample_id):
         """Populate tksheet with data from self.data"""
@@ -1825,6 +1865,7 @@ Developed by Charlie Becquet
             data_rows.append(empty_row)
     
         sheet.set_sheet_data(data_rows)
+        sheet.set_all_cell_sizes_to_text(width=60)
         debug_print(f"DEBUG: Populated tksheet with {len(data_rows)} rows")
 
     def sync_tksheet_to_data(self, sheet, sample_id):
@@ -1833,11 +1874,20 @@ Developed by Charlie Becquet
     
         try:
             sheet_data = sheet.get_sheet_data()
-        
+            old_sheet_data = sheet.get_sheet_data()
             # Store old weight values to detect changes
             old_before_weights = self.data[sample_id]["before_weight"].copy()
             old_after_weights = self.data[sample_id]["after_weight"].copy()
         
+            last_nonzero_puff_index = None
+            for i, row in enumerate(old_sheet_data):
+                try:
+                    puff_val = float(row[0]) if row[0] not in (None, "") else 0
+                    if puff_val != 0:
+                        last_nonzero_puff_index = i
+                except (ValueError, IndexError):
+                    continue
+
             # Clear existing data arrays
             for key in self.data[sample_id]:
                 if key not in ["current_row_index", "avg_tpm"]:
@@ -1856,6 +1906,30 @@ Developed by Charlie Becquet
                         return val if val else ""
                     return ""
             
+                # Detect before/after weight value change
+                old_row = old_sheet_data[row_idx] if row_idx < len(old_sheet_data) else []
+                new_before = safe_get_cell(row_data, 1)
+                new_after = safe_get_cell(row_data, 2)
+                old_before = str(old_row[1]).strip() if len(old_row) > 1 and old_row[1] is not None else ""
+                old_after = str(old_row[2]).strip() if len(old_row) > 2 and old_row[2] is not None else ""
+                new_puffs = safe_get_cell(row_data, 0)
+
+                should_update_puffs = False
+                debug_print(f"should we update? old row: {old_row}, old before: {old_before}, old after: {old_after}, new before: {new_before}, new after: {new_after}, new puffs: {new_puffs}, last nonzero puff {last_nonzero_puff_index} ")
+                if (old_before == "" and new_before != "") or (old_after == "" and new_after != ""):
+                    if new_puffs == "" and last_nonzero_puff_index is not None:
+                        debug_print(f"Yes! Change detected, old before: {old_before}, old after: {old_after}, new before: {new_before}, new after: {new_after}, new puffs: {new_puffs}")
+                        should_update_puffs = True
+                    else:
+                        debug_print(f"No - last nonzero puff index: {last_nonzero_puff_index}")
+                else:
+                    debug_print(f"No")
+                if should_update_puffs:
+                    puff_value = (row_idx - last_nonzero_puff_index) * self.puff_interval
+                    new_puffs = str(puff_value)
+                    debug_print(f"DEBUG: Auto-filled puffs at row {row_idx} with value {new_puffs}")
+                    sheet.set_cell_data(row_idx, 0, new_puffs)  # Update sheet visually
+
                 if self.test_name in ["User Test Simulation", "User Simulation Test"]:
                     # Map columns to data structure for User Test Simulation
                     self.data[sample_id]["chronography"].append(safe_get_cell(row_data, 0))
@@ -1898,50 +1972,13 @@ Developed by Charlie Becquet
             import traceback
             traceback.print_exc()
 
-    def on_tksheet_modified(self, event, sheet, sample_id):
-        """Handle changes in tksheet and update internal data"""
-        debug_print(f"DEBUG: tksheet modified for {sample_id}")
-    
-        # Check for puffs auto-population first
-        try:
-            selections = sheet.get_selected_cells()
-            if selections:
-                row, col = selections[0]
-                self.check_and_populate_puffs(sheet, sample_id, row)
-        except:
-            pass
-    
-        # Store old TPM values to check if they changed
-        old_tpm = self.data[sample_id]["tpm"].copy() if "tpm" in self.data[sample_id] else []
-    
-        # Sync data from sheet to internal structure
-        self.sync_tksheet_to_data(sheet, sample_id)
-    
-        # Recalculate TPM for this sample
-        tpm_changed = self.calculate_tpm(sample_id)
-    
-        # Update the TPM column in the sheet with calculated values
-        self.update_tpm_in_sheet(sheet, sample_id)
-    
-        # Force stats panel update if TPM changed
-        new_tpm = self.data[sample_id]["tpm"]
-        if old_tpm != new_tpm:
-            debug_print(f"DEBUG: TPM values changed, forcing stats update")
-            self.window.after(100, self.update_stats_panel)  # Small delay to ensure UI is ready
-    
-        # Mark as having unsaved changes
-        self.mark_unsaved_changes()
-
-    def on_tksheet_select(self, event, sheet, sample_id):
-        """Handle cell selection in tksheet"""
-        
-        pass
-
     def update_tpm_in_sheet(self, sheet, sample_id):
         """Update the TPM column in the sheet with calculated values"""
         # Get the number of headers to find TPM column index
-        if hasattr(sheet, 'headers'):
-            tpm_col_idx = len(sheet.headers) - 1  # TPM is always the last column
+        debug_print(f"DEBUG: attempting to calculate sheet header length")
+        if hasattr(sheet, 'columns'):
+            tpm_col_idx = len(sheet.columns) - 1  # TPM is always the last column
+            debug_print(f"DEBUG: calculated sheet header length")
         else:
             # Fallback if headers attribute not available
             if self.test_name in ["User Test Simulation", "User Simulation Test"]:
@@ -1956,7 +1993,6 @@ Developed by Charlie Becquet
             else:
                 sheet.set_cell_data(row_idx, tpm_col_idx, "")
 
-
     def update_tksheet(self, sheet, sample_id):
         """Update the tksheet with current data (replaces update_treeview)"""
         debug_print(f"DEBUG: Updating tksheet for {sample_id}")
@@ -1966,7 +2002,7 @@ Developed by Charlie Becquet
             self.populate_tksheet_data(sheet, sample_id)
         
             # Highlight TPM cells that have calculated values
-            self.highlight_tpm_cells(sheet, sample_id)
+            #self.highlight_tpm_cells(sheet, sample_id)
         
             debug_print(f"DEBUG: tksheet updated for {sample_id}")
         except Exception as e:
@@ -1988,102 +2024,6 @@ Developed by Charlie Becquet
             if tpm_value is not None:
                 # Highlight the cell with green background (like your original TPM highlighting)
                 sheet.highlight_cells(row=row_idx, column=tpm_col_idx, bg="#C6EFCE", fg="black")
-
-    def refresh_main_gui_after_save_old(self):
-        """Refresh the main GUI to show updated data after saving."""
-        debug_print("DEBUG: Starting main GUI refresh")
-
-        try:
-            # Use test_name as the sheet to refresh
-            current_sheet_name = self.test_name
-            debug_print(f"DEBUG: Target sheet: {current_sheet_name}")
-    
-            # Check parent and file_manager
-            debug_print(f"DEBUG: Has parent: {hasattr(self, 'parent')}")
-            debug_print(f"DEBUG: Parent exists: {self.parent is not None}")
-            debug_print(f"DEBUG: Has file_manager: {hasattr(self.parent, 'file_manager')}")
-            debug_print(f"DEBUG: File manager exists: {self.parent.file_manager is not None}")
-    
-            # Handle .vap3 files differently - they don't need reloading from disk
-            if self.file_path.endswith('.vap3'):
-                debug_print("DEBUG: .vap3 file detected - updating UI without reloading from disk")
-            
-                # For .vap3 files, the data is already updated in memory
-                # Just refresh the display without reloading
-                if hasattr(self.parent, 'selected_sheet'):
-                    if not self.parent.selected_sheet:
-                        import tkinter as tk
-                        self.parent.selected_sheet = tk.StringVar()
-                        debug_print("DEBUG: Created selected_sheet variable")
-                    self.parent.selected_sheet.set(current_sheet_name)
-                    debug_print(f"DEBUG: Set sheet to {current_sheet_name}")
-
-                # Update the display
-                if hasattr(self.parent, 'update_displayed_sheet'):
-                    debug_print("DEBUG: Calling update_displayed_sheet")
-                    self.parent.update_displayed_sheet(current_sheet_name)
-                    debug_print("DEBUG: Display updated")
-                else:
-                    debug_print("DEBUG: No update_displayed_sheet method available")
-        
-            else:
-                # Regular Excel file handling
-                debug_print(f"DEBUG: Force reloading Excel file {self.file_path}")
-        
-                # Clear any existing cache for this file first
-                if hasattr(self.parent, 'file_manager') and self.parent.file_manager:
-                    if hasattr(self.parent.file_manager, 'loaded_files_cache'):
-                        cache_key = f"{self.file_path}_None"
-                        if cache_key in self.parent.file_manager.loaded_files_cache:
-                            del self.parent.file_manager.loaded_files_cache[cache_key]
-                            debug_print("DEBUG: Cleared file cache")
-            
-                    self.parent.file_manager.load_excel_file(
-                        self.file_path, 
-                        skip_database_storage=True,
-                        force_reload=True
-                    )
-                    debug_print("DEBUG: Excel file reloaded")
-
-                    # Update all_filtered_sheets
-                    if hasattr(self.parent, 'all_filtered_sheets') and hasattr(self.parent, 'current_file'):
-                        debug_print(f"DEBUG: Updating all_filtered_sheets for {self.parent.current_file}")
-                        for file_data in self.parent.all_filtered_sheets:
-                            if file_data.get("file_name") == self.parent.current_file:
-                                file_data["filtered_sheets"] = copy.deepcopy(self.parent.filtered_sheets)
-                                debug_print("DEBUG: Updated all_filtered_sheets entry")
-                                break
-
-                    # Set the sheet selection
-                    if hasattr(self.parent, 'selected_sheet'):
-                        if not self.parent.selected_sheet:
-                            import tkinter as tk
-                            self.parent.selected_sheet = tk.StringVar()
-                            debug_print("DEBUG: Created selected_sheet variable")
-                        self.parent.selected_sheet.set(current_sheet_name)
-                        debug_print(f"DEBUG: Set sheet to {current_sheet_name}")
-
-                    # Update the display
-                    if hasattr(self.parent, 'update_displayed_sheet'):
-                        debug_print("DEBUG: Calling update_displayed_sheet")
-                        self.parent.update_displayed_sheet(current_sheet_name)
-                        debug_print("DEBUG: Display updated")
-                    else:
-                        debug_print("DEBUG: No update_displayed_sheet method available")
-                else:
-                    debug_print("DEBUG: Cannot reload - file_manager not available")
-        
-            # Force GUI update
-            if hasattr(self.parent, 'root'):
-                self.parent.root.update_idletasks()
-                debug_print("DEBUG: Forced GUI update")
-
-            debug_print("DEBUG: Refresh complete")
-
-        except Exception as e:
-            debug_print(f"ERROR: Refresh failed: {e}")
-            import traceback
-            traceback.print_exc()
 
     def refresh_main_gui_after_save(self):
         """Update the main GUI data structures after saving data."""
@@ -2209,8 +2149,10 @@ Developed by Charlie Becquet
                     continue
                 
                 # Calculate puffs in this interval
+                
                 puff_interval = int(self.data[sample_id]["puffs"][i])
-                puffs_in_interval = puff_interval
+              
+                puffs_in_interval = 10 # default 10
             
                 if i > 0:
                     prev_puff = int(self.data[sample_id]["puffs"][i - 1])
@@ -2225,7 +2167,7 @@ Developed by Charlie Becquet
                 tpm = (weight_consumed * 1000) / puffs_in_interval  # Convert to mg per puff
             
                 # Store result
-                self.data[sample_id]["tpm"][i] = round(tpm, 6)
+                self.data[sample_id]["tpm"][i] = round(tpm, 3)
                 valid_tpm_values.append(tpm)
                 
             except Exception:
@@ -2577,11 +2519,15 @@ Developed by Charlie Becquet
                 self.calculate_tpm(sample_id)
                 debug_print(f"DEBUG: Calculated TPM for {sample_id}")
 
-            # Update all treeviews to show the loaded data
-            for i, sample_tree in enumerate(self.sample_trees):
-                sample_id = f"Sample {i + 1}"
-                self.update_tksheet(sample_tree, sample_id)
-                debug_print(f"DEBUG: Updated treeview for {sample_id}")
+            # update tksheets to show loaded data
+            if hasattr(self, 'sample_sheets') and self.sample_sheets:
+                for i, sample_sheet in enumerate(self.sample_sheets):
+                    if i < self.num_samples:
+                        sample_id = f"Sample {i + 1}"
+                        self.update_tksheet(sample_sheet, sample_id)
+                        debug_print(f"DEBUG: Updated tksheet for {sample_id}")
+            else:
+                debug_print("DEBUG: sample_sheets not available yet, data loading completed")
 
             # Update the stats panel
             self.update_stats_panel()
@@ -2800,14 +2746,14 @@ Developed by Charlie Becquet
                     debug_print(f"DEBUG: Calculated TPM for {sample_id}")
 
                 # Update all treeviews to show the loaded data WITH calculated TPM
-                if hasattr(self, 'sample_trees') and self.sample_trees:
-                    for i, sample_tree in enumerate(self.sample_trees):
+                if hasattr(self, 'sample_sheets') and self.sample_sheets:
+                    for i, sample_sheet in enumerate(self.sample_sheets):
                         if i < self.num_samples:
                             sample_id = f"Sample {i + 1}"
-                            self.update_tksheet(sample_tree, sample_id)  # FIXED: Pass both tree and sample_id
-                            debug_print(f"DEBUG: Updated treeview for {sample_id} with TPM values")
+                            self.update_tksheet(sample_sheet, sample_id)
+                            debug_print(f"DEBUG: Updated tksheet for {sample_id} with TPM values")
                 else:
-                    debug_print("DEBUG: sample_trees not available yet, TPM calculation completed")
+                    debug_print("DEBUG: sample_sheets not available yet, TPM calculation completed")
                 
                 # Update the stats panel if available
                 if hasattr(self, 'update_stats_panel'):
@@ -2830,10 +2776,9 @@ Developed by Charlie Becquet
             # Calculate TPM for this sample
             self.calculate_tpm(sample_id)
         
-            # Update the treeview to show calculated TPM with highlighting
-            if i < len(self.sample_trees):
-                tree = self.sample_trees[i]
-                self.update_tksheet(tree, sample_id)
+        if hasattr(self, 'sample_sheets') and i < len(self.sample_sheets):
+            sheet = self.sample_sheets[i]
+            self.update_tksheet(sheet, sample_id)
     
         # Update stats panel to show current TPM data
         self.update_stats_panel()
@@ -2861,38 +2806,38 @@ Developed by Charlie Becquet
         """Set up keyboard shortcuts for navigation."""
         if not hasattr(self, 'hotkey_bindings'):
             self.hotkey_bindings = {}
-    
+
         # Clear any existing bindings
         for key, binding_id in self.hotkey_bindings.items():
             try:
                 self.window.unbind(key, binding_id)
             except:
                 pass
-    
+
         self.hotkey_bindings.clear()
-    
+
         # Bind Ctrl+S for quick save
         self.window.bind("<Control-s>", lambda e: self.save_data(show_confirmation=False) if self.hotkeys_enabled else None)
-    
-        # Use different binding approach for navigation
-        def handle_ctrl_nav(direction):
+
+        # Use Alt+Left/Right for navigation instead of Ctrl
+        def handle_alt_nav(direction):
             if not self.hotkeys_enabled:
                 return "break"
-        
+    
             if direction == "left":
                 self.go_to_previous_sample()
             else:
                 self.go_to_next_sample()
             return "break"
-    
-        # Bind both lowercase and uppercase versions
-        self.window.bind("<Control-Left>", lambda e: handle_ctrl_nav("left"))
-        self.window.bind("<Control-Right>", lambda e: handle_ctrl_nav("right"))
-    
+
+        # Bind Alt+Left/Right for sample navigation
+        self.window.bind("<Alt-Left>", lambda e: handle_alt_nav("left"))
+        self.window.bind("<Alt-Right>", lambda e: handle_alt_nav("right"))
+
         # Also bind with focus_set to ensure window has focus
         self.window.focus_set()
-    
-        debug_print("DEBUG: Hotkeys set up with improved Control+Left/Right handling")
+
+        debug_print("DEBUG: Hotkeys set up with Alt+Left/Right for sample navigation")
     
     def on_window_close(self):
         """Handle window close event with auto-save."""
@@ -2919,7 +2864,9 @@ Developed by Charlie Becquet
         # Show the main GUI window again before destroying
         if hasattr(self.parent, 'root') and self.main_window_was_visible:
             self.parent.root.deiconify()  # Show main window
+            self.parent.root.state('zoomed')
             self.parent.root.lift()  # Bring to front
+            
             debug_print("DEBUG: Main GUI window restored")
     
         self.window.destroy()
@@ -3494,85 +3441,6 @@ Developed by Charlie Becquet
             debug_print(f"DEBUG: Auto-puff progression applied from row {row_idx}")
         except (ValueError, TypeError):
             debug_print("DEBUG: Error in auto-puff progression")
-
-    def handle_enter_key(self, event, sheet, sample_id):
-        """Handle Enter key to move to next row."""
-        debug_print("DEBUG: Enter key pressed in tksheet")
-    
-        try:
-            # Get current selection
-            selections = sheet.get_selected_cells()
-            if selections:
-                row, col = selections[0]
-                # Move to next row, same column
-                next_row = row + 1
-                if next_row < sheet.total_rows():
-                    sheet.deselect("all")
-                    sheet.select_cell(next_row, col)
-                    sheet.see(next_row, col)
-                    return "break"
-        except Exception as e:
-            debug_print(f"DEBUG: Error handling Enter key: {e}")
-    
-        return None
-
-
-    def handle_tab_navigation(self, event):
-        """Handle tab key navigation during editing."""
-        if not self.editing or not self.current_edit:
-            return
-    
-        # Store current edit values before finishing
-        tree = self.current_edit["tree"]
-        sample_id = self.current_edit["sample_id"]
-        column = self.current_edit["column"]
-        row_idx = self.current_edit["row_idx"]
-    
-        # Get column index and direction
-        col_idx = int(column[1:])
-        shift_pressed = event.state & 0x0001  # Check if Shift key is pressed
-        direction = "left" if shift_pressed else "right"
-    
-        # Finish current edit
-        self.finish_edit()
-    
-        # Navigate based on direction
-        items = tree.get_children()
-    
-        if direction == "right":
-            # Navigate to next column or row
-            next_col_idx = col_idx + 1
-        
-            if next_col_idx <= self.tree_columns:
-                # Go to next column in same row
-                next_column = f"#{next_col_idx}"
-                self.edit_cell(tree, self.current_item, next_column, row_idx, sample_id)
-            elif row_idx < len(items) - 1:
-                # Go to first column of next row
-                next_item = items[row_idx + 1]
-                tree.selection_set(next_item)
-                tree.focus(next_item)
-                tree.see(next_item)
-                self.current_item = next_item
-                self.edit_cell(tree, next_item, "#1", row_idx + 1, sample_id)
-        else:
-            # Navigate to previous column or row
-            prev_col_idx = col_idx - 1
-        
-            if prev_col_idx >= 1:
-                # Go to previous column in same row
-                prev_column = f"#{prev_col_idx}"
-                self.edit_cell(tree, self.current_item, prev_column, row_idx, sample_id)
-            elif row_idx > 0:
-                # Go to last column of previous row
-                prev_item = items[row_idx - 1]
-                tree.selection_set(prev_item)
-                tree.focus(prev_item)
-                tree.see(prev_item)
-                self.current_item = prev_item
-                self.edit_cell(tree, prev_item, f"#{self.tree_columns}", row_idx - 1, sample_id)
-    
-        return "break"  # Stop event propagation
 
     def check_and_populate_puffs(self, sheet, sample_id, row_idx):
         """Auto-populate puffs values up to the current row if needed."""
