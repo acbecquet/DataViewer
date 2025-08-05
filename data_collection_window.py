@@ -159,6 +159,11 @@ class DataCollectionWindow:
         self.num_samples = header_data["num_samples"]
         self.result = None
 
+        if hasattr(parent, 'root'):
+            self.main_window_was_visible = parent.root.winfo_viewable()
+            parent.root.withdraw()  # Hide main window
+            debug_print("DEBUG: Main GUI window hidden")
+
         # Store the original filename for saving purposes
         self.original_filename = original_filename
         if self.original_filename:
@@ -193,12 +198,6 @@ class DataCollectionWindow:
         # Default puff interval
         self.puff_interval = 10  # Default to 10
     
-        # Tracking variables for cell editing
-        self.editing = False
-        self.current_edit_widget = None
-        self.current_edit = None
-        self.current_item = None
-        self.current_column = None
     
         # Set up keyboard shortcut flags
         self.hotkeys_enabled = True
@@ -207,13 +206,6 @@ class DataCollectionWindow:
         # Create the style for ttk widgets
         self.style = ttk.Style()
         self.setup_styles()
-
-        # Click tracking variables
-        # Simplified click tracking
-        self.last_click_time = 0
-        self.last_clicked_item = None
-        self.last_clicked_column = None
-
 
         # Initialize data structures
         self.initialize_data()
@@ -520,22 +512,6 @@ class DataCollectionWindow:
     
         debug_print(f"DEBUG: Window centered at {x},{y} with size {width}x{height}")
     
-    def on_canvas_resize(self, event=None):
-        """Handle canvas resize events to update plot size."""
-        if hasattr(self, 'tpm_canvas') and hasattr(self, 'tpm_figure'):
-            # Get the current canvas size
-            canvas_widget = self.tpm_canvas.get_tk_widget()
-            width = canvas_widget.winfo_width()
-            height = canvas_widget.winfo_height()
-        
-            if width > 1 and height > 1:  # Valid size
-                # Convert to inches at 80dpi
-                fig_width = width / 80.0
-                fig_height = height / 80.0
-            
-                # Update figure size
-                self.tpm_figure.set_size_inches(fig_width, fig_height)
-                self.tpm_canvas.draw()
 
     def create_widgets(self):
         """Create the data collection UI with a cleaner structure."""
@@ -855,35 +831,17 @@ class DataCollectionWindow:
     def recreate_sample_tabs(self):
         """Recreate all sample tabs when sample count changes."""
         debug_print("DEBUG: Recreating sample tabs")
-        
+    
         # Clear existing tabs
         for tab in self.notebook.tabs():
             self.notebook.forget(tab)
-        
-        # Clear the lists
-        self.sample_frames.clear()
-        self.sample_trees.clear()
-        
-        # Recreate tabs for the new number of samples
-        for i in range(self.num_samples):
-            sample_id = f"Sample {i+1}"
-            sample_frame = ttk.Frame(self.notebook, padding=10, style='TFrame')
-            
-            # Get sample name safely
-            sample_name = "New Sample"
-            if i < len(self.header_data.get('samples', [])):
-                sample_name = self.header_data['samples'][i].get('id', f"Sample {i+1}")
-            
-            self.notebook.add(sample_frame, text=f"Sample {i+1} - {sample_name}")
-            self.sample_frames.append(sample_frame)
-            
-            # Create the sample tab content
-            tree = self.create_sample_tab(sample_frame, sample_id, i)
-            self.sample_trees.append(tree)
-        
+    
+        # Just call the existing method
+        self.create_sample_tabs()
+    
         # Recreate the TPM stats panel
         self.create_tpm_stats_panel()
-        
+    
         debug_print(f"DEBUG: Recreated {self.num_samples} sample tabs")
 
     def update_header_display(self):
@@ -1663,6 +1621,25 @@ Developed by Charlie Becquet
                 except Exception as e:
                     debug_print(f"DEBUG: Error updating VAP3 file: {e}")
     
+    def create_sample_tabs(self):
+        """Create tabs for all samples in the notebook."""
+        # This method manages the overall process
+        self.sample_frames = []
+        self.sample_sheets = []
+    
+        # Calls create_sample_tab() for EACH sample
+        for i in range(self.num_samples):
+            sample_id = f"Sample {i+1}"
+            sample_frame = ttk.Frame(self.notebook, padding=10, style='TFrame')
+            sample_name = self.header_data['samples'][i].get('id', f"Sample {i+1}")
+        
+            self.notebook.add(sample_frame, text=f"Sample {i+1} - {sample_name}")
+            self.sample_frames.append(sample_frame)
+        
+            # Create individual tab content
+            sheet = self.create_sample_tab(sample_frame, sample_id, i)
+            self.sample_sheets.append(sheet)
+
     def create_sample_tab(self, parent_frame, sample_id, sample_index):
         """Create a tab for a single sample with tksheet instead of treeview."""
         debug_print(f"DEBUG: Creating sample tab for {sample_id}")
@@ -1728,6 +1705,9 @@ Developed by Charlie Becquet
             table_selected_rows_fg="#000000"
         )
 
+        sheet.bind("<Return>", lambda event: self.hand_enter_key(event, sheet, sample_id))
+        sheet.bind("<<SheetCellEdited>>", lambda event: self.on_cell_edited(event, sheet, sample_id))
+
         # Set column widths to match your original treeview (FIXED: use set_column_widths)
         if self.test_name in ["User Test Simulation", "User Simulation Test"]:
             column_widths = [100, 80, 100, 100, 100, 80, 150, 80]
@@ -1792,6 +1772,17 @@ Developed by Charlie Becquet
         debug_print(f"DEBUG: Sample tab created for {sample_id} with {len(headers)} columns using tksheet")
         return sheet
 
+    def on_cell_edited(self, event, sheet, sample_id):
+        """Handle cell edit completion."""
+        try:
+            # Get the edited cell position
+            if hasattr(event, 'row') and hasattr(event, 'column'):
+                row = event.row
+                col = event.column
+                self.check_and_populate_puffs(sheet, sample_id, row)
+        except Exception as e:
+            debug_print(f"DEBUG: Error in on_cell_edited: {e}")
+
     def populate_tksheet_data(self, sheet, sample_id):
         """Populate tksheet with data from self.data"""
         debug_print(f"DEBUG: Populating tksheet for {sample_id}")
@@ -1843,6 +1834,10 @@ Developed by Charlie Becquet
         try:
             sheet_data = sheet.get_sheet_data()
         
+            # Store old weight values to detect changes
+            old_before_weights = self.data[sample_id]["before_weight"].copy()
+            old_after_weights = self.data[sample_id]["after_weight"].copy()
+        
             # Clear existing data arrays
             for key in self.data[sample_id]:
                 if key not in ["current_row_index", "avg_tpm"]:
@@ -1883,6 +1878,19 @@ Developed by Charlie Becquet
                     self.data[sample_id]["notes"].append(safe_get_cell(row_data, 7))
                     self.data[sample_id]["tpm"].append(None)  # Will be recalculated
         
+            # Check if any weights changed
+            weights_changed = (
+                old_before_weights != self.data[sample_id]["before_weight"] or
+                old_after_weights != self.data[sample_id]["after_weight"]
+            )
+        
+            if weights_changed:
+                debug_print(f"DEBUG: Weight values changed, triggering TPM recalculation")
+                # Force immediate TPM calculation
+                self.calculate_tpm(sample_id)
+                # Force immediate plot update
+                self.update_stats_panel()
+        
             debug_print(f"DEBUG: Synced {len(sheet_data)} rows to internal data structure")
         
         except Exception as e:
@@ -1894,17 +1902,32 @@ Developed by Charlie Becquet
         """Handle changes in tksheet and update internal data"""
         debug_print(f"DEBUG: tksheet modified for {sample_id}")
     
+        # Check for puffs auto-population first
+        try:
+            selections = sheet.get_selected_cells()
+            if selections:
+                row, col = selections[0]
+                self.check_and_populate_puffs(sheet, sample_id, row)
+        except:
+            pass
+    
+        # Store old TPM values to check if they changed
+        old_tpm = self.data[sample_id]["tpm"].copy() if "tpm" in self.data[sample_id] else []
+    
         # Sync data from sheet to internal structure
         self.sync_tksheet_to_data(sheet, sample_id)
     
         # Recalculate TPM for this sample
-        self.calculate_tpm(sample_id)
+        tpm_changed = self.calculate_tpm(sample_id)
     
         # Update the TPM column in the sheet with calculated values
         self.update_tpm_in_sheet(sheet, sample_id)
     
-        # Update stats panel
-        self.update_stats_panel()
+        # Force stats panel update if TPM changed
+        new_tpm = self.data[sample_id]["tpm"]
+        if old_tpm != new_tpm:
+            debug_print(f"DEBUG: TPM values changed, forcing stats update")
+            self.window.after(100, self.update_stats_panel)  # Small delay to ensure UI is ready
     
         # Mark as having unsaved changes
         self.mark_unsaved_changes()
@@ -1933,16 +1956,6 @@ Developed by Charlie Becquet
             else:
                 sheet.set_cell_data(row_idx, tpm_col_idx, "")
 
-    def on_tree_key_press(self, event, tree, sample_id):
-        """Handle key press events in the treeview."""
-        if event.keysym == "Tab":
-            return self.handle_tab_key(event, tree, sample_id)
-        elif event.keysym in ["Up", "Down", "Left", "Right"]:
-            return self.handle_arrow_key(event, tree, sample_id, event.keysym.lower())
-        elif event.char.isprintable():
-            return self.start_edit_on_typing(event, tree, sample_id)
-    
-        return None
 
     def update_tksheet(self, sheet, sample_id):
         """Update the tksheet with current data (replaces update_treeview)"""
@@ -2859,30 +2872,27 @@ Developed by Charlie Becquet
         self.hotkey_bindings.clear()
     
         # Bind Ctrl+S for quick save
-        binding_id = self.window.bind("<Control-s>", lambda e: self.save_data(show_confirmation=False) if self.hotkeys_enabled else None)
-        self.hotkey_bindings["<Control-s>"] = binding_id
+        self.window.bind("<Control-s>", lambda e: self.save_data(show_confirmation=False) if self.hotkeys_enabled else None)
     
-        # Debug the Ctrl+Left/Right bindings
-        def debug_left(e):
-            debug_print("DEBUG: Ctrl+Left pressed!")
-            if self.hotkeys_enabled:
+        # Use different binding approach for navigation
+        def handle_ctrl_nav(direction):
+            if not self.hotkeys_enabled:
+                return "break"
+        
+            if direction == "left":
                 self.go_to_previous_sample()
-            return "break"  # Try to prevent further propagation
-    
-        def debug_right(e):
-            debug_print("DEBUG: Ctrl+Right pressed!")
-            if self.hotkeys_enabled:
+            else:
                 self.go_to_next_sample()
-            return "break"  # Try to prevent further propagation
+            return "break"
     
-        # Bind Ctrl+Left/Right with debugging
-        binding_id = self.window.bind_all("<Control-Left>", debug_left)
-        self.hotkey_bindings["<Control-Left>"] = binding_id
+        # Bind both lowercase and uppercase versions
+        self.window.bind("<Control-Left>", lambda e: handle_ctrl_nav("left"))
+        self.window.bind("<Control-Right>", lambda e: handle_ctrl_nav("right"))
     
-        binding_id = self.window.bind_all("<Control-Right>", debug_right)
-        self.hotkey_bindings["<Control-Right>"] = binding_id
+        # Also bind with focus_set to ensure window has focus
+        self.window.focus_set()
     
-        debug_print("DEBUG: Hotkeys set up with Control+Left/Right for sample navigation")
+        debug_print("DEBUG: Hotkeys set up with improved Control+Left/Right handling")
     
     def on_window_close(self):
         """Handle window close event with auto-save."""
@@ -2906,6 +2916,11 @@ Developed by Charlie Becquet
                 self.result = "cancel"
         else:
             self.result = "load_file" if self.last_save_time else "cancel"
+        # Show the main GUI window again before destroying
+        if hasattr(self.parent, 'root') and self.main_window_was_visible:
+            self.parent.root.deiconify()  # Show main window
+            self.parent.root.lift()  # Bring to front
+            debug_print("DEBUG: Main GUI window restored")
     
         self.window.destroy()
     
@@ -3213,74 +3228,6 @@ Developed by Charlie Becquet
     
         debug_print(f"DEBUG: TPM plot updated for {current_sample_id} with smart y-axis bounds")
 
-    def _on_plot_frame_resize(self, event):
-        """Handle plot frame resize to maintain responsive plot sizing."""
-        # Only handle resize events for the plot_frame itself, not its children
-        if event.widget != self.plot_frame:
-            return
-        
-        try:
-            # Get current frame dimensions
-            frame_width = self.plot_frame.winfo_width()
-            frame_height = self.plot_frame.winfo_height()
-        
-            # Skip if dimensions are too small or not ready
-            if frame_width <= 1 or frame_height <= 1:
-               
-                return
-            
-            # Calculate figure size in inches
-            dpi = 80
-            padding_pixels = 4  
-        
-            # Use 2/3 of available height for plot (66.7%)
-            available_plot_height = frame_height * 0.95  # Use almost all available space
-        
-            # Calculate dimensions with minimal padding
-            new_width_inches = max(2.0, (frame_width - padding_pixels) / dpi)
-            new_height_inches = max(1.5, (available_plot_height - padding_pixels) / dpi)
-                
-            # Only resize if the change is significant (avoid excessive redraws)
-            current_size = self.tpm_figure.get_size_inches()
-            width_diff = abs(current_size[0] - new_width_inches)
-            height_diff = abs(current_size[1] - new_height_inches)
-        
-            if width_diff > 0.1 or height_diff > 0.1:            
-                # Resize the figure
-                self.tpm_figure.set_size_inches(new_width_inches, new_height_inches)
-            
-                # Apply very tight layout and redraw
-                self.tpm_figure.tight_layout(pad=0.05)  # Very minimal padding
-                self.tpm_canvas.draw()
-                
-        except Exception as e:
-            debug_print(f"DEBUG: Error during plot resize: {e}")
-
-    def update_plot_size(self):
-        """Update plot size to fit container."""
-        if hasattr(self, 'tpm_canvas') and hasattr(self, 'tpm_figure'):
-            try:
-                # Get the container size
-                canvas_widget = self.tpm_canvas.get_tk_widget()
-                canvas_widget.update_idletasks()
-            
-                width = canvas_widget.winfo_width()
-                height = canvas_widget.winfo_height()
-            
-                # Only resize if we have valid dimensions
-                if width > 50 and height > 50:
-                    # Convert pixels to inches (80 DPI)
-                    fig_width = max(3, width / 80.0)   
-                    fig_height = max(2, height / 80.0) 
-                
-                    # Update figure size
-                    self.tpm_figure.set_size_inches(fig_width, fig_height)
-                    self.tpm_figure.tight_layout(pad=0.5)
-                    self.tpm_canvas.draw()
-                
-            except Exception as e:
-                debug_print(f"DEBUG: Error updating plot size: {e}")
-
     def update_stats_panel(self, event=None):
         """Update the TPM statistics panel to show only current sample with enhanced stats."""
         debug_print("DEBUG: Updating enhanced TPM statistics panel")
@@ -3352,57 +3299,6 @@ Developed by Charlie Becquet
         self.update_tpm_plot_for_current_sample()
 
         debug_print(f"DEBUG: Enhanced stats updated for {current_sample_id}")
-
-    def update_tpm_plot(self, sample_id):
-        """Update the TPM plot for the specified sample with proper autosizing."""
-        debug_print(f"DEBUG: Updating TPM plot for {sample_id}")
-    
-        # Clear the plot
-        self.tpm_ax.clear()
-    
-        # Get data for the sample
-        tpm_values = [v for v in self.data[sample_id]["tpm"] if v is not None]
-        puff_values = []
-    
-        # Get corresponding puff values for non-None TPM values
-        for i, tpm in enumerate(self.data[sample_id]["tpm"]):
-            if tpm is not None and i < len(self.data[sample_id]["puffs"]):
-                puff_values.append(self.data[sample_id]["puffs"][i])
-    
-        if tpm_values and puff_values and len(tpm_values) == len(puff_values):
-            # Plot TPM over puffs
-            self.tpm_ax.plot(puff_values, tpm_values, marker='o', linewidth=2, markersize=4, color='blue')
-            self.tpm_ax.set_xlabel('Puffs', fontsize=9)
-            self.tpm_ax.set_ylabel('TPM', fontsize=9)
-            self.tpm_ax.set_title(f'TPM Over Time - {sample_id}', fontsize=10)
-            self.tpm_ax.grid(True, alpha=0.3)
-        
-            # Set reasonable y-axis limits
-            if max(tpm_values) <= 9:
-                self.tpm_ax.set_ylim(0, 9)
-            else:
-                self.tpm_ax.set_ylim(0, max(tpm_values) * 1.1)
-            
-            # Adjust tick label sizes for better fit
-            self.tpm_ax.tick_params(axis='both', which='major', labelsize=8)
-        
-        else:
-            # Show empty plot with labels
-            self.tpm_ax.set_xlabel('Puffs', fontsize=9)
-            self.tpm_ax.set_ylabel('TPM', fontsize=9)
-            self.tpm_ax.set_title(f'TPM Over Time - {sample_id}', fontsize=10)
-            self.tpm_ax.grid(True, alpha=0.3)
-            self.tpm_ax.text(0.5, 0.5, 'No TPM data available', 
-                            transform=self.tpm_ax.transAxes, ha='center', va='center', fontsize=9)
-    
-        self.tpm_figure.tight_layout(pad=0.5)
-    
-        # Refresh the canvas
-        self.tpm_canvas.draw()
-
-        self.window.after(50, self.update_plot_size)
-    
-        debug_print(f"DEBUG: TPM plot updated for {sample_id} with autosizing")
     
     def go_to_previous_sample(self):
         """Navigate to the previous sample tab."""
@@ -3479,104 +3375,6 @@ Developed by Charlie Becquet
         self.save_status_text.pack(side="right", padx=(0, 5))
     
         self.log("Header section created", "debug")
-
-    def create_sample_tabs(self):
-        """Create tabs for all samples in the notebook."""
-        # Initialize lists to store references
-        self.sample_frames = []
-        self.sample_trees = []
-    
-        # Create a tab for each sample
-        for i in range(self.num_samples):
-            sample_id = f"Sample {i+1}"
-        
-            # Create frame for this sample
-            sample_frame = ttk.Frame(self.notebook, padding=10, style='TFrame')
-        
-            # Get sample name safely
-            sample_name = "Unknown Sample"
-            if i < len(self.header_data.get('samples', [])):
-                sample_name = self.header_data['samples'][i].get('id', f"Sample {i+1}")
-        
-            # Add tab to notebook
-            self.notebook.add(sample_frame, text=f"Sample {i+1} - {sample_name}")
-            self.sample_frames.append(sample_frame)
-        
-            # Create tab content
-            tree = self.create_sample_tab(sample_frame, sample_id, i)
-            self.sample_trees.append(tree)
-    
-        self.log(f"Created {self.num_samples} sample tabs", "debug")
-
-    def finish_edit(self, event=None):
-        """Finish editing and save the value."""
-        if not self.editing or not hasattr(self, 'current_edit'):
-            return
-
-        edit = self.current_edit
-        value = edit["entry"].get()
-        sample_id = edit["sample_id"]
-        tree = edit["tree"]
-        item = edit["item"]
-        column = edit["column"]
-        column_name = edit["column_name"]
-        row_idx = edit["row_idx"]
-
-        # Attempt to convert value
-        value = self.convert_cell_value(value, column_name)
-
-        # Update internal data if changed
-        if row_idx < len(self.data[sample_id][column_name]):
-            old_value = self.data[sample_id][column_name][row_idx]
-            debug_print(f"DEBUG: finish_edit - old_value: '{old_value}', new_value: '{value}', column: {column_name}")
-        
-            if old_value != value:
-                self.data[sample_id][column_name][row_idx] = value
-                self.mark_unsaved_changes()
-
-                # Auto-progression features with conditional logic for after_weight
-                if column_name == "after_weight":
-                    # Only auto-progress if the old value was empty (new data entry)
-                    # Don't auto-progress if we're editing existing data
-                    old_value_empty = old_value in ["", None, 0] or (isinstance(old_value, str) and old_value.strip() == "")
-                    debug_print(f"DEBUG: after_weight change - old_value_empty: {old_value_empty}")
-                
-                    if old_value_empty:
-                        debug_print(f"DEBUG: Auto-progressing weight because old value was empty")
-                        self.auto_progress_weight(tree, sample_id, row_idx, value)
-                    else:
-                        debug_print(f"DEBUG: Skipping auto-progression because old value was not empty (editing existing data)")
-                elif column_name == "puffs":
-                    self.auto_progress_puffs(tree, sample_id, row_idx, value)
-
-        # Update Treeview display
-        col_idx = int(column[1:]) - 1
-        values = list(tree.item(item, "values"))
-        values[col_idx] = str(value) if value != "" else ""
-        tree.item(item, values=values)
-
-        # Live TPM calculation and display update
-        if column_name in ["before_weight", "after_weight", "puffs"]:
-            debug_print(f"DEBUG: Triggering live TPM calculation for {sample_id} due to {column_name} change")
-    
-            # Calculate TPM for this specific row and potentially affected rows
-            self.calculate_tpm_for_row(sample_id, row_idx)
-    
-            # Update the entire treeview to reflect TPM changes
-            self.update_tksheet(tree, sample_id)
-    
-            # Update stats panel
-            self.update_stats_panel()
-    
-            debug_print(f"DEBUG: Live TPM update completed for {sample_id}")
-
-        # Finish edit mode before navigating
-        self.end_editing()
-
-        # Optional keyboard navigation
-        if event and event.keysym in ["Right", "Left"]:
-            direction = "right" if event.keysym == "Right" else "left"
-            self.handle_arrow_key(event, tree, sample_id, direction)
 
     def calculate_tpm_for_row(self, sample_id, changed_row_idx):
         """Calculate TPM for a specific row and related rows when data changes."""
@@ -3662,7 +3460,7 @@ Developed by Charlie Becquet
             return value  # Keep as-is if conversion fails
         return value
 
-    def auto_progress_weight(self, tree, sample_id, row_idx, value):
+    def auto_progress_weight(self, sheet, sample_id, row_idx, value):
         """Auto-fill the next row's before_weight with current after_weight."""
         if value in ["", 0, None]:
             return
@@ -3671,17 +3469,14 @@ Developed by Charlie Becquet
             next_row = row_idx + 1
             if next_row < len(self.data[sample_id]["before_weight"]):
                 self.data[sample_id]["before_weight"][next_row] = val
-                if next_row < len(tree.get_children()):
-                    next_item = tree.get_children()[next_row]
-                    values = list(tree.item(next_item, "values"))
-                    col_idx = 2 if self.test_name in ["User Test Simulation", "User Simulation Test"] else 1
-                    values[col_idx] = str(val)
-                    tree.item(next_item, values=values)
-                    debug_print(f"DEBUG: Auto-set Sample {sample_id} row {next_row} before_weight to {val}")
+                # Update sheet display
+                col_idx = 2 if self.test_name in ["User Test Simulation", "User Simulation Test"] else 1
+                sheet.set_cell_data(next_row, col_idx, str(val))
+                debug_print(f"DEBUG: Auto-set Sample {sample_id} row {next_row} before_weight to {val}")
         except (ValueError, TypeError):
             debug_print("DEBUG: Failed auto weight progression due to invalid value")
 
-    def auto_progress_puffs(self, tree, sample_id, row_idx, value):
+    def auto_progress_puffs(self, sheet, sample_id, row_idx, value):
         """Auto-fill puffs for subsequent rows unless test is user-driven."""
         if self.test_name in ["User Test Simulation", "User Simulation Test"]:
             debug_print("DEBUG: Skipping auto-puff progression for user simulation test")
@@ -3693,197 +3488,34 @@ Developed by Charlie Becquet
                 increment = (i - row_idx) * self.puff_interval
                 puff_val = start_val + increment
                 self.data[sample_id]["puffs"][i] = puff_val
-                if i < len(tree.get_children()):
-                    item = tree.get_children()[i]
-                    values = list(tree.item(item, "values"))
-                    puff_col = 1 if self.test_name == "User Test Simulation" else 0
-                    values[puff_col] = str(puff_val)
-                    tree.item(item, values=values)
+                # Update sheet display
+                puff_col = 1 if self.test_name in ["User Test Simulation", "User Simulation Test"] else 0
+                sheet.set_cell_data(i, puff_col, str(puff_val))
             debug_print(f"DEBUG: Auto-puff progression applied from row {row_idx}")
         except (ValueError, TypeError):
             debug_print("DEBUG: Error in auto-puff progression")
 
-    def edit_cell(self, tree, item, column, row_idx, sample_id):
-        """Single unified method for cell editing."""
-        # Get column name based on column index
-        col_idx = int(column[1:]) - 1
-        column_name = self.get_column_name(col_idx)
+    def handle_enter_key(self, event, sheet, sample_id):
+        """Handle Enter key to move to next row."""
+        debug_print("DEBUG: Enter key pressed in tksheet")
     
-        # Check if this is the TPM column - make it read-only
-        if column_name == "tpm":
-            debug_print("DEBUG: TPM column is read-only (calculated automatically)")
-            return  # Don't allow editing of TPM column
+        try:
+            # Get current selection
+            selections = sheet.get_selected_cells()
+            if selections:
+                row, col = selections[0]
+                # Move to next row, same column
+                next_row = row + 1
+                if next_row < sheet.total_rows():
+                    sheet.deselect("all")
+                    sheet.select_cell(next_row, col)
+                    sheet.see(next_row, col)
+                    return "break"
+        except Exception as e:
+            debug_print(f"DEBUG: Error handling Enter key: {e}")
     
-        # Check if the column exists in our data structure
-        if column_name not in self.data[sample_id]:
-            debug_print(f"DEBUG: Column {column_name} not found in data structure")
-            return
-    
-        # End any existing edit first
-        self.end_editing()
-    
-        # Get cell coordinates and create editing frame
-        x, y, width, height = tree.bbox(item, column)
-        frame = tk.Frame(tree, borderwidth=0, highlightthickness=1, highlightbackground="black")
-        frame.place(x=x, y=y, width=width, height=height)
-    
-        # Create entry widget with current value
-        entry = tk.Entry(frame, borderwidth=0)
-        entry.pack(fill="both", expand=True)
-    
-        # Set current value
-        current_value = self.data[sample_id][column_name][row_idx] if row_idx < len(self.data[sample_id][column_name]) else ""
-        if current_value:
-            entry.insert(0, str(current_value))
-        entry.select_range(0, tk.END)
-    
-        # Store edit state
-        self.editing = True
-        self.hotkeys_enabled = False
-        self.current_edit = {
-            "frame": frame, "entry": entry, "tree": tree, "item": item,
-            "column": column, "column_name": column_name, "row_idx": row_idx, "sample_id": sample_id
-        }
-    
-        # Set up event bindings
-        entry.focus_set()
-        entry.bind("<Return>", self.finish_edit)
-        entry.bind("<Tab>", self.handle_tab_in_edit)
-        entry.bind("<Escape>", self.cancel_edit)
-        entry.bind("<FocusOut>", self.finish_edit)
-        entry.bind("<Left>", self.handle_arrow_in_edit)
-        entry.bind("<Right>", self.handle_arrow_in_edit)
-    
-        self.log(f"Started editing cell - sample: {sample_id}, row: {row_idx}, column: {column_name}", "debug")
-    
-    def on_tree_click(self, event, tree, sample_id):
-        """Unified method for handling tree clicks."""
-        import time
-    
-        item = tree.identify("item", event.x, event.y)
-        column = tree.identify("column", event.x, event.y)
-        region = tree.identify("region", event.x, event.y)
-    
-        # Ignore clicks outside cells
-        if not item or not column or region != "cell":
-            return
-    
-        # Store current selection
-        self.current_item = item
-        self.current_column = column
-    
-        # Check for double-click (based on time since last click)
-        current_time = time.time() * 1000
-        is_double_click = (current_time - self.last_click_time < 300 and
-                          item == getattr(self, 'last_clicked_item', None) and
-                          column == getattr(self, 'last_clicked_column', None))
-    
-        if is_double_click:
-            # Start editing on double-click
-            row_idx = tree.index(item)
-            self.edit_cell(tree, item, column, row_idx, sample_id)
-        else:
-            # Single click - just highlight cell
-            self.highlight_cell(tree, item, column)
-    
-        # Update click tracking
-        self.last_click_time = current_time
-        self.last_clicked_item = item
-        self.last_clicked_column = column
+        return None
 
-    def handle_tab_key(self, event, tree, sample_id):
-        """Handle Tab key press in the treeview."""
-        if self.editing:
-            return "break"  # Already handled in edit mode
-        
-        # Get the current selection
-        item = tree.focus()
-        if not item:
-            # Select the first item and the first column (puffs - now editable)
-            if tree.get_children():
-                item = tree.get_children()[0]
-                tree.selection_set(item)
-                tree.focus(item)
-                self.edit_cell(tree, item, "#1", 0, sample_id, 'puffs')  # Start with puffs column
-            return "break"
-        
-        # Get the current column
-        column = tree.identify_column(event.x) if event else None
-        if not column:
-            # Start at the first column (puffs)
-            column = "#1"
-        
-        # Get column index (1-based)
-        col_idx = int(column[1:])
-    
-        # Get next column
-        next_col_idx = col_idx + 1
-    
-        # If at the last column, move to the first column of the next row
-        if next_col_idx > 6:  # We have 6 columns
-            # Get the next item
-            items = tree.get_children()
-            idx = items.index(item)
-        
-            if idx < len(items) - 1:
-                # Move to next row
-                next_item = items[idx + 1]
-                tree.selection_set(next_item)
-                tree.focus(next_item)
-                tree.see(next_item)
-            
-                # Edit the first column (puffs - now editable)
-                self.edit_cell(tree, next_item, "#1", idx + 1, sample_id, 'puffs')
-            else:
-                # At the last row, move to next sample
-                self.go_to_next_sample()
-        else:
-            # Edit the next column in the same row
-            self.current_column = f"#{next_col_idx}"
-            self.highlight_cell(tree, item, self.current_column)
-        
-        return "break"  # Stop event propagation
-
-    def start_edit_on_typing(self, event, tree, sample_id):
-        """Start editing if a debug_printable character is typed while a cell is selected."""
-        if not event.char.isprintable():
-            return  # Skip control keys
-
-        item = tree.focus()
-        column = getattr(self, 'current_column', '#2')
-
-        if not item:
-            items = tree.get_children()
-            if not items:
-                return
-            item = items[0]
-            tree.selection_set(item)
-            tree.focus(item)
-
-        row_idx = tree.index(item)
-    
-        # Start editing with the key typed
-        self.edit_cell(tree, item, column, row_idx, sample_id)
-    
-        if self.current_edit and self.current_edit["entry"]:
-            entry = self.current_edit["entry"]
-            entry.delete(0, tk.END)
-            entry.insert(0, event.char)
-            entry.icursor(1)
-
-    def handle_tab_in_edit(self, event):
-        """Handle tab key pressed while editing a cell."""
-        self.log("Tab pressed during edit", "debug")
-    
-        # Store the current edit info before finishing
-        current_tree = self.current_edit["tree"]
-        current_sample_id = self.current_edit["sample_id"]
-    
-        # Save the current edit
-        self.finish_edit(event)
-    
-        # Use the handle_tab_navigation method
-        return self.handle_tab_navigation(event)
 
     def handle_tab_navigation(self, event):
         """Handle tab key navigation during editing."""
@@ -3942,129 +3574,42 @@ Developed by Charlie Becquet
     
         return "break"  # Stop event propagation
 
-    def handle_arrow_key(self, event, tree, sample_id, direction):
-        """Handle arrow key press in the treeview."""
-        if self.editing:
-            return  # Let the entry widget handle arrow keys when editing
+    def check_and_populate_puffs(self, sheet, sample_id, row_idx):
+        """Auto-populate puffs values up to the current row if needed."""
+        debug_print(f"DEBUG: Checking puffs population for row {row_idx}")
+    
+        # Check if current row has a puffs value
+        current_puffs = self.data[sample_id]["puffs"][row_idx] if row_idx < len(self.data[sample_id]["puffs"]) else ""
+    
+        if not current_puffs or str(current_puffs).strip() == "":
+            # Find the last row with a puffs value
+            last_puff_row = -1
+            last_puff_value = 0
         
-        # Get the current selection
-        item = tree.focus()
-        if not item:
-            return "break"
+            for i in range(row_idx - 1, -1, -1):
+                if i < len(self.data[sample_id]["puffs"]):
+                    puff_val = self.data[sample_id]["puffs"][i]
+                    if puff_val and str(puff_val).strip():
+                        try:
+                            last_puff_value = int(float(puff_val))
+                            last_puff_row = i
+                            break
+                        except (ValueError, TypeError):
+                            continue
         
-        # Get current column if stored, otherwise use first editable column
-        current_column = getattr(self, 'current_column', '#2')
-        col_idx = int(current_column[1:])
-    
-        if direction in ["left", "right"]:
-            items = tree.get_children()
-            row_idx = items.index(item)
-
-            if direction == "right":
-                if col_idx < 6:
-                    col_idx += 1
-                elif row_idx < len(items) - 1:
-                    row_idx += 1
-                    col_idx = 2
-                else:
-                    return "break"
-            elif direction == "left":
-                if col_idx > 2:
-                    col_idx -= 1
-                elif row_idx > 0:
-                    row_idx -= 1
-                    col_idx = 6
-                else:
-                    return "break"
-
-            next_item = items[row_idx]
-            next_column = f"#{col_idx}"
-            self.current_column = next_column
-            self.highlight_cell(tree, next_item, next_column)
-            debug_print(f"DEBUG: Arrow navigation - moved to row {row_idx}, column {next_column}")
+            debug_print(f"DEBUG: Last puff found at row {last_puff_row} with value {last_puff_value}")
         
-        elif direction in ["up", "down"]:
-            # Vertical navigation
-            items = tree.get_children()
-            current_idx = items.index(item)
+            # Populate all empty puffs values from last_puff_row + 1 to row_idx
+            for i in range(last_puff_row + 1, row_idx + 1):
+                if i < len(self.data[sample_id]["puffs"]):
+                    new_puff_value = last_puff_value + ((i - last_puff_row) * self.puff_interval)
+                    self.data[sample_id]["puffs"][i] = new_puff_value
+                
+                    # Update the sheet display
+                    puff_col_idx = 1 if self.test_name in ["User Test Simulation", "User Simulation Test"] else 0
+                    sheet.set_cell_data(i, puff_col_idx, str(new_puff_value))
+                
+                    debug_print(f"DEBUG: Auto-populated row {i} with puffs value {new_puff_value}")
         
-            if direction == "down":
-                if current_idx < len(items) - 1:
-                    next_item = items[current_idx + 1]
-                    tree.selection_set(next_item)
-                    tree.focus(next_item)
-                    tree.see(next_item)
-                    self.current_column = current_column
-                    self.highlight_cell(tree, next_item, self.current_column)
-                    debug_print(f"DEBUG: Arrow navigation - moved down to row {current_idx + 1}")
-            else:  # up
-                if current_idx > 0:
-                    prev_item = items[current_idx - 1]
-                    tree.selection_set(prev_item)
-                    tree.focus(prev_item)
-                    tree.see(prev_item)
-                    self.current_column = current_column
-                    self.highlight_cell(tree, prev_item, self.current_column)
-                    debug_print(f"DEBUG: Arrow navigation - moved up to row {current_idx - 1}")
-    
-        return "break"  # Stop event propagation
-
-    def handle_arrow_in_edit(self, event):
-        """Handle arrow keys pressed while editing a cell."""
-        # Only handle left/right arrows
-        if event.keysym not in ["Left", "Right"]:
-            return
-    
-        # Check if at beginning or end of text
-        entry = self.current_edit["entry"]
-        cursor_pos = entry.index(tk.INSERT)
-    
-        # If at beginning and pressing left, or at end and pressing right, navigate to next cell
-        if (cursor_pos == 0 and event.keysym == "Left") or \
-           (cursor_pos == len(entry.get()) and event.keysym == "Right"):
-            self.log(f"Arrow key navigation from edit - {event.keysym}", "debug")
-            self.finish_edit(event)
-            return "break"  # Stop event propagation
-
-    def cancel_edit(self, event=None):
-        self.end_editing()
-        return "break"
-
-    def end_editing(self):
-        if not self.editing:
-            return
-        if self.current_edit and "frame" in self.current_edit:
-            self.current_edit["frame"].destroy()
-        self.current_edit = None
-        self.editing = False
-        self.hotkeys_enabled = True
-
-    def highlight_cell(self, tree, item, column):
-        """Highlight a specific cell using enhanced treeview selection."""
-        # Clear previous selection
-        tree.selection_set()
-    
-        # Select the item and focus on it
-        tree.selection_set(item)
-        tree.focus(item)
-        tree.see(item)
-    
-        # Store current selection for keyboard navigation
-        self.current_item = item
-        self.current_column = column
-    
-        # Add visual emphasis by applying a special tag
-        current_tags = list(tree.item(item, 'tags'))
-    
-        # Remove any existing highlight tags from other items
-        for child in tree.get_children():
-            tags = list(tree.item(child, 'tags'))
-            tags = [tag for tag in tags if not tag.startswith('highlight_')]
-            tree.item(child, tags=tags)
-    
-        # Add highlight tag to current item
-        if 'highlight_selected' not in current_tags:
-            current_tags.append('highlight_selected')
-            tree.item(item, tags=current_tags)
-    
-        debug_print(f"DEBUG: Cell highlighted - item: {item}, column: {column}")
+            return True
+        return False
