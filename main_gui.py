@@ -143,6 +143,7 @@ def is_empty_sample(sample_data):
                     debug_print(f"DEBUG: Sample has non-numeric plotting data in '{field}': '{value}'")
                     return False
         
+        
         debug_print("DEBUG: Sample has no plotting data - is empty")
         return True  # No plotting data found
         
@@ -287,9 +288,9 @@ class TestingGUI:
         self.image_loader = None
         self.root.protocol("WM_DELETE_WINDOW", self.on_app_close)
 
-        # Setup update checking
-        self.update_checker = UpdateChecker(current_version="3.0.0")
-        self.setup_update_checking()
+        # Setup update checking - disable when no internet!
+        #self.update_checker = UpdateChecker(current_version="3.0.0")
+        #self.setup_update_checking()
 
         init_time = time.time() - init_start
 

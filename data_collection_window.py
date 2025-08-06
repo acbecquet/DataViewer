@@ -196,8 +196,6 @@ class DataCollectionWindow:
 
         # Default puff interval
         self.puff_interval = 10  # Default to 10
-    
-        self.old_row_value = None
 
         # Set up keyboard shortcut flags
         self.hotkeys_enabled = True
@@ -1745,6 +1743,8 @@ Developed by Charlie Becquet
         # Populate sheet with initial data  
         self.populate_tksheet_data(sheet, sample_id)
 
+        self.old_sheet_data = sheet.get_sheet_data()
+
         debug_print(f"DEBUG: Sample tab created for {sample_id} with {len(headers)} columns using tksheet")
         return sheet
 
@@ -1774,7 +1774,6 @@ Developed by Charlie Becquet
             """Handle any cell modification."""
             try:
                 debug_print(f"DEBUG: Cell modified in {sample_id}")
-            
                 # Small delay to ensure edit is complete
                 self.window.after(50, lambda: self.process_sheet_changes(sheet, sample_id))
         
@@ -1790,7 +1789,6 @@ Developed by Charlie Becquet
                 selections = sheet.get_selected_cells()
                 if selections:
                     row, col = selections[0]
-                    self.old_row_value = row
                     self.check_and_populate_puffs(sheet, sample_id, row)
             except Exception as e:
                 debug_print(f"DEBUG: Error in selection handler: {e}")
@@ -1818,6 +1816,9 @@ Developed by Charlie Becquet
         
             # Mark as changed
             self.mark_unsaved_changes()
+
+            # update old sheet data for next update
+            self.old_sheet_data = sheet.get_sheet_data()
         
         except Exception as e:
             debug_print(f"DEBUG: Error processing sheet changes: {e}")
@@ -1874,13 +1875,13 @@ Developed by Charlie Becquet
     
         try:
             sheet_data = sheet.get_sheet_data()
-            old_sheet_data = sheet.get_sheet_data()
             # Store old weight values to detect changes
             old_before_weights = self.data[sample_id]["before_weight"].copy()
             old_after_weights = self.data[sample_id]["after_weight"].copy()
         
             last_nonzero_puff_index = None
-            for i, row in enumerate(old_sheet_data):
+            
+            for i, row in enumerate(sheet_data):
                 try:
                     puff_val = float(row[0]) if row[0] not in (None, "") else 0
                     if puff_val != 0:
@@ -1907,7 +1908,10 @@ Developed by Charlie Becquet
                     return ""
             
                 # Detect before/after weight value change
-                old_row = old_sheet_data[row_idx] if row_idx < len(old_sheet_data) else []
+                if self.old_sheet_data is not None:
+                    old_row = self.old_sheet_data[row_idx] if row_idx < len(self.old_sheet_data) else []
+                else:
+                    old_row = sheet_data[row_idx] if row_idx < len(sheet_data) else []
                 new_before = safe_get_cell(row_data, 1)
                 new_after = safe_get_cell(row_data, 2)
                 old_before = str(old_row[1]).strip() if len(old_row) > 1 and old_row[1] is not None else ""
