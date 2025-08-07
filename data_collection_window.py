@@ -1755,16 +1755,36 @@ Developed by Charlie Becquet
         debug_print("DEBUG: Ending any active editing (tksheet)")
         pass
 
-    def on_cell_edited(self, event, sheet, sample_id):
-        """Handle cell edit completion."""
+    def on_edit_complete(self, sheet, sample_id, row_idx):
+        """Handle actions when user completes editing a cell (Enter, Tab, etc.)"""
         try:
-            # Get the edited cell position
-            if hasattr(event, 'row') and hasattr(event, 'column'):
-                row = event.row
-                col = event.column
-                self.check_and_populate_puffs(sheet, sample_id, row)
+            debug_print(f"DEBUG: Edit completed for {sample_id} at row {row_idx}")
+        
+            # Check if current row has an after weight and next row needs before weight
+            if row_idx < len(self.data[sample_id]["after_weight"]) - 1:  # Not the last row
+                current_after_weight = self.data[sample_id]["after_weight"][row_idx]
+                next_before_weight = self.data[sample_id]["before_weight"][row_idx + 1] if (row_idx + 1) < len(self.data[sample_id]["before_weight"]) else ""
+            
+                # If current row has after weight and next row's before weight is empty
+                if current_after_weight and str(current_after_weight).strip() != "" and (not next_before_weight or str(next_before_weight).strip() == ""):
+                    debug_print(f"DEBUG: Edit completion - auto-progressing weight from row {row_idx} ({current_after_weight}) to row {row_idx + 1}")
+                
+                    # Update the next row's before weight in data structure
+                    self.data[sample_id]["before_weight"][row_idx + 1] = current_after_weight
+                
+                    # Update the sheet display
+                    before_weight_col_idx = 2 if self.test_name in ["User Test Simulation", "User Simulation Test"] else 1
+                    sheet.set_cell_data(row_idx + 1, before_weight_col_idx, str(current_after_weight))
+                
+                    debug_print(f"DEBUG: Edit completion - auto-set next row before_weight to {current_after_weight}")
+                
+                    # Mark as changed and recalculate TPM
+                    self.mark_unsaved_changes()
+                    self.calculate_tpm(sample_id)
+                    self.update_tpm_in_sheet(sheet, sample_id)
+                
         except Exception as e:
-            debug_print(f"DEBUG: Error in on_cell_edited: {e}")
+            debug_print(f"DEBUG: Error in on_edit_complete: {e}")
 
     def setup_enhanced_sheet_bindings(self, sheet, sample_id, sample_index):
         """Set up simplified event bindings for reliable cell editing."""
@@ -1780,19 +1800,29 @@ Developed by Charlie Becquet
             except Exception as e:
                 debug_print(f"DEBUG: Error in cell modified handler: {e}")
 
-        # Bind to the sheet's built-in events
-        sheet.bind("<<SheetModified>>", on_cell_modified)
-    
-        # Handle selection changes to auto-populate puffs
+        # Handle selection changes and detect edit completion
         def on_selection_changed(event):
             try:
                 selections = sheet.get_selected_cells()
                 if selections:
-                    row, col = selections[0]
-                    self.check_and_populate_puffs(sheet, sample_id, row)
+                    new_row, col = selections[0]
+                
+                    # Check if we moved to a different row (edit completed on previous row)
+                    if hasattr(self, '_current_edit_row') and self._current_edit_row is not None and self._current_edit_row != new_row:
+                        debug_print(f"DEBUG: Edit completed, moved from row {self._current_edit_row} to row {new_row}")
+                        # User moved to different row - edit on previous row is complete
+                        self.on_edit_complete(sheet, sample_id, self._current_edit_row)
+                
+                    # Update current edit row
+                    self._current_edit_row = new_row
+                    debug_print(f"DEBUG: Selection changed to row {new_row}, col {col}")
+                
             except Exception as e:
                 debug_print(f"DEBUG: Error in selection handler: {e}")
-    
+
+
+        # Bind to the sheet's built-in events
+        sheet.bind("<<SheetModified>>", on_cell_modified)
         sheet.bind("<<SheetSelectCell>>", on_selection_changed)
     
         debug_print(f"DEBUG: Simplified sheet bindings set up for {sample_id}")
@@ -1800,26 +1830,26 @@ Developed by Charlie Becquet
     def process_sheet_changes(self, sheet, sample_id):
         """Process all changes to the sheet data."""
         debug_print(f"DEBUG: Processing sheet changes for {sample_id}")
-    
+
         try:
             # Sync sheet data to internal structure
             self.sync_tksheet_to_data(sheet, sample_id)
-        
+
             # Recalculate TPM
             self.calculate_tpm(sample_id)
-        
+
             # Update TPM column in sheet
             self.update_tpm_in_sheet(sheet, sample_id)
-        
+
             # Update stats panel
             self.window.after(100, self.update_stats_panel)
-        
+
             # Mark as changed
             self.mark_unsaved_changes()
 
             # update old sheet data for next update
             self.old_sheet_data = sheet.get_sheet_data()
-        
+
         except Exception as e:
             debug_print(f"DEBUG: Error processing sheet changes: {e}")
 
@@ -1872,67 +1902,144 @@ Developed by Charlie Becquet
     def sync_tksheet_to_data(self, sheet, sample_id):
         """Sync tksheet data back to internal data structure"""
         debug_print(f"DEBUG: Syncing tksheet data to internal structure for {sample_id}")
-    
+
         try:
             sheet_data = sheet.get_sheet_data()
             # Store old weight values to detect changes
             old_before_weights = self.data[sample_id]["before_weight"].copy()
             old_after_weights = self.data[sample_id]["after_weight"].copy()
-        
+
+            # Find last nonzero puff index AND value (for puff auto-population)
             last_nonzero_puff_index = None
-            
+            last_puff_value = 0
+        
             for i, row in enumerate(sheet_data):
                 try:
                     puff_val = float(row[0]) if row[0] not in (None, "") else 0
                     if puff_val != 0:
                         last_nonzero_puff_index = i
+                        last_puff_value = int(puff_val)  # Store the actual value, not just index
+                        debug_print(f"DEBUG: Found nonzero puff at row {i} with value {last_puff_value}")
                 except (ValueError, IndexError):
                     continue
+
+            # Find last nonzero AFTER WEIGHT index (for weight auto-progression) 
+            last_nonzero_after_weight_index = None
+        
+            # Get correct column indices based on test type
+            if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+                before_weight_col = 2
+                after_weight_col = 3
+            else:
+                before_weight_col = 1
+                after_weight_col = 2
+            
+            for i, row in enumerate(sheet_data):
+                try:
+                    after_weight_val = str(row[after_weight_col]).strip() if len(row) > after_weight_col and row[after_weight_col] is not None else ""
+                    if after_weight_val and after_weight_val != "":
+                        last_nonzero_after_weight_index = i
+                        debug_print(f"DEBUG: Found nonzero after weight at row {i} with value {after_weight_val}")
+                except (ValueError, IndexError):
+                    continue
+
+            debug_print(f"DEBUG: Last puff index: {last_nonzero_puff_index}, Last after weight index: {last_nonzero_after_weight_index}")
 
             # Clear existing data arrays
             for key in self.data[sample_id]:
                 if key not in ["current_row_index", "avg_tpm"]:
                     self.data[sample_id][key] = []
-        
+
+            # Track auto weight progression actions to execute later
+            auto_weight_actions = []
+
             # Rebuild data from sheet
             for row_idx, row_data in enumerate(sheet_data):
                 # Ensure row_data is a list and handle empty/None values
                 if not isinstance(row_data, list):
                     row_data = list(row_data) if row_data is not None else []
-            
+
                 # Helper function to safely get cell value
                 def safe_get_cell(data_row, col_idx):
                     if col_idx < len(data_row) and data_row[col_idx] is not None:
                         val = str(data_row[col_idx]).strip()
                         return val if val else ""
                     return ""
-            
+
                 # Detect before/after weight value change
                 if self.old_sheet_data is not None:
                     old_row = self.old_sheet_data[row_idx] if row_idx < len(self.old_sheet_data) else []
                 else:
                     old_row = sheet_data[row_idx] if row_idx < len(sheet_data) else []
-                new_before = safe_get_cell(row_data, 1)
-                new_after = safe_get_cell(row_data, 2)
-                old_before = str(old_row[1]).strip() if len(old_row) > 1 and old_row[1] is not None else ""
-                old_after = str(old_row[2]).strip() if len(old_row) > 2 and old_row[2] is not None else ""
+            
+                new_before = safe_get_cell(row_data, before_weight_col)
+                new_after = safe_get_cell(row_data, after_weight_col)
+                old_before = str(old_row[before_weight_col]).strip() if len(old_row) > before_weight_col and old_row[before_weight_col] is not None else ""
+                old_after = str(old_row[after_weight_col]).strip() if len(old_row) > after_weight_col and old_row[after_weight_col] is not None else ""
                 new_puffs = safe_get_cell(row_data, 0)
 
-                should_update_puffs = False
-                debug_print(f"should we update? old row: {old_row}, old before: {old_before}, old after: {old_after}, new before: {new_before}, new after: {new_after}, new puffs: {new_puffs}, last nonzero puff {last_nonzero_puff_index} ")
-                if (old_before == "" and new_before != "") or (old_after == "" and new_after != ""):
-                    if new_puffs == "" and last_nonzero_puff_index is not None:
-                        debug_print(f"Yes! Change detected, old before: {old_before}, old after: {old_after}, new before: {new_before}, new after: {new_after}, new puffs: {new_puffs}")
-                        should_update_puffs = True
+                # Check for auto weight progression condition - ONLY for after weight column changes
+                should_trigger_auto_weight = False
+                # CRITICAL: Only trigger if AFTER weight changed AND before weight did NOT change
+                # This ensures we only trigger when user edited the after weight column, not before weight column
+                after_weight_changed = (old_after == "" and new_after != "")
+                before_weight_changed = (old_before == "" and new_before != "")
+            
+                if after_weight_changed and not before_weight_changed:  # Only after weight changed, not before weight
+                    # Use AFTER WEIGHT index for weight progression logic
+                    if last_nonzero_after_weight_index is None or row_idx >= last_nonzero_after_weight_index:
+                        debug_print(f"DEBUG: AFTER weight column changed from empty to {new_after} at row {row_idx} - scheduling auto weight AND puff progression")
+                        auto_weight_actions.append((row_idx, new_after))
+                        should_trigger_auto_weight = True
                     else:
-                        debug_print(f"No - last nonzero puff index: {last_nonzero_puff_index}")
+                        debug_print(f"DEBUG: After weight changed at row {row_idx} but this is before last after weight row {last_nonzero_after_weight_index} - no auto progression")
+                elif before_weight_changed and not after_weight_changed:
+                    debug_print(f"DEBUG: BEFORE weight column changed from empty to {new_before} at row {row_idx} - NO auto progression (only TPM update)")
+                elif after_weight_changed and before_weight_changed:
+                    debug_print(f"DEBUG: BOTH weight columns changed at row {row_idx} - this might be bulk data entry or auto-population, no auto progression")
+
+                # Handle puff updates - USE PUFF INDEX for puff logic
+                should_update_puffs = False
+                debug_print(f"Should we update puffs? {old_row}, new before:{new_before}, new after:{new_after}")
+            
+                # Only update puffs if we're past the last known puffs row AND weights changed
+                if last_nonzero_puff_index is not None and row_idx > last_nonzero_puff_index:
+                    if (old_before == "" and new_before != "") or (old_after == "" and new_after != ""):
+                        if new_puffs == "":
+                            debug_print(f"Yes! New data detected at row {row_idx}, auto-filling puffs")
+                            should_update_puffs = True
+                        else:
+                            debug_print(f"No - puffs already filled: {new_puffs}")
+                    else:
+                        debug_print(f"No - no weight changes detected")
+                elif last_nonzero_puff_index is None:
+                    # No existing puffs data, this is the first entry
+                    if (old_before == "" and new_before != "") or (old_after == "" and new_after != ""):
+                        if new_puffs == "":
+                            debug_print(f"Yes! First data entry detected at row {row_idx}, auto-filling puffs")
+                            should_update_puffs = True
+                            # For first entry, set last_nonzero_puff_index to -1 so calculation works
+                            last_nonzero_puff_index = -1
+                            last_puff_value = 0
                 else:
-                    debug_print(f"No")
+                    debug_print(f"No - editing existing puff data at row {row_idx} (last puffs row: {last_nonzero_puff_index})")
+            
                 if should_update_puffs:
-                    puff_value = (row_idx - last_nonzero_puff_index) * self.puff_interval
+                    # Calculate correct puff value: base + increments
+                    puff_value = last_puff_value + (row_idx - last_nonzero_puff_index) * self.puff_interval
                     new_puffs = str(puff_value)
-                    debug_print(f"DEBUG: Auto-filled puffs at row {row_idx} with value {new_puffs}")
-                    sheet.set_cell_data(row_idx, 0, new_puffs)  # Update sheet visually
+                    debug_print(f"DEBUG: Auto-filled puffs at row {row_idx} with value {new_puffs} (base: {last_puff_value}, distance: {row_idx - last_nonzero_puff_index}, interval: {self.puff_interval})")
+                
+                    # Update sheet visually
+                    puff_col_idx = 1 if self.test_name in ["User Test Simulation", "User Simulation Test"] else 0
+                    sheet.set_cell_data(row_idx, puff_col_idx, new_puffs)
+                
+                    # Populate all intermediate puff values from last_nonzero_puff_index + 1 to row_idx
+                    for intermediate_row in range(last_nonzero_puff_index + 1, row_idx + 1):
+                        if intermediate_row < len(sheet_data):
+                            intermediate_puff_value = last_puff_value + (intermediate_row - last_nonzero_puff_index) * self.puff_interval
+                            sheet.set_cell_data(intermediate_row, puff_col_idx, str(intermediate_puff_value))
+                            debug_print(f"DEBUG: Auto-populated intermediate row {intermediate_row} with puffs value {intermediate_puff_value}")
 
                 if self.test_name in ["User Test Simulation", "User Simulation Test"]:
                     # Map columns to data structure for User Test Simulation
@@ -1955,22 +2062,47 @@ Developed by Charlie Becquet
                     self.data[sample_id]["clog"].append(safe_get_cell(row_data, 6))
                     self.data[sample_id]["notes"].append(safe_get_cell(row_data, 7))
                     self.data[sample_id]["tpm"].append(None)  # Will be recalculated
-        
+
+            # NOW execute auto weight progression actions after data arrays are fully rebuilt
+            debug_print(f"DEBUG: Executing {len(auto_weight_actions)} auto weight progression actions")
+            for action_row_idx, action_value in auto_weight_actions:
+                debug_print(f"DEBUG: Executing auto weight progression for row {action_row_idx} with value {action_value}")
+                # Update next row's before weight
+                self.auto_progress_weight(sheet, sample_id, action_row_idx, action_value)
+            
+                # ALSO update next row's puffs if it doesn't have any
+                next_row_idx = action_row_idx + 1
+                if next_row_idx < len(self.data[sample_id]["puffs"]):
+                    current_puffs = self.data[sample_id]["puffs"][next_row_idx] if next_row_idx < len(self.data[sample_id]["puffs"]) else ""
+                    if not current_puffs or str(current_puffs).strip() == "":
+                        # Calculate next puff value
+                        current_puff_value = int(self.data[sample_id]["puffs"][action_row_idx]) if action_row_idx < len(self.data[sample_id]["puffs"]) and self.data[sample_id]["puffs"][action_row_idx] else 0
+                        next_puff_value = current_puff_value + self.puff_interval
+                    
+                        # Update data structure
+                        self.data[sample_id]["puffs"][next_row_idx] = next_puff_value
+                    
+                        # Update sheet display
+                        puff_col_idx = 1 if self.test_name in ["User Test Simulation", "User Simulation Test"] else 0
+                        sheet.set_cell_data(next_row_idx, puff_col_idx, str(next_puff_value))
+                    
+                        debug_print(f"DEBUG: Auto weight progression also updated next row puffs: row {next_row_idx} = {next_puff_value}")
+
             # Check if any weights changed
             weights_changed = (
                 old_before_weights != self.data[sample_id]["before_weight"] or
                 old_after_weights != self.data[sample_id]["after_weight"]
             )
-        
+
             if weights_changed:
                 debug_print(f"DEBUG: Weight values changed, triggering TPM recalculation")
                 # Force immediate TPM calculation
                 self.calculate_tpm(sample_id)
                 # Force immediate plot update
                 self.update_stats_panel()
-        
+
             debug_print(f"DEBUG: Synced {len(sheet_data)} rows to internal data structure")
-        
+
         except Exception as e:
             debug_print(f"DEBUG: Error syncing tksheet data: {e}")
             import traceback
@@ -3426,62 +3558,3 @@ Developed by Charlie Becquet
                 debug_print(f"DEBUG: Auto-set Sample {sample_id} row {next_row} before_weight to {val}")
         except (ValueError, TypeError):
             debug_print("DEBUG: Failed auto weight progression due to invalid value")
-
-    def auto_progress_puffs(self, sheet, sample_id, row_idx, value):
-        """Auto-fill puffs for subsequent rows unless test is user-driven."""
-        if self.test_name in ["User Test Simulation", "User Simulation Test"]:
-            debug_print("DEBUG: Skipping auto-puff progression for user simulation test")
-            return
-
-        try:
-            start_val = int(value)
-            for i in range(row_idx + 1, len(self.data[sample_id]["puffs"])):
-                increment = (i - row_idx) * self.puff_interval
-                puff_val = start_val + increment
-                self.data[sample_id]["puffs"][i] = puff_val
-                # Update sheet display
-                puff_col = 1 if self.test_name in ["User Test Simulation", "User Simulation Test"] else 0
-                sheet.set_cell_data(i, puff_col, str(puff_val))
-            debug_print(f"DEBUG: Auto-puff progression applied from row {row_idx}")
-        except (ValueError, TypeError):
-            debug_print("DEBUG: Error in auto-puff progression")
-
-    def check_and_populate_puffs(self, sheet, sample_id, row_idx):
-        """Auto-populate puffs values up to the current row if needed."""
-        debug_print(f"DEBUG: Checking puffs population for row {row_idx}")
-    
-        # Check if current row has a puffs value
-        current_puffs = self.data[sample_id]["puffs"][row_idx] if row_idx < len(self.data[sample_id]["puffs"]) else ""
-    
-        if not current_puffs or str(current_puffs).strip() == "":
-            # Find the last row with a puffs value
-            last_puff_row = -1
-            last_puff_value = 0
-        
-            for i in range(row_idx - 1, -1, -1):
-                if i < len(self.data[sample_id]["puffs"]):
-                    puff_val = self.data[sample_id]["puffs"][i]
-                    if puff_val and str(puff_val).strip():
-                        try:
-                            last_puff_value = int(float(puff_val))
-                            last_puff_row = i
-                            break
-                        except (ValueError, TypeError):
-                            continue
-        
-            debug_print(f"DEBUG: Last puff found at row {last_puff_row} with value {last_puff_value}")
-        
-            # Populate all empty puffs values from last_puff_row + 1 to row_idx
-            for i in range(last_puff_row + 1, row_idx + 1):
-                if i < len(self.data[sample_id]["puffs"]):
-                    new_puff_value = last_puff_value + ((i - last_puff_row) * self.puff_interval)
-                    self.data[sample_id]["puffs"][i] = new_puff_value
-                
-                    # Update the sheet display
-                    puff_col_idx = 1 if self.test_name in ["User Test Simulation", "User Simulation Test"] else 0
-                    sheet.set_cell_data(i, puff_col_idx, str(new_puff_value))
-                
-                    debug_print(f"DEBUG: Auto-populated row {i} with puffs value {new_puff_value}")
-        
-            return True
-        return False
