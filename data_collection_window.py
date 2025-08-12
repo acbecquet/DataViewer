@@ -238,11 +238,8 @@ class DataCollectionWindow:
         file_menu = tk.Menu(menubar, tearoff=0)
         file_menu.add_command(label="Save", accelerator="Ctrl+S", 
                             command=lambda: self.save_data(show_confirmation=False))
-        file_menu.add_command(label="Save and Continue", 
-                            command=lambda: self.save_data(show_confirmation=True))
         file_menu.add_command(label="Save and Exit", 
                             command=lambda: self.save_data(exit_after=True))
-        file_menu.add_separator()
         file_menu.add_separator()
         file_menu.add_command(label="Export CSV", command=self.export_csv)
         file_menu.add_separator()
@@ -2983,28 +2980,33 @@ Developed by Charlie Becquet
         if self.auto_save_timer:
             self.window.after_cancel(self.auto_save_timer)
     
-        # Auto-save if there are unsaved changes
-        if self.has_unsaved_changes:
-            if messagebox.askyesno("Save Changes", 
-                                 "You have unsaved changes. Save before closing?"):
-                try:
-                    self.save_data(show_confirmation=False)
-                    self.result = "load_file"
-                except Exception as e:
-                    messagebox.showerror("Save Error", f"Failed to save: {e}")
-                    return  # Don't close if save failed
+        # Only handle unsaved changes if result is not already set
+        if self.result is None:
+            # Auto-save if there are unsaved changes
+            if self.has_unsaved_changes:
+                if messagebox.askyesno("Save Changes", 
+                                     "You have unsaved changes. Save before closing?"):
+                    try:
+                        self.save_data(show_confirmation=False)
+                        self.result = "load_file"
+                    except Exception as e:
+                        messagebox.showerror("Save Error", f"Failed to save: {e}")
+                        return  # Don't close if save failed
+                else:
+                    self.result = "cancel"
             else:
-                self.result = "cancel"
-        else:
-            self.result = "load_file" if self.last_save_time else "cancel"
+                self.result = "load_file" if self.last_save_time else "cancel"
+    
         # Show the main GUI window again before destroying
         if hasattr(self.parent, 'root') and self.main_window_was_visible:
+            debug_print("DEBUG: Restoring main GUI window from data collection window")
             self.parent.root.deiconify()  # Show main window
             self.parent.root.state('zoomed')
             self.parent.root.lift()  # Bring to front
-            
+            self.parent.root.focus_set()  # Give focus to main window
+        
             debug_print("DEBUG: Main GUI window restored")
-    
+
         self.window.destroy()
     
     def save_data(self, exit_after=False, show_confirmation=True, auto_save=False):
@@ -3052,9 +3054,12 @@ Developed by Charlie Becquet
         
             # Exit if requested
             if exit_after:
+                debug_print("DEBUG: Save and exit requested - calling on_window_close()")
                 self.result = "load_file"
-                self.window.destroy()
-            
+                # Call on_window_close() to properly restore main window before destroying
+                self.on_window_close()
+                return True
+
             return True
         
         except Exception as e:
