@@ -1579,114 +1579,82 @@ class FileManager:
             if not hasattr(self.gui, 'filtered_sheets') or selected_test not in self.gui.filtered_sheets:
                 debug_print(f"ERROR: Sheet {selected_test} not found in loaded data")
                 return None
-        
+    
             sheet_data = self.gui.filtered_sheets[selected_test]['data']
             debug_print(f"DEBUG: Found loaded sheet data with shape: {sheet_data.shape}")
             debug_print(f"DEBUG: Column headers: {list(sheet_data.columns[:20])}")  # Show first 20 column headers
-    
-            # Extract header data from the first few rows of the DataFrame
+
+            # Determine sample count from data structure
+            sample_count = self.determine_sample_count_from_data(sheet_data, selected_test)
+        
+            # Extract header data using new structure
             header_data = {
                 'common': {
-                    'tester': '',
-                    'media': '',
-                    'viscosity': '',
-                    'voltage': '',
-                    'oil_mass': '',
-                    'puffing_regime': 'Standard'
+                    'tester': ''
                 },
                 'samples': [],
                 'test': selected_test,
-                'num_samples': 1
+                'num_samples': sample_count
             }
-    
+
             try:              
+                # Extract tester from a common location (row 3, column 3)
                 if len(sheet_data) > 2 and len(sheet_data.columns) > 2:
                     tester_value = sheet_data.iloc[2, 2] if not pd.isna(sheet_data.iloc[2, 2]) else ""
                     header_data['common']['tester'] = str(tester_value).strip()
                     debug_print(f"DEBUG: Extracted tester: '{header_data['common']['tester']}'")
 
-                if len(sheet_data) > 1 and len(sheet_data.columns) > 0:
-                    media_value = sheet_data.iloc[1, 0] if not pd.isna(sheet_data.iloc[1, 0]) else ""
-                    header_data['common']['media'] = str(media_value).strip()
-                    debug_print(f"DEBUG: Extracted media: '{header_data['common']['media']}'")
-
-                if len(sheet_data) > 1 and len(sheet_data.columns) > 1:
-                    viscosity_value = sheet_data.iloc[1, 1] if not pd.isna(sheet_data.iloc[1, 1]) else ""
-                    header_data['common']['viscosity'] = str(viscosity_value).strip()
-
-                if len(sheet_data) > 5 and len(sheet_data.columns) > 1:
-                    voltage_value = sheet_data.iloc[5, 1] if not pd.isna(sheet_data.iloc[5, 1]) else ""
-                    header_data['common']['voltage'] = str(voltage_value).strip()
-                    debug_print(f"DEBUG: Extracted voltage: '{header_data['common']['voltage']}'")
-
-                if len(sheet_data) > 7 and len(sheet_data.columns) > 1:
-                    oil_mass_value = sheet_data.iloc[7, 1] if not pd.isna(sheet_data.iloc[7, 1]) else ""
-                    header_data['common']['oil_mass'] = str(oil_mass_value).strip()
-                    debug_print(f"DEBUG: Extracted oil_mass: '{header_data['common']['oil_mass']}'")
-
-                if len(sheet_data) > 7 and len(sheet_data.columns) > 0:
-                    puffing_regime_value = sheet_data.iloc[7, 0] if not pd.isna(sheet_data.iloc[7, 0]) else "Standard"
-                    header_data['common']['puffing_regime'] = str(puffing_regime_value).strip()
-                    debug_print(f"DEBUG: Extracted puffing_regime: '{header_data['common']['puffing_regime']}'")
+                # Extract sample-specific data for each detected sample
+                for i in range(sample_count):
+                    sample_data = {
+                        'id': f'Sample {i+1}',
+                        'resistance': '',
+                        'media': '',
+                        'viscosity': '',
+                        'voltage': '',
+                        'puffing_regime': '60mL/3s/30s',
+                        'oil_mass': ''
+                    }
                 
-            except Exception as e:
-                debug_print(f"DEBUG: Error extracting common header data: {e}")
-    
-            # Extract sample data from column headers and resistance from row 0
-            samples = []
-            sample_count = 0
-        
-            try:
-                # Look for sample IDs in column headers at positions 5, 17, 29, 41, etc. (every 12 columns)
-                for i in range(6):  # Check up to 6 samples
-                    sample_id_col = 5 + (i * 12)  # Columns 5, 17, 29, 41, 53, 65
-                    resistance_col = 3 + (i * 12)  # Columns 3, 15, 27, 39, 51, 63
+                    # Try to extract sample-specific data from the appropriate columns
+                    try:
+                        col_offset = i * 12  # Standard 12-column format
+                    
+                        # Sample ID (row 0, column 5 + offset)
+                        if len(sheet_data.columns) > (5 + col_offset) and len(sheet_data) > 0:
+                            sample_id = sheet_data.iloc[0, 5 + col_offset]
+                            if pd.notna(sample_id) and str(sample_id).strip():
+                                sample_data['id'] = str(sample_id).strip()
+                    
+                        # Media (row 1, column 1 + offset)
+                        if len(sheet_data.columns) > (1 + col_offset) and len(sheet_data) > 1:
+                            media = sheet_data.iloc[1, 1 + col_offset]
+                            if pd.notna(media) and str(media).strip():
+                                sample_data['media'] = str(media).strip()
+                    
+                        # Viscosity (row 2, column 1 + offset)
+                        if len(sheet_data.columns) > (1 + col_offset) and len(sheet_data) > 2:
+                            viscosity = sheet_data.iloc[2, 1 + col_offset]
+                            if pd.notna(viscosity) and str(viscosity).strip():
+                                sample_data['viscosity'] = str(viscosity).strip()
+                    
+                        # Resistance (row 1, column 4 + offset)
+                        if len(sheet_data.columns) > (4 + col_offset) and len(sheet_data) > 1:
+                            resistance = sheet_data.iloc[1, 4 + col_offset]
+                            if pd.notna(resistance) and str(resistance).strip():
+                                sample_data['resistance'] = str(resistance).strip()
+                    
+                        debug_print(f"DEBUG: Sample {i+1} data: {sample_data}")
+                    
+                    except Exception as e:
+                        debug_print(f"DEBUG: Error extracting data for sample {i+1}: {e}")
                 
-                    # Check if these columns exist
-                    if sample_id_col < len(sheet_data.columns) and resistance_col < len(sheet_data.columns):
-                        # Get sample ID from column header
-                        sample_id = str(sheet_data.columns[sample_id_col]).strip()
-                    
-                        # Get resistance from row 0 of the resistance column
-                        resistance = ""
-                        if len(sheet_data) > 0:
-                            resistance_val = sheet_data.iloc[0, resistance_col]
-                            if not pd.isna(resistance_val):
-                                resistance = str(resistance_val).strip()
-                    
-                        # Only add if we have a meaningful sample ID (not NaN, empty, or default column name)
-                        if sample_id and sample_id != 'nan' and not sample_id.startswith('Unnamed'):
-                            samples.append({
-                                'id': sample_id,
-                                'resistance': resistance
-                            })
-                            sample_count += 1
-                            debug_print(f"DEBUG: Found sample {sample_count} from headers: ID='{sample_id}' (col {sample_id_col}), Resistance='{resistance}' (col {resistance_col}, row 0)")
-                        else:
-                            # No more meaningful samples
-                            debug_print(f"DEBUG: No meaningful sample found at column {sample_id_col}, stopping sample search")
-                            break
-                    else:
-                        # Columns don't exist, stop looking
-                        debug_print(f"DEBUG: Sample columns {sample_id_col} or {resistance_col} don't exist, stopping sample search")
-                        break
-                    
+                    header_data['samples'].append(sample_data)
+
             except Exception as e:
-                debug_print(f"DEBUG: Error extracting sample data from headers: {e}")
-    
-            # If no samples found, create a default one
-            if sample_count == 0:
-                debug_print("DEBUG: No samples found in headers, creating default sample")
-                samples = [{'id': 'Sample 1', 'resistance': ''}]
-                sample_count = 1
-    
-            header_data['samples'] = samples
-            header_data['num_samples'] = sample_count
-    
-            debug_print(f"DEBUG: Successfully extracted header data from loaded sheets: {sample_count} samples")
-            debug_print(f"DEBUG: Common data: {header_data['common']}")
-            debug_print(f"DEBUG: Samples: {samples}")
-    
+                debug_print(f"DEBUG: Error extracting header data: {e}")
+
+            debug_print(f"DEBUG: Final extracted header data: {sample_count} samples")
             return header_data
         
         except Exception as e:
@@ -1945,22 +1913,51 @@ class FileManager:
     def show_header_data_dialog(self, file_path, selected_test):
         """Show the header data dialog for a selected test."""
         debug_print(f"DEBUG: Showing header data dialog for {selected_test}")
-        
-        # Show the header data dialog
-        header_dialog = HeaderDataDialog(self.gui.root, file_path, selected_test)
-        result, header_data = header_dialog.show()
     
+        # Try to determine sample count from existing data first
+        initial_sample_count = 1
+        try:
+            if hasattr(self.gui, 'filtered_sheets') and selected_test in self.gui.filtered_sheets:
+                sheet_data = self.gui.filtered_sheets[selected_test]['data']
+                initial_sample_count = self.determine_sample_count_from_data(sheet_data, selected_test)
+                debug_print(f"DEBUG: Determined {initial_sample_count} samples from existing data")
+        except Exception as e:
+            debug_print(f"DEBUG: Could not determine sample count from data: {e}")
+    
+        # Create initial header data structure with detected sample count
+        initial_header_data = {
+            'common': {'tester': ''},
+            'samples': [
+                {
+                    'id': f'Sample {i+1}',
+                    'resistance': '',
+                    'media': '',
+                    'viscosity': '',
+                    'voltage': '',
+                    'puffing_regime': '60mL/3s/30s',
+                    'oil_mass': ''
+                } for i in range(initial_sample_count)
+            ],
+            'test': selected_test,
+            'num_samples': initial_sample_count
+        }
+    
+        # Show the header data dialog
+        header_dialog = HeaderDataDialog(self.gui.root, file_path, selected_test, 
+                                       edit_mode=False, current_data=initial_header_data)
+        result, header_data = header_dialog.show()
+
         if result:
             debug_print("DEBUG: Header data dialog completed successfully")
             # Apply header data to the file
             self.apply_header_data_to_file(file_path, header_data)
-        
+    
             debug_print("DEBUG: Proceeding to data collection window")
             # Show the data collection window
             from data_collection_window import DataCollectionWindow
             data_collection = DataCollectionWindow(self.gui, file_path, selected_test, header_data)
             data_result = data_collection.show()
-        
+    
             if data_result == "load_file":
                 # Load the file for viewing
                 self.load_file(file_path)
@@ -1977,14 +1974,14 @@ class FileManager:
         """
         try:
             debug_print(f"DEBUG: Applying header data to {file_path} for {header_data['num_samples']} samples")
-        
+    
             # Load the workbook
             wb = openpyxl.load_workbook(file_path)
 
             # Get the sheet for the selected test
             if header_data["test"] in wb.sheetnames:
                 ws = wb[header_data["test"]]
-            
+        
                 debug_print(f"DEBUG: Successfully opened sheet '{header_data['test']}'")
 
                 # Set the test name at row 1, column 1 (this should be done once)
@@ -1993,6 +1990,7 @@ class FileManager:
 
                 # Get common data once
                 common_data = header_data["common"]
+                samples_data = header_data.get("samples", [])
 
                 # Apply sample-specific data for each sample block
                 num_samples = header_data["num_samples"]
@@ -2000,146 +1998,160 @@ class FileManager:
                     # Calculate column offset (12 columns per sample)
                     # Sample blocks start at column 1, so offsets are 0, 12, 24, 36, etc.
                     col_offset = i * 12
-                
-                    debug_print(f"DEBUG: Processing sample {i+1} with column offset {col_offset}")
+                    sample_data = samples_data[i] if i < len(samples_data) else {}
             
-                    # Get sample data
-                    sample_data = header_data["samples"][i]
-                    sample_id = sample_data["id"]
-                    sample_resistance = sample_data["resistance"]
-                
-                    debug_print(f"DEBUG: Sample {i+1}: ID='{sample_id}', Resistance='{sample_resistance}'")
-                
-                    # Apply sample-specific headers according to template structure:
-                    # Row 1: Sample ID goes in column F (6) + offset
-                    sample_id_col = 6 + col_offset
-                    ws.cell(row=1, column=sample_id_col, value=sample_id)
-                    debug_print(f"DEBUG: Set sample ID '{sample_id}' at row 1, column {sample_id_col}")
-                
-                    # Row 2: Resistance goes in column D (4) + offset  
-                    resistance_col = 4 + col_offset
-                    if sample_resistance:  # Only set if not empty
+                    debug_print(f"DEBUG: Processing sample {i+1} with column offset {col_offset}")
+                    debug_print(f"DEBUG: Sample {i+1}: ID='{sample_data.get('id', '')}', Resistance='{sample_data.get('resistance', '')}'")
+
+                    # Row 1, Column F (6) + offset: Sample ID
+                    sample_id = sample_data.get('id', f'Sample {i+1}')
+                    ws.cell(row=1, column=6 + col_offset, value=sample_id)
+                    debug_print(f"DEBUG: Set sample ID '{sample_id}' at row 1, column {6 + col_offset}")
+
+                    # Row 2, Column D (4) + offset: Resistance  
+                    resistance = sample_data.get("resistance", "")
+                    if resistance:
                         try:
-                            # Try to convert to float for numeric storage
-                            resistance_value = float(sample_resistance)
-                            ws.cell(row=2, column=resistance_col, value=resistance_value)
+                            resistance_value = float(resistance)
+                            ws.cell(row=2, column=4 + col_offset, value=resistance_value)
                         except ValueError:
-                            # If not numeric, store as string
-                            ws.cell(row=2, column=resistance_col, value=sample_resistance)
-                    debug_print(f"DEBUG: Set resistance '{sample_resistance}' at row 2, column {resistance_col}")
+                            ws.cell(row=2, column=4 + col_offset, value=resistance)
+                        debug_print(f"DEBUG: Set resistance '{resistance}' at row 2, column {4 + col_offset}")
 
-                    # Set tester for each sample at row 3, column D (4) + offset (just name, no "Tester:" prefix)
-                    tester_col = 4 + col_offset
-                    tester_name = header_data['common']['tester']  # Just the name
-                    ws.cell(row=3, column=tester_col, value=tester_name)
-                    debug_print(f"DEBUG: Set tester '{tester_name}' at row 3, column {tester_col} for sample {i+1}")
+                    # Row 3, Column D (4) + offset: Tester name (from common data)
+                    tester_name = common_data.get("tester", "")
+                    if tester_name:
+                        tester_col = 4 + col_offset
+                        ws.cell(row=3, column=tester_col, value=tester_name)
+                        debug_print(f"DEBUG: Set tester '{tester_name}' at row 3, column {tester_col} for sample {i+1}")
 
-                    # Apply common data to EACH sample block (not just the first one)
+                    # Sample-specific data from the sample record
                     # Row 2, Column B (2) + offset: Media
-                    if common_data["media"]:
+                    media = sample_data.get("media", "")
+                    if media:
                         media_col = 2 + col_offset
-                        ws.cell(row=2, column=media_col, value=common_data["media"])
-                        debug_print(f"DEBUG: Set media '{common_data['media']}' at row 2, column {media_col} for sample {i+1}")
-                
+                        ws.cell(row=2, column=media_col, value=media)
+                        debug_print(f"DEBUG: Set media '{media}' at row 2, column {media_col} for sample {i+1}")
+            
                     # Row 3, Column B (2) + offset: Viscosity 
-                    if common_data["viscosity"]:
+                    viscosity = sample_data.get("viscosity", "")
+                    if viscosity:
                         viscosity_col = 2 + col_offset
                         try:
-                            viscosity_value = float(common_data["viscosity"])
+                            viscosity_value = float(viscosity)
                             ws.cell(row=3, column=viscosity_col, value=viscosity_value)
                         except ValueError:
-                            ws.cell(row=3, column=viscosity_col, value=common_data["viscosity"])
-                        debug_print(f"DEBUG: Set viscosity '{common_data['viscosity']}' at row 3, column {viscosity_col} for sample {i+1}")
-                
+                            ws.cell(row=3, column=viscosity_col, value=viscosity)
+                        debug_print(f"DEBUG: Set viscosity '{viscosity}' at row 3, column {viscosity_col} for sample {i+1}")
+            
                     # Row 3, Column F (6) + offset: Voltage
-                    if common_data["voltage"]:
+                    voltage = sample_data.get("voltage", "")
+                    if voltage:
                         voltage_col = 6 + col_offset
                         try:
-                            voltage_value = float(common_data["voltage"])
+                            voltage_value = float(voltage)
                             ws.cell(row=3, column=voltage_col, value=voltage_value)
                         except ValueError:
-                            ws.cell(row=3, column=voltage_col, value=common_data["voltage"])
-                        debug_print(f"DEBUG: Set voltage '{common_data['voltage']}' at row 3, column {voltage_col} for sample {i+1}")
-                
-                    # Row 3, Column H (8) + offset: Oil mass
-                    if common_data["oil_mass"]:
+                            ws.cell(row=3, column=voltage_col, value=voltage)
+                        debug_print(f"DEBUG: Set voltage '{voltage}' at row 3, column {voltage_col} for sample {i+1}")
+
+                    # Row 3, Column H (8) + offset: Oil Mass
+                    oil_mass = sample_data.get("oil_mass", "")
+                    if oil_mass:
                         oil_mass_col = 8 + col_offset
                         try:
-                            oil_mass_value = float(common_data["oil_mass"])
+                            oil_mass_value = float(oil_mass)
                             ws.cell(row=3, column=oil_mass_col, value=oil_mass_value)
                         except ValueError:
-                            ws.cell(row=3, column=oil_mass_col, value=common_data["oil_mass"])
-                        debug_print(f"DEBUG: Set oil mass '{common_data['oil_mass']}' at row 3, column {oil_mass_col} for sample {i+1}")
-            
-                    # Row 2, Column G (7) + offset: Puffing regime
-                    puffing_regime = header_data['common'].get('puffing_regime', "Standard - 60mL/3s/30s")
-                    puffing_regime_col = 7 + col_offset
-                    ws.cell(row=2, column=puffing_regime_col, value=puffing_regime)
-                    debug_print(f"DEBUG: Set puffing regime '{puffing_regime}' at row 2, column {puffing_regime_col} for sample {i+1}")
+                            ws.cell(row=3, column=oil_mass_col, value=oil_mass)
+                        debug_print(f"DEBUG: Set oil mass '{oil_mass}' at row 3, column {oil_mass_col} for sample {i+1}")
 
-                # NEW: Delete extra columns after the last sample to clean up data visualization
-                last_sample_column = num_samples * 12  # 12 columns per sample
+                    # Row 2, Column H + offset: Puffing Regime
+                    puffing_regime = sample_data.get("puffing_regime", "60mL/3s/30s")
+                    if puffing_regime:
+                        puffing_regime_col = 8 + col_offset
+                        ws.cell(row=2, column=puffing_regime_col, value=puffing_regime)
+                        debug_print(f"DEBUG: Set puffing regime '{puffing_regime}' at row 2, column {puffing_regime_col} for sample {i+1}")
+
+                # Calculate the last column used
+                last_sample_column = ((num_samples - 1) * 12) + 12
                 max_column = ws.max_column
-            
-                if max_column > last_sample_column:
-                    debug_print(f"DEBUG: Deleting extra columns {last_sample_column + 1} to {max_column}")
-                    # Delete columns from (last_sample_column + 1) to max_column
-                    for col in range(max_column, last_sample_column, -1):  # Delete from right to left
-                        ws.delete_cols(col)
-                    debug_print(f"DEBUG: Deleted {max_column - last_sample_column} extra columns")
-                else:
-                    debug_print(f"DEBUG: No extra columns to delete. Last sample column: {last_sample_column}, Max column: {max_column}")
+                debug_print(f"DEBUG: Last sample column: {last_sample_column}, Max column: {max_column}")
         
                 # Save the workbook
                 wb.save(file_path)
                 debug_print(f"DEBUG: Successfully saved workbook to {file_path}")
-        
+    
                 debug_print(f"SUCCESS: Applied header data for {num_samples} samples to {file_path}")
-            
-                # Verify the data was written correctly by reading it back
-                debug_print("DEBUG: Verifying written data...")
-                verification_wb = openpyxl.load_workbook(file_path)
-                verification_ws = verification_wb[header_data["test"]]
-            
-                # Verify test name at row 1, column 1
-                test_name_cell = verification_ws.cell(row=1, column=1)
-                debug_print(f"DEBUG: Verification - Test name at row 1, col 1: '{test_name_cell.value}'")
-            
-                # Verify column count
-                final_max_column = verification_ws.max_column
-                debug_print(f"DEBUG: Verification - Final max column: {final_max_column} (expected: {last_sample_column})")
-            
-                for i in range(num_samples):
-                    col_offset = i * 12
-                    sample_id_cell = verification_ws.cell(row=1, column=6 + col_offset)
-                    resistance_cell = verification_ws.cell(row=2, column=4 + col_offset)
-                    tester_cell = verification_ws.cell(row=3, column=4 + col_offset)
-                    media_cell = verification_ws.cell(row=2, column=2 + col_offset)
-                    viscosity_cell = verification_ws.cell(row=3, column=2 + col_offset)
-                    voltage_cell = verification_ws.cell(row=3, column=6 + col_offset)
-                    oil_mass_cell = verification_ws.cell(row=3, column=8 + col_offset)
-                    puffing_regime_cell = verification_ws.cell(row=2, column=7 + col_offset)
-                
-                    debug_print(f"DEBUG: Verification - Sample {i+1}:")
-                    debug_print(f"  ID='{sample_id_cell.value}', Resistance='{resistance_cell.value}', Tester='{tester_cell.value}'")
-                    debug_print(f"  Media='{media_cell.value}', Viscosity='{viscosity_cell.value}'")
-                    debug_print(f"  Voltage='{voltage_cell.value}', Oil mass='{oil_mass_cell.value}'")
-                    debug_print(f"  Puffing regime='{puffing_regime_cell.value}'")
-
-                verification_wb.close()
-                debug_print("DEBUG: Verification complete")
-            
+        
             else:
-                error_msg = f"Sheet '{header_data['test']}' not found in the file. Available sheets: {wb.sheetnames}"
+                error_msg = f"Sheet '{header_data['test']}' not found in the file."
                 debug_print(f"ERROR: {error_msg}")
-                messagebox.showerror("Error", error_msg)
-            
+                raise Exception(error_msg)
+        
         except Exception as e:
-            error_msg = f"Error applying header data: {str(e)}"
-            debug_print(f"ERROR: {error_msg}")
+            debug_print(f"ERROR: Error applying header data: {e}")
             debug_print("DEBUG: Full traceback:")
+            import traceback
             traceback.print_exc()
-            messagebox.showerror("Error", error_msg)
+            raise
+
+    def determine_sample_count_from_data(self, sheet_data, test_name):
+        """Determine the number of samples based on existing data structure."""
+        debug_print(f"DEBUG: Determining sample count from data for test: {test_name}")
+    
+        try:
+            total_columns = len(sheet_data.columns)
+            debug_print(f"DEBUG: Total columns in data: {total_columns}")
+        
+            # Determine columns per sample based on test type
+            if test_name in ["User Test Simulation", "User Simulation Test"]:
+                columns_per_sample = 8  # User simulation format
+            else:
+                columns_per_sample = 12  # Standard format
+        
+            debug_print(f"DEBUG: Using {columns_per_sample} columns per sample for test type")
+        
+            # Calculate number of samples, accounting for header columns
+            # Standard format: first 3-5 columns are headers, then samples
+            header_columns = 5  # Approximate number of header columns
+            data_columns = max(0, total_columns - header_columns)
+            estimated_samples = max(1, data_columns // columns_per_sample)
+        
+            debug_print(f"DEBUG: Estimated {estimated_samples} samples from {data_columns} data columns")
+        
+            # Look for actual data to verify sample count
+            # Check for sample IDs in the expected positions
+            actual_samples = 0
+            for i in range(min(10, estimated_samples)):  # Check up to 10 samples
+                sample_id_col = 5 + (i * columns_per_sample)  # Approximate position
+                if sample_id_col < total_columns:
+                    # Check if there's meaningful data in this sample's area
+                    sample_has_data = False
+                    for row_idx in range(min(5, len(sheet_data))):
+                        for col_offset in range(min(columns_per_sample, total_columns - sample_id_col)):
+                            cell_value = sheet_data.iloc[row_idx, sample_id_col + col_offset]
+                            if pd.notna(cell_value) and str(cell_value).strip():
+                                sample_has_data = True
+                                break
+                        if sample_has_data:
+                            break
+                
+                    if sample_has_data:
+                        actual_samples = i + 1
+                        debug_print(f"DEBUG: Found data for sample {actual_samples}")
+                    else:
+                        debug_print(f"DEBUG: No data found for sample {i + 1}, stopping count")
+                        break
+        
+            final_sample_count = max(1, actual_samples) if actual_samples > 0 else estimated_samples
+            debug_print(f"DEBUG: Final determined sample count: {final_sample_count}")
+        
+            return final_sample_count
+        
+        except Exception as e:
+            debug_print(f"ERROR: Error determining sample count: {e}")
+            return 1  # Default to 1 sample if we can't determine
 
     def start_file_loading_wrapper(self, startup_menu: tk.Toplevel) -> None:
         """Handle the 'Load' button click in the startup menu."""

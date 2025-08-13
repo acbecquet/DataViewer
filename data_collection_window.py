@@ -253,6 +253,7 @@ class DataCollectionWindow:
         edit_menu.add_command(label="Clear All Data", command=self.clear_all_data)
         edit_menu.add_separator()
         edit_menu.add_command(label="Add Row", command=self.add_row)
+        edit_menu.add_command(label="Add Rows", command=self.add_multiple_rows)
         edit_menu.add_command(label="Remove Last Row", command=self.remove_last_row)
         edit_menu.add_separator()
         edit_menu.add_command(label="Recalculate TPM", command=self.recalculate_all_tpm)
@@ -770,56 +771,62 @@ class DataCollectionWindow:
     def handle_sample_count_change(self, old_count, new_count):
         """Handle changes in the number of samples."""
         debug_print(f"DEBUG: Handling sample count change: {old_count} -> {new_count}")
-    
+
         if new_count > old_count:
             # Add new samples
             for i in range(old_count, new_count):
                 sample_id = f"Sample {i+1}"
+            
+                # Initialize with the complete data structure (matching initialize_data)
                 self.data[sample_id] = {
-                    "puffs": [],
-                    "before_weight": [],
-                    "after_weight": [],
-                    "draw_pressure": [],
-                    "smell": [],
-                    "notes": [],
-                    "tpm": [],
-                    "current_row_index": 0,
+                    "current_row_index": 0, 
                     "avg_tpm": 0.0
                 }
-            
-                # Add chronography for User Test Simulation
+
+                # Add all standard columns (must match the structure in initialize_data)
+                columns = ["puffs", "before_weight", "after_weight", "draw_pressure", "resistance", "smell", "clog", "notes", "tpm"]
+                for column in columns:
+                    self.data[sample_id][column] = []
+
+                # Add special columns for User Test Simulation
                 if self.test_name in ["User Test Simulation", "User Simulation Test"]:
                     self.data[sample_id]["chronography"] = []
-            
+
                 # Pre-initialize 50 rows for new sample
                 for j in range(50):
                     puff = (j + 1) * self.puff_interval
                     self.data[sample_id]["puffs"].append(puff)
-                    self.data[sample_id]["before_weight"].append("")
-                    self.data[sample_id]["after_weight"].append("")
-                    self.data[sample_id]["draw_pressure"].append("")
-                    self.data[sample_id]["smell"].append("")
-                    self.data[sample_id]["notes"].append("")
-                    self.data[sample_id]["tpm"].append(None)
+                
+                    # Initialize other columns with empty values
+                    for column in columns:
+                        if column == "puffs":
+                            continue  # Already initialized
+                        elif column == "tpm":
+                            self.data[sample_id][column].append(None)
+                        else:
+                            self.data[sample_id][column].append("")
                 
                     # Add chronography initialization for User Test Simulation
-                    if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+                    if "chronography" in self.data[sample_id]:
                         self.data[sample_id]["chronography"].append("")
-        
+            
+                debug_print(f"DEBUG: Added new sample {sample_id} with complete data structure")
+
             debug_print(f"DEBUG: Added {new_count - old_count} new samples")
-        
+
         elif new_count < old_count:
             # Remove excess samples
             for i in range(new_count, old_count):
                 sample_id = f"Sample {i+1}"
                 if sample_id in self.data:
                     del self.data[sample_id]
-        
+                    debug_print(f"DEBUG: Removed sample {sample_id}")
+
             debug_print(f"DEBUG: Removed {old_count - new_count} samples")
-    
+
         # Update the number of samples
         self.num_samples = new_count
-    
+
         # Recreate the UI to reflect the new sample count
         self.recreate_sample_tabs()
 
@@ -875,37 +882,107 @@ class DataCollectionWindow:
             debug_print(f"DEBUG: Error updating label: {e}")
 
     def apply_header_changes_to_file(self):
-        """Apply header changes to the Excel file."""
+        """Apply header changes to the Excel file using the new sample-specific structure."""
         debug_print("DEBUG: Applying header changes to Excel file")
+    
+        # For .vap3 files, we don't update the physical file directly
+        if self.file_path.endswith('.vap3') or not os.path.exists(self.file_path):
+            debug_print("DEBUG: .vap3 file detected, updating header data in memory only")
+            # The header data is already updated in self.header_data
+            # Just mark that we have changes
+            self.mark_unsaved_changes()
+            return
+        
         try:
             import openpyxl
             wb = openpyxl.load_workbook(self.file_path)
-            
+        
             if self.test_name not in wb.sheetnames:
                 debug_print(f"DEBUG: Sheet {self.test_name} not found")
                 return
-                
+            
             ws = wb[self.test_name]
-            
-            # Apply common data
+        
+            # Get common data and samples data
             common_data = self.header_data.get('common', {})
-            ws.cell(row=2, column=2, value=common_data.get('media', ''))
-            ws.cell(row=3, column=2, value=common_data.get('viscosity', ''))
-            ws.cell(row=2, column=6, value=common_data.get('voltage', ''))
-            ws.cell(row=2, column=8, value=common_data.get('oil_mass', ''))
-            
-            # Apply sample-specific data
-            for i, sample_data in enumerate(self.header_data.get('samples', [])):
+            samples_data = self.header_data.get('samples', [])
+        
+            # Apply sample-specific data for each sample block
+            num_samples = self.header_data.get('num_samples', 0)
+            for i in range(num_samples):
                 col_offset = i * 12
-                ws.cell(row=1, column=6 + col_offset, value=sample_data.get('id', ''))
-                ws.cell(row=3, column=4 + col_offset, value=sample_data.get('resistance', ''))
+                sample_data = samples_data[i] if i < len(samples_data) else {}
             
+                debug_print(f"DEBUG: Applying header changes for sample {i+1} with offset {col_offset}")
+            
+                # Row 1, Column F (6) + offset: Sample ID  
+                sample_id = sample_data.get('id', f'Sample {i+1}')
+                ws.cell(row=1, column=6 + col_offset, value=sample_id)
+            
+                # Row 2, Column D (4) + offset: Resistance
+                resistance = sample_data.get("resistance", "")
+                if resistance:
+                    try:
+                        resistance_value = float(resistance)
+                        ws.cell(row=2, column=4 + col_offset, value=resistance_value)
+                    except ValueError:
+                        ws.cell(row=2, column=4 + col_offset, value=resistance)
+            
+                # Row 3, Column D (4) + offset: Tester name
+                tester_name = common_data.get("tester", "")
+                if tester_name:
+                    ws.cell(row=3, column=4 + col_offset, value=tester_name)
+            
+                # Row 2, Column B (2) + offset: Media
+                media = sample_data.get("media", "")
+                if media:
+                    ws.cell(row=2, column=2 + col_offset, value=media)
+            
+                # Row 3, Column B (2) + offset: Viscosity
+                viscosity = sample_data.get("viscosity", "")
+                if viscosity:
+                    try:
+                        viscosity_value = float(viscosity)
+                        ws.cell(row=3, column=2 + col_offset, value=viscosity_value)
+                    except ValueError:
+                        ws.cell(row=3, column=2 + col_offset, value=viscosity)
+            
+                # Row 3, Column F (6) + offset: Voltage  
+                voltage = sample_data.get("voltage", "")
+                if voltage:
+                    try:
+                        voltage_value = float(voltage)
+                        ws.cell(row=3, column=6 + col_offset, value=voltage_value)
+                    except ValueError:
+                        ws.cell(row=3, column=6 + col_offset, value=voltage)
+            
+                # Row 3, Column H (8) + offset: Oil Mass
+                oil_mass = sample_data.get("oil_mass", "")
+                if oil_mass:
+                    try:
+                        oil_mass_value = float(oil_mass)
+                        ws.cell(row=3, column=8 + col_offset, value=oil_mass_value)
+                    except ValueError:
+                        ws.cell(row=3, column=8 + col_offset, value=oil_mass)
+            
+                # Row 2, Column H (8) + offset: Puffing Regime
+                puffing_regime = sample_data.get("puffing_regime", "60mL/3s/30s")
+                if puffing_regime:
+                    ws.cell(row=2, column=8 + col_offset, value=puffing_regime)
+        
             # Save the workbook
             wb.save(self.file_path)
-            debug_print("DEBUG: Header changes applied to Excel file")
-            
+            debug_print("DEBUG: Header changes applied successfully to Excel file")
+        
         except Exception as e:
             debug_print(f"DEBUG: Error applying header changes to file: {e}")
+            # For .vap3 files, this is expected - just update in memory
+            if self.file_path.endswith('.vap3'):
+                debug_print("DEBUG: .vap3 file format detected, header changes stored in memory only")
+            else:
+                # For actual Excel files, show the error
+                from tkinter import messagebox
+                messagebox.showerror("Error", f"Could not update header data in file: {e}")
 
     def show_temp_status_message(self, message, duration_ms):
         """Show a temporary status message."""
@@ -985,7 +1062,7 @@ class DataCollectionWindow:
     def add_row(self):
         """Add a new row to all samples."""
         debug_print("DEBUG: Adding new row to all samples")
-
+    
         # Get the current sample instead of checking all samples
         try:
             current_tab_index = self.notebook.index(self.notebook.select())
@@ -995,7 +1072,7 @@ class DataCollectionWindow:
             current_sample_id = "Sample 1"
             current_tab_index = 0
             debug_print("DEBUG: Defaulting to Sample 1 for add row")
-
+    
         # Find the last non-empty puff value in the current sample
         last_puff = 0
         for puff_val in reversed(self.data[current_sample_id]["puffs"]):
@@ -1006,14 +1083,26 @@ class DataCollectionWindow:
                     break
                 except (ValueError, TypeError):
                     continue
-
+    
         # Calculate new puff value for current sample
         new_puff = last_puff + self.puff_interval
         debug_print(f"DEBUG: Calculated new_puff: {new_puff} (last puff: {last_puff}, interval: {self.puff_interval})")
-
+    
         # Add row to all samples, but use appropriate puff values for each
         for i in range(self.num_samples):
             sample_id = f"Sample {i + 1}"
+        
+            # Ensure all required fields exist in the data structure (defensive check)
+            required_fields = ["puffs", "before_weight", "after_weight", "draw_pressure", "resistance", "smell", "clog", "notes", "tpm"]
+            for field in required_fields:
+                if field not in self.data[sample_id]:
+                    self.data[sample_id][field] = []
+                    debug_print(f"DEBUG: Added missing field '{field}' to {sample_id}")
+        
+            # Add chronography for User Test Simulation if needed
+            if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+                if "chronography" not in self.data[sample_id]:
+                    self.data[sample_id]["chronography"] = []
         
             if sample_id == current_sample_id:
                 # Use calculated puff for current sample
@@ -1028,11 +1117,11 @@ class DataCollectionWindow:
                             break
                         except (ValueError, TypeError):
                             continue
-            
+        
                 other_sample_new_puff = last_sample_puff + self.puff_interval
                 self.data[sample_id]["puffs"].append(other_sample_new_puff)
                 debug_print(f"DEBUG: Added puff {other_sample_new_puff} to {sample_id}")
-
+        
             # Add empty values for other columns
             self.data[sample_id]["before_weight"].append("")
             self.data[sample_id]["after_weight"].append("")
@@ -1040,23 +1129,200 @@ class DataCollectionWindow:
             self.data[sample_id]["smell"].append("")
             self.data[sample_id]["notes"].append("")
             self.data[sample_id]["tpm"].append(None)
-
+        
             # Add resistance and clog for standard tests
             if self.test_name not in ["User Test Simulation", "User Simulation Test"]:
                 self.data[sample_id]["resistance"].append("")
                 self.data[sample_id]["clog"].append("")
-        
+    
             # Add chronography for User Test Simulation
             if self.test_name in ["User Test Simulation", "User Simulation Test"]:
                 self.data[sample_id]["chronography"].append("")
-
-            # Update treeview
-            if hasattr(self, 'sample_sheets') and i < len(self.sample_sheets):
-                sheet = self.sample_sheets[i]
-                self.update_tksheet(sheet, sample_id)
-
+    
+        # Update all tksheets to show the new row
+        for i in range(self.num_samples):
+            sample_id = f"Sample {i + 1}"
+            self.update_tksheet(sample_id)
+    
+        # Update TPM calculations and stats
+        self.update_all_tpm_calculations()
+    
+        # Mark as having unsaved changes
         self.mark_unsaved_changes()
+    
         debug_print(f"DEBUG: Added new row with puff count {new_puff} to {current_sample_id}")
+
+    def add_multiple_rows(self):
+        """Add multiple rows to all samples with user input."""
+        debug_print("DEBUG: Adding multiple rows to all samples")
+    
+        # Create a dialog to get the number of rows
+        dialog = tk.Toplevel(self.window)
+        dialog.title("Add Multiple Rows")
+        dialog.geometry("300x150")
+        dialog.transient(self.window)
+        dialog.grab_set()
+        dialog.resizable(False, False)
+    
+        # Center the dialog
+        dialog.update_idletasks()
+        x = (dialog.winfo_screenwidth() // 2) - (dialog.winfo_width() // 2)
+        y = (dialog.winfo_screenheight() // 2) - (dialog.winfo_height() // 2)
+        dialog.geometry(f"+{x}+{y}")
+    
+        # Result variable
+        result = {"rows": 0, "confirmed": False}
+    
+        # Create the dialog content
+        main_frame = ttk.Frame(dialog, padding=20)
+        main_frame.pack(fill="both", expand=True)
+    
+        # Label
+        ttk.Label(main_frame, text="Number of rows to add:", font=("Arial", 10)).pack(pady=(0, 10))
+    
+        # Entry with validation
+        rows_var = tk.IntVar(value=1)
+        entry = ttk.Spinbox(
+            main_frame, 
+            from_=1, 
+            to=100, 
+            textvariable=rows_var, 
+            width=10,
+            justify="center"
+        )
+        entry.pack(pady=(0, 20))
+        entry.focus_set()
+    
+        # Button frame
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill="x")
+    
+        def on_ok():
+            try:
+                num_rows = rows_var.get()
+                if num_rows < 1:
+                    messagebox.showerror("Invalid Input", "Number of rows must be at least 1.")
+                    return
+                result["rows"] = num_rows
+                result["confirmed"] = True
+                dialog.destroy()
+            except tk.TclError:
+                messagebox.showerror("Invalid Input", "Please enter a valid number.")
+    
+        def on_cancel():
+            result["confirmed"] = False
+            dialog.destroy()
+    
+        # Buttons
+        ttk.Button(button_frame, text="Cancel", command=on_cancel).pack(side="right")
+        ttk.Button(button_frame, text="OK", command=on_ok).pack(side="right", padx=(0, 5))
+    
+        # Bind Enter key to OK
+        dialog.bind('<Return>', lambda e: on_ok())
+        dialog.bind('<Escape>', lambda e: on_cancel())
+    
+        # Wait for dialog to close
+        dialog.wait_window()
+    
+        # If user confirmed, add the rows
+        if result["confirmed"] and result["rows"] > 0:
+            num_rows_to_add = result["rows"]
+            debug_print(f"DEBUG: User requested to add {num_rows_to_add} rows")
+        
+            # Get the current sample instead of checking all samples
+            try:
+                current_tab_index = self.notebook.index(self.notebook.select())
+                current_sample_id = f"Sample {current_tab_index + 1}"
+                debug_print(f"DEBUG: Current sample for add multiple rows: {current_sample_id}")
+            except:
+                current_sample_id = "Sample 1"
+                current_tab_index = 0
+                debug_print("DEBUG: Defaulting to Sample 1 for add multiple rows")
+        
+            # Find the last non-empty puff value in the current sample
+            last_puff = 0
+            for puff_val in reversed(self.data[current_sample_id]["puffs"]):
+                if puff_val and str(puff_val).strip():
+                    try:
+                        last_puff = int(float(puff_val))
+                        debug_print(f"DEBUG: Found last puff in {current_sample_id}: {last_puff}")
+                        break
+                    except (ValueError, TypeError):
+                        continue
+        
+            # Add the specified number of rows
+            for row_num in range(num_rows_to_add):
+                # Calculate new puff value for current sample
+                new_puff = last_puff + ((row_num + 1) * self.puff_interval)
+                debug_print(f"DEBUG: Adding row {row_num + 1}/{num_rows_to_add} with puff {new_puff}")
+            
+                # Add row to all samples
+                for i in range(self.num_samples):
+                    sample_id = f"Sample {i + 1}"
+                
+                    # Ensure all required fields exist in the data structure (defensive check)
+                    required_fields = ["puffs", "before_weight", "after_weight", "draw_pressure", "resistance", "smell", "clog", "notes", "tpm"]
+                    for field in required_fields:
+                        if field not in self.data[sample_id]:
+                            self.data[sample_id][field] = []
+                            debug_print(f"DEBUG: Added missing field '{field}' to {sample_id}")
+                
+                    # Add chronography for User Test Simulation if needed
+                    if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+                        if "chronography" not in self.data[sample_id]:
+                            self.data[sample_id]["chronography"] = []
+                
+                    if sample_id == current_sample_id:
+                        # Use calculated puff for current sample
+                        self.data[sample_id]["puffs"].append(new_puff)
+                    else:
+                        # For other samples, find their last puff and add interval
+                        last_sample_puff = 0
+                        for puff_val in reversed(self.data[sample_id]["puffs"]):
+                            if puff_val and str(puff_val).strip():
+                                try:
+                                    last_sample_puff = int(float(puff_val))
+                                    break
+                                except (ValueError, TypeError):
+                                    continue
+                
+                        other_sample_new_puff = last_sample_puff + ((row_num + 1) * self.puff_interval)
+                        self.data[sample_id]["puffs"].append(other_sample_new_puff)
+                
+                    # Add empty values for other columns
+                    self.data[sample_id]["before_weight"].append("")
+                    self.data[sample_id]["after_weight"].append("")
+                    self.data[sample_id]["draw_pressure"].append("")
+                    self.data[sample_id]["smell"].append("")
+                    self.data[sample_id]["notes"].append("")
+                    self.data[sample_id]["tpm"].append(None)
+                
+                    # Add resistance and clog for standard tests
+                    if self.test_name not in ["User Test Simulation", "User Simulation Test"]:
+                        self.data[sample_id]["resistance"].append("")
+                        self.data[sample_id]["clog"].append("")
+            
+                    # Add chronography for User Test Simulation
+                    if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+                        self.data[sample_id]["chronography"].append("")
+        
+            # Update all tksheets to show the new rows
+            for i in range(self.num_samples):
+                sample_id = f"Sample {i + 1}"
+                self.update_tksheet(sample_id)
+        
+            # Update TPM calculations and stats
+            self.update_all_tpm_calculations()
+        
+            # Mark as having unsaved changes
+            self.mark_unsaved_changes()
+        
+            debug_print(f"DEBUG: Successfully added {num_rows_to_add} rows to all samples")
+        
+            # Show success message
+            self.show_temp_status_message(f"Added {num_rows_to_add} rows to all samples", 3000)
+        else:
+            debug_print("DEBUG: Add multiple rows cancelled by user")
 
     def remove_last_row(self):
         """Remove the last row from all samples."""

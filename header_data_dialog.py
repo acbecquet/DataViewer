@@ -40,7 +40,7 @@ class HeaderDataDialog:
         self.dialog.transient(parent)
         self.dialog.grab_set()
         self.dialog.configure(bg=APP_BACKGROUND_COLOR)
-        self.dialog.geometry("600x500")  # Initial size
+        self.dialog.geometry("700x600")  # Increased size for sample-specific fields
     
         # Set up cleanup when dialog is destroyed
         self.dialog.protocol("WM_DELETE_WINDOW", self.cleanup_and_close)
@@ -130,115 +130,53 @@ class HeaderDataDialog:
         )
         header_label.grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 20))
         
+        # === COMMON FIELDS SECTION ===
+        common_frame = ttk.LabelFrame(self.form_frame, text="Common Information", padding=10)
+        common_frame.grid(row=1, column=0, columnspan=4, sticky="ew", pady=(0, 20))
+        
         # Tester
         ttk.Label(
-            self.form_frame, 
+            common_frame, 
             text="Tester:", 
             foreground="black",
             background=APP_BACKGROUND_COLOR
-        ).grid(row=1, column=0, sticky="w", pady=5)
+        ).grid(row=0, column=0, sticky="w", pady=5)
         
         self.tester_var = tk.StringVar()
-        ttk.Entry(self.form_frame, textvariable=self.tester_var, width=30).grid(
-            row=1, column=1, sticky="ew", padx=(10, 0), pady=5
+        ttk.Entry(common_frame, textvariable=self.tester_var, width=30).grid(
+            row=0, column=1, sticky="ew", padx=(10, 0), pady=5
         )
         
         # Number of Samples
         ttk.Label(
-            self.form_frame, 
+            common_frame, 
             text="Number of Samples:", 
             foreground="black",
             background=APP_BACKGROUND_COLOR
-        ).grid(row=2, column=0, sticky="w", pady=5)
+        ).grid(row=1, column=0, sticky="w", pady=5)
         
         self.num_samples_var = tk.IntVar(value=1)
         samples_spinbox = ttk.Spinbox(
-            self.form_frame, 
+            common_frame, 
             from_=1, 
             to=10, 
             textvariable=self.num_samples_var, 
             width=5,
             command=self.update_sample_fields
         )
-        samples_spinbox.grid(row=2, column=1, sticky="w", padx=(10, 0), pady=5)
+        samples_spinbox.grid(row=1, column=1, sticky="w", padx=(10, 0), pady=5)
         
-        # Create a frame for sample-specific data
+        # Configure grid for common frame
+        common_frame.columnconfigure(1, weight=1)
+        
+        # === SAMPLE-SPECIFIC FIELDS SECTION ===
         self.samples_frame = ttk.Frame(self.form_frame)
-        self.samples_frame.grid(row=3, column=0, columnspan=4, sticky="ew", pady=10)
-        
-        # Media
-        ttk.Label(
-            self.form_frame, 
-            text="Media:", 
-            foreground="black",
-            background=APP_BACKGROUND_COLOR
-        ).grid(row=4, column=0, sticky="w", pady=5)
-        
-        self.media_var = tk.StringVar()
-        ttk.Entry(self.form_frame, textvariable=self.media_var, width=30).grid(
-            row=4, column=1, sticky="ew", padx=(10, 0), pady=5
-        )
-        
-        # Viscosity
-        ttk.Label(
-            self.form_frame, 
-            text="Viscosity (cP):", 
-            foreground="black",
-            background=APP_BACKGROUND_COLOR
-        ).grid(row=5, column=0, sticky="w", pady=5)
-        
-        self.viscosity_var = tk.StringVar()
-        ttk.Entry(self.form_frame, textvariable=self.viscosity_var, width=30).grid(
-            row=5, column=1, sticky="ew", padx=(10, 0), pady=5
-        )
-        
-        # Voltage
-        ttk.Label(
-            self.form_frame, 
-            text="Voltage (V):", 
-            foreground="black",
-            background=APP_BACKGROUND_COLOR
-        ).grid(row=6, column=0, sticky="w", pady=5)
-        
-        self.voltage_var = tk.StringVar()
-        ttk.Entry(self.form_frame, textvariable=self.voltage_var, width=30).grid(
-            row=6, column=1, sticky="ew", padx=(10, 0), pady=5
-        )
-        
-        # Puffing Regime
-        ttk.Label(
-            self.form_frame, 
-            text="Puffing Regime:", 
-            foreground="black",
-            background=APP_BACKGROUND_COLOR
-        ).grid(row=7, column=0, sticky="w", pady=5)
-
-        self.puffing_regime_var = tk.StringVar(value="60mL/3s/30s")  # Set default value
-        puffing_regime_entry = ttk.Entry(
-            self.form_frame,
-            textvariable=self.puffing_regime_var,
-            width=30
-        )
-        puffing_regime_entry.grid(row=7, column=1, sticky="ew", padx=(10, 0), pady=5)
-        
-        # Initial Oil Mass
-        ttk.Label(
-            self.form_frame, 
-            text="Initial Oil Mass (g):", 
-            foreground="black",
-            background=APP_BACKGROUND_COLOR
-        ).grid(row=8, column=0, sticky="w", pady=5)
-        
-        self.oil_mass_var = tk.StringVar()
-        ttk.Entry(self.form_frame, textvariable=self.oil_mass_var, width=30).grid(
-            row=8, column=1, sticky="ew", padx=(10, 0), pady=5
-        )
+        self.samples_frame.grid(row=2, column=0, columnspan=4, sticky="ew", pady=10)
         
         # Configure grid
-        self.form_frame.columnconfigure(1, weight=1)
-        self.form_frame.columnconfigure(3, weight=1)
+        self.form_frame.columnconfigure(0, weight=1)
         
-        # Initialize sample fields
+        # Initialize sample field variables
         self.sample_id_vars = []
         self.sample_media_vars = []
         self.sample_viscosity_vars = []
@@ -248,14 +186,14 @@ class HeaderDataDialog:
         self.resistance_vars = []
         self.update_sample_fields()
         
-        # Populate existing data if in edit mode - ADD THIS
+        # Populate existing data if in edit mode
         if self.edit_mode and hasattr(self, 'existing_data'):
             # Use after_idle to ensure all widgets are created first
             self.dialog.after_idle(self.populate_existing_data)
         
         # Buttons
         button_frame = ttk.Frame(self.form_frame)
-        button_frame.grid(row=9, column=0, columnspan=4, sticky="ew", pady=(20, 0))
+        button_frame.grid(row=3, column=0, columnspan=4, sticky="ew", pady=(20, 0))
         
         ttk.Button(button_frame, text="Cancel", command=self.on_cancel).pack(side="right")
         
@@ -276,26 +214,10 @@ class HeaderDataDialog:
             # Data collection format
             common_data = self.existing_data.get('common', {})
             self.tester_var.set(common_data.get('tester', ''))
-            self.media_var.set(common_data.get('media', ''))
-            self.viscosity_var.set(str(common_data.get('viscosity', '')))
-            self.voltage_var.set(str(common_data.get('voltage', '')))
-            # Set puffing regime with default fallback
-            puffing_regime = common_data.get('puffing_regime', '60mL/3s/30s')
-            self.puffing_regime_var.set(puffing_regime if puffing_regime else '60mL/3s/30s')
-            self.oil_mass_var.set(str(common_data.get('oil_mass', '')))
-        
             samples_data = self.existing_data.get('samples', [])
         else:
             # File format
             self.tester_var.set(self.existing_data.get('tester', ''))
-            self.media_var.set(self.existing_data.get('media', ''))
-            self.viscosity_var.set(str(self.existing_data.get('viscosity', '')))
-            self.voltage_var.set(str(self.existing_data.get('voltage', '')))
-            # Set puffing regime with default fallback
-            puffing_regime = self.existing_data.get('puffing_regime', '60mL/3s/30s')
-            self.puffing_regime_var.set(puffing_regime if puffing_regime else '60mL/3s/30s')
-            self.oil_mass_var.set(str(self.existing_data.get('oil_mass', '')))
-        
             samples_data = self.existing_data.get('samples', [])
         
         # Set number of samples and populate sample data
@@ -309,6 +231,11 @@ class HeaderDataDialog:
                 if i < len(self.sample_id_vars):
                     self.sample_id_vars[i].set(sample_data.get('id', ''))
                     self.resistance_vars[i].set(sample_data.get('resistance', ''))
+                    self.sample_media_vars[i].set(sample_data.get('media', ''))
+                    self.sample_viscosity_vars[i].set(sample_data.get('viscosity', ''))
+                    self.sample_voltage_vars[i].set(sample_data.get('voltage', ''))
+                    self.sample_puffing_regime_vars[i].set(sample_data.get('puffing_regime', '60mL/3s/30s'))
+                    self.sample_oil_mass_vars[i].set(sample_data.get('oil_mass', ''))
         
         debug_print("DEBUG: Form populated with existing data")
 
@@ -328,10 +255,6 @@ class HeaderDataDialog:
             # Load existing data from known positions
             self.existing_data = {
                 'tester': ws.cell(row=1, column=1).value or "",
-                'media': ws.cell(row=2, column=2).value or "",
-                'viscosity': ws.cell(row=3, column=2).value or "",
-                'voltage': ws.cell(row=2, column=6).value or "",
-                'oil_mass': ws.cell(row=2, column=8).value or "",
                 'samples': []
             }
             
@@ -340,11 +263,20 @@ class HeaderDataDialog:
                 col_offset = i * 12
                 sample_id = ws.cell(row=1, column=6 + col_offset).value
                 resistance = ws.cell(row=3, column=4 + col_offset).value
+                media = ws.cell(row=2, column=2 + col_offset).value
+                viscosity = ws.cell(row=3, column=2 + col_offset).value
+                voltage = ws.cell(row=2, column=6 + col_offset).value
+                oil_mass = ws.cell(row=2, column=8 + col_offset).value
                 
                 if sample_id:  # Only add if sample ID exists
                     self.existing_data['samples'].append({
                         'id': str(sample_id),
-                        'resistance': str(resistance) if resistance else ""
+                        'resistance': str(resistance) if resistance else "",
+                        'media': str(media) if media else "",
+                        'viscosity': str(viscosity) if viscosity else "",
+                        'voltage': str(voltage) if voltage else "",
+                        'puffing_regime': "60mL/3s/30s",  # Default value
+                        'oil_mass': str(oil_mass) if oil_mass else ""
                     })
             
             debug_print(f"DEBUG: Loaded existing data: {len(self.existing_data['samples'])} samples")
@@ -376,7 +308,7 @@ class HeaderDataDialog:
         self.on_cancel()
     
     def update_sample_fields(self):
-        """Update the sample-specific fields - SIMPLIFIED VERSION."""
+        """Update the sample-specific fields with all required fields per sample."""
         debug_print(f"DEBUG: Updating sample fields for {self.num_samples_var.get()} samples")
 
         # Clear existing widgets
@@ -386,33 +318,48 @@ class HeaderDataDialog:
         # Get the number of samples
         num_samples = self.num_samples_var.get()
 
-        # Ensure we have enough variables - ONLY ID and resistance
+        # Ensure we have enough variables for all sample-specific fields
         while len(self.sample_id_vars) < num_samples:
             self.sample_id_vars.append(tk.StringVar())
             self.resistance_vars.append(tk.StringVar())
+            self.sample_media_vars.append(tk.StringVar())
+            self.sample_viscosity_vars.append(tk.StringVar())
+            self.sample_voltage_vars.append(tk.StringVar())
+            self.sample_puffing_regime_vars.append(tk.StringVar(value="60mL/3s/30s"))
+            self.sample_oil_mass_vars.append(tk.StringVar())
 
-        # Remove the redundant sample-specific field variables
-        # Delete these lines that create per-sample common fields:
-        # self.sample_media_vars, self.sample_viscosity_vars, etc.
-
-        # Create UI for only ID and resistance per sample
+        # Create UI for each sample with all required fields
         for i in range(num_samples):
             sample_frame = ttk.LabelFrame(self.samples_frame, text=f"Sample {i+1}", padding=10)
             sample_frame.pack(fill='x', pady=5)
 
-            # Sample ID
-            id_frame = ttk.Frame(sample_frame)
-            id_frame.pack(fill='x', pady=2)
-            ttk.Label(id_frame, text="Sample ID:", width=15).pack(side='left')
-            ttk.Entry(id_frame, textvariable=self.sample_id_vars[i], width=30).pack(side='left', padx=5)
+            # Create a grid layout within each sample frame
+            # Row 0: Sample ID and Resistance
+            ttk.Label(sample_frame, text="Sample ID:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
+            ttk.Entry(sample_frame, textvariable=self.sample_id_vars[i], width=20).grid(row=0, column=1, padx=5, pady=2)
+            
+            ttk.Label(sample_frame, text="Resistance (Ω):").grid(row=0, column=2, sticky="w", padx=5, pady=2)
+            ttk.Entry(sample_frame, textvariable=self.resistance_vars[i], width=20).grid(row=0, column=3, padx=5, pady=2)
 
-            # Resistance
-            resistance_frame = ttk.Frame(sample_frame)
-            resistance_frame.pack(fill='x', pady=2)
-            ttk.Label(resistance_frame, text="Resistance (Ω):", width=15).pack(side='left')
-            ttk.Entry(resistance_frame, textvariable=self.resistance_vars[i], width=30).pack(side='left', padx=5)
+            # Row 1: Media and Viscosity
+            ttk.Label(sample_frame, text="Media:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
+            ttk.Entry(sample_frame, textvariable=self.sample_media_vars[i], width=20).grid(row=1, column=1, padx=5, pady=2)
+            
+            ttk.Label(sample_frame, text="Viscosity (cP):").grid(row=1, column=2, sticky="w", padx=5, pady=2)
+            ttk.Entry(sample_frame, textvariable=self.sample_viscosity_vars[i], width=20).grid(row=1, column=3, padx=5, pady=2)
 
-        debug_print(f"DEBUG: Created simplified sample fields for {num_samples} samples")
+            # Row 2: Voltage and Puffing Regime
+            ttk.Label(sample_frame, text="Voltage (V):").grid(row=2, column=0, sticky="w", padx=5, pady=2)
+            ttk.Entry(sample_frame, textvariable=self.sample_voltage_vars[i], width=20).grid(row=2, column=1, padx=5, pady=2)
+            
+            ttk.Label(sample_frame, text="Puffing Regime:").grid(row=2, column=2, sticky="w", padx=5, pady=2)
+            ttk.Entry(sample_frame, textvariable=self.sample_puffing_regime_vars[i], width=20).grid(row=2, column=3, padx=5, pady=2)
+
+            # Row 3: Oil Mass
+            ttk.Label(sample_frame, text="Initial Oil Mass (g):").grid(row=3, column=0, sticky="w", padx=5, pady=2)
+            ttk.Entry(sample_frame, textvariable=self.sample_oil_mass_vars[i], width=20).grid(row=3, column=1, padx=5, pady=2)
+
+        debug_print(f"DEBUG: Created sample-specific fields for {num_samples} samples")
     
     def validate_data(self):
         """Validate the header data."""
@@ -423,18 +370,6 @@ class HeaderDataDialog:
             messagebox.showerror("Validation Error", "Tester name is required.")
             return False
             
-        # Validate numeric fields
-        try:
-            if self.viscosity_var.get().strip():
-                float(self.viscosity_var.get().strip())
-            if self.voltage_var.get().strip():
-                float(self.voltage_var.get().strip())
-            if self.oil_mass_var.get().strip():
-                float(self.oil_mass_var.get().strip())
-        except ValueError:
-            messagebox.showerror("Validation Error", "Viscosity, Voltage, and Oil Mass must be numeric values.")
-            return False
-            
         # Check sample-specific fields
         num_samples = self.num_samples_var.get()
         for i in range(num_samples):
@@ -442,44 +377,50 @@ class HeaderDataDialog:
                 messagebox.showerror("Validation Error", f"Sample {i+1} ID is required.")
                 return False
                 
-            # Validate resistance
+            # Validate numeric fields for each sample
             try:
+                if self.sample_viscosity_vars[i].get().strip():
+                    float(self.sample_viscosity_vars[i].get().strip())
+                if self.sample_voltage_vars[i].get().strip():
+                    float(self.sample_voltage_vars[i].get().strip())
+                if self.sample_oil_mass_vars[i].get().strip():
+                    float(self.sample_oil_mass_vars[i].get().strip())
                 if self.resistance_vars[i].get().strip():
                     float(self.resistance_vars[i].get().strip())
             except ValueError:
-                messagebox.showerror("Validation Error", f"Resistance for Sample {i+1} must be a numeric value.")
+                messagebox.showerror("Validation Error", f"Numeric fields for Sample {i+1} must be valid numbers.")
                 return False
         
         debug_print("DEBUG: Header data validation successful")
         return True
     
     def collect_header_data(self):
-        """Collect and return the header data - SIMPLIFIED VERSION."""
+        """Collect and return the header data with proper structure."""
         debug_print("DEBUG: Collecting header data")
 
         header_data = {
-            "test": self.selected_test,  # Add test name
+            "test": self.selected_test,
             "common": {
-                "tester": self.tester_var.get().strip(),
-                "media": self.media_var.get().strip(),
-                "viscosity": self.viscosity_var.get().strip(),
-                "voltage": self.voltage_var.get().strip(),
-                "puffing_regime": self.puffing_regime_var.get().strip(),
-                "oil_mass": self.oil_mass_var.get().strip()
+                "tester": self.tester_var.get().strip()
             },
             "num_samples": self.num_samples_var.get(),
             "samples": []
         }
 
-        # Collect individual sample data - ONLY ID and resistance (no redundant fields)
+        # Collect individual sample data with all fields
         for i in range(self.num_samples_var.get()):
             sample_data = {
                 "id": self.sample_id_vars[i].get().strip(),
-                "resistance": self.resistance_vars[i].get().strip()
+                "resistance": self.resistance_vars[i].get().strip(),
+                "media": self.sample_media_vars[i].get().strip(),
+                "viscosity": self.sample_viscosity_vars[i].get().strip(),
+                "voltage": self.sample_voltage_vars[i].get().strip(),
+                "puffing_regime": self.sample_puffing_regime_vars[i].get().strip(),
+                "oil_mass": self.sample_oil_mass_vars[i].get().strip()
             }
             header_data["samples"].append(sample_data)
 
-        debug_print(f"DEBUG: Collected simplified header data: {header_data}")
+        debug_print(f"DEBUG: Collected header data: {header_data}")
         return header_data
     
     def on_continue(self):
