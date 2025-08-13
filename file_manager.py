@@ -1577,11 +1577,48 @@ class FileManager:
         try:
             # Check if the sheet is loaded
             if not hasattr(self.gui, 'filtered_sheets') or selected_test not in self.gui.filtered_sheets:
-                debug_print(f"ERROR: Sheet {selected_test} not found in loaded data")
+                print(f"ERROR: Sheet {selected_test} not found in loaded data")
                 return None
     
-            sheet_data = self.gui.filtered_sheets[selected_test]['data']
-            debug_print(f"DEBUG: Found loaded sheet data with shape: {sheet_data.shape}")
+            sheet_info = self.gui.filtered_sheets[selected_test]
+            debug_print(f"DEBUG: sheet_info keys: {list(sheet_info.keys())}")
+    
+            # FOR .VAP3 FILES: Use the stored header_data JSON directly
+            if 'header_data' in sheet_info:
+                debug_print(f"DEBUG: header_data key exists, value type: {type(sheet_info['header_data'])}")
+                debug_print(f"DEBUG: header_data value: {sheet_info['header_data']}")
+        
+                if sheet_info['header_data'] is not None:
+                    debug_print("DEBUG: Found stored header_data in loaded sheets - using directly")
+                    header_data = sheet_info['header_data']
+        
+                    # Ensure backwards compatibility for device_type
+                    if 'common' in header_data:
+                        if 'device_type' not in header_data['common']:
+                            header_data['common']['device_type'] = 'EVO'  # Default for backwards compatibility
+                            debug_print("DEBUG: Added default device_type for backwards compatibility")
+        
+                    # Validate structure
+                    debug_print(f"DEBUG: About to validate header_data: {header_data}")
+                    if self.validate_header_data(header_data):
+                        debug_print(f"DEBUG: Successfully extracted header data from .vap3 for {selected_test}")
+                        return header_data
+                    else:
+                        debug_print("DEBUG: Stored header data failed validation, falling back to extraction")
+                else:
+                    debug_print("DEBUG: header_data key exists but value is None")
+            else:
+                debug_print("DEBUG: No header_data key found in sheet_info")
+        
+            # FALLBACK: Try to extract from sheet data (for backwards compatibility or corrupted header data)
+            print("DEBUG: No valid stored header_data found, attempting extraction from sheet data")
+            sheet_data = sheet_info['data']
+        
+            if sheet_data.empty:
+                debug_print("DEBUG: Sheet data is empty")
+                return None
+        
+            debug_print(f"DEBUG: Sheet data shape: {sheet_data.shape}")
             debug_print(f"DEBUG: Column headers: {list(sheet_data.columns[:20])}")  # Show first 20 column headers
 
             # Determine sample count from data structure
@@ -1590,7 +1627,8 @@ class FileManager:
             # Extract header data using new structure
             header_data = {
                 'common': {
-                    'tester': ''
+                    'tester': '',
+                    'device_type': 'T58G'  # Default
                 },
                 'samples': [],
                 'test': selected_test,
@@ -1598,14 +1636,22 @@ class FileManager:
             }
 
             try:              
-                # Extract tester from a common location (row 3, column 3)
+                # Extract tester from a common location (row 1, column 3)
                 if len(sheet_data) > 2 and len(sheet_data.columns) > 2:
-                    tester_value = sheet_data.iloc[2, 2] if not pd.isna(sheet_data.iloc[2, 2]) else ""
+                    tester_value = sheet_data.iloc[1, 3] if not pd.isna(sheet_data.iloc[1, 3]) else ""
                     header_data['common']['tester'] = str(tester_value).strip()
                     debug_print(f"DEBUG: Extracted tester: '{header_data['common']['tester']}'")
 
-                # Extract sample-specific data for each detected sample
+                # Extract sample-specific data for each sample
                 for i in range(sample_count):
+                    # Determine column offset based on test type
+                    if selected_test in ["User Test Simulation", "User Simulation Test"]:
+                        col_offset = i * 8  # 8 columns per sample for User Test Simulation
+                        debug_print(f"DEBUG: Using User Test Simulation format for sample {i+1}")
+                    else:
+                        col_offset = i * 12  # 12 columns per sample for standard tests
+                        debug_print(f"DEBUG: Using standard format for sample {i+1}")
+                
                     sample_data = {
                         'id': f'Sample {i+1}',
                         'resistance': '',
@@ -1616,33 +1662,37 @@ class FileManager:
                         'oil_mass': ''
                     }
                 
-                    # Try to extract sample-specific data from the appropriate columns
                     try:
-                        col_offset = i * 12  # Standard 12-column format
-                    
-                        # Sample ID (row 0, column 5 + offset)
-                        if len(sheet_data.columns) > (5 + col_offset) and len(sheet_data) > 0:
-                            sample_id = sheet_data.iloc[0, 5 + col_offset]
+                        # Sample ID (row 0, column 5 + offset for standard, column 1 + offset for User Test Simulation)
+                        if selected_test in ["User Test Simulation", "User Simulation Test"]:
+                            sample_id_col = 1 + col_offset
+                        else:
+                            sample_id_col = 5 + col_offset
+                        
+                        if len(sheet_data.columns) > sample_id_col and len(sheet_data) > 0:
+                            sample_id = sheet_data.columns[sample_id_col]
                             if pd.notna(sample_id) and str(sample_id).strip():
                                 sample_data['id'] = str(sample_id).strip()
                     
-                        # Media (row 1, column 1 + offset)
-                        if len(sheet_data.columns) > (1 + col_offset) and len(sheet_data) > 1:
-                            media = sheet_data.iloc[1, 1 + col_offset]
-                            if pd.notna(media) and str(media).strip():
-                                sample_data['media'] = str(media).strip()
-                    
-                        # Viscosity (row 2, column 1 + offset)
-                        if len(sheet_data.columns) > (1 + col_offset) and len(sheet_data) > 2:
-                            viscosity = sheet_data.iloc[2, 1 + col_offset]
-                            if pd.notna(viscosity) and str(viscosity).strip():
-                                sample_data['viscosity'] = str(viscosity).strip()
-                    
-                        # Resistance (row 1, column 4 + offset)
-                        if len(sheet_data.columns) > (4 + col_offset) and len(sheet_data) > 1:
-                            resistance = sheet_data.iloc[1, 4 + col_offset]
-                            if pd.notna(resistance) and str(resistance).strip():
-                                sample_data['resistance'] = str(resistance).strip()
+                        # For standard tests, extract additional data
+                        if selected_test not in ["User Test Simulation", "User Simulation Test"]:
+                            # Resistance (row 1, column 3 + offset)
+                            if len(sheet_data.columns) > (3 + col_offset) and len(sheet_data) > 1:
+                                resistance = sheet_data.iloc[0, 3 + col_offset]
+                                if pd.notna(resistance) and str(resistance).strip():
+                                    sample_data['resistance'] = str(resistance).strip()
+                        
+                            # Media (row 1, column 1 + offset)
+                            if len(sheet_data.columns) > (1 + col_offset) and len(sheet_data) > 1:
+                                media = sheet_data.iloc[0, 1 + col_offset]
+                                if pd.notna(media) and str(media).strip():
+                                    sample_data['media'] = str(media).strip()
+                        
+                            # Viscosity (row 2, column 1 + offset)
+                            if len(sheet_data.columns) > (1 + col_offset) and len(sheet_data) > 2:
+                                viscosity = sheet_data.iloc[1, 1 + col_offset]
+                                if pd.notna(viscosity) and str(viscosity).strip():
+                                    sample_data['viscosity'] = str(viscosity).strip()
                     
                         debug_print(f"DEBUG: Sample {i+1} data: {sample_data}")
                     

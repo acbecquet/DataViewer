@@ -1867,11 +1867,11 @@ Developed by Charlie Becquet
                         debug_print("DEBUG: Updated all_filtered_sheets with new data")
                         break
     
-            if self.test_name in self.gui.filtered_sheets:
-                self.gui.filtered_sheets[self.test_name]['header_data'] = self.header_data
+            if self.test_name in self.parent.filtered_sheets:
+                self.parent.filtered_sheets[self.test_name]['header_data'] = self.header_data
                 debug_print("DEBUG: Stored header data in filtered_sheets for .vap3 persistence")
     
-
+               
             debug_print("DEBUG: Successfully saved data to loaded sheets")
     
             debug_print("DEBUG: Loaded sheets save completed - main GUI data should now be current")
