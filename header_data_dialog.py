@@ -27,7 +27,18 @@ class HeaderDataDialog:
         self.current_data = current_data
         self.result = None
         self.header_data = {}
-    
+        
+        self.device_dr_mapping = {
+            'T58G': 0.9,
+            'EVO': 0.15,
+            'EVOMAX': 0.15,
+            'T28': 0.1,
+            'T51': 0.8,
+            'other': 0.15,
+            None: 0.0 # For backward compatibility with excel
+        }
+        debug_print(f"DEBUG: Device dR mapping initialized: {self.device_dr_mapping}")
+
         debug_print(f"DEBUG: HeaderDataDialog initialized - edit_mode: {edit_mode}, has_current_data: {current_data is not None}")
     
         # Initialize references for cleanup
@@ -155,6 +166,19 @@ class HeaderDataDialog:
             background=APP_BACKGROUND_COLOR
         ).grid(row=1, column=0, sticky="w", pady=5)
         
+        # Device Type selection
+        ttk.Label(common_frame, text="Device Type:").grid(row=0, column=2, sticky="w", padx=5, pady=5)
+        self.device_type_var = tk.StringVar(value="EVO")  # Default to EVO
+        device_type_combo = ttk.Combobox(
+            common_frame, 
+            textvariable=self.device_type_var, 
+            values=['T58G', 'EVO', 'EVOMAX', 'T28', 'T51', 'other'],
+            state="readonly",
+            width=15
+        )
+        device_type_combo.grid(row=0, column=3, sticky="w", padx=(10, 0), pady=5)
+        debug_print("DEBUG: Device type combobox created with default value 'EVO'")
+
         self.num_samples_var = tk.IntVar(value=1)
         samples_spinbox = ttk.Spinbox(
             common_frame, 
@@ -209,16 +233,24 @@ class HeaderDataDialog:
         
         debug_print("DEBUG: Populating form with existing data")
     
-        # Handle both file format and current_data format
         if 'common' in self.existing_data:
             # Data collection format
             common_data = self.existing_data.get('common', {})
             self.tester_var.set(common_data.get('tester', ''))
+            device_type = common_data.get('device_type', None)
+            # Handle None or missing device type for backwards compatibility
+            if device_type is None:
+                device_type = 'EVO'  # Default for new entries
+                debug_print("DEBUG: No device type found, defaulting to 'EVO' for new entries")
+            self.device_type_var.set(device_type)
             samples_data = self.existing_data.get('samples', [])
+            debug_print(f"DEBUG: Loaded device type from existing data: {device_type}")
         else:
-            # File format
+            # File format (Excel) - no device type stored
             self.tester_var.set(self.existing_data.get('tester', ''))
+            self.device_type_var.set('EVO')  # Default for Excel files
             samples_data = self.existing_data.get('samples', [])
+            debug_print("DEBUG: Excel file format detected, defaulting device type to 'EVO'")
         
         # Set number of samples and populate sample data
         num_existing_samples = len(samples_data)
@@ -401,14 +433,40 @@ class HeaderDataDialog:
         header_data = {
             "test": self.selected_test,
             "common": {
-                "tester": self.tester_var.get().strip()
+                "tester": self.tester_var.get().strip(),
+                "device_type": self.device_type_var.get()
             },
             "num_samples": self.num_samples_var.get(),
             "samples": []
         }
+        debug_print(f"DEBUG: Added device type to header data: {self.device_type_var.get()}")
 
-        # Collect individual sample data with all fields
         for i in range(self.num_samples_var.get()):
+            # Get voltage and resistance for power calculation
+            voltage_str = self.sample_voltage_vars[i].get().strip()
+            resistance_str = self.resistance_vars[i].get().strip()
+            device_type = self.device_type_var.get()
+    
+            # Calculate power using P = V^2 / (R + dR)
+            calculated_power = ""
+            try:
+                if voltage_str and resistance_str:
+                    voltage = float(voltage_str)
+                    resistance = float(resistance_str)
+                    dr_value = self.device_dr_mapping.get(device_type, 0.0)
+            
+                    # For backwards compatibility, if device_type is None, use dR = 0
+                    if device_type == 'None' or device_type is None:
+                        dr_value = 0.0
+                        debug_print(f"DEBUG: Using dR = 0 for backwards compatibility (device_type: {device_type})")
+            
+                    power = (voltage ** 2) / (resistance + dr_value)
+                    calculated_power = f"{power:.3f}"
+                    debug_print(f"DEBUG: Sample {i+1} power calculation: V={voltage}, R={resistance}, dR={dr_value}, P={calculated_power}")
+            except (ValueError, TypeError) as e:
+                debug_print(f"DEBUG: Could not calculate power for sample {i+1}: {e}")
+                calculated_power = ""
+    
             sample_data = {
                 "id": self.sample_id_vars[i].get().strip(),
                 "resistance": self.resistance_vars[i].get().strip(),
@@ -416,9 +474,11 @@ class HeaderDataDialog:
                 "viscosity": self.sample_viscosity_vars[i].get().strip(),
                 "voltage": self.sample_voltage_vars[i].get().strip(),
                 "puffing_regime": self.sample_puffing_regime_vars[i].get().strip(),
-                "oil_mass": self.sample_oil_mass_vars[i].get().strip()
+                "oil_mass": self.sample_oil_mass_vars[i].get().strip(),
+                "calculated_power": calculated_power
             }
             header_data["samples"].append(sample_data)
+            debug_print(f"DEBUG: Sample {i+1} data collected with power: {calculated_power}")
 
         debug_print(f"DEBUG: Collected header data: {header_data}")
         return header_data

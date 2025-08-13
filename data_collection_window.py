@@ -856,11 +856,10 @@ class DataCollectionWindow:
                 if hasattr(widget, 'winfo_children'):
                     self.update_header_labels_recursive(widget)
             
-            # Update notebook tab labels
+            # Keep original tab labels unchanged
             for i in range(min(self.num_samples, len(self.sample_frames))):
-                if i < len(self.header_data.get('samples', [])):
-                    sample_name = self.header_data['samples'][i].get('id', f"Sample {i+1}")
-                    self.notebook.tab(i, text=f"Sample {i+1} - {sample_name}")
+                self.notebook.tab(i, text=f"Sample {i+1}")
+                debug_print(f"DEBUG: Keeping tab {i} as 'Sample {i+1}'")
                     
         except Exception as e:
             debug_print(f"DEBUG: Error updating header display: {e}")
@@ -947,7 +946,7 @@ class DataCollectionWindow:
                     except ValueError:
                         ws.cell(row=3, column=2 + col_offset, value=viscosity)
             
-                # Row 3, Column F (6) + offset: Voltage  
+                # Row 3, Column F (6) + offset: Voltage
                 voltage = sample_data.get("voltage", "")
                 if voltage:
                     try:
@@ -955,6 +954,40 @@ class DataCollectionWindow:
                         ws.cell(row=3, column=6 + col_offset, value=voltage_value)
                     except ValueError:
                         ws.cell(row=3, column=6 + col_offset, value=voltage)
+
+                # Calculate and apply power to Row 2, Column F (6) + offset
+                resistance = sample_data.get("resistance", "")
+                device_type = self.header_data.get('common', {}).get('device_type', 'EVO')
+
+                # Device type mapping for dR values
+                device_dr_mapping = {
+                    'T58G': 0.9,
+                    'EVO': 0.15,
+                    'EVOMAX': 0.15,
+                    'T28': 0.1,
+                    'T51': 0.8,
+                    'other': 0.15,
+                    None: 0.0
+                }
+
+                try:
+                    if voltage and resistance:
+                        voltage_val = float(voltage)
+                        resistance_val = float(resistance)
+                        dr_value = device_dr_mapping.get(device_type, 0.0)
+        
+                        # Explicit handling for None device type (backwards compatibility)
+                        if device_type is None:
+                            dr_value = 0.0
+                            debug_print(f"DEBUG: Using dR = 0 for backwards compatibility (device_type is None)")
+        
+                        calculated_power = (voltage_val ** 2) / (resistance_val + dr_value)
+                        ws.cell(row=2, column=6 + col_offset, value=calculated_power)
+                        debug_print(f"DEBUG: Calculated and applied power {calculated_power:.3f}W for sample {i+1} (V={voltage_val}, R={resistance_val}, dR={dr_value}, device_type={device_type})")
+                    else:
+                        debug_print(f"DEBUG: Cannot calculate power for sample {i+1} - missing voltage or resistance")
+                except (ValueError, TypeError) as e:
+                    debug_print(f"DEBUG: Error calculating power for sample {i+1}: {e}")
             
                 # Row 3, Column H (8) + offset: Oil Mass
                 oil_mass = sample_data.get("oil_mass", "")
@@ -1834,6 +1867,11 @@ Developed by Charlie Becquet
                         debug_print("DEBUG: Updated all_filtered_sheets with new data")
                         break
     
+            if self.test_name in self.gui.filtered_sheets:
+                self.gui.filtered_sheets[self.test_name]['header_data'] = self.header_data
+                debug_print("DEBUG: Stored header data in filtered_sheets for .vap3 persistence")
+    
+
             debug_print("DEBUG: Successfully saved data to loaded sheets")
     
             debug_print("DEBUG: Loaded sheets save completed - main GUI data should now be current")

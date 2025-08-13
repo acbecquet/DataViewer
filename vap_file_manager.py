@@ -92,15 +92,15 @@ class VapFileManager:
                     # Check if this is a plotting sheet
                     is_plotting = plotting_sheet_test(sheet_name, sheet_info['data'])
                     is_empty = sheet_info.get('is_empty', False)
-                    
+    
                     # Create directory structure for the sheet
                     sheet_dir = f'sheets/{sheet_name}'
-                    
+    
                     # Convert DataFrame to CSV for better interoperability
                     buffer = io.StringIO()
                     sheet_info['data'].to_csv(buffer, index=False)
                     archive.writestr(f'{sheet_dir}/data.csv', buffer.getvalue())
-                    
+    
                     # Store sheet meta_data
                     sheet_meta_data = {
                         'is_plotting': is_plotting,
@@ -108,6 +108,12 @@ class VapFileManager:
                     }
                     archive.writestr(f'{sheet_dir}/meta_data.json', 
                                     json.dumps(sheet_meta_data))
+    
+                    # Store header data if available (for .vap3 files only)
+                    if 'header_data' in sheet_info:
+                        archive.writestr(f'{sheet_dir}/header_data.json', 
+                                        json.dumps(sheet_info['header_data']))
+                        print(f"DEBUG: Stored header data for sheet {sheet_name}")
                 
                 # Store images
                 for file_name, file_sheets in sheet_images.items():
@@ -191,17 +197,29 @@ class VapFileManager:
                     sheet_meta_path = f'sheets/{sheet_name}/meta_data.json'
                     if sheet_meta_path in all_files:
                         sheet_meta = json.loads(archive.read(sheet_meta_path).decode('utf-8'))
-                        
+        
                         # Load sheet data
                         data_path = f'sheets/{sheet_name}/data.csv'
                         if data_path in all_files:
                             csv_data = archive.read(data_path).decode('utf-8')
                             data = pd.read_csv(io.StringIO(csv_data))
-                            
+            
+                            # Load header data if available (for .vap3 files only)
+                            sheet_dir = f'sheets/{sheet_name}'
+                            header_data = None
+                            try:
+                                header_data_content = archive.read(f'{sheet_dir}/header_data.json').decode('utf-8')
+                                header_data = json.loads(header_data_content)
+                                print(f"DEBUG: Loaded header data for sheet {sheet_name}")
+                            except KeyError:
+                                print(f"DEBUG: No header data found for sheet {sheet_name} (backwards compatibility)")
+                                header_data = None
+            
                             # Reconstruct sheet info
                             result['filtered_sheets'][sheet_name] = {
                                 'data': data,
-                                'is_empty': sheet_meta.get('is_empty', False)
+                                'is_empty': sheet_meta.get('is_empty', False),
+                                'header_data': header_data
                             }
                 
                 # Extract images if they exist

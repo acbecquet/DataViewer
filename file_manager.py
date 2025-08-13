@@ -1755,6 +1755,14 @@ class FileManager:
             traceback.print_exc()
             return None
 
+    def migrate_header_data_for_backwards_compatibility(self, header_data):
+        """Ensure header data has device type field for backwards compatibility."""
+        if header_data and 'common' in header_data:
+            if 'device_type' not in header_data['common']:
+                header_data['common']['device_type'] = None
+                debug_print("DEBUG: Added device_type: None for backwards compatibility")
+        return header_data
+
     def validate_header_data(self, header_data):
         """Validate that header data is complete enough for data collection."""
         debug_print("DEBUG: Validating extracted header data")
@@ -2044,16 +2052,27 @@ class FileManager:
                             ws.cell(row=3, column=viscosity_col, value=viscosity)
                         debug_print(f"DEBUG: Set viscosity '{viscosity}' at row 3, column {viscosity_col} for sample {i+1}")
             
-                    # Row 3, Column F (6) + offset: Voltage
+                    # Row 3, Column F (6) + offset: Voltage  
                     voltage = sample_data.get("voltage", "")
                     if voltage:
-                        voltage_col = 6 + col_offset
                         try:
                             voltage_value = float(voltage)
-                            ws.cell(row=3, column=voltage_col, value=voltage_value)
+                            ws.cell(row=3, column=6 + col_offset, value=voltage_value)
                         except ValueError:
-                            ws.cell(row=3, column=voltage_col, value=voltage)
-                        debug_print(f"DEBUG: Set voltage '{voltage}' at row 3, column {voltage_col} for sample {i+1}")
+                            ws.cell(row=3, column=6 + col_offset, value=voltage)
+
+                    # Row 2, Column F (6) + offset: Calculated Power
+                    calculated_power = sample_data.get("calculated_power", "")
+                    if calculated_power:
+                        try:
+                            power_value = float(calculated_power)
+                            ws.cell(row=2, column=6 + col_offset, value=power_value)
+                            debug_print(f"DEBUG: Set calculated power '{power_value}' at row 2, column {6 + col_offset} for sample {i+1}")
+                        except ValueError:
+                            ws.cell(row=2, column=6 + col_offset, value=calculated_power)
+                            debug_print(f"DEBUG: Set calculated power (string) '{calculated_power}' at row 2, column {6 + col_offset} for sample {i+1}")
+                    else:
+                        debug_print(f"DEBUG: No calculated power available for sample {i+1}")
 
                     # Row 3, Column H (8) + offset: Oil Mass
                     oil_mass = sample_data.get("oil_mass", "")
