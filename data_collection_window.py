@@ -882,11 +882,11 @@ class DataCollectionWindow:
 
     def apply_header_changes_to_file(self):
         """Apply header changes to the Excel file using the new sample-specific structure."""
-        debug_print("DEBUG: Applying header changes to Excel file")
+        print("DEBUG: Applying header changes to Excel file")
     
         # For .vap3 files, we don't update the physical file directly
         if self.file_path.endswith('.vap3') or not os.path.exists(self.file_path):
-            debug_print("DEBUG: .vap3 file detected, updating header data in memory only")
+            print("DEBUG: .vap3 file detected, updating header data in memory only")
             # The header data is already updated in self.header_data
             # Just mark that we have changes
             self.mark_unsaved_changes()
@@ -897,7 +897,7 @@ class DataCollectionWindow:
             wb = openpyxl.load_workbook(self.file_path)
         
             if self.test_name not in wb.sheetnames:
-                debug_print(f"DEBUG: Sheet {self.test_name} not found")
+                print(f"DEBUG: Sheet {self.test_name} not found")
                 return
             
             ws = wb[self.test_name]
@@ -912,7 +912,7 @@ class DataCollectionWindow:
                 col_offset = i * 12
                 sample_data = samples_data[i] if i < len(samples_data) else {}
             
-                debug_print(f"DEBUG: Applying header changes for sample {i+1} with offset {col_offset}")
+                print(f"DEBUG: Applying header changes for sample {i+1} with offset {col_offset}")
             
                 # Row 1, Column F (6) + offset: Sample ID  
                 sample_id = sample_data.get('id', f'Sample {i+1}')
@@ -975,19 +975,23 @@ class DataCollectionWindow:
                         voltage_val = float(voltage)
                         resistance_val = float(resistance)
                         dr_value = device_dr_mapping.get(device_type, 0.0)
+
+                        print(f"DEBUG: Voltage: {voltage_val}V, Resistance: {resistance_val}Ω")
+                        print(f"DEBUG: Device type lookup: '{device_type}' -> dR = {dr_value}")
+
         
                         # Explicit handling for None device type (backwards compatibility)
                         if device_type is None:
                             dr_value = 0.0
-                            debug_print(f"DEBUG: Using dR = 0 for backwards compatibility (device_type is None)")
+                            print(f"DEBUG: Using dR = 0 for backwards compatibility (device_type is None)")
         
                         calculated_power = (voltage_val ** 2) / (resistance_val + dr_value)
                         ws.cell(row=2, column=6 + col_offset, value=calculated_power)
-                        debug_print(f"DEBUG: Calculated and applied power {calculated_power:.3f}W for sample {i+1} (V={voltage_val}, R={resistance_val}, dR={dr_value}, device_type={device_type})")
+                        print(f"DEBUG: Calculated and applied power {calculated_power:.3f}W for sample {i+1} (V={voltage_val}, R={resistance_val}, dR={dr_value}, device_type={device_type})")
                     else:
-                        debug_print(f"DEBUG: Cannot calculate power for sample {i+1} - missing voltage or resistance")
+                        print(f"DEBUG: Cannot calculate power for sample {i+1} - missing voltage or resistance")
                 except (ValueError, TypeError) as e:
-                    debug_print(f"DEBUG: Error calculating power for sample {i+1}: {e}")
+                    print(f"DEBUG: Error calculating power for sample {i+1}: {e}")
             
                 # Row 3, Column H (8) + offset: Oil Mass
                 oil_mass = sample_data.get("oil_mass", "")
