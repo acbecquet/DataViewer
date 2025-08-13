@@ -768,9 +768,9 @@ class DataCollectionWindow:
             debug_print("DEBUG: Header editing was cancelled")
 
     def handle_sample_count_change(self, old_count, new_count):
-        """Handle changes in the number of samples."""
+        """Handle changes in the number of samples - COMPLETE IMPLEMENTATION."""
         debug_print(f"DEBUG: Handling sample count change: {old_count} -> {new_count}")
-    
+
         if new_count > old_count:
             # Add new samples
             for i in range(old_count, new_count):
@@ -786,11 +786,15 @@ class DataCollectionWindow:
                     "current_row_index": 0,
                     "avg_tpm": 0.0
                 }
-            
-                # Add chronography for User Test Simulation
+
+                # Add resistance field for User Test Simulation
                 if self.test_name in ["User Test Simulation", "User Simulation Test"]:
                     self.data[sample_id]["chronography"] = []
-            
+                    self.data[sample_id]["resistance"] = []
+                else:
+                    self.data[sample_id]["resistance"] = []
+                    self.data[sample_id]["clog"] = []
+
                 # Pre-initialize 50 rows for new sample
                 for j in range(50):
                     puff = (j + 1) * self.puff_interval
@@ -801,25 +805,32 @@ class DataCollectionWindow:
                     self.data[sample_id]["smell"].append("")
                     self.data[sample_id]["notes"].append("")
                     self.data[sample_id]["tpm"].append(None)
-                
-                    # Add chronography initialization for User Test Simulation
+
+                    # Initialize additional fields based on test type
                     if self.test_name in ["User Test Simulation", "User Simulation Test"]:
                         self.data[sample_id]["chronography"].append("")
-        
+                    else:
+                        self.data[sample_id]["resistance"].append("")
+                        self.data[sample_id]["clog"].append("")
+
             debug_print(f"DEBUG: Added {new_count - old_count} new samples")
-        
+
         elif new_count < old_count:
             # Remove excess samples
             for i in range(new_count, old_count):
                 sample_id = f"Sample {i+1}"
                 if sample_id in self.data:
                     del self.data[sample_id]
-        
+                    debug_print(f"DEBUG: Removed {sample_id}")
+
             debug_print(f"DEBUG: Removed {old_count - new_count} samples")
-    
+
         # Update the number of samples
         self.num_samples = new_count
-    
+
+        # Clear existing sample frames
+        self.sample_frames = []
+
         # Recreate the UI to reflect the new sample count
         self.recreate_sample_tabs()
 
@@ -840,23 +851,55 @@ class DataCollectionWindow:
         debug_print(f"DEBUG: Recreated {self.num_samples} sample tabs")
 
     def update_header_display(self):
-        """Update the header information displayed in the UI."""
-        
+        """Update the header information displayed in the UI - ENHANCED VERSION."""
+        debug_print("DEBUG: Updating header display")
+    
         # Update the header labels (if they exist)
         try:
             # Update any header text that shows tester name, etc.
             for widget in self.window.winfo_children():
                 if hasattr(widget, 'winfo_children'):
                     self.update_header_labels_recursive(widget)
-            
-            # Update notebook tab labels
+        
+            # Update notebook tab labels with sample names
             for i in range(min(self.num_samples, len(self.sample_frames))):
                 if i < len(self.header_data.get('samples', [])):
                     sample_name = self.header_data['samples'][i].get('id', f"Sample {i+1}")
-                    self.notebook.tab(i, text=f"Sample {i+1} - {sample_name}")
-                    
+                    tab_text = f"Sample {i+1}"
+                    if sample_name and sample_name != f"Sample {i+1}":
+                        tab_text = f"Sample {i+1} - {sample_name}"
+                    self.notebook.tab(i, text=tab_text)
+                    debug_print(f"DEBUG: Updated tab {i} text to '{tab_text}'")
+                
         except Exception as e:
             debug_print(f"DEBUG: Error updating header display: {e}")
+
+    def get_excel_column_positions(self, sample_index):
+        """Get standardized Excel column positions for a sample block."""
+        col_offset = sample_index * 12
+        return {
+            'sample_id': 6 + col_offset,      # Column F + offset
+            'media': 2 + col_offset,          # Column B + offset  
+            'viscosity': 2 + col_offset,      # Column B + offset (row 3)
+            'tester': 4 + col_offset,         # Column D + offset (row 3)
+            'resistance': 4 + col_offset,     # Column D + offset (row 2)
+            'voltage': 6 + col_offset,        # Column F + offset (row 3)
+            'oil_mass': 8 + col_offset,       # Column H + offset
+            'puffs': 1 + col_offset,          # Column A + offset (data starts row 4)
+            'before_weight': 2 + col_offset,  # Column B + offset (data starts row 4)
+            'after_weight': 3 + col_offset,   # Column C + offset (data starts row 4)
+            'draw_pressure': 4 + col_offset,  # Column D + offset (data starts row 4)
+            'tpm': 9 + col_offset             # Column I + offset (data starts row 4)
+        }
+
+    def get_tksheet_column_headers(self):
+        """Get consistent column headers for tksheet based on test type."""
+        if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+            return ["Chronography", "Puffs", "Before Weight (g)", "After Weight (g)", 
+                    "Draw Pressure (kPa)", "Failure", "Notes", "TPM (mg/puff)"]
+        else:
+            return ["Puffs", "Before Weight (g)", "After Weight (g)", "Draw Pressure (kPa)", 
+                    "Resistance (Ω)", "Smell", "Clog", "Notes", "TPM (mg/puff)"]
 
     def update_header_labels_recursive(self, widget):
         """Recursively update header labels in the widget tree."""
@@ -875,37 +918,95 @@ class DataCollectionWindow:
             debug_print(f"DEBUG: Error updating label: {e}")
 
     def apply_header_changes_to_file(self):
-        """Apply header changes to the Excel file."""
+        """Apply header changes to the Excel file - COMPLETE IMPLEMENTATION."""
         debug_print("DEBUG: Applying header changes to Excel file")
         try:
             import openpyxl
             wb = openpyxl.load_workbook(self.file_path)
-            
+        
             if self.test_name not in wb.sheetnames:
                 debug_print(f"DEBUG: Sheet {self.test_name} not found")
                 return
-                
+            
             ws = wb[self.test_name]
-            
-            # Apply common data
+        
+            # Apply common data to each sample block
             common_data = self.header_data.get('common', {})
-            ws.cell(row=2, column=2, value=common_data.get('media', ''))
-            ws.cell(row=3, column=2, value=common_data.get('viscosity', ''))
-            ws.cell(row=2, column=6, value=common_data.get('voltage', ''))
-            ws.cell(row=2, column=8, value=common_data.get('oil_mass', ''))
+            samples_data = self.header_data.get('samples', [])
+        
+            # Set test name at row 1, column 1
+            ws.cell(row=1, column=1, value=self.test_name)
+            debug_print(f"DEBUG: Set test name '{self.test_name}' at row 1, column 1")
+        
+            # Apply data to each sample block with consistent column mapping
+            for i in range(self.num_samples):
+                col_offset = i * 12  # 12 columns per sample
+                debug_print(f"DEBUG: Processing sample {i+1} with column offset {col_offset}")
             
-            # Apply sample-specific data
-            for i, sample_data in enumerate(self.header_data.get('samples', [])):
-                col_offset = i * 12
-                ws.cell(row=1, column=6 + col_offset, value=sample_data.get('id', ''))
-                ws.cell(row=3, column=4 + col_offset, value=sample_data.get('resistance', ''))
+                # Sample-specific headers
+                if i < len(samples_data):
+                    sample_data = samples_data[i]
+                    # Sample ID at row 1, column F (6) + offset
+                    sample_id_col = 6 + col_offset
+                    ws.cell(row=1, column=sample_id_col, value=sample_data.get('id', ''))
+                    debug_print(f"DEBUG: Set sample ID '{sample_data.get('id', '')}' at row 1, column {sample_id_col}")
+                
+                    # Resistance at row 3, column D (4) + offset  
+                    resistance_col = 4 + col_offset
+                    if sample_data.get('resistance'):
+                        try:
+                            resistance_value = float(sample_data['resistance'])
+                            ws.cell(row=3, column=resistance_col, value=resistance_value)
+                        except ValueError:
+                            ws.cell(row=3, column=resistance_col, value=sample_data['resistance'])
+                        debug_print(f"DEBUG: Set resistance '{sample_data.get('resistance', '')}' at row 3, column {resistance_col}")
             
+                # Common headers applied to each sample block
+                # Tester at row 3, column D (4) + offset (just name, no prefix)
+                tester_col = 4 + col_offset
+                ws.cell(row=3, column=tester_col, value=common_data.get('tester', ''))
+            
+                # Media at row 2, column B (2) + offset
+                media_col = 2 + col_offset
+                ws.cell(row=2, column=media_col, value=common_data.get('media', ''))
+            
+                # Viscosity at row 3, column B (2) + offset
+                viscosity_col = 2 + col_offset
+                if common_data.get('viscosity'):
+                    try:
+                        viscosity_value = float(common_data['viscosity'])
+                        ws.cell(row=3, column=viscosity_col, value=viscosity_value)
+                    except ValueError:
+                        ws.cell(row=3, column=viscosity_col, value=common_data['viscosity'])
+            
+                # Voltage at row 3, column F (6) + offset
+                voltage_col = 6 + col_offset
+                if common_data.get('voltage'):
+                    try:
+                        voltage_value = float(common_data['voltage'])
+                        ws.cell(row=3, column=voltage_col, value=voltage_value)
+                    except ValueError:
+                        ws.cell(row=3, column=voltage_col, value=common_data['voltage'])
+            
+                # Oil mass at row 2, column H (8) + offset
+                oil_mass_col = 8 + col_offset
+                if common_data.get('oil_mass'):
+                    try:
+                        oil_mass_value = float(common_data['oil_mass'])
+                        ws.cell(row=2, column=oil_mass_col, value=oil_mass_value)
+                    except ValueError:
+                        ws.cell(row=2, column=oil_mass_col, value=common_data['oil_mass'])
+            
+                debug_print(f"DEBUG: Applied common headers to sample {i+1} block")
+        
             # Save the workbook
             wb.save(self.file_path)
-            debug_print("DEBUG: Header changes applied to Excel file")
-            
+            debug_print("DEBUG: Header changes applied and saved to Excel file")
+        
         except Exception as e:
             debug_print(f"DEBUG: Error applying header changes to file: {e}")
+            import traceback
+            traceback.print_exc()
 
     def show_temp_status_message(self, message, duration_ms):
         """Show a temporary status message."""
@@ -1620,23 +1721,35 @@ Developed by Charlie Becquet
                     debug_print(f"DEBUG: Error updating VAP3 file: {e}")
     
     def create_sample_tabs(self):
-        """Create tabs for all samples in the notebook."""
-        # This method manages the overall process
-        self.sample_frames = []
-        self.sample_sheets = []
+        """Create sample tabs with consistent column mapping."""
+        debug_print(f"DEBUG: Creating {self.num_samples} sample tabs")
     
-        # Calls create_sample_tab() for EACH sample
+        # Clear existing sample frames
+        self.sample_frames = []
+    
         for i in range(self.num_samples):
             sample_id = f"Sample {i+1}"
-            sample_frame = ttk.Frame(self.notebook, padding=10, style='TFrame')
-            sample_name = self.header_data['samples'][i].get('id', f"Sample {i+1}")
         
-            self.notebook.add(sample_frame, text=f"Sample {i+1} - {sample_name}")
-            self.sample_frames.append(sample_frame)
+            # Create tab frame
+            tab_frame = ttk.Frame(self.notebook)
+            self.sample_frames.append(tab_frame)
         
-            # Create individual tab content
-            sheet = self.create_sample_tab(sample_frame, sample_id, i)
-            self.sample_sheets.append(sheet)
+            # Get sample name for tab label
+            sample_name = ""
+            if (i < len(self.header_data.get('samples', [])) and 
+                self.header_data['samples'][i].get('id')):
+                sample_name = self.header_data['samples'][i]['id']
+        
+            tab_text = f"Sample {i+1}"
+            if sample_name and sample_name != f"Sample {i+1}":
+                tab_text = f"Sample {i+1} - {sample_name}"
+        
+            self.notebook.add(tab_frame, text=tab_text)
+        
+            # Create tksheet with consistent headers
+            sheet = self.create_tksheet_for_sample(tab_frame, sample_id, i)
+        
+            debug_print(f"DEBUG: Created tab for {sample_id} with name '{sample_name}'")
 
     def create_sample_tab(self, parent_frame, sample_id, sample_index):
         """Create a tab for a single sample with tksheet instead of treeview."""

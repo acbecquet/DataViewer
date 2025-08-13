@@ -55,6 +55,17 @@ def lazy_import_tkintertable():
         debug_print(f"Error importing tkintertable: {e}")
         return None, None
 
+def lazy_import_tksheet():
+    """Lazy import tksheet when needed."""
+    try:
+        from tksheet import Sheet
+        return Sheet
+    except ImportError as e:
+        debug_print(f"Error importing tksheet: {e}")
+        return None
+
+
+
 def lazy_import_requests():
     """Lazy import requests when needed."""
     try:
@@ -390,6 +401,13 @@ Would you like to download and install the update?"""
         if not hasattr(self, '_tkintertable'):
             self._tkintertable = lazy_import_tkintertable()
         return self._tkintertable
+
+    # Update the get_tkintertable method to get_tksheet
+    def get_tksheet(self):
+        """Get tksheet with lazy loading."""
+        if not hasattr(self, '_tksheet'):
+            self._tksheet = lazy_import_tksheet()
+        return self._tksheet
 
     def lazy_init_managers(self):
         """Initialize manager classes only when needed."""
@@ -1482,6 +1500,326 @@ Would you like to download and install the update?"""
         self.plot_frame.update_idletasks()
 
     def display_table(self, frame, data, sheet_name, is_plotting_sheet):
+        """Display table data in the given frame using tksheet with robust error handling."""
+        pd = self.get_pandas()
+        np = self.get_numpy()
+        Sheet = self.get_tksheet()
+
+        if not Sheet or not np or not pd:
+            debug_print("ERROR: Required libraries not available. Aborting display_table.")
+            return
+
+        for widget in frame.winfo_children():
+            widget.destroy()
+
+        # Handle completely empty data (after filtering)
+        if data.empty:
+            debug_print(f"DEBUG: Data is completely empty after filtering for sheet '{sheet_name}'")
+        
+            # Create placeholder indicating ready for data collection
+            placeholder_label = tk.Label(
+                frame,
+                text=f"No samples to display.\nAll samples were empty or placeholder data.\nReady for data collection.",
+                font=("Arial", 12),
+                fg="gray",
+                justify="center"
+            )
+            placeholder_label.pack(expand=True, pady=50)
+            return
+
+        debug_print("DEBUG: Cleared existing table widgets.")
+
+        # Clean and prepare data with enhanced error handling
+        try:
+            data = clean_columns(data)
+            data.columns = data.columns.map(str)  # Ensure column headers are strings
+            debug_print("DEBUG: Column cleaning completed successfully.")
+
+            # Fix: More robust empty check
+            try:
+                is_data_empty = len(data) == 0 or data.shape[0] == 0
+            except Exception as e:
+                debug_print(f"DEBUG: Error checking if data is empty, assuming not empty: {e}")
+                is_data_empty = False
+
+            if is_data_empty:
+                debug_print("DEBUG: Data is empty. Displaying warning.")
+                messagebox.showwarning("Warning", f"Sheet '{sheet_name}' contains no data to display.")
+                return
+
+            # Fix: More robust data type conversion
+            try:
+                # Convert to string and handle NaN values in one step
+                data = data.astype(str)
+                data = data.replace(['nan', 'None', 'NaN'], '', regex=False)
+                debug_print("DEBUG: Data type conversion completed successfully.")
+            except Exception as type_error:
+                debug_print(f"DEBUG: Error in data type conversion: {type_error}")
+                # Final fallback - create a clean copy
+                try:
+                    clean_data = pd.DataFrame()
+                    for col in data.columns:
+                        clean_data[col] = data[col].apply(lambda x: str(x) if pd.notna(x) else '')
+                    data = clean_data
+                    debug_print("DEBUG: Used fallback data conversion method.")
+                except Exception as fallback_error:
+                    debug_print(f"ERROR: Even fallback conversion failed: {fallback_error}")
+                    return
+
+            debug_print("DEBUG: Data processed successfully.")
+
+        except Exception as data_prep_error:
+            debug_print(f"ERROR: Critical error in data preparation: {data_prep_error}")
+            import traceback
+            traceback.print_exc()
+    
+            # Show error message to user
+            error_label = tk.Label(
+                frame,
+                text=f"Error displaying table data for '{sheet_name}'.\nPlease check the console for details.",
+                font=("Arial", 12),
+                fg="red",
+                justify="center"
+            )
+            error_label.pack(expand=True, pady=50)
+            return
+
+        # Continue with table creation using tksheet
+        try:
+            table_frame = ttk.Frame(frame, padding=(2, 1))
+            table_frame.pack(fill='both', expand=True)
+        
+            # Configure grid weights for proper resizing
+            table_frame.grid_rowconfigure(0, weight=1)
+            table_frame.grid_columnconfigure(0, weight=1)
+
+            debug_print("DEBUG: Table frame created and packed.")
+
+            # IMPROVED: Dynamic sizing parameters based on font and maximum column width
+            font_size = 10  # Font size in points
+            char_width_pixels = 8  # Approximate pixels per character for Arial 10pt
+            font_height_pixels = 12  # Font height in pixels
+        
+            # Set maximum column width based on "Test Method" column from your image (1920x1080 screen)
+            max_column_width = 380  # Pixels
+            min_column_width = 120  # Minimum for readability
+        
+            # Calculate max characters per line dynamically
+            max_chars_per_line = max_column_width // char_width_pixels
+            debug_print(f"DEBUG: Using max_column_width={max_column_width}px, char_width={char_width_pixels}px, max_chars_per_line={max_chars_per_line}")
+        
+            # Row height parameters
+            min_row_height = 25  # Minimum row height
+            row_padding = 8  # Extra pixels for padding
+
+            # Pre-process data for text wrapping using existing wrap_text function
+            debug_print("DEBUG: Pre-processing text for table display with wrapping using utils.wrap_text.")
+    
+            # Apply text wrapping to all cells and calculate dimensions
+            wrapped_data = data.copy()
+            row_heights = []
+            col_widths = []
+    
+            debug_print(f"DEBUG: Processing {len(data)} rows and {len(data.columns)} columns for text wrapping")
+        
+            # First pass: Calculate column widths based on content
+            for col_idx, col_name in enumerate(data.columns):
+                max_chars_in_column = len(str(col_name))  # Start with header length
+            
+                # Check all cells in this column
+                for row_idx in range(len(data)):
+                    try:
+                        cell_value = data.iloc[row_idx, col_idx]
+                        if pd.isna(cell_value) or cell_value in ['nan', 'None', 'NaN', '']:
+                            cell_text = ''
+                        else:
+                            cell_text = str(cell_value).strip()
+                    
+                        if cell_text:
+                            # Find the longest line after wrapping
+                            wrapped_text = wrap_text(cell_text, max_width=max_chars_per_line)
+                            if wrapped_text:
+                                lines = wrapped_text.split('\n')
+                                max_line_length = max(len(line) for line in lines)
+                                max_chars_in_column = max(max_chars_in_column, max_line_length)
+                        
+                    except Exception as cell_error:
+                        debug_print(f"DEBUG: Error processing cell at ({row_idx}, {col_idx}) for width: {cell_error}")
+                        continue
+            
+                # Convert character count to pixel width, respecting min/max limits
+                calculated_width = max_chars_in_column * char_width_pixels + 5  # 20px padding
+                column_width = max(min_column_width, min(max_column_width, calculated_width))
+                col_widths.append(column_width)
+            
+                debug_print(f"DEBUG: Column '{col_name}' - max_chars: {max_chars_in_column}, calculated_width: {calculated_width}px, final_width: {column_width}px")
+        
+            # Second pass: Apply text wrapping and calculate row heights
+            for row_idx in range(len(data)):
+                max_lines_in_row = 1
+            
+                for col_idx, col_name in enumerate(data.columns):
+                    try:
+                        cell_value = data.iloc[row_idx, col_idx]
+                    
+                        # Convert to string and handle empty/nan values
+                        if pd.isna(cell_value) or cell_value in ['nan', 'None', 'NaN', '']:
+                            cell_text = ''
+                        else:
+                            cell_text = str(cell_value).strip()
+                    
+                        if cell_text:
+                            # Use the existing wrap_text function from utils
+                            wrapped_text = wrap_text(cell_text, max_width=max_chars_per_line)
+                            wrapped_data.iloc[row_idx, col_idx] = wrapped_text
+                        
+                            # Calculate lines for row height
+                            if wrapped_text:
+                                line_count = wrapped_text.count('\n') + 1
+                                max_lines_in_row = max(max_lines_in_row, line_count)
+                        else:
+                            wrapped_data.iloc[row_idx, col_idx] = ''
+                        
+                    except Exception as cell_error:
+                        debug_print(f"DEBUG: Error processing cell at ({row_idx}, {col_idx}): {cell_error}")
+                        wrapped_data.iloc[row_idx, col_idx] = str(cell_value) if 'cell_value' in locals() else ''
+                        continue
+            
+                # Calculate row height based on max lines in this row
+                row_height = max(min_row_height, max_lines_in_row * font_height_pixels + row_padding)
+                row_heights.append(row_height)
+    
+            debug_print(f"DEBUG: Calculated row heights: min={min(row_heights)}, max={max(row_heights)}, avg={sum(row_heights)/len(row_heights):.1f}")
+            debug_print(f"DEBUG: Calculated column widths: min={min(col_widths)}, max={max(col_widths)}, avg={sum(col_widths)/len(col_widths):.1f}")
+
+            # Prepare data for tksheet
+            headers = list(data.columns)
+            rows_data = wrapped_data.values.tolist()
+        
+            debug_print(f"DEBUG: Prepared {len(headers)} columns and {len(rows_data)} rows for tksheet")
+
+            # Create tksheet widget with auto-sizing DISABLED
+            sheet = Sheet(
+                table_frame,
+                data=rows_data,
+                headers=headers,
+                show_table=True,
+                show_row_index=True,
+                show_header=True,
+                show_top_left=True,
+                empty_horizontal=0,
+                empty_vertical=0,
+                selected_rows_to_end_of_window=False,
+                horizontal_grid_to_end_of_window=False,
+                vertical_grid_to_end_of_window=False,
+                show_horizontal_grid=True,
+                show_vertical_grid=True,
+                auto_resize_default_row_index=False,  # Disable auto-resize
+                auto_resize_default_header=False,     # Disable auto-resize
+                auto_resize_row_index=False,          # Disable auto-resize
+                auto_resize_columns=False,            # Disable auto-resize
+                height=400,  # Set reasonable default height
+                width=600    # Set reasonable default width
+            )
+
+            # Configure tksheet styling with proper 3-tuple font specifications
+            sheet.set_options(
+                theme="light blue",  # Similar to the #4CC9F0 background
+                font=("Arial", font_size, "normal"),  # Use our font_size variable
+                header_font=("Arial", font_size, "bold"),
+                index_font=("Arial", font_size, "normal"),
+                show_dropdown_borders=False,
+                redraw_header_grid=True,
+                redraw_row_index_grid=True
+            )
+
+            # IMPORTANT: Set column widths BEFORE row heights to prevent auto-sizing interference
+            debug_print("DEBUG: Setting column widths first to prevent auto-sizing...")
+            for col_idx, width in enumerate(col_widths):
+                try:
+                    sheet.column_width(column=col_idx, width=int(width))
+                    debug_print(f"DEBUG: Set column {col_idx} width to {int(width)}px")
+                except Exception as e:
+                    debug_print(f"DEBUG: Error setting column {col_idx} width: {e}")
+
+            # Set row heights AFTER column widths
+            debug_print("DEBUG: Setting individual row heights...")
+            for row_idx, height in enumerate(row_heights):
+                try:
+                    sheet.row_height(row=row_idx, height=int(height))
+                except Exception as e:
+                    debug_print(f"DEBUG: Error setting row {row_idx} height: {e}")
+
+            # Disable any remaining auto-sizing features that might interfere
+            sheet.disable_bindings(
+                "edit_cell",
+                "edit_header", 
+                "edit_index",
+                "copy",
+                "cut",
+                "paste",
+                "delete",
+                "insert_columns",
+                "insert_rows",
+                "delete_columns", 
+                "delete_rows"
+            )
+
+            # Enable only viewing and selection bindings
+            sheet.enable_bindings(
+                "single_select",
+                "drag_select", 
+                "select_all",
+                "column_select",
+                "row_select",
+                "column_width_resize",      # Allow manual resizing
+                "double_click_column_resize",  # Allow double-click auto-size
+                "row_height_resize",       # Allow manual resizing
+                "arrowkeys",
+                "right_click_popup_menu",
+                "rc_select"
+            )
+
+            # Grid the sheet widget
+            sheet.grid(row=0, column=0, sticky="nsew")
+
+            # FINAL: Force refresh and ensure our sizing sticks
+            sheet.refresh()
+        
+            # Double-check our column widths after refresh (in case tksheet changed them)
+            debug_print("DEBUG: Verifying column widths after refresh...")
+            for col_idx, expected_width in enumerate(col_widths):
+                try:
+                    actual_width = sheet.column_width(column=col_idx)
+                    if abs(actual_width - expected_width) > 5:  # Allow 5px tolerance
+                        debug_print(f"DEBUG: Column {col_idx} width mismatch - expected: {expected_width}, actual: {actual_width}, resetting...")
+                        sheet.column_width(column=col_idx, width=int(expected_width))
+                except Exception as e:
+                    debug_print(f"DEBUG: Error verifying column {col_idx} width: {e}")
+        
+            debug_print("DEBUG: tksheet table displayed successfully.")
+
+            # Store reference to sheet for potential future use
+            if not hasattr(self, 'current_sheet_widget'):
+                self.current_sheet_widget = {}
+            self.current_sheet_widget[sheet_name] = sheet
+
+        except Exception as table_error:
+            debug_print(f"ERROR: Failed to create tksheet table: {table_error}")
+            import traceback
+            traceback.print_exc()
+    
+            # Show error message to user
+            error_label = tk.Label(
+                frame,
+                text=f"Error creating table for '{sheet_name}'.\nPlease check the console for details.",
+                font=("Arial", 12),
+                fg="red",
+                justify="center"
+            )
+            error_label.pack(expand=True, pady=50)
+
+    def display_table_old(self, frame, data, sheet_name, is_plotting_sheet):
         """Display table data in the given frame with robust error handling."""
         pd = self.get_pandas()
         np = self.get_numpy()
