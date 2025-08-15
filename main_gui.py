@@ -879,6 +879,201 @@ Would you like to download and install the update?"""
         """Open a .vap3 file using the file manager."""
         self.file_manager.load_vap3_file()
 
+    def save_with_sample_images(self):
+        """Enhanced save method that includes sample images from data collection."""
+        try:
+            debug_print("DEBUG: Saving with sample images")
+        
+            # Check if we have pending sample images from data collection
+            sample_images = getattr(self, 'pending_sample_images', {})
+            sample_image_crop_states = getattr(self, 'pending_sample_image_crop_states', {})
+            sample_header_data = getattr(self, 'pending_sample_header_data', {})
+        
+            if sample_images:
+                debug_print(f"DEBUG: Found {len(sample_images)} sample groups to save")
+            
+                # Use the enhanced VAP file manager
+                from vap_file_manager import VapFileManager
+                vap_manager = VapFileManager()
+            
+                # Get current application state
+                image_crop_states = getattr(self, 'image_crop_states', {})
+                plot_settings = {
+                    'selected_plot_type': getattr(self, 'selected_plot_type', tk.StringVar()).get()
+                }
+            
+                # Save to VAP3 file with sample images
+                success = vap_manager.save_to_vap3(
+                    self.file_path,
+                    self.filtered_sheets,
+                    getattr(self, 'sheet_images', {}),
+                    getattr(self, 'plot_options', []),
+                    image_crop_states,
+                    plot_settings,
+                    sample_images,  # NEW: Sample images
+                    sample_image_crop_states,  # NEW: Sample image crop states
+                    sample_header_data  # NEW: Sample header data
+                )
+            
+                if success:
+                    # Clear pending sample images after successful save
+                    if hasattr(self, 'pending_sample_images'):
+                        delattr(self, 'pending_sample_images')
+                    if hasattr(self, 'pending_sample_image_crop_states'):
+                        delattr(self, 'pending_sample_image_crop_states')
+                    if hasattr(self, 'pending_sample_header_data'):
+                        delattr(self, 'pending_sample_header_data')
+                
+                    # Process and display the formatted images
+                    self.process_formatted_sample_images()
+                
+                    debug_print("DEBUG: Successfully saved with sample images")
+                    return True
+                else:
+                    debug_print("ERROR: Failed to save with sample images")
+                    return False
+            else:
+                # No sample images, use regular save
+                debug_print("DEBUG: No sample images to save, using regular save")
+                return self.file_manager.save_as_vap3()
+            
+        except Exception as e:
+            debug_print(f"ERROR: Failed to save with sample images: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+
+    def process_pending_sample_images(self):
+        """Process and display pending sample images from data collection."""
+        try:
+            if not hasattr(self, 'pending_formatted_images'):
+                debug_print("DEBUG: No pending formatted images to process")
+                return
+        
+            formatted_images = self.pending_formatted_images
+            debug_print(f"DEBUG: Processing {len(formatted_images)} pending sample images")
+        
+            # Get current sheet name
+            current_sheet = self.selected_sheet.get()
+            if not current_sheet:
+                debug_print("DEBUG: No current sheet selected for sample images")
+                return
+        
+            # Initialize image storage if needed
+            if not hasattr(self, 'sheet_images'):
+                self.sheet_images = {}
+        
+            if self.current_file not in self.sheet_images:
+                self.sheet_images[self.current_file] = {}
+        
+            if current_sheet not in self.sheet_images[self.current_file]:
+                self.sheet_images[self.current_file][current_sheet] = []
+        
+            # Add the sample images to the current sheet
+            for img_info in formatted_images:
+                img_path = img_info['path']
+            
+                # Add to sheet images if not already present
+                if img_path not in self.sheet_images[self.current_file][current_sheet]:
+                    self.sheet_images[self.current_file][current_sheet].append(img_path)
+            
+                # Store crop state
+                if not hasattr(self, 'image_crop_states'):
+                    self.image_crop_states = {}
+                self.image_crop_states[img_path] = img_info.get('crop_state', False)
+        
+            # Update the image display if we have an active image loader
+            if hasattr(self, 'image_loader') and self.image_loader:
+                debug_print("DEBUG: Refreshing main GUI image display with sample images")
+            
+                # Load the updated image list
+                self.image_loader.load_images_from_list(self.sheet_images[self.current_file][current_sheet])
+            
+                # Restore crop states
+                for img_path in self.sheet_images[self.current_file][current_sheet]:
+                    if img_path in self.image_crop_states:
+                        self.image_loader.image_crop_states[img_path] = self.image_crop_states[img_path]
+            
+                # Force refresh display
+                self.image_loader.display_images()
+            
+                # Update the image frame
+                self.image_frame.update_idletasks()
+        
+            # Clear pending images after processing
+            delattr(self, 'pending_formatted_images')
+        
+            debug_print(f"DEBUG: Successfully processed sample images for sheet {current_sheet}")
+        
+        except Exception as e:
+            debug_print(f"ERROR: Failed to process pending sample images: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def process_formatted_sample_images(self):
+        """Process and display formatted sample images in the main GUI."""
+        try:
+            formatted_images = getattr(self, 'pending_formatted_images', [])
+        
+            if not formatted_images:
+                debug_print("DEBUG: No formatted images to process")
+                return
+        
+            debug_print(f"DEBUG: Processing {len(formatted_images)} formatted sample images")
+        
+            # Get current sheet name
+            current_sheet = self.selected_sheet.get()
+            if not current_sheet:
+                debug_print("DEBUG: No current sheet selected")
+                return
+        
+            # Add images to current sheet's image collection
+            if not hasattr(self, 'sheet_images'):
+                self.sheet_images = {}
+        
+            if self.current_file not in self.sheet_images:
+                self.sheet_images[self.current_file] = {}
+        
+            if current_sheet not in self.sheet_images[self.current_file]:
+                self.sheet_images[self.current_file][current_sheet] = []
+        
+            # Add the formatted images
+            for img_info in formatted_images:
+                img_path = img_info['path']
+            
+                # Add to sheet images if not already present
+                if img_path not in self.sheet_images[self.current_file][current_sheet]:
+                    self.sheet_images[self.current_file][current_sheet].append(img_path)
+            
+                # Store crop state
+                if not hasattr(self, 'image_crop_states'):
+                    self.image_crop_states = {}
+                self.image_crop_states[img_path] = img_info.get('crop_state', False)
+        
+            # Refresh the image display if we have an image loader
+            if hasattr(self, 'image_loader') and self.image_loader:
+                debug_print("DEBUG: Refreshing image display with sample images")
+                self.image_loader.load_images_from_list(self.sheet_images[self.current_file][current_sheet])
+            
+                # Restore crop states
+                for img_path in self.sheet_images[self.current_file][current_sheet]:
+                    if img_path in self.image_crop_states:
+                        self.image_loader.image_crop_states[img_path] = self.image_crop_states[img_path]
+            
+                # Force refresh display
+                self.image_loader.display_images()
+        
+            # Clear pending formatted images
+            if hasattr(self, 'pending_formatted_images'):
+                delattr(self, 'pending_formatted_images')
+        
+            debug_print(f"DEBUG: Successfully processed sample images for sheet {current_sheet}")
+        
+        except Exception as e:
+            debug_print(f"ERROR: Failed to process formatted sample images: {e}")
+            import traceback
+            traceback.print_exc()
+
     def save_as_vap3(self) -> None:
         """Save the current session as a .vap3 file."""
         self.file_manager.save_as_vap3()
@@ -1332,6 +1527,68 @@ Would you like to download and install the update?"""
             from image_loader import ImageLoader
             self.image_loader = ImageLoader(self.image_frame, is_plotting_sheet)
         self.image_loader.add_images()
+
+    def load_sample_images_from_vap3(self, vap_data):
+        """Load and display sample images from VAP3 data."""
+        try:
+            sample_images = vap_data.get('sample_images', {})
+            sample_metadata = vap_data.get('sample_images_metadata', {})
+            sample_crop_states = vap_data.get('sample_image_crop_states', {})
+        
+            if not sample_images:
+                debug_print("DEBUG: No sample images found in VAP3 data")
+                return
+        
+            debug_print(f"DEBUG: Loading sample images from VAP3: {len(sample_images)} samples")
+        
+            # Convert sample images to formatted images for main GUI display
+            formatted_images = []
+            header_data = sample_metadata.get('header_data', {})
+        
+            for sample_id, image_paths in sample_images.items():
+                # Extract sample index
+                try:
+                    sample_index = int(sample_id.split()[-1]) - 1
+                except (ValueError, IndexError):
+                    sample_index = 0
+            
+                # Get sample info from header data
+                sample_info = {}
+                if 'samples' in header_data and sample_index < len(header_data['samples']):
+                    sample_info = header_data['samples'][sample_index]
+            
+                # Create labels for each image
+                for img_path in image_paths:
+                    # Create descriptive label
+                    label_parts = [
+                        sample_info.get('id', sample_id),
+                        header_data.get('test', 'Unknown Test'),
+                        sample_info.get('media', 'Unknown Media'),
+                        f"{sample_info.get('viscosity', 'Unknown')} cP",
+                        sample_metadata.get('timestamp', '')[:10]  # Date only
+                    ]
+                
+                    formatted_label = " - ".join(filter(None, label_parts))
+                
+                    formatted_images.append({
+                        'path': img_path,
+                        'label': formatted_label,
+                        'sample_id': sample_id,
+                        'crop_state': sample_crop_states.get(img_path, False)
+                    })
+        
+            # Store for processing
+            self.pending_formatted_images = formatted_images
+        
+            # Process and display immediately
+            self.process_pending_sample_images()
+        
+            debug_print(f"DEBUG: Successfully loaded {len(formatted_images)} sample images from VAP3")
+        
+        except Exception as e:
+            debug_print(f"ERROR: Failed to load sample images from VAP3: {e}")
+            import traceback
+            traceback.print_exc()
 
     def open_data_collection(self):
         """Open data collection interface, handling both loaded and unloaded file states."""
@@ -1818,6 +2075,28 @@ Would you like to download and install the update?"""
                 justify="center"
             )
             error_label.pack(expand=True, pady=50)
+
+    def store_vap3_data_for_data_collection(self, vap_data):
+        """Store VAP3 data for access by data collection windows."""
+        try:
+            debug_print("DEBUG: Storing VAP3 data for data collection access")
+        
+            # Store the complete VAP3 data for data collection windows to access
+            self.current_vap_data = vap_data
+        
+            # Log what we're storing
+            sample_images = vap_data.get('sample_images', {})
+            if sample_images:
+                debug_print(f"DEBUG: Stored VAP3 data with {len(sample_images)} sample image groups")
+                for sample_id, images in sample_images.items():
+                    debug_print(f"DEBUG: Stored {sample_id}: {len(images)} images")
+            else:
+                debug_print("DEBUG: No sample images in VAP3 data")
+            
+        except Exception as e:
+            debug_print(f"ERROR: Failed to store VAP3 data: {e}")
+            import traceback
+            traceback.print_exc()
 
     def store_images(self, sheet_name, paths):
         """Store image paths and their crop states for a specific sheet."""

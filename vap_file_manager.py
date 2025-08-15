@@ -36,7 +36,10 @@ class VapFileManager:
     def save_to_vap3(self, filepath: str, filtered_sheets: Dict, 
                     sheet_images: Dict, plot_options: List[str], 
                     image_crop_states: Dict = None, 
-                    plot_settings: Dict = None) -> bool:
+                    plot_settings: Dict = None,
+                    sample_images: Dict = None,
+                    sample_image_crop_states: Dict = None,
+                    sample_header_data: Dict = None) -> bool:
         """
         Save test data to a .vap3 file.
         
@@ -54,7 +57,13 @@ class VapFileManager:
             Dictionary tracking crop status of images
         plot_settings : dict, optional
             Dictionary containing plot settings (selected plot type, etc.)
-        
+            sample_images : dict, optional
+            Dictionary of sample-specific images {sample_id: [image_paths]}
+        sample_image_crop_states : dict, optional
+            Dictionary of crop states for sample images {image_path: crop_state}
+        sample_header_data : dict, optional
+            Header data containing sample information for labeling
+
         Returns:
         --------
         bool
@@ -74,7 +83,8 @@ class VapFileManager:
                     'file_id': file_id,
                     'timestamp': timestamp,
                     'sheet_names': list(filtered_sheets.keys()),
-                    'has_images': bool(sheet_images)
+                    'has_images': bool(sheet_images),
+                    'has_sample_images': bool(sample_images)
                 }
                 
                 # Write meta_data to the archive
@@ -124,6 +134,36 @@ class VapFileManager:
                                 img_ext = os.path.splitext(img_path)[1]
                                 archive.write(img_path, f'images/{sheet_name}/image_{i}{img_ext}')
                 
+                # NEW: Store sample-specific images
+                if sample_images:
+                    print(f"DEBUG: Storing sample images: {len(sample_images)} samples")
+                
+                    # Create sample images metadata
+                    sample_images_metadata = {
+                        'version': '1.0',
+                        'timestamp': timestamp,
+                        'sample_count': len(sample_images),
+                        'header_data': sample_header_data
+                    }
+                    archive.writestr('sample_images/metadata.json', json.dumps(sample_images_metadata))
+                
+                    # Store each sample's images
+                    for sample_id, image_paths in sample_images.items():
+                        print(f"DEBUG: Storing {len(image_paths)} images for {sample_id}")
+                    
+                        for i, img_path in enumerate(image_paths):
+                            if os.path.exists(img_path):
+                                img_ext = os.path.splitext(img_path)[1]
+                                # Store with sample-specific path
+                                sample_img_path = f'sample_images/{sample_id}/image_{i}{img_ext}'
+                                archive.write(img_path, sample_img_path)
+                                print(f"DEBUG: Stored sample image: {sample_img_path}")
+
+                    # Store sample image crop states
+                    if sample_image_crop_states:
+                        archive.writestr('sample_images/crop_states.json', 
+                                       json.dumps(sample_image_crop_states))
+
                 # Store image crop states
                 if image_crop_states:
                     archive.writestr('image_crop_states.json', json.dumps(image_crop_states))
@@ -167,7 +207,10 @@ class VapFileManager:
             'image_crop_states': {},
             'plot_options': [],
             'plot_settings': {},
-            'meta_data': {}
+            'meta_data': {},
+            'sample_images': {},
+            'sample_image_crop_states': {},
+            'sample_images_metadata' : {}
         }
         
         try:
@@ -241,6 +284,42 @@ class VapFileManager:
                             temp_path = tmpfile.name
                             self.temp_files.append(temp_path)  # Track for cleanup
                             result['sheet_images'][current_file][sheet_name].append(temp_path)
+
+                if meta_data.get('has_sample_images', False):
+                    print(f"DEBUG: Loading sample images from VAP3 file")
+                
+                    # Load sample images metadata
+                    if 'sample_images/metadata.json' in all_files:
+                        sample_metadata = json.loads(archive.read('sample_images/metadata.json').decode('utf-8'))
+                        result['sample_images_metadata'] = sample_metadata
+                        print(f"DEBUG: Loaded sample images metadata: {sample_metadata.get('sample_count', 0)} samples")
+                
+                    # Load sample image crop states
+                    if 'sample_images/crop_states.json' in all_files:
+                        sample_crop_states = json.loads(archive.read('sample_images/crop_states.json').decode('utf-8'))
+                        result['sample_image_crop_states'] = sample_crop_states
+                
+                    # Extract sample images
+                    sample_image_files = [f for f in all_files if f.startswith('sample_images/') and f.endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.pdf'))]
+                
+                    for img_file in sample_image_files:
+                        # Parse the path to get sample ID (e.g., 'sample_images/Sample 1/image_0.png')
+                        parts = img_file.split('/')
+                        if len(parts) >= 3:
+                            sample_id = parts[1]
+                        
+                            if sample_id not in result['sample_images']:
+                                result['sample_images'][sample_id] = []
+                        
+                            # Extract to a temporary file and add to result
+                            with tempfile.NamedTemporaryFile(suffix=os.path.splitext(img_file)[1], delete=False) as tmpfile:
+                                tmpfile.write(archive.read(img_file))
+                                temp_path = tmpfile.name
+                                self.temp_files.append(temp_path)  # Track for cleanup
+                                result['sample_images'][sample_id].append(temp_path)
+                
+                    print(f"DEBUG: Loaded sample images: {len(result['sample_images'])} samples")
+                        
                 
                 # Extract image crop states if they exist
                 if 'image_crop_states.json' in all_files:

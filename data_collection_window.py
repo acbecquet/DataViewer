@@ -195,6 +195,9 @@ class DataCollectionWindow:
         self.window.attributes('-topmost', True)
         self.window.after(100, lambda: self.window.attributes('-topmost', False)) 
 
+        self.sample_images = {}
+        self.sample_image_crop_states = {}
+
         # Default puff interval
         self.puff_interval = 10  # Default to 10
 
@@ -216,6 +219,8 @@ class DataCollectionWindow:
         self.create_widgets()
 
         self.load_existing_data_from_file()
+
+        self.load_existing_sample_images_from_vap3()
     
         # Center the window
         self.center_window()
@@ -567,33 +572,41 @@ class DataCollectionWindow:
 
     def create_sop_section(self, parent_frame):
         """Create the SOP (Standard Operating Procedure) section."""
-        
+    
         # Create a collapsible SOP frame
         sop_frame = ttk.LabelFrame(parent_frame, text="", style='TLabelframe')
         sop_frame.pack(fill="x", pady=(0, 10))
-    
+
         # Create a header frame for button and title
         header_frame = ttk.Frame(sop_frame, style='TFrame')
         header_frame.pack(fill="x", padx=5, pady=5)
-    
+
         # Add small toggle button on the left with minimal size
         self.sop_visible = False
         self.toggle_sop_button = ttk.Button(
             header_frame,
             text="Show",
-            width=6,  # Even smaller width
+            width=6,
             command=self.toggle_sop_visibility
         )
-        self.toggle_sop_button.pack(side="left", padx=(0, 5))  # Small gap between button and title
-    
+        self.toggle_sop_button.pack(side="left", padx=(0, 5))
+
         # Add title label after the button
         title_label = ttk.Label(header_frame, text="Standard Operating Procedure (SOP)", 
                                font=("Arial", 10, "bold"), style='TLabel')
         title_label.pack(side="left")
     
+        # NEW: Load Images for Sample button
+        load_images_button = ttk.Button(
+            header_frame,
+            text="Load Images for Sample",
+            command=self.load_images_for_sample
+        )
+        load_images_button.pack(side="right", padx=(5, 0))
+
         # Get the SOP text for the current test
         sop_text = TEST_SOPS.get(self.test_name, TEST_SOPS["default"])
-    
+
         # Create a text widget to display the SOP with centered text
         self.sop_text_widget = tk.Text(
             sop_frame, 
@@ -610,15 +623,15 @@ class DataCollectionWindow:
 
         # Insert the SOP text and center it
         self.sop_text_widget.insert("1.0", sop_text.strip())
-    
+
         # Center the text
         self.sop_text_widget.tag_configure("center", justify='center')
         self.sop_text_widget.tag_add("center", "1.0", "end")
-    
+
         # Make it read-only
         self.sop_text_widget.config(state="disabled")
-    
-        debug_print("DEBUG: SOP section created successfully")
+
+        debug_print("DEBUG: SOP section created successfully with Load Images button")
 
     def toggle_sop_visibility(self):
         """Toggle the visibility of the SOP text."""
@@ -2693,6 +2706,146 @@ Developed by Charlie Becquet
             debug_print(f"ERROR: Invalid weight value '{value}' - must be a number")
             return False
     
+    def load_images_for_sample(self):
+        """Load images for the currently selected sample."""
+        try:
+            # Get current sample
+            current_tab_index = self.notebook.index(self.notebook.select())
+            sample_id = f"Sample {current_tab_index + 1}"
+        
+            debug_print(f"DEBUG: Loading images for {sample_id}")
+        
+            # Create a temporary frame for the image loader
+            temp_window = tk.Toplevel(self.window)
+            temp_window.title(f"Load Images for {sample_id}")
+            temp_window.geometry("600x400")
+            temp_window.transient(self.window)
+            temp_window.grab_set()
+        
+            # Create frame for image loader
+            image_frame = ttk.Frame(temp_window)
+            image_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        
+            # Create ImageLoader instance for this sample
+            from image_loader import ImageLoader
+        
+            def on_images_selected(image_paths):
+                """Callback when images are selected for this sample."""
+                debug_print(f"DEBUG: Images selected for {sample_id}: {image_paths}")
+            
+                # Store images for this sample
+                if sample_id not in self.sample_images:
+                    self.sample_images[sample_id] = []
+            
+                # Add new images (avoid duplicates)
+                for img_path in image_paths:
+                    if img_path not in self.sample_images[sample_id]:
+                        self.sample_images[sample_id].append(img_path)
+                        # Store crop state (default from current settings)
+                        self.sample_image_crop_states[img_path] = False  # Default crop state
+            
+                debug_print(f"DEBUG: Total images for {sample_id}: {len(self.sample_images[sample_id])}")
+            
+                # Update the status label
+                status_label.config(text=f"Images loaded for {sample_id}: {len(self.sample_images[sample_id])} files")
+        
+            # Create ImageLoader
+            image_loader = ImageLoader(
+                image_frame, 
+                is_plotting_sheet=False,  # Not a plotting sheet context
+                on_images_selected=on_images_selected,
+                main_gui=None  # No main GUI connection yet
+            )
+        
+            # Load existing images for this sample if any
+            if sample_id in self.sample_images:
+                image_loader.load_images_from_list(self.sample_images[sample_id])
+                # Restore crop states
+                for img_path in self.sample_images[sample_id]:
+                    if img_path in self.sample_image_crop_states:
+                        image_loader.image_crop_states[img_path] = self.sample_image_crop_states[img_path]
+        
+            # Add status label
+            status_label = ttk.Label(temp_window, text=f"Current images for {sample_id}: {len(self.sample_images.get(sample_id, []))}")
+            status_label.pack(pady=5)
+        
+            # Add control buttons
+            button_frame = ttk.Frame(temp_window)
+            button_frame.pack(pady=10)
+        
+            ttk.Button(button_frame, text="Add More Images", 
+                      command=image_loader.add_images).pack(side="left", padx=5)
+        
+            ttk.Button(button_frame, text="Close", 
+                      command=temp_window.destroy).pack(side="left", padx=5)
+        
+            # Center the window
+            temp_window.transient(self.window)
+            temp_window.grab_set()
+        
+            # Position relative to parent
+            x = self.window.winfo_x() + 50
+            y = self.window.winfo_y() + 50
+            temp_window.geometry(f"600x400+{x}+{y}")
+        
+        except Exception as e:
+            debug_print(f"ERROR: Failed to load images for sample: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def get_sample_images_summary(self):
+        """Get a summary of all loaded sample images."""
+        summary = {}
+        total_images = 0
+    
+        for sample_id, images in self.sample_images.items():
+            summary[sample_id] = len(images)
+            total_images += len(images)
+    
+        debug_print(f"DEBUG: Sample images summary: {summary} (Total: {total_images})")
+        return summary, total_images
+
+    def load_existing_sample_images_from_vap3(self):
+        """Load existing sample images from VAP3 file when opening data collection window."""
+        try:
+            debug_print("DEBUG: Loading existing sample images from VAP3")
+        
+            # Check if parent has loaded VAP3 data with sample images
+            if not hasattr(self.parent, 'filtered_sheets'):
+                debug_print("DEBUG: No filtered_sheets in parent")
+                return
+        
+            # Get the current test sheet
+            if self.test_name not in self.parent.filtered_sheets:
+                debug_print(f"DEBUG: Test {self.test_name} not found in filtered_sheets")
+                return
+        
+            sheet_info = self.parent.filtered_sheets[self.test_name]
+        
+            # Check if we have loaded sample images data
+            vap_data = getattr(self.parent, 'current_vap_data', {})
+            sample_images = vap_data.get('sample_images', {})
+            sample_image_crop_states = vap_data.get('sample_image_crop_states', {})
+        
+            if sample_images:
+                debug_print(f"DEBUG: Found existing sample images: {len(sample_images)} samples")
+            
+                # Load the images into our data structure
+                self.sample_images = sample_images.copy()
+                self.sample_image_crop_states = sample_image_crop_states.copy()
+            
+                debug_print(f"DEBUG: Loaded existing sample images: {list(self.sample_images.keys())}")
+            
+                for sample_id, images in self.sample_images.items():
+                    debug_print(f"DEBUG: Sample {sample_id}: {len(images)} images")
+            else:
+                debug_print("DEBUG: No existing sample images found in VAP3 data")
+            
+        except Exception as e:
+            debug_print(f"ERROR: Failed to load existing sample images: {e}")
+            import traceback
+            traceback.print_exc()
+
     def load_existing_data_from_loaded_sheets(self):
         """Load existing data from already-loaded sheet data (for .vap3 files)."""
         debug_print(f"DEBUG: Loading existing data from loaded sheets for test: {self.test_name}")
@@ -3306,14 +3459,15 @@ Developed by Charlie Becquet
 
         debug_print("DEBUG: Hotkeys set up with Alt+Left/Right for sample navigation")
     
+
     def on_window_close(self):
-        """Handle window close event with auto-save."""
+        """Handle window close event with auto-save and sample image transfer."""
         self.log("Window close event triggered", "debug")
- 
+
         # Cancel auto-save timer
         if self.auto_save_timer:
             self.window.after_cancel(self.auto_save_timer)
-    
+
         # Only handle unsaved changes if result is not already set
         if self.result is None:
             # Auto-save if there are unsaved changes
@@ -3330,7 +3484,10 @@ Developed by Charlie Becquet
                     self.result = "cancel"
             else:
                 self.result = "load_file" if self.last_save_time else "cancel"
-    
+
+        # NEW: Transfer sample images to main GUI for display
+        self._transfer_sample_images_to_main_gui()
+
         # Show the main GUI window again before destroying
         if hasattr(self.parent, 'root') and self.main_window_was_visible:
             debug_print("DEBUG: Restoring main GUI window from data collection window")
@@ -3342,7 +3499,143 @@ Developed by Charlie Becquet
             debug_print("DEBUG: Main GUI window restored")
 
         self.window.destroy()
-    
+
+    # ADD NEW: Transfer sample images to main GUI
+    def _transfer_sample_images_to_main_gui(self):
+        """Transfer sample images to main GUI with proper labeling for display."""
+        try:
+            debug_print("DEBUG: Transferring sample images to main GUI")
+        
+            # Check if we have sample images to transfer
+            if not hasattr(self, 'sample_images') or not self.sample_images:
+                debug_print("DEBUG: No sample images to transfer")
+                return
+        
+            debug_print(f"DEBUG: Processing {len(self.sample_images)} sample groups for main GUI")
+        
+            # Create formatted images for main GUI display
+            formatted_images = []
+        
+            for sample_id, image_paths in self.sample_images.items():
+                try:
+                    # Extract sample index from sample_id (e.g., "Sample 1" -> 0)
+                    sample_index = int(sample_id.split()[-1]) - 1
+                
+                    if sample_index < len(self.header_data['samples']):
+                        sample_info = self.header_data['samples'][sample_index]
+                    
+                        # Create labels for each image with comprehensive information
+                        for img_path in image_paths:
+                            # Create descriptive label: "Sample 1 - Test Name - Media - Viscosity - Date"
+                            label_parts = [
+                                sample_info.get('id', sample_id),
+                                self.test_name,
+                                sample_info.get('media', 'Unknown Media'),
+                                f"{sample_info.get('viscosity', 'Unknown')} cP",
+                                datetime.datetime.now().strftime("%Y-%m-%d")
+                            ]
+                        
+                            # Filter out empty parts and join
+                            formatted_label = " - ".join(filter(lambda x: x and str(x).strip(), label_parts))
+                        
+                            formatted_images.append({
+                                'path': img_path,
+                                'label': formatted_label,
+                                'sample_id': sample_id,
+                                'sample_info': sample_info,
+                                'crop_state': getattr(self, 'sample_image_crop_states', {}).get(img_path, False)
+                            })
+                        
+                            debug_print(f"DEBUG: Created formatted image: {formatted_label}")
+                
+                except (ValueError, IndexError) as e:
+                    debug_print(f"DEBUG: Error processing sample {sample_id}: {e}")
+                    continue
+        
+            # Store formatted images in parent for main GUI processing
+            if formatted_images:
+                self.parent.pending_formatted_images = formatted_images
+                debug_print(f"DEBUG: Stored {len(formatted_images)} formatted images for main GUI")
+            
+                # If parent has a method to immediately process these, call it
+                if hasattr(self.parent, 'process_pending_sample_images'):
+                    self.parent.process_pending_sample_images()
+        
+        except Exception as e:
+            debug_print(f"ERROR: Failed to transfer sample images to main GUI: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def save_sample_images_to_vap3(self):
+        """Save sample-specific images to the VAP3 file."""
+        try:
+            debug_print("DEBUG: Saving sample images to VAP3 file")
+        
+            if not self.sample_images:
+                debug_print("DEBUG: No sample images to save")
+                return
+        
+            # We'll modify the VAP file manager to handle this
+            # For now, store the sample images in the parent for later saving
+            if hasattr(self.parent, 'pending_sample_images'):
+                self.parent.pending_sample_images = self.sample_images.copy()
+                self.parent.pending_sample_image_crop_states = self.sample_image_crop_states.copy()
+                self.parent.pending_sample_header_data = self.header_data.copy()
+                debug_print(f"DEBUG: Stored {len(self.sample_images)} sample image groups for later saving")
+        
+        except Exception as e:
+            debug_print(f"ERROR: Failed to save sample images: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def transfer_images_to_main_gui(self):
+        """Transfer sample images to main GUI with proper labeling."""
+        try:
+            debug_print("DEBUG: Transferring sample images to main GUI")
+        
+            if not self.sample_images:
+                debug_print("DEBUG: No sample images to transfer")
+                return
+        
+            # Create formatted images for main GUI
+            formatted_images = []
+        
+            for sample_id, image_paths in self.sample_images.items():
+                sample_index = int(sample_id.split()[-1]) - 1  # Extract sample number
+            
+                if sample_index < len(self.header_data['samples']):
+                    sample_info = self.header_data['samples'][sample_index]
+                
+                    # Create labels for each image
+                    for img_path in image_paths:
+                        # Create descriptive label: "Sample 1 - Test Name - Media - Viscosity - Date"
+                        label_parts = [
+                            sample_info.get('id', sample_id),
+                            self.test_name,
+                            sample_info.get('media', 'Unknown Media'),
+                            f"{sample_info.get('viscosity', 'Unknown')} cP",
+                            datetime.datetime.now().strftime("%Y-%m-%d")
+                        ]
+                    
+                        formatted_label = " - ".join(filter(None, label_parts))
+                    
+                        formatted_images.append({
+                            'path': img_path,
+                            'label': formatted_label,
+                            'sample_id': sample_id,
+                            'crop_state': self.sample_image_crop_states.get(img_path, False)
+                        })
+        
+            # Store in parent for main GUI
+            if hasattr(self.parent, 'pending_formatted_images'):
+                self.parent.pending_formatted_images = formatted_images
+                debug_print(f"DEBUG: Prepared {len(formatted_images)} formatted images for main GUI")
+        
+        except Exception as e:
+            debug_print(f"ERROR: Failed to transfer images to main GUI: {e}")
+            import traceback
+            traceback.print_exc()
+
     def save_data(self, exit_after=False, show_confirmation=True, auto_save=False):
         """Unified method for saving data."""
         # End any active editing
@@ -3365,6 +3658,8 @@ Developed by Charlie Becquet
         
             # Save to Excel file
             self._save_to_excel()
+
+            self._save_sample_images()
         
             # Update application state if needed
             if hasattr(self.parent, 'filtered_sheets'):
@@ -3409,6 +3704,91 @@ Developed by Charlie Becquet
             
             return False
     
+    # ADD NEW: Sample image saving method
+    def _save_sample_images(self):
+        """Save sample images to the appropriate file format."""
+        try:
+            debug_print("DEBUG: _save_sample_images() starting")
+        
+            # Check if we have sample images to save
+            if not hasattr(self, 'sample_images') or not self.sample_images:
+                debug_print("DEBUG: No sample images to save")
+                return
+        
+            debug_print(f"DEBUG: Saving sample images for {len(self.sample_images)} samples")
+        
+            # For VAP3 files or if the parent supports it, store in memory for later saving
+            if self.file_path.endswith('.vap3') or hasattr(self.parent, 'filtered_sheets'):
+                debug_print("DEBUG: Storing sample images in parent for VAP3 save")
+            
+                # Store sample images in parent for later VAP3 save
+                self.parent.pending_sample_images = self.sample_images.copy()
+                self.parent.pending_sample_image_crop_states = getattr(self, 'sample_image_crop_states', {}).copy()
+                self.parent.pending_sample_header_data = self.header_data.copy()
+            
+                debug_print(f"DEBUG: Stored {len(self.sample_images)} sample groups in parent")
+            
+                # If this is already a VAP3 file, save it now
+                if self.file_path.endswith('.vap3'):
+                    self._save_vap3_with_sample_images()
+        
+            debug_print("DEBUG: Sample images saved successfully")
+        
+        except Exception as e:
+            debug_print(f"ERROR: Failed to save sample images: {e}")
+            import traceback
+            traceback.print_exc()
+            # Don't fail the entire save process for image save issues
+        
+    def _save_vap3_with_sample_images(self):
+        """Save the VAP3 file with sample images included."""
+        try:
+            debug_print("DEBUG: Saving VAP3 file with sample images")
+        
+            # Import the enhanced VAP file manager
+            from vap_file_manager import VapFileManager
+            vap_manager = VapFileManager()
+        
+            # Get current application state from parent
+            filtered_sheets = getattr(self.parent, 'filtered_sheets', {})
+            sheet_images = getattr(self.parent, 'sheet_images', {})
+            plot_options = getattr(self.parent, 'plot_options', [])
+            image_crop_states = getattr(self.parent, 'image_crop_states', {})
+        
+            # Plot settings
+            plot_settings = {}
+            if hasattr(self.parent, 'selected_plot_type'):
+                plot_settings['selected_plot_type'] = self.parent.selected_plot_type.get()
+        
+            # Sample images
+            sample_images = getattr(self.parent, 'pending_sample_images', {})
+            sample_image_crop_states = getattr(self.parent, 'pending_sample_image_crop_states', {})
+            sample_header_data = getattr(self.parent, 'pending_sample_header_data', {})
+        
+            # Save to VAP3 file with sample images
+            success = vap_manager.save_to_vap3(
+                self.file_path,
+                filtered_sheets,
+                sheet_images,
+                plot_options,
+                image_crop_states,
+                plot_settings,
+                sample_images,
+                sample_image_crop_states,
+                sample_header_data
+            )
+        
+            if success:
+                debug_print("DEBUG: VAP3 file with sample images saved successfully")
+            else:
+                debug_print("ERROR: Failed to save VAP3 file with sample images")
+            
+        except Exception as e:
+            debug_print(f"ERROR: Failed to save VAP3 with sample images: {e}")
+            import traceback
+            traceback.print_exc()
+            # Don't fail the entire save for this
+
     def initialize_data(self):
         """Initialize data structures for all samples."""
         self.data = {}

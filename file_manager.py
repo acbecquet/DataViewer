@@ -411,6 +411,39 @@ class FileManager:
             # Hide progress dialog
             self.gui.progress_dialog.hide_progress_bar()
     
+
+    def handle_data_collection_close(self, data_collection_window, result):
+        """Handle closing of data collection window with sample image support."""
+        try:
+            if result == "load_file":
+                # Check for sample images before loading
+                if hasattr(data_collection_window, 'sample_images') and data_collection_window.sample_images:
+                    debug_print("DEBUG: Data collection closed with sample images")
+                
+                    # Store sample images in main GUI for saving
+                    self.gui.pending_sample_images = data_collection_window.sample_images.copy()
+                    self.gui.pending_sample_image_crop_states = data_collection_window.sample_image_crop_states.copy()
+                    self.gui.pending_sample_header_data = data_collection_window.header_data.copy()
+                
+                    # Transfer formatted images
+                    data_collection_window.transfer_images_to_main_gui()
+                
+                    # Save with sample images
+                    if self.gui.file_path and self.gui.file_path.endswith('.vap3'):
+                        self.gui.save_with_sample_images()
+            
+                # Load the file for viewing
+                self.load_file(data_collection_window.file_path)
+            
+            # Restore main window visibility
+            if hasattr(data_collection_window, 'main_window_was_visible') and data_collection_window.main_window_was_visible:
+                self.gui.root.deiconify()
+        
+        except Exception as e:
+            debug_print(f"ERROR: Failed to handle data collection close: {e}")
+            import traceback
+            traceback.print_exc()
+
     def load_from_database(self, file_id=None, show_success_msg=True, batch_operation=False):
         """Load a file from the database."""
         debug_print(f"DEBUG: load_from_database called with file_id={file_id}, show_success_message={show_success_msg}, batch_operation={batch_operation}")
@@ -2348,7 +2381,10 @@ class FileManager:
                     existing_file = file_data
                     debug_print(f"DEBUG: File already loaded: {current_file_name}")
                     break
-        
+            
+            vap_data = vap_manager.load_from_vap3(filepath)
+            self.gui.load_sample_images_from_vap3(vap_data)
+
             if existing_file:
                 # File already loaded, just make it active
                 self.set_active_file(existing_file["file_name"])
