@@ -3235,11 +3235,11 @@ Developed by Charlie Becquet
         self.setup_hotkeys()
     
         # Bind window resize events to update plot size
-        self.window.bind('<Configure>', self.on_window_resize_plot, add=True)
+        #self.window.bind('<Configure>', self.on_window_resize_plot, add=True)
         debug_print("DEBUG: Window resize event handler bound")
     
         # Initialize plot sizing after window is fully set up
-        self.window.after(1000, self.initialize_plot_size)
+        #self.window.after(1000, self.initialize_plot_size)
     
         debug_print("DEBUG: Event handlers set up")
     
@@ -3392,7 +3392,8 @@ Developed by Charlie Becquet
             # Basic data structure
             self.data[sample_id] = {
                 "current_row_index": 0, 
-                "avg_tpm": 0.0
+                "avg_tpm": 0.0,
+                "sample_notes": ""
             }
     
             # Add standard columns (smell field will be used for both "smell" and "failure" depending on test type)
@@ -3461,54 +3462,130 @@ Developed by Charlie Becquet
         # Create the main stats frame with proper expansion
         main_stats_frame = ttk.LabelFrame(self.stats_frame, text="TPM Statistics", padding=10)
         main_stats_frame.pack(fill='both', expand=True, padx=5, pady=5)
-    
+
         # Store reference for resize handling
         self.plot_container = main_stats_frame
-    
+
         # Sample selection for stats display (fixed height section)
         control_frame = ttk.Frame(main_stats_frame)
         control_frame.pack(side='top', fill='x', pady=(0, 5))
-    
+
         # Current sample label
         self.current_sample_label = ttk.Label(control_frame, text="Sample 1: Unknown Sample", 
                                              font=('Arial', 12, 'bold'))
         self.current_sample_label.pack(anchor='w')
-    
-        # Stats text frame (fixed height section)  
+
+        # Stats text frame (fixed height section) - now with grid layout for 3 columns
         text_frame = ttk.Frame(main_stats_frame)
         text_frame.pack(side='top', fill='x', pady=(5, 10))
+        self.text_frame_ref = text_frame
     
-        # Stats display
-        self.avg_tpm_label = ttk.Label(text_frame, text="Average TPM: 0.000", font=('Arial', 10))
+        # Configure grid weights for equal column sizing: 33% / 33% / 33%
+        text_frame.columnconfigure(0, weight=1, uniform="equal_columns")  
+        text_frame.columnconfigure(1, weight=1, uniform="equal_columns")  
+        text_frame.columnconfigure(2, weight=1, uniform="equal_columns")  
+    
+        # Left column - TPM statistics 
+        left_column = ttk.LabelFrame(text_frame, text="TPM Statistics", padding=5)
+        left_column.grid(row=0, column=0, sticky='nsew', padx=(0, 2))
+        left_column.grid_columnconfigure(0, weight=1)
+        # Stats display (left column)
+        self.avg_tpm_label = ttk.Label(left_column, text="Average TPM: 0.000", font=('Arial', 10))
         self.avg_tpm_label.pack(anchor='w')
-    
-        self.latest_tpm_label = ttk.Label(text_frame, text="Latest TPM: 0.000", font=('Arial', 10))
+
+        self.latest_tpm_label = ttk.Label(left_column, text="Latest TPM: 0.000", font=('Arial', 10))
         self.latest_tpm_label.pack(anchor='w')
-    
-        self.std_dev_label = ttk.Label(text_frame, text="Std Dev (last 5 sessions): 0.000", font=('Arial', 10))
+
+        self.std_dev_label = ttk.Label(left_column, text="Std Dev (last 5 sessions): 0.000", font=('Arial', 10))
         self.std_dev_label.pack(anchor='w')
-    
-        self.current_puffs_label = ttk.Label(text_frame, text="Current Puffs: 0", font=('Arial', 10))
+
+        self.current_puffs_label = ttk.Label(left_column, text="Current Puffs: 0", font=('Arial', 10))
         self.current_puffs_label.pack(anchor='w')
     
-        # Plot container frame (expandable section)
+        # Middle column - Sample information 
+        middle_column = ttk.LabelFrame(text_frame, text="Sample Information", padding=5)
+        middle_column.grid(row=0, column=1, sticky='nsew', padx=2)
+        middle_column.grid_columnconfigure(0, weight=1)
+    
+        # Sample information labels (middle column)
+        self.media_label = ttk.Label(middle_column, text="Media: N/A", font=('Arial', 10))
+        self.media_label.pack(anchor='w')
+    
+        self.viscosity_label = ttk.Label(middle_column, text="Viscosity: N/A", font=('Arial', 10))
+        self.viscosity_label.pack(anchor='w')
+    
+        self.oil_mass_label = ttk.Label(middle_column, text="Initial Oil Mass: N/A", font=('Arial', 10))
+        self.oil_mass_label.pack(anchor='w')
+    
+        self.resistance_label = ttk.Label(middle_column, text="Resistance: N/A", font=('Arial', 10))
+        self.resistance_label.pack(anchor='w')
+    
+        self.voltage_label = ttk.Label(middle_column, text="Voltage: N/A", font=('Arial', 10))
+        self.voltage_label.pack(anchor='w')
+    
+        self.puffing_regime_label = ttk.Label(middle_column, text="Puffing Regime: N/A", font=('Arial', 10))
+        self.puffing_regime_label.pack(anchor='w')
+    
+        self.device_type_label = ttk.Label(middle_column, text="Device Type: N/A", font=('Arial', 10))
+        self.device_type_label.pack(anchor='w')
+    
+        # Right column - Sample Test Notes 
+        right_column = ttk.LabelFrame(text_frame, text="Sample Test Notes", padding=5)
+        right_column.grid(row=0, column=2, sticky='nsew', padx=(2, 0))
+        right_column.grid_columnconfigure(0, weight=1)
+    
+        # Create text widget for notes with scrollbar in right column
+        notes_container = ttk.Frame(right_column)
+        notes_container.pack(fill='both', expand=True)
+    
+        self.sample_notes_text = tk.Text(notes_container, height=6, wrap='word', font=('Arial', 10))
+        notes_scrollbar = ttk.Scrollbar(notes_container, orient='vertical', command=self.sample_notes_text.yview)
+        self.sample_notes_text.configure(yscrollcommand=notes_scrollbar.set)
+    
+        self.sample_notes_text.pack(side='left', fill='both', expand=True)
+        notes_scrollbar.pack(side='right', fill='y')
+    
+        # Bind notes text changes to save function
+        self.sample_notes_text.bind('<KeyRelease>', self.on_notes_changed)
+        self.sample_notes_text.bind('<FocusOut>', self.on_notes_changed)
+
+        # Plot container frame (use original expandable approach)
         plot_container = ttk.Frame(main_stats_frame)
         plot_container.pack(side='top', fill='both', expand=True)
-    
+
         # Store reference to the container for proper sizing
         self.stats_frame_container = plot_container
-    
-        # Create the matplotlib plot with dynamic sizing
+
+        # Create the matplotlib plot using your original method
         self.setup_stats_plot_canvas(plot_container)
-    
+
         # Initialize TPM labels dictionary if not exists
         if not hasattr(self, 'tpm_labels'):
             self.tpm_labels = {}
-    
-        # Update the statistics for the current sample
+
+        # Update the statistics for the current sample (this will handle the plot update)
         self.update_stats_panel()
+
+        debug_print("DEBUG: Enhanced TPM statistics panel created with 3-column layout and original plot sizing")
+
+    def on_notes_changed(self, event=None):
+        """Handle changes to sample notes text."""
+        debug_print("DEBUG: Sample notes changed")
     
-        debug_print("DEBUG: Enhanced TPM statistics panel created with resize support")
+        try:
+            current_tab_index = self.notebook.index(self.notebook.select())
+            current_sample_id = f"Sample {current_tab_index + 1}"
+        
+            # Get the current notes content
+            notes_content = self.sample_notes_text.get('1.0', 'end-1c')
+        
+            # Store in data structure
+            self.data[current_sample_id]["sample_notes"] = notes_content
+        
+            debug_print(f"DEBUG: Updated notes for {current_sample_id}")
+        
+        except Exception as e:
+            debug_print(f"DEBUG: Error updating sample notes: {e}")
 
     def setup_stats_plot_canvas(self, parent):
         """Create the matplotlib canvas for the TPM plot with dynamic responsive sizing."""
@@ -3534,9 +3611,6 @@ Developed by Charlie Becquet
         self.stats_canvas = FigureCanvasTkAgg(self.stats_fig, canvas_frame)
         canvas_widget = self.stats_canvas.get_tk_widget()
         canvas_widget.pack(fill='both', expand=True)
-    
-        # Initialize empty plot
-        self.update_tpm_plot_for_current_sample()
     
         debug_print("DEBUG: Stats plot canvas created with responsive sizing")
 
@@ -3628,6 +3702,12 @@ Developed by Charlie Becquet
         """Update the TPM statistics panel to show only current sample with enhanced stats."""
         debug_print("DEBUG: Updating enhanced TPM statistics panel")
 
+        # Debug: Check if our grid configuration is still intact
+        if hasattr(self, 'text_frame_ref'):
+            debug_print(f"DEBUG: text_frame column 0 weight: {self.text_frame_ref.grid_columnconfigure(0)}")
+            debug_print(f"DEBUG: text_frame column 1 weight: {self.text_frame_ref.grid_columnconfigure(1)}")
+            debug_print(f"DEBUG: text_frame column 2 weight: {self.text_frame_ref.grid_columnconfigure(2)}")
+
         # Get currently selected sample
         try:
             current_tab_index = self.notebook.index(self.notebook.select())
@@ -3677,19 +3757,84 @@ Developed by Charlie Becquet
             current_puff_count = 0
             recent_tpm_values = []
 
-        # Update labels
+        # Update TPM statistics labels
         if hasattr(self, 'avg_tpm_label'):
             self.avg_tpm_label.config(text=f"Average TPM: {avg_tpm:.6f}" if tpm_values else "Average TPM: N/A")
-    
+
         if hasattr(self, 'latest_tpm_label'):
             self.latest_tpm_label.config(text=f"Latest TPM: {latest_tpm:.6f}" if tpm_values else "Latest TPM: N/A")
-    
+
         if hasattr(self, 'std_dev_label'):
             sessions_text = f"(last {len(recent_tpm_values)} sessions)" if tpm_values else ""
             self.std_dev_label.config(text=f"Std Dev {sessions_text}: {std_dev:.6f}" if tpm_values else "Std Dev: N/A")
-    
+
         if hasattr(self, 'current_puffs_label'):
             self.current_puffs_label.config(text=f"Current Puffs: {current_puff_count}")
+
+        # Update sample information labels
+        if current_tab_index < len(self.header_data.get('samples', [])):
+            sample_data = self.header_data['samples'][current_tab_index]
+        
+            if hasattr(self, 'media_label'):
+                media = sample_data.get('media', 'N/A')
+                self.media_label.config(text=f"Media: {media}")
+            
+            if hasattr(self, 'viscosity_label'):
+                viscosity = sample_data.get('viscosity', 'N/A')
+                self.viscosity_label.config(text=f"Viscosity: {viscosity}")
+            
+            if hasattr(self, 'oil_mass_label'):
+                oil_mass = sample_data.get('oil_mass', 'N/A')
+                self.oil_mass_label.config(text=f"Initial Oil Mass: {oil_mass}")
+            
+            if hasattr(self, 'resistance_label'):
+                resistance = sample_data.get('resistance', 'N/A')
+                self.resistance_label.config(text=f"Resistance: {resistance}")
+            
+            if hasattr(self, 'voltage_label'):
+                voltage = sample_data.get('voltage', 'N/A')
+                self.voltage_label.config(text=f"Voltage: {voltage}")
+            
+            if hasattr(self, 'puffing_regime_label'):
+                puffing_regime = sample_data.get('puffing_regime', 'N/A')
+                self.puffing_regime_label.config(text=f"Puffing Regime: {puffing_regime}")
+            
+            # Get device type from common data
+            device_type = self.header_data.get('common', {}).get('device_type', 'N/A')
+            if hasattr(self, 'device_type_label'):
+                self.device_type_label.config(text=f"Device Type: {device_type}")
+        else:
+            # Set all to N/A if no header data available
+            if hasattr(self, 'media_label'):
+                self.media_label.config(text="Media: N/A")
+            if hasattr(self, 'viscosity_label'):
+                self.viscosity_label.config(text="Viscosity: N/A")
+            if hasattr(self, 'oil_mass_label'):
+                self.oil_mass_label.config(text="Initial Oil Mass: N/A")
+            if hasattr(self, 'resistance_label'):
+                self.resistance_label.config(text="Resistance: N/A")
+            if hasattr(self, 'voltage_label'):
+                self.voltage_label.config(text="Voltage: N/A")
+            if hasattr(self, 'puffing_regime_label'):
+                self.puffing_regime_label.config(text="Puffing Regime: N/A")
+            if hasattr(self, 'device_type_label'):
+                self.device_type_label.config(text="Device Type: N/A")
+    
+        # Update sample notes
+        if hasattr(self, 'sample_notes_text'):
+            # Temporarily disable event binding to avoid recursive calls
+            self.sample_notes_text.bind('<KeyRelease>', lambda e: None)
+            self.sample_notes_text.bind('<FocusOut>', lambda e: None)
+        
+            # Clear and set notes content
+            self.sample_notes_text.delete('1.0', 'end')
+            notes_content = self.data[current_sample_id].get("sample_notes", "")
+            if notes_content:
+                self.sample_notes_text.insert('1.0', notes_content)
+        
+            # Re-enable event binding
+            self.sample_notes_text.bind('<KeyRelease>', self.on_notes_changed)
+            self.sample_notes_text.bind('<FocusOut>', self.on_notes_changed)
 
         # Update TPM plot for current sample
         self.update_tpm_plot_for_current_sample()
