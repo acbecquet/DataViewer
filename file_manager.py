@@ -533,7 +533,9 @@ class FileManager:
                 from vap_file_manager import VapFileManager
                 vap_manager = VapFileManager()
                 vap_data = vap_manager.load_from_vap3(temp_vap3_path)
-            
+                debug_print(f"DEBUG: VAP3 data keys: {list(vap_data.keys())}")
+                debug_print(f"DEBUG: Sample images in vap_data: {list(vap_data.get('sample_images', {}).keys())}")
+                debug_print(f"DEBUG: Sample image counts: {[(k, len(v)) for k, v in vap_data.get('sample_images', {}).items()]}")
                 # Store VAP3 data in GUI for sample image loading
                 self.gui.current_vap_data = vap_data
                 debug_print(f"DEBUG: Loaded VAP3 data with keys: {list(vap_data.keys())}")

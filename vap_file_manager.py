@@ -299,26 +299,35 @@ class VapFileManager:
                         sample_crop_states = json.loads(archive.read('sample_images/crop_states.json').decode('utf-8'))
                         result['sample_image_crop_states'] = sample_crop_states
                 
-                    # Extract sample images
-                    sample_image_files = [f for f in all_files if f.startswith('sample_images/') and f.endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.pdf'))]
+                    # Extract sample images (always check, not conditional on flag)
+                    sample_image_files = [f for f in all_files if f.startswith('sample_images/') 
+                                          and f != 'sample_images/metadata.json' 
+                                          and f != 'sample_images/crop_states.json'
+                                          and f.endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.pdf'))]
+
+                    if sample_image_files:
+                        print(f"DEBUG: Found {len(sample_image_files)} sample image files to extract")
                 
-                    for img_file in sample_image_files:
-                        # Parse the path to get sample ID (e.g., 'sample_images/Sample 1/image_0.png')
-                        parts = img_file.split('/')
-                        if len(parts) >= 3:
-                            sample_id = parts[1]
+                        for img_file in sample_image_files:
+                            # Parse the path to get sample ID (e.g., 'sample_images/Sample 1/image_0.png')
+                            parts = img_file.split('/')
+                            if len(parts) >= 3:
+                                sample_id = parts[1]
                         
-                            if sample_id not in result['sample_images']:
-                                result['sample_images'][sample_id] = []
+                                if sample_id not in result['sample_images']:
+                                    result['sample_images'][sample_id] = []
                         
-                            # Extract to a temporary file and add to result
-                            with tempfile.NamedTemporaryFile(suffix=os.path.splitext(img_file)[1], delete=False) as tmpfile:
-                                tmpfile.write(archive.read(img_file))
-                                temp_path = tmpfile.name
-                                self.temp_files.append(temp_path)  # Track for cleanup
-                                result['sample_images'][sample_id].append(temp_path)
+                                # Extract to a temporary file and add to result
+                                with tempfile.NamedTemporaryFile(suffix=os.path.splitext(img_file)[1], delete=False) as tmpfile:
+                                    tmpfile.write(archive.read(img_file))
+                                    temp_path = tmpfile.name
+                                    self.temp_files.append(temp_path)  # Track for cleanup
+                                    result['sample_images'][sample_id].append(temp_path)
+                                    print(f"DEBUG: Extracted sample image for {sample_id}: {temp_path}")
                 
-                    print(f"DEBUG: Loaded sample images: {len(result['sample_images'])} samples")
+                        print(f"DEBUG: Loaded sample images: {len(result['sample_images'])} samples")
+                    else:
+                        print("DEBUG: No sample image files found in archive")
                         
                 
                 # Extract image crop states if they exist
