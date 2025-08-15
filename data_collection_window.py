@@ -158,6 +158,7 @@ class DataCollectionWindow:
         self.header_data = header_data
         self.num_samples = header_data["num_samples"]
         self.result = None
+        self.updating_notes = False
 
         if hasattr(parent, 'root'):
             self.main_window_was_visible = parent.root.winfo_viewable()
@@ -1946,6 +1947,31 @@ Developed by Charlie Becquet
             sheet = self.create_sample_tab(sample_frame, sample_id, i)
             self.sample_sheets.append(sheet)
 
+            # At the end, add this binding for tab selection events:
+        self.notebook.bind("<<NotebookTabChanged>>", self.on_tab_changed)
+        debug_print("DEBUG: Bound tab change event handler")
+
+    def on_tab_changed(self, event=None):
+        """Handle tab change events to properly manage notes focus."""
+        debug_print("DEBUG: Tab changed - handling notes focus")
+    
+        # Force any active text editing to complete and lose focus
+        if hasattr(self, 'sample_notes_text') and self.sample_notes_text.winfo_exists():
+            try:
+                # Force the text widget to lose focus
+                self.sample_notes_text.selection_clear()
+                self.window.focus_set()  # Move focus to main window
+            
+                # Process any pending events (including FocusOut)
+                self.window.update_idletasks()
+                debug_print("DEBUG: Forced notes widget to lose focus and processed pending events")
+            
+            except Exception as e:
+                debug_print(f"DEBUG: Error handling focus during tab change: {e}")
+    
+        # Small delay to ensure all events are processed, then update the panel
+        self.window.after(10, self.update_stats_panel)
+
     def create_sample_tab(self, parent_frame, sample_id, sample_index):
         """Create a tab for a single sample with tksheet instead of treeview."""
         debug_print(f"DEBUG: Creating sample tab for {sample_id}")
@@ -3570,8 +3596,13 @@ Developed by Charlie Becquet
 
     def on_notes_changed(self, event=None):
         """Handle changes to sample notes text."""
+        # Add this check at the beginning
+        if self.updating_notes:
+            debug_print("DEBUG: Ignoring notes change during panel update")
+            return
+        
         debug_print("DEBUG: Sample notes changed")
-    
+
         try:
             current_tab_index = self.notebook.index(self.notebook.select())
             current_sample_id = f"Sample {current_tab_index + 1}"
@@ -3579,10 +3610,17 @@ Developed by Charlie Becquet
             # Get the current notes content
             notes_content = self.sample_notes_text.get('1.0', 'end-1c')
         
+            # Double-check: verify this content should belong to the current sample
+            # by checking if we're not in the middle of updating
+            if hasattr(self, 'last_updated_sample'):
+                if self.last_updated_sample != current_sample_id:
+                    debug_print(f"DEBUG: Ignoring notes change - sample mismatch: {current_sample_id} vs {self.last_updated_sample}")
+                    return
+        
             # Store in data structure
             self.data[current_sample_id]["sample_notes"] = notes_content
         
-            debug_print(f"DEBUG: Updated notes for {current_sample_id}")
+            debug_print(f"DEBUG: Updated notes for {current_sample_id}: '{notes_content[:30]}...'")
         
         except Exception as e:
             debug_print(f"DEBUG: Error updating sample notes: {e}")
@@ -3717,6 +3755,9 @@ Developed by Charlie Becquet
             current_sample_id = "Sample 1"  
             current_tab_index = 0
 
+        # Store which sample we're updating for verification in on_notes_changed
+        self.last_updated_sample = current_sample_id
+
         # Get sample name
         sample_name = "Unknown Sample"
         if current_tab_index < len(self.header_data.get('samples', [])):
@@ -3774,31 +3815,31 @@ Developed by Charlie Becquet
         # Update sample information labels
         if current_tab_index < len(self.header_data.get('samples', [])):
             sample_data = self.header_data['samples'][current_tab_index]
-        
+    
             if hasattr(self, 'media_label'):
                 media = sample_data.get('media', 'N/A')
                 self.media_label.config(text=f"Media: {media}")
-            
+        
             if hasattr(self, 'viscosity_label'):
                 viscosity = sample_data.get('viscosity', 'N/A')
                 self.viscosity_label.config(text=f"Viscosity: {viscosity}")
-            
+        
             if hasattr(self, 'oil_mass_label'):
                 oil_mass = sample_data.get('oil_mass', 'N/A')
                 self.oil_mass_label.config(text=f"Initial Oil Mass: {oil_mass}")
-            
+        
             if hasattr(self, 'resistance_label'):
                 resistance = sample_data.get('resistance', 'N/A')
                 self.resistance_label.config(text=f"Resistance: {resistance}")
-            
+        
             if hasattr(self, 'voltage_label'):
                 voltage = sample_data.get('voltage', 'N/A')
                 self.voltage_label.config(text=f"Voltage: {voltage}")
-            
+        
             if hasattr(self, 'puffing_regime_label'):
                 puffing_regime = sample_data.get('puffing_regime', 'N/A')
                 self.puffing_regime_label.config(text=f"Puffing Regime: {puffing_regime}")
-            
+        
             # Get device type from common data
             device_type = self.header_data.get('common', {}).get('device_type', 'N/A')
             if hasattr(self, 'device_type_label'):
@@ -3819,22 +3860,38 @@ Developed by Charlie Becquet
                 self.puffing_regime_label.config(text="Puffing Regime: N/A")
             if hasattr(self, 'device_type_label'):
                 self.device_type_label.config(text="Device Type: N/A")
-    
-        # Update sample notes
-        if hasattr(self, 'sample_notes_text'):
-            # Temporarily disable event binding to avoid recursive calls
-            self.sample_notes_text.bind('<KeyRelease>', lambda e: None)
-            self.sample_notes_text.bind('<FocusOut>', lambda e: None)
+
+        # Update sample notes with proper protection against recursive events
+        if hasattr(self, 'sample_notes_text') and self.sample_notes_text.winfo_exists():
+            # Set flag to prevent recursive event handling
+            self.updating_notes = True
+            debug_print(f"DEBUG: Setting updating_notes flag to True for {current_sample_id}")
         
-            # Clear and set notes content
-            self.sample_notes_text.delete('1.0', 'end')
-            notes_content = self.data[current_sample_id].get("sample_notes", "")
-            if notes_content:
-                self.sample_notes_text.insert('1.0', notes_content)
-        
-            # Re-enable event binding
-            self.sample_notes_text.bind('<KeyRelease>', self.on_notes_changed)
-            self.sample_notes_text.bind('<FocusOut>', self.on_notes_changed)
+            try:
+                # Completely unbind events temporarily  
+                self.sample_notes_text.unbind('<KeyRelease>')
+                self.sample_notes_text.unbind('<FocusOut>')
+            
+                # Ensure the widget doesn't have focus before updating content
+                if self.sample_notes_text == self.window.focus_get():
+                    self.window.focus_set()
+                    self.window.update_idletasks()
+                    debug_print("DEBUG: Removed focus from notes widget before content update")
+            
+                # Clear and set notes content
+                self.sample_notes_text.delete('1.0', 'end')
+                notes_content = self.data[current_sample_id].get("sample_notes", "")
+                if notes_content:
+                    self.sample_notes_text.insert('1.0', notes_content)
+            
+                debug_print(f"DEBUG: Updated notes widget content for {current_sample_id}: '{notes_content[:50]}...'")
+            
+            finally:
+                # Always re-enable event binding and clear flag
+                self.sample_notes_text.bind('<KeyRelease>', self.on_notes_changed)
+                self.sample_notes_text.bind('<FocusOut>', self.on_notes_changed)
+                self.updating_notes = False
+                debug_print(f"DEBUG: Clearing updating_notes flag and re-binding events for {current_sample_id}")
 
         # Update TPM plot for current sample
         self.update_tpm_plot_for_current_sample()
