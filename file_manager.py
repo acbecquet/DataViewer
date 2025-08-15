@@ -558,6 +558,21 @@ class FileManager:
                         sample_crop_states = vap_data.get('sample_image_crop_states', {})
                         sample_header_data = vap_data.get('sample_images_metadata', {}).get('header_data', {})
                     
+                        debug_print(f"DEBUG: Sample images content: {sample_images}")
+                        debug_print(f"DEBUG: Sample images metadata content: {sample_header_data}")
+                        debug_print(f"DEBUG: Sample crop states content: {sample_crop_states}")
+                        debug_print(f"DEBUG: Sample images keys: {list(sample_images.keys()) if sample_images else 'Empty'}")
+                        debug_print(f"DEBUG: Total sample image files: {sum(len(imgs) for imgs in sample_images.values()) if sample_images else 0}")
+
+                        # Also check regular sheet images for comparison
+                        sheet_images = vap_data.get('sheet_images', {})
+                        debug_print(f"DEBUG: Sheet images content: {sheet_images}")
+                        if sheet_images:
+                            for file_key, sheets in sheet_images.items():
+                                debug_print(f"DEBUG: File '{file_key}' sheet images:")
+                                for sheet_name, images in sheets.items():
+                                    debug_print(f"DEBUG:   Sheet '{sheet_name}': {len(images)} images - {images[:2] if images else 'None'}...")
+
                         if sample_images:
                             if not hasattr(self.gui, 'sample_image_metadata'):
                                 self.gui.sample_image_metadata = {}

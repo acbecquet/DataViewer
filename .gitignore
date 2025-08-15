@@ -48,9 +48,9 @@ data/logs/
 bin/
 obj/
 
-# INCLUDE the main database - DO NOT ignore
-!dataviewer.db
-!data/dataviewer.db
+# INCLUDE the main database - ignore
+dataviewer.db
+data/dataviewer.db
 
 # Old builds and executable files
 build_old/
