@@ -7,6 +7,7 @@ Interface for rapid test data collection with enhanced saving and menu functiona
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 from tksheet import Sheet
+import datetime
 import pandas as pd
 import numpy as np
 import os
@@ -2806,40 +2807,91 @@ Developed by Charlie Becquet
         return summary, total_images
 
     def load_existing_sample_images_from_vap3(self):
-        """Load existing sample images from VAP3 file when opening data collection window."""
+        """Load existing sample images from VAP3 file or main GUI when opening data collection window."""
         try:
             debug_print("DEBUG: Loading existing sample images from VAP3")
         
-            # Check if parent has loaded VAP3 data with sample images
-            if not hasattr(self.parent, 'filtered_sheets'):
-                debug_print("DEBUG: No filtered_sheets in parent")
-                return
+            images_loaded = False
         
-            # Get the current test sheet
-            if self.test_name not in self.parent.filtered_sheets:
-                debug_print(f"DEBUG: Test {self.test_name} not found in filtered_sheets")
-                return
+            # Method 1: Check if parent has loaded VAP3 data with sample images
+            if hasattr(self.parent, 'filtered_sheets'):
+                # Check for VAP3 sample images data
+                vap_data = getattr(self.parent, 'current_vap_data', {})
+                sample_images = vap_data.get('sample_images', {})
+                sample_image_crop_states = vap_data.get('sample_image_crop_states', {})
         
-            sheet_info = self.parent.filtered_sheets[self.test_name]
-        
-            # Check if we have loaded sample images data
-            vap_data = getattr(self.parent, 'current_vap_data', {})
-            sample_images = vap_data.get('sample_images', {})
-            sample_image_crop_states = vap_data.get('sample_image_crop_states', {})
-        
-            if sample_images:
-                debug_print(f"DEBUG: Found existing sample images: {len(sample_images)} samples")
+                if sample_images:
+                    debug_print(f"DEBUG: Found existing sample images in VAP3: {len(sample_images)} samples")
             
-                # Load the images into our data structure
-                self.sample_images = sample_images.copy()
-                self.sample_image_crop_states = sample_image_crop_states.copy()
-            
-                debug_print(f"DEBUG: Loaded existing sample images: {list(self.sample_images.keys())}")
-            
+                    # Load the images into our data structure
+                    self.sample_images = sample_images.copy()
+                    self.sample_image_crop_states = sample_image_crop_states.copy()
+                    images_loaded = True
+                
+                    debug_print(f"DEBUG: Loaded existing sample images from VAP3: {list(self.sample_images.keys())}")
+        
+            # Method 2: Check if parent has stored sample metadata from previous transfers
+            if not images_loaded and hasattr(self.parent, 'sample_image_metadata'):
+                current_file = getattr(self.parent, 'current_file', None)
+                if (current_file and 
+                    current_file in self.parent.sample_image_metadata and 
+                    self.test_name in self.parent.sample_image_metadata[current_file]):
+                
+                    metadata = self.parent.sample_image_metadata[current_file][self.test_name]
+                    stored_sample_images = metadata.get('sample_images', {})
+                    stored_crop_states = metadata.get('sample_image_crop_states', {})
+                
+                    if stored_sample_images:
+                        debug_print(f"DEBUG: Found existing sample images in main GUI metadata: {len(stored_sample_images)} samples")
+                    
+                        # Load the images into our data structure
+                        self.sample_images = stored_sample_images.copy()
+                        self.sample_image_crop_states = stored_crop_states.copy()
+                        images_loaded = True
+                    
+                        debug_print(f"DEBUG: Loaded existing sample images from main GUI: {list(self.sample_images.keys())}")
+        
+            # Method 3: Try to reconstruct from main GUI sheet images (fallback method)
+            if not images_loaded and hasattr(self.parent, 'sheet_images'):
+                current_file = getattr(self.parent, 'current_file', None)
+                if (current_file and 
+                    current_file in self.parent.sheet_images and 
+                    self.test_name in self.parent.sheet_images[current_file]):
+                
+                    sheet_image_paths = self.parent.sheet_images[current_file][self.test_name]
+                    if sheet_image_paths:
+                        debug_print(f"DEBUG: Found {len(sheet_image_paths)} sheet images, attempting to organize by sample")
+                    
+                        # Try to organize images by sample based on filename patterns or stored metadata
+                        reconstructed_sample_images = {}
+                        reconstructed_crop_states = {}
+                    
+                        # Check if we have image crop states that might contain sample info
+                        image_crop_states = getattr(self.parent, 'image_crop_states', {})
+                    
+                        for img_path in sheet_image_paths:
+                            # For now, put all images in "Sample 1" as fallback
+                            # This could be enhanced to parse filenames or use other metadata
+                            sample_key = "Sample 1"
+                            if sample_key not in reconstructed_sample_images:
+                                reconstructed_sample_images[sample_key] = []
+                            reconstructed_sample_images[sample_key].append(img_path)
+                            reconstructed_crop_states[img_path] = image_crop_states.get(img_path, False)
+                    
+                        if reconstructed_sample_images:
+                            self.sample_images = reconstructed_sample_images
+                            self.sample_image_crop_states = reconstructed_crop_states
+                            images_loaded = True
+                            debug_print(f"DEBUG: Reconstructed sample images from sheet images")
+        
+            if images_loaded:
+                # Log summary of loaded images
+                total_images = sum(len(imgs) for imgs in self.sample_images.values())
+                debug_print(f"DEBUG: Successfully loaded {total_images} total images across {len(self.sample_images)} samples")
                 for sample_id, images in self.sample_images.items():
-                    debug_print(f"DEBUG: Sample {sample_id}: {len(images)} images")
+                    debug_print(f"DEBUG: {sample_id}: {len(images)} images")
             else:
-                debug_print("DEBUG: No existing sample images found in VAP3 data")
+                debug_print("DEBUG: No existing sample images found")
             
         except Exception as e:
             debug_print(f"ERROR: Failed to load existing sample images: {e}")
@@ -3555,8 +3607,28 @@ Developed by Charlie Becquet
             # Store formatted images in parent for main GUI processing
             if formatted_images:
                 self.parent.pending_formatted_images = formatted_images
+                # Store the target sheet information
+                self.parent.pending_images_target_sheet = self.test_name
                 debug_print(f"DEBUG: Stored {len(formatted_images)} formatted images for main GUI")
+                debug_print(f"DEBUG: Target sheet stored as: {self.test_name}")
+        
+                # Store sample-specific image metadata for reverse lookup
+                if not hasattr(self.parent, 'sample_image_metadata'):
+                    self.parent.sample_image_metadata = {}
+                if self.parent.current_file not in self.parent.sample_image_metadata:
+                    self.parent.sample_image_metadata[self.parent.current_file] = {}
+                if self.test_name not in self.parent.sample_image_metadata[self.parent.current_file]:
+                    self.parent.sample_image_metadata[self.parent.current_file][self.test_name] = {}
             
+                # Store the sample-to-image mapping for later retrieval
+                self.parent.sample_image_metadata[self.parent.current_file][self.test_name] = {
+                    'sample_images': self.sample_images.copy(),
+                    'sample_image_crop_states': getattr(self, 'sample_image_crop_states', {}).copy(),
+                    'header_data': self.header_data.copy(),
+                    'test_name': self.test_name
+                }
+                debug_print(f"DEBUG: Stored sample metadata for reverse lookup")
+        
                 # If parent has a method to immediately process these, call it
                 if hasattr(self.parent, 'process_pending_sample_images'):
                     self.parent.process_pending_sample_images()
@@ -3588,53 +3660,6 @@ Developed by Charlie Becquet
             import traceback
             traceback.print_exc()
 
-    def transfer_images_to_main_gui(self):
-        """Transfer sample images to main GUI with proper labeling."""
-        try:
-            debug_print("DEBUG: Transferring sample images to main GUI")
-        
-            if not self.sample_images:
-                debug_print("DEBUG: No sample images to transfer")
-                return
-        
-            # Create formatted images for main GUI
-            formatted_images = []
-        
-            for sample_id, image_paths in self.sample_images.items():
-                sample_index = int(sample_id.split()[-1]) - 1  # Extract sample number
-            
-                if sample_index < len(self.header_data['samples']):
-                    sample_info = self.header_data['samples'][sample_index]
-                
-                    # Create labels for each image
-                    for img_path in image_paths:
-                        # Create descriptive label: "Sample 1 - Test Name - Media - Viscosity - Date"
-                        label_parts = [
-                            sample_info.get('id', sample_id),
-                            self.test_name,
-                            sample_info.get('media', 'Unknown Media'),
-                            f"{sample_info.get('viscosity', 'Unknown')} cP",
-                            datetime.datetime.now().strftime("%Y-%m-%d")
-                        ]
-                    
-                        formatted_label = " - ".join(filter(None, label_parts))
-                    
-                        formatted_images.append({
-                            'path': img_path,
-                            'label': formatted_label,
-                            'sample_id': sample_id,
-                            'crop_state': self.sample_image_crop_states.get(img_path, False)
-                        })
-        
-            # Store in parent for main GUI
-            if hasattr(self.parent, 'pending_formatted_images'):
-                self.parent.pending_formatted_images = formatted_images
-                debug_print(f"DEBUG: Prepared {len(formatted_images)} formatted images for main GUI")
-        
-        except Exception as e:
-            debug_print(f"ERROR: Failed to transfer images to main GUI: {e}")
-            import traceback
-            traceback.print_exc()
 
     def save_data(self, exit_after=False, show_confirmation=True, auto_save=False):
         """Unified method for saving data."""
