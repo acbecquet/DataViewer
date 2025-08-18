@@ -1,4 +1,4 @@
-import os
+﻿import os
 import sqlite3
 import json
 import datetime
@@ -7,7 +7,7 @@ import sys
 from typing import Dict, List, Any, Optional
 from utils import debug_print
 
-def get_database_path():
+def get_database_path_old():
     """Get the correct database path whether running as script or executable"""
     if hasattr(sys, '_MEIPASS'):
         # Running as PyInstaller executable
@@ -16,36 +16,341 @@ def get_database_path():
         # Running as script
         return 'dataviewer.db'
 
+def get_database_path():
+    """
+    Get database path prioritizing working Synology Drive client setup.
+    Network discovery added as secondary option.
+    """
+    import platform
+    import string
+    from utils import debug_print
+    
+    # CONFIGURATION
+    SYNOLOGY_IP = "192.168.222.10"  # Your confirmed working IP
+    DATABASE_RELATIVE_PATH = r"SDR\Device Group\Database"
+    DATABASE_FILENAME = "dataviewer.db"
+    
+    debug_print("DEBUG: Starting database path detection...")
+    
+    # Method 1: PRIORITIZE your working local Synology Drive setup
+    if platform.system() == "Windows":
+        # Check your known working locations first
+        priority_locations = [
+            r"C:\Synology2024",  # Your confirmed working setup
+            r"C:\SynologyDrive"  # Alternative found location
+        ]
+        
+        for base_path in priority_locations:
+            if os.path.exists(base_path):
+                db_path = os.path.join(base_path, DATABASE_RELATIVE_PATH, DATABASE_FILENAME)
+                db_dir = os.path.dirname(db_path)
+                
+                if os.path.exists(db_dir):
+                    debug_print(f"DEBUG: Found working Synology Drive path: {db_dir}")
+                    
+                    # Test write access
+                    try:
+                        test_file = os.path.join(db_dir, "test_write.tmp")
+                        with open(test_file, 'w') as f:
+                            f.write("test")
+                        os.remove(test_file)
+                        debug_print(f"SUCCESS: Using Synology Drive with write access: {db_path}")
+                        return db_path
+                    except Exception as e:
+                        debug_print(f"WARNING: Synology Drive path found but no write access: {e}")
+    
+    # Method 2: Try to discover the correct network share name
+    if platform.system() == "Windows":
+        debug_print(f"DEBUG: Attempting to discover correct share name for {SYNOLOGY_IP}...")
+        
+        # Common Synology share names to try
+        common_shares = ["volume1", "shared", "drive", "homes", "public", "data"]
+        
+        for share_name in common_shares:
+            for sub_path in ["", "SDR", r"SDR\Device Group\Database"]:
+                if sub_path:
+                    test_unc = f"\\\\{SYNOLOGY_IP}\\{share_name}\\{sub_path}"
+                else:
+                    test_unc = f"\\\\{SYNOLOGY_IP}\\{share_name}"
+                
+                try:
+                    if os.path.exists(test_unc):
+                        debug_print(f"SUCCESS: Found accessible share: {test_unc}")
+                        
+                        # If this is the database directory, use it
+                        if sub_path == r"SDR\Device Group\Database":
+                            network_db_path = os.path.join(test_unc, DATABASE_FILENAME)
+                            try:
+                                # Test write access
+                                test_file = os.path.join(test_unc, "test_write.tmp")
+                                with open(test_file, 'w') as f:
+                                    f.write("test")
+                                os.remove(test_file)
+                                debug_print(f"SUCCESS: Network path with write access: {network_db_path}")
+                                return network_db_path
+                            except:
+                                debug_print(f"INFO: Network path found but no write access: {test_unc}")
+                        
+                        # If this has the SDR folder, build the full path
+                        elif sub_path == "SDR":
+                            full_db_path = os.path.join(test_unc, "Device Group", "Database", DATABASE_FILENAME)
+                            if os.path.exists(os.path.dirname(full_db_path)):
+                                try:
+                                    test_file = os.path.join(os.path.dirname(full_db_path), "test_write.tmp")
+                                    with open(test_file, 'w') as f:
+                                        f.write("test")
+                                    os.remove(test_file)
+                                    debug_print(f"SUCCESS: Found full network path: {full_db_path}")
+                                    return full_db_path
+                                except:
+                                    debug_print(f"INFO: Found network SDR folder but no write access")
+                        
+                        break  # Found this share, don't need to test sub-paths
+                except:
+                    continue  # Try next path
+    
+    # Method 3: Scan all drives for any Synology folders (backup)
+    if platform.system() == "Windows":
+        debug_print("DEBUG: Scanning all drives for Synology folders...")
+        
+        for drive_letter in string.ascii_uppercase:
+            drive_root = f"{drive_letter}:\\"
+            if not os.path.exists(drive_root):
+                continue
+            
+            synology_patterns = ["Synology2024", "Synology2025", "SynologyDrive", "Synology"]
+            
+            for pattern in synology_patterns:
+                synology_base = os.path.join(drive_root, pattern)
+                if os.path.exists(synology_base):
+                    db_path = os.path.join(synology_base, DATABASE_RELATIVE_PATH, DATABASE_FILENAME)
+                    db_dir = os.path.dirname(db_path)
+                    
+                    if os.path.exists(db_dir):
+                        try:
+                            test_file = os.path.join(db_dir, "test_write.tmp")
+                            with open(test_file, 'w') as f:
+                                f.write("test")
+                            os.remove(test_file)
+                            debug_print(f"SUCCESS: Backup Synology Drive path: {db_path}")
+                            return db_path
+                        except:
+                            continue
+    
+    # Method 4: Fallback to local database
+    debug_print("WARNING: No accessible shared database found")
+    debug_print("INFO: Using local database - changes won't be shared with team")
+    
+    if hasattr(sys, '_MEIPASS'):
+        local_path = os.path.join(sys._MEIPASS, DATABASE_FILENAME)
+    else:
+        local_path = DATABASE_FILENAME
+    
+    debug_print(f"FALLBACK: Using local database: {local_path}")
+    return local_path
+
+
+def test_synology_connection_with_ip():
+    """
+    Enhanced connection test that uses IP address instead of server name.
+    """
+    import platform
+    import socket
+    import string
+    
+    # CONFIGURATION - Replace with your actual IP
+    SYNOLOGY_IP = "192.168.222.10"  # Replace XXX with your actual IP
+    DATABASE_RELATIVE_PATH = r"SDR\Device Group\Database"
+    
+    print("=" * 60)
+    print("SYNOLOGY CONNECTION DIAGNOSTIC (IP-BASED)")
+    print("=" * 60)
+    print(f"Target IP: {SYNOLOGY_IP}")
+    print(f"Target Path: {DATABASE_RELATIVE_PATH}")
+    
+    # Test 1: Network connectivity to IP
+    print(f"\n1. Testing network connectivity to {SYNOLOGY_IP}...")
+    connectivity_results = []
+    
+    # Test common ports
+    common_ports = {
+        22: "SSH",
+        80: "HTTP", 
+        443: "HTTPS",
+        445: "SMB/CIFS",
+        548: "AFP",
+        5000: "Synology Web",
+        5001: "Synology HTTPS"
+    }
+    
+    socket.setdefaulttimeout(3)
+    for port, service in common_ports.items():
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            result = sock.connect_ex((SYNOLOGY_IP, port))
+            sock.close()
+            if result == 0:
+                print(f"   ✅ {service} (port {port}): Open")
+                connectivity_results.append(port)
+            else:
+                print(f"   ❌ {service} (port {port}): Closed/Filtered")
+        except Exception as e:
+            print(f"   ❌ {service} (port {port}): Error - {e}")
+    
+    if not connectivity_results:
+        print("   ⚠️  No services responding - check IP address and network connection")
+        return
+    
+    # Test 2: UNC path access with IP
+    print(f"\n2. Testing UNC path access with IP...")
+    if platform.system() == "Windows":
+        unc_paths_to_test = [
+            f"\\\\{SYNOLOGY_IP}\\SDR",
+            f"\\\\{SYNOLOGY_IP}\\{DATABASE_RELATIVE_PATH}",
+            f"\\\\{SYNOLOGY_IP}\\shared\\SDR",  # Alternative common path
+        ]
+        
+        for unc_path in unc_paths_to_test:
+            try:
+                print(f"   Testing: {unc_path}")
+                if os.path.exists(unc_path):
+                    contents = os.listdir(unc_path)
+                    print(f"   ✅ SUCCESS: Accessible, found {len(contents)} items")
+                    if contents:
+                        print(f"      Contents: {', '.join(contents[:5])}{'...' if len(contents) > 5 else ''}")
+                else:
+                    print(f"   ❌ Path does not exist")
+            except Exception as e:
+                print(f"   ❌ Access failed: {e}")
+    
+    # Test 3: Scan for local Synology Drive folders
+    print(f"\n3. Scanning for local Synology Drive folders...")
+    found_synology_folders = []
+    
+    if platform.system() == "Windows":
+        for drive_letter in string.ascii_uppercase:
+            drive_root = f"{drive_letter}:\\"
+            if not os.path.exists(drive_root):
+                continue
+            
+            try:
+                contents = os.listdir(drive_root)
+                synology_folders = [f for f in contents if 'synology' in f.lower()]
+                
+                for folder in synology_folders:
+                    folder_path = os.path.join(drive_root, folder)
+                    if os.path.isdir(folder_path):
+                        found_synology_folders.append(folder_path)
+                        print(f"   ✅ Found: {folder_path}")
+                        
+                        # Check for target structure
+                        target_path = os.path.join(folder_path, DATABASE_RELATIVE_PATH)
+                        if os.path.exists(target_path):
+                            print(f"      🎯 Contains target database path!")
+                        
+            except (PermissionError, OSError):
+                continue
+    
+    if not found_synology_folders:
+        print("   ❌ No local Synology Drive folders found")
+        print("   💡 Install Synology Drive client and sync the SDR folder")
+    
+    # Summary
+    print(f"\n" + "=" * 60)
+    print("DIAGNOSTIC SUMMARY")
+    print("=" * 60)
+    
+    if 445 in connectivity_results:
+        print("✅ SMB file sharing is available")
+        print("💡 Try mapping a network drive manually:")
+        print(f"   Map \\\\{SYNOLOGY_IP}\\SDR to a drive letter")
+    
+    if found_synology_folders:
+        print("✅ Local Synology Drive folders found")
+        print("💡 Ensure SDR folder is synced in Synology Drive client")
+    
+    if not connectivity_results and not found_synology_folders:
+        print("❌ No access methods working")
+        print("💡 Check: VPN connection, network settings, firewall")
+    
+    print("=" * 60)
+
 class DatabaseManager:
     """Manages interactions with the SQLite database for storing VAP3 files and metadata."""
     def __init__(self, db_path=None):
         """
-        Initialize the DatabaseManager with a connection to the SQLite database.
-        
-        Args:
-            db_path (str, optional): Path to the SQLite database file. 
-                                    If None, creates a 'dataviewer.db' in the current directory.
+        Initialize the DatabaseManager with enhanced Synology support and connection retry.
         """
         try:
             db_path = get_database_path()
             if db_path is None:
-                # Use a default path in the application directory
                 db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dataviewer.db')
             
-            # Create directory if it doesn't exist
-            os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
+            # Create directory if it doesn't exist (important for network paths)
+            db_dir = os.path.dirname(os.path.abspath(db_path))
+            try:
+                os.makedirs(db_dir, exist_ok=True)
+                debug_print(f"DEBUG: Ensured database directory exists: {db_dir}")
+            except Exception as dir_error:
+                debug_print(f"WARNING: Could not create database directory {db_dir}: {dir_error}")
+                # This might be normal for network paths
             
-            # Initialize database connection with extended error codes to help with debugging
-            self.conn = sqlite3.connect(db_path, detect_types=sqlite3.PARSE_DECLTYPES)
-            self.conn.execute("PRAGMA foreign_keys = ON")
+            # Enhanced connection with retry logic for network databases
+            max_retries = 3
+            retry_delay = 2  # seconds
+            
+            for attempt in range(max_retries):
+                try:
+                    debug_print(f"DEBUG: Database connection attempt {attempt + 1}/{max_retries}")
+                    
+                    # Use WAL mode for better network performance and concurrent access
+                    self.conn = sqlite3.connect(
+                        db_path, 
+                        detect_types=sqlite3.PARSE_DECLTYPES,
+                        timeout=30.0,  # 30 second timeout for network operations
+                        check_same_thread=False  # Allow multi-threading
+                    )
+                    
+                    # Configure for network use
+                    self.conn.execute("PRAGMA foreign_keys = ON")
+                    self.conn.execute("PRAGMA journal_mode = WAL")  # Better for network/concurrent access
+                    self.conn.execute("PRAGMA synchronous = NORMAL")  # Balance safety vs performance
+                    self.conn.execute("PRAGMA cache_size = 10000")  # Larger cache for network latency
+                    self.conn.execute("PRAGMA temp_store = MEMORY")  # Use memory for temp storage
+                    
+                    # Test the connection
+                    self.conn.execute("SELECT 1").fetchone()
+                    
+                    debug_print(f"SUCCESS: Database connected on attempt {attempt + 1}")
+                    break
+                    
+                except sqlite3.OperationalError as db_error:
+                    if "database is locked" in str(db_error).lower() and attempt < max_retries - 1:
+                        debug_print(f"DEBUG: Database locked, retrying in {retry_delay} seconds...")
+                        time.sleep(retry_delay)
+                        retry_delay *= 1.5  # Exponential backoff
+                        continue
+                    else:
+                        raise
+                except Exception as conn_error:
+                    if attempt < max_retries - 1:
+                        debug_print(f"DEBUG: Connection failed, retrying in {retry_delay} seconds: {conn_error}")
+                        time.sleep(retry_delay)
+                        retry_delay *= 1.5
+                        continue
+                    else:
+                        raise
             
             # Create tables if they don't exist
             self._create_tables()
             
-            debug_print(f"Database initialized at: {db_path}")
+            debug_print(f"Database initialized successfully at: {db_path}")
+            
+            # Store the path for reference
+            self.db_path = db_path
+            
         except Exception as e:
             print(f"Error initializing database: {e}")
-            # Make sure conn exists even if initialization fails
             if not hasattr(self, 'conn'):
                 self.conn = None
             raise
