@@ -318,6 +318,196 @@ class DatabaseManager:
             print(f"Error deleting file: {e}")
             return False
     
+    def get_files_with_sheet_info(self):
+        """
+        Get all files with their associated sheet information for filtering.
+    
+        Returns:
+            list: List of file records with sheet data
+        """
+        try:
+            self._check_connection()
+        
+            cursor = self.conn.cursor()
+            query = """
+            SELECT DISTINCT f.id, f.filename, f.meta_data, f.created_at,
+                   GROUP_CONCAT(s.sheet_name) as sheet_names
+            FROM files f
+            LEFT JOIN sheets s ON f.id = s.file_id
+            GROUP BY f.id, f.filename, f.meta_data, f.created_at
+            ORDER BY f.created_at DESC
+            """
+        
+            cursor.execute(query)
+            rows = cursor.fetchall()
+        
+            files = []
+            for row in rows:
+                try:
+                    meta_data = json.loads(row[2]) if row[2] else {}
+                except json.JSONDecodeError:
+                    meta_data = {}
+            
+                try:
+                    if isinstance(row[3], datetime.datetime):
+                        created_at = row[3]
+                    else:
+                        created_at = datetime.datetime.fromisoformat(row[3])
+                except (ValueError, TypeError):
+                    created_at = datetime.datetime.now()
+            
+                sheet_names = row[4].split(',') if row[4] else []
+            
+                files.append({
+                    "id": row[0],
+                    "filename": row[1],
+                    "meta_data": meta_data,
+                    "created_at": created_at,
+                    "sheet_names": sheet_names
+                })
+        
+            debug_print(f"Retrieved {len(files)} files with sheet info")
+            return files
+        
+        except Exception as e:
+            print(f"Error getting files with sheet info: {e}")
+            return []
+
+    def delete_file_and_versions(self, file_id):
+        """
+        Delete a file and all its versions from the database.
+    
+        Args:
+            file_id (int): ID of the file to delete
+        
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            self._check_connection()
+        
+            cursor = self.conn.cursor()
+        
+            # Get filename for logging
+            cursor.execute("SELECT filename FROM files WHERE id = ?", (file_id,))
+            result = cursor.fetchone()
+            if not result:
+                debug_print(f"File ID {file_id} not found")
+                return False
+            
+            filename = result[0]
+            debug_print(f"Deleting file and versions: {filename} (ID: {file_id})")
+        
+            # Delete from files table (cascade will handle sheets and images)
+            cursor.execute("DELETE FROM files WHERE id = ?", (file_id,))
+            deleted_count = cursor.rowcount
+        
+            self.conn.commit()
+            debug_print(f"Successfully deleted {deleted_count} record(s)")
+            return deleted_count > 0
+        
+        except Exception as e:
+            if self.conn is not None:
+                self.conn.rollback()
+            print(f"Error deleting file and versions: {e}")
+            return False
+
+    def delete_multiple_files(self, file_ids):
+        """
+        Delete multiple files from the database.
+    
+        Args:
+            file_ids (list): List of file IDs to delete
+        
+        Returns:
+            tuple: (success_count, error_count)
+        """
+        success_count = 0
+        error_count = 0
+    
+        for file_id in file_ids:
+            if self.delete_file_and_versions(file_id):
+                success_count += 1
+            else:
+                error_count += 1
+    
+        debug_print(f"Batch deletion complete: {success_count} successful, {error_count} errors")
+        return success_count, error_count
+
+    def get_file_size_info(self, file_id):
+        """
+        Get file size information for a specific file.
+    
+        Args:
+            file_id (int): ID of the file
+        
+        Returns:
+            int: File size in bytes
+        """
+        try:
+            self._check_connection()
+        
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT LENGTH(file_content) FROM files WHERE id = ?", (file_id,))
+            result = cursor.fetchone()
+        
+            return result[0] if result else 0
+        
+        except Exception as e:
+            debug_print(f"Error getting file size: {e}")
+            return 0
+
+    def get_most_recent_version_by_base_name(self, base_filename):
+        """
+        Get the most recent version of a file by its base filename.
+        
+        Args:
+            base_filename (str): Base filename to search for
+            
+        Returns:
+            dict: File record or None if not found
+        """
+        try:
+            self._check_connection()
+            
+            cursor = self.conn.cursor()
+            # Search for files with similar base names and get the most recent
+            cursor.execute("""
+                SELECT id, filename, file_content, meta_data, created_at 
+                FROM files 
+                WHERE filename LIKE ? 
+                ORDER BY created_at DESC 
+                LIMIT 1
+            """, (f"%{base_filename}%",))
+            
+            row = cursor.fetchone()
+            if row:
+                try:
+                    meta_data = json.loads(row[3]) if row[3] else {}
+                except json.JSONDecodeError:
+                    meta_data = {}
+                
+                try:
+                    if isinstance(row[4], datetime.datetime):
+                        created_at = row[4]
+                    else:
+                        created_at = datetime.datetime.fromisoformat(row[4])
+                except (ValueError, TypeError):
+                    created_at = datetime.datetime.now()
+                
+                return {
+                    "id": row[0],
+                    "filename": row[1],
+                    "file_content": row[2],
+                    "meta_data": meta_data,
+                    "created_at": created_at
+                }
+            else:
+                return None
+        except Exception as e:
+            print(f"Error getting most recent version: {e}")
+            return None
+
     def close(self):
         """Close the database connection."""
         if hasattr(self, 'conn') and self.conn is not None:

@@ -26,7 +26,7 @@ import psutil
 import openpyxl
 from openpyxl import Workbook, load_workbook
 import tkinter as tk
-from tkinter import filedialog, messagebox, Toplevel, Label, Button, ttk, Frame
+from tkinter import filedialog, messagebox, Toplevel, Label, Button, ttk, Frame, Listbox, Scrollbar
 from test_selection_dialog import TestSelectionDialog
 from test_start_menu import TestStartMenu
 from header_data_dialog import HeaderDataDialog
@@ -818,10 +818,10 @@ class FileManager:
             dialog.title("Select Files for Comparison")
         else:
             dialog.title("Database Browser")
-        
+    
         dialog.transient(self.gui.root)
         self.center_window(dialog, 900, 700)
-    
+
         # Create frames for UI elements
         top_frame = Frame(dialog)
         top_frame.pack(fill="x", padx=10, pady=10)
@@ -897,7 +897,7 @@ class FileManager:
                 display_text = f"{base_name} ({count} versions, latest: {latest_file['created_at'].strftime('%Y-%m-%d %H:%M')})"
             else:
                 display_text = f"{base_name} ({latest_file['created_at'].strftime('%Y-%m-%d %H:%M')})"
-    
+
             file_listbox.insert(tk.END, display_text)
             listbox_to_file_mapping[listbox_index] = latest_file
             debug_print(f"DEBUG: Mapped listbox index {listbox_index} to file ID {latest_file['id']} for base name '{base_name}'")
@@ -907,6 +907,7 @@ class FileManager:
         selection_info = Label(list_frame, text="", font=("Arial", 10))
         selection_info.pack(pady=5)
 
+        # DEFINE ALL FUNCTIONS FIRST BEFORE CREATING BUTTONS
         def update_selection_info():
             """Update the selection information label."""
             selected_count = len(file_listbox.curselection())
@@ -924,40 +925,40 @@ class FileManager:
             """Show dialog with version history and allow version selection."""
             history_dialog = Toplevel(dialog)
             history_dialog.title(f"Version History - {base_name}")
-    
+
             # Hide the window immediately to prevent stutter during positioning
             history_dialog.withdraw()
-    
+
             history_dialog.transient(dialog)
             history_dialog.grab_set()
-    
+
             # Create frames
             top_frame_hist = Frame(history_dialog)
             top_frame_hist.pack(fill="x", padx=10, pady=10)
-    
+
             list_frame_hist = Frame(history_dialog)
             list_frame_hist.pack(fill="both", expand=True, padx=10, pady=10)
-    
+
             bottom_frame_hist = Frame(history_dialog)
             bottom_frame_hist.pack(fill="x", padx=10, pady=10)
-    
+
             # Header
             Label(top_frame_hist, text=f"Version History: {base_name}", 
                   font=("Arial", 14, "bold")).pack()
             Label(top_frame_hist, text="Double-click a version to select it for loading", 
                   font=("Arial", 10)).pack(pady=5)
-    
+
             # Version listbox with scrollbar
             hist_listbox_frame = Frame(list_frame_hist)
             hist_listbox_frame.pack(fill="both", expand=True)
-    
+
             hist_scrollbar = tk.Scrollbar(hist_listbox_frame)
             hist_scrollbar.pack(side="right", fill="y")
-    
+
             version_listbox = tk.Listbox(hist_listbox_frame, yscrollcommand=hist_scrollbar.set, font=FONT)
             version_listbox.pack(side="left", fill="both", expand=True)
             hist_scrollbar.config(command=version_listbox.yview)
-    
+
             # Populate with versions (newest first)
             for i, version in enumerate(versions):
                 created_str = version['created_at'].strftime('%Y-%m-%d %H:%M:%S')
@@ -965,16 +966,16 @@ class FileManager:
                 status = " [CURRENT]" if is_current else f" [v{len(versions)-i}]"
                 display_text = f"{version['filename']}{status} - {created_str}"
                 version_listbox.insert(tk.END, display_text)
-    
+
             def on_version_double_click(event):
                 """Handle double-click on version to replace in main browser."""
                 selection = version_listbox.curselection()
                 if not selection:
                     return
-        
+    
                 selected_version_idx = selection[0]
                 selected_version = versions[selected_version_idx]
-        
+    
                 # Update the main listbox display
                 created_str = selected_version['created_at'].strftime('%Y-%m-%d %H:%M')
                 if selected_version_idx == 0:
@@ -991,72 +992,251 @@ class FileManager:
                     # Older version selected - show with indicator
                     version_num = len(versions) - selected_version_idx
                     display_text = f"{base_name} [v{version_num}: {created_str}] ★"
-            
+        
                     # Store original mapping for restoration if not already stored
                     if not hasattr(dialog, 'original_mappings'):
                         dialog.original_mappings = {}
                     if main_listbox_index not in dialog.original_mappings:
                         dialog.original_mappings[main_listbox_index] = versions[0]  # Store original (newest)
-        
+    
                 # Update main listbox
                 file_listbox.delete(main_listbox_index)
                 file_listbox.insert(main_listbox_index, display_text)
-        
+    
                 # Update mapping to point to selected version
                 listbox_to_file_mapping[main_listbox_index] = selected_version
-        
+    
                 # Keep the item selected in main listbox
                 file_listbox.selection_clear(0, tk.END)
                 file_listbox.selection_set(main_listbox_index)
-        
-                debug_print(f"DEBUG: Temporarily replaced {base_name} with version {selected_version_idx + 1}")
-        
-                history_dialog.destroy()
     
+                debug_print(f"DEBUG: Temporarily replaced {base_name} with version {selected_version_idx + 1}")
+    
+                history_dialog.destroy()
+
             # Bind double-click to version listbox
             version_listbox.bind("<Double-Button-1>", on_version_double_click)
-    
+
             # Close button
             def on_close():
                 history_dialog.destroy()
-    
+
+            def on_delete_versions():
+                """Delete selected versions from the version history."""
+                selected_items = version_listbox.curselection()
+                if not selected_items:
+                    messagebox.showwarning("Warning", "Please select at least one version to delete.")
+                    return
+
+                version_ids = []
+                version_names = []
+                for idx in selected_items:
+                    if idx < len(versions):
+                        version_record = versions[idx]
+                        version_ids.append(version_record['id'])
+                        version_names.append(version_record['filename'])
+
+                if not version_ids:
+                    messagebox.showwarning("Warning", "No valid versions selected for deletion.")
+                    return
+
+                # Confirm deletion
+                if len(version_ids) == 1:
+                    confirm_msg = f"Are you sure you want to delete this version:\n\n{version_names[0]}\n\nThis action cannot be undone."
+                else:
+                    confirm_msg = f"Are you sure you want to delete {len(version_ids)} versions?\n\nThis action cannot be undone."
+
+                if not messagebox.askyesno("Confirm Deletion", confirm_msg):
+                    return
+
+                try:
+                    debug_print(f"DEBUG: Starting deletion of {len(version_ids)} versions")
+                    success_count, error_count = self.db_manager.delete_multiple_files(version_ids)
+                
+                    if success_count > 0:
+                        if error_count == 0:
+                            messagebox.showinfo("Success", f"Successfully deleted {success_count} version(s).")
+                        else:
+                            messagebox.showwarning("Partial Success", f"Deleted {success_count} version(s), but {error_count} failed.")
+                    
+                        # Check if we deleted the most recent version
+                        most_recent_deleted = 0 in selected_items
+                    
+                        if most_recent_deleted:
+                            # Find the new most recent version and update main listbox
+                            remaining_versions = [v for i, v in enumerate(versions) if i not in selected_items]
+                            if remaining_versions:
+                                # Sort remaining versions by date (newest first)
+                                remaining_versions.sort(key=lambda x: x['created_at'], reverse=True)
+                                new_most_recent = remaining_versions[0]
+                            
+                                # Update the main listbox display
+                                base_name = extract_base_filename(new_most_recent['filename'])
+                                count = len(remaining_versions)
+                                created_str = new_most_recent['created_at'].strftime('%Y-%m-%d %H:%M')
+                            
+                                if count > 1:
+                                    display_text = f"{base_name} ({count} versions, latest: {created_str})"
+                                else:
+                                    display_text = f"{base_name} ({created_str})"
+                            
+                                # Update the item in main listbox
+                                file_listbox.delete(main_listbox_index)
+                                file_listbox.insert(main_listbox_index, display_text)
+                                listbox_to_file_mapping[main_listbox_index] = new_most_recent
+                            
+                                debug_print(f"DEBUG: Updated main listbox after deleting most recent version")
+                            else:
+                                # All versions deleted, remove from main listbox
+                                file_listbox.delete(main_listbox_index)
+                                if main_listbox_index in listbox_to_file_mapping:
+                                    del listbox_to_file_mapping[main_listbox_index]
+                                debug_print(f"DEBUG: Removed entry from main listbox - all versions deleted")
+                    
+                        # Close the version history dialog and refresh
+                        history_dialog.destroy()
+                        update_selection_info()
+                    else:
+                        messagebox.showerror("Error", "Failed to delete any versions.")
+            
+                except Exception as e:
+                    debug_print(f"DEBUG: Error during version deletion: {e}")
+                    messagebox.showerror("Error", f"Error during deletion: {e}")
+
+            # Add delete button on the left, close on the right
+            Button(bottom_frame_hist, text="Delete Selected", command=on_delete_versions, 
+                   bg="#f44336", fg="white", font=FONT).pack(side="left", padx=5)
+        
             Button(bottom_frame_hist, text="Close", command=on_close, 
                    bg="#f44336", fg="black", font=FONT).pack(side="right", padx=5)
-    
+
             # Center the window and then show it (prevents stutter)
             self.center_window(history_dialog, 600, 400)
             history_dialog.deiconify()
+
+        def on_delete():
+            selected_items = file_listbox.curselection()
+            if not selected_items:
+                messagebox.showwarning("Warning", "Please select at least one file to delete.")
+                return
+
+            file_ids = []
+            filenames = []
+            for idx in selected_items:
+                if idx in listbox_to_file_mapping:
+                    file_record = listbox_to_file_mapping[idx]
+                    file_ids.append(file_record['id'])
+                    filenames.append(file_record['filename'])
+
+            if not file_ids:
+                messagebox.showwarning("Warning", "No valid files selected for deletion.")
+                return
+
+            # Confirm deletion
+            if len(file_ids) == 1:
+                confirm_msg = f"Are you sure you want to delete the file:\n\n{filenames[0]}\n\nThis action cannot be undone."
+            else:
+                confirm_msg = f"Are you sure you want to delete {len(file_ids)} files?\n\nThis action cannot be undone."
+
+            if not messagebox.askyesno("Confirm Deletion", confirm_msg):
+                return
+
+            try:
+                debug_print(f"DEBUG: Starting deletion of {len(file_ids)} files")
+                success_count, error_count = self.db_manager.delete_multiple_files(file_ids)
+                
+                if success_count > 0:
+                    if error_count == 0:
+                        messagebox.showinfo("Success", f"Successfully deleted {success_count} file(s).")
+                    else:
+                        messagebox.showwarning("Partial Success", f"Deleted {success_count} file(s), but {error_count} failed.")
+                    
+                    # Refresh the file list after deletion
+                    refresh_file_list()
+                else:
+                    messagebox.showerror("Error", "Failed to delete any files.")
+            
+            except Exception as e:
+                debug_print(f"DEBUG: Error during file deletion: {e}")
+                messagebox.showerror("Error", f"Error during deletion: {e}")
+
+        def refresh_file_list():
+            """Refresh the file list display after deletion."""
+            try:
+                debug_print("DEBUG: Refreshing file list after deletion")
+                
+                # Clear current listbox
+                file_listbox.delete(0, tk.END)
+                listbox_to_file_mapping.clear()
+                file_groups.clear()
+                
+                # Reload files from database
+                files = self.db_manager.list_files()
+                debug_print(f"DEBUG: Reloaded {len(files)} files from database")
+                
+                # Regroup files
+                for file_record in files:
+                    base_name = extract_base_filename(file_record['filename'])
+                    if base_name not in file_groups:
+                        file_groups[base_name] = []
+                    file_groups[base_name].append(file_record)
+                
+                # Sort each group by creation date (newest first)
+                for base_name in file_groups:
+                    file_groups[base_name].sort(key=lambda x: x['created_at'], reverse=True)
+                
+                # Repopulate listbox
+                for base_name, versions in file_groups.items():
+                    latest_version = versions[0]
+                    count = len(versions)
+                    created_str = latest_version['created_at'].strftime('%Y-%m-%d %H:%M')
+                    
+                    if count > 1:
+                        display_text = f"{base_name} ({count} versions, latest: {created_str})"
+                    else:
+                        display_text = f"{base_name} ({created_str})"
+                    
+                    current_index = file_listbox.size()
+                    file_listbox.insert(tk.END, display_text)
+                    listbox_to_file_mapping[current_index] = latest_version
+                
+                update_selection_info()
+                debug_print("DEBUG: File list refresh completed")
+                
+            except Exception as e:
+                debug_print(f"DEBUG: Error refreshing file list: {e}")
+                messagebox.showerror("Error", f"Error refreshing file list: {e}")
 
         def on_double_click(event):
             """Handle double-click to show version history for selected files."""
             selected_items = list(file_listbox.curselection())
             if not selected_items:
                 return
-        
+    
             # Process each selected file one by one
             def process_next_file(file_indices):
                 if not file_indices:
                     return  # All done
-            
+        
                 idx = file_indices[0]
                 remaining = file_indices[1:]
-            
+        
                 if idx not in listbox_to_file_mapping:
                     # Skip this one and process next
                     if remaining:
                         dialog.after(100, lambda: process_next_file(remaining))
                     return
-                
+            
                 selected_file = listbox_to_file_mapping[idx]
                 base_name = extract_base_filename(selected_file['filename'])
-            
+        
                 # Check if this file has multiple versions
                 if base_name not in file_groups or len(file_groups[base_name]) <= 1:
                     # Single version - skip to next file
                     if remaining:
                         dialog.after(100, lambda: process_next_file(remaining))
                     return
-            
+        
                 # Show version history dialog
                 # We need to ensure the dialog is modal and wait for it to close before proceeding
                 def show_dialog_and_continue():
@@ -1064,58 +1244,46 @@ class FileManager:
                     # After dialog closes, process next file
                     if remaining:
                         dialog.after(100, lambda: process_next_file(remaining))
-            
-                show_dialog_and_continue()
         
+                show_dialog_and_continue()
+    
             # Start processing the first file
             process_next_file(selected_items)
-
-        file_listbox.bind("<Double-Button-1>", on_double_click)
 
         def on_selection_change(event):
             """Restore original versions for deselected items."""
             if hasattr(dialog, 'original_mappings'):
                 current_selection = set(file_listbox.curselection())
-            
+        
                 # Check each item that has been temporarily replaced
                 items_to_restore = []
                 for idx, original_version in dialog.original_mappings.items():
                     if idx not in current_selection:
                         items_to_restore.append((idx, original_version))
-            
+        
                 # Restore items that were deselected
                 for idx, original_version in items_to_restore:
                     base_name = extract_base_filename(original_version['filename'])
                     count = len(file_groups[base_name])
                     created_str = original_version['created_at'].strftime('%Y-%m-%d %H:%M')
-                
+            
                     if count > 1:
                         display_text = f"{base_name} ({count} versions, latest: {created_str})"
                     else:
                         display_text = f"{base_name} ({created_str})"
-                
+            
                     # Restore display and mapping
                     file_listbox.delete(idx)
                     file_listbox.insert(idx, display_text)
                     listbox_to_file_mapping[idx] = original_version
-                
-                    debug_print(f"DEBUG: Restored {base_name} to latest version (deselected)")
             
+                    debug_print(f"DEBUG: Restored {base_name} to latest version (deselected)")
+        
                 # Remove restored items from tracking
                 for idx, _ in items_to_restore:
                     del dialog.original_mappings[idx]
-        
+    
             update_selection_info()
-
-        file_listbox.bind("<<ListboxSelect>>", on_selection_change)
-
-        # Create buttons
-        button_frame = Frame(bottom_frame)
-        button_frame.pack(fill="x", pady=10)
-
-        # Add select all/none buttons
-        select_frame = Frame(button_frame)
-        select_frame.pack(fill="x", pady=(0, 10))
 
         def select_all():
             file_listbox.select_set(0, tk.END)
@@ -1125,28 +1293,20 @@ class FileManager:
             file_listbox.selection_clear(0, tk.END)
             update_selection_info()
 
-        Button(select_frame, text="Select All", command=select_all, font=FONT).pack(side="left", padx=5)
-        Button(select_frame, text="Select None", command=select_none, font=FONT).pack(side="left", padx=5)
-
-        # Add info label
-        info_label = Label(select_frame, text="Double-click files to view version history", 
-                          font=("Arial", 9), fg="gray")
-        info_label.pack(side="right", padx=5)
-
+        # Define load functions based on mode
         if comparison_mode:
-            # Comparison mode buttons
-            def on_load_for_comparison():
+            def on_load():
                 selected_items = file_listbox.curselection()
                 if len(selected_items) < 2:
                     messagebox.showwarning("Warning", "Please select at least 2 files for comparison.")
                     return
-        
+
                 file_ids = []
                 for idx in selected_items:
                     if idx in listbox_to_file_mapping:
                         file_record = listbox_to_file_mapping[idx]
                         file_ids.append(file_record['id'])
-    
+
                 dialog.destroy()
                 if len(file_ids) >= 2:
                     original_all_filtered_sheets = self.gui.all_filtered_sheets.copy()
@@ -1158,14 +1318,7 @@ class FileManager:
                     else:
                         messagebox.showwarning("Warning", "Failed to load enough files for comparison.")
                         self.gui.all_filtered_sheets = original_all_filtered_sheets
-
-            Button(button_frame, text="Load for Comparison", command=on_load_for_comparison, 
-                   bg="#4CAF50", fg="black", font=FONT).pack(side="left", padx=5)
-            Button(button_frame, text="Cancel", command=dialog.destroy, 
-                   bg="#f44336", fg="black", font=FONT).pack(side="right", padx=5)
-
         else:
-            # Normal mode buttons
             def on_load():
                 selected_items = file_listbox.curselection()
                 if not selected_items:
@@ -1184,10 +1337,36 @@ class FileManager:
                 elif len(file_ids) > 1:
                     self.load_multiple_from_database(file_ids)
 
-            Button(button_frame, text="Load Selected", command=on_load, 
-                   bg="#4CAF50", fg="black", font=FONT).pack(side="left", padx=5)
-            Button(button_frame, text="Close", command=dialog.destroy, 
-                   bg="#f44336", fg="black", font=FONT).pack(side="right", padx=5)
+        # Bind events
+        file_listbox.bind("<Double-Button-1>", on_double_click)
+        file_listbox.bind("<<ListboxSelect>>", on_selection_change)
+
+        # Create buttons
+        button_frame = Frame(bottom_frame)
+        button_frame.pack(fill="x", pady=10)
+
+        # Add select all/none buttons
+        select_frame = Frame(button_frame)
+        select_frame.pack(fill="x", pady=(0, 10))
+
+        Button(select_frame, text="Select All", command=select_all, font=FONT).pack(side="left", padx=5)
+        Button(select_frame, text="Select None", command=select_none, font=FONT).pack(side="left", padx=5)
+
+        # Add info label
+        info_label = Label(select_frame, text="Double-click files to view version history", 
+                          font=("Arial", 9), fg="gray")
+        info_label.pack(side="right", padx=5)
+
+        # Create main action buttons
+        Button(button_frame, text="Load Selected", command=on_load, 
+               bg="#4CAF50", fg="black", font=FONT).pack(side="left", padx=5)
+    
+        # Add delete button in the middle
+        Button(button_frame, text="Delete Selected", command=on_delete, 
+               bg="#f44336", fg="white", font=FONT).pack(side="left", padx=20)
+        
+        Button(button_frame, text="Close", command=dialog.destroy, 
+               bg="#666666", fg="black", font=FONT).pack(side="right", padx=5)
 
         # Initialize selection info
         update_selection_info()
