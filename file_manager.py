@@ -845,6 +845,92 @@ class FileManager:
             base = re.sub(r'\.[^.]*$', '', base)  # Remove extension
             return base.strip()
 
+
+        def sort_file_groups(groups, sort_method):
+            """Sort file groups based on the selected method."""
+            debug_print(f"DEBUG: Sorting files by {sort_method}")
+            
+            if sort_method == "newest_first":
+                # Sort by most recent update (within each group, then by group)
+                sorted_groups = {}
+                for base_name, versions in groups.items():
+                    # Each group is already sorted by creation date (newest first)
+                    sorted_groups[base_name] = versions
+                # Sort group keys by the most recent file in each group
+                sorted_keys = sorted(sorted_groups.keys(), 
+                                   key=lambda name: sorted_groups[name][0]['created_at'], reverse=True)
+            elif sort_method == "oldest_first":
+                # Sort by oldest update
+                sorted_groups = {}
+                for base_name, versions in groups.items():
+                    sorted_groups[base_name] = versions
+                # Sort group keys by the most recent file in each group (oldest first)
+                sorted_keys = sorted(sorted_groups.keys(), 
+                                   key=lambda name: sorted_groups[name][0]['created_at'], reverse=False)
+            elif sort_method == "alphabetical_asc":
+                # Sort alphabetically A to Z
+                sorted_groups = groups
+                sorted_keys = sorted(groups.keys())
+            elif sort_method == "alphabetical_desc":
+                # Sort alphabetically Z to A  
+                sorted_groups = groups
+                sorted_keys = sorted(groups.keys(), reverse=True)
+            else:
+                # Default to newest first
+                sorted_groups = groups
+                sorted_keys = sorted(groups.keys(), 
+                                   key=lambda name: groups[name][0]['created_at'], reverse=True)
+            
+            return sorted_groups, sorted_keys
+
+        def populate_listbox():
+            """Populate the listbox with files according to current sort method."""
+            try:
+                debug_print("DEBUG: Populating listbox with sorted files")
+                
+                # Clear current listbox
+                file_listbox.delete(0, tk.END)
+                listbox_to_file_mapping.clear()
+                
+                # Get current sort method
+                current_sort = sort_var.get()
+                if current_sort == "Newest First":
+                    sort_method = "newest_first"
+                elif current_sort == "Oldest First":
+                    sort_method = "oldest_first"
+                elif current_sort == "A to Z":
+                    sort_method = "alphabetical_asc"
+                elif current_sort == "Z to A":
+                    sort_method = "alphabetical_desc"
+                else:
+                    sort_method = "newest_first"
+                
+                # Sort the file groups
+                sorted_groups, sorted_keys = sort_file_groups(file_groups, sort_method)
+                
+                # Populate listbox with sorted groups
+                listbox_index = 0
+                for base_name in sorted_keys:
+                    latest_file = sorted_groups[base_name][0]  # First item is newest
+                    count = len(sorted_groups[base_name])
+
+                    if count > 1:
+                        display_text = f"{base_name} ({count} versions, latest: {latest_file['created_at'].strftime('%Y-%m-%d %H:%M')})"
+                    else:
+                        display_text = f"{base_name} ({latest_file['created_at'].strftime('%Y-%m-%d %H:%M')})"
+
+                    file_listbox.insert(tk.END, display_text)
+                    listbox_to_file_mapping[listbox_index] = latest_file
+                    debug_print(f"DEBUG: Mapped listbox index {listbox_index} to file ID {latest_file['id']} for base name '{base_name}'")
+                    listbox_index += 1
+                    
+                update_selection_info()
+                debug_print(f"DEBUG: Listbox populated with {listbox_index} items")
+                
+            except Exception as e:
+                debug_print(f"DEBUG: Error populating listbox: {e}")
+                messagebox.showerror("Error", f"Error displaying files: {e}")
+
         try:
             # Get files from database
             files = self.db_manager.list_files()
@@ -874,6 +960,33 @@ class FileManager:
 
         Label(top_frame, text=header_text, font=("Arial", 12, "bold")).pack()
 
+        # Add sorting controls
+        sort_frame = Frame(top_frame)
+        sort_frame.pack(fill="x", pady=10)
+        
+        Label(sort_frame, text="Sort by:", font=("Arial", 10)).pack(side="left", padx=(0, 5))
+        
+        # Sort options variable
+        sort_var = tk.StringVar(value="newest_first")
+        
+        sort_options = [
+            ("Newest First", "newest_first"),
+            ("Oldest First", "oldest_first"), 
+            ("A to Z", "alphabetical_asc"),
+            ("Z to A", "alphabetical_desc")
+        ]
+        
+        sort_dropdown = ttk.Combobox(sort_frame, textvariable=sort_var, values=[option[1] for option in sort_options], 
+                                   state="readonly", width=15)
+        sort_dropdown.pack(side="left", padx=5)
+        
+        # Set display values
+        sort_dropdown['values'] = [option[0] for option in sort_options]
+        sort_dropdown.set("Newest First")
+
+        # Create listbox with scrollbar
+        listbox_frame = Frame(list_frame)
+
         # Create listbox with scrollbar
         listbox_frame = Frame(list_frame)
         listbox_frame.pack(fill="both", expand=True)
@@ -887,21 +1000,16 @@ class FileManager:
         file_listbox.pack(side="left", fill="both", expand=True)
         scrollbar.config(command=file_listbox.yview)
 
-        # Populate listbox with grouped files
-        listbox_index = 0
-        for base_name in sorted(file_groups.keys()):
-            latest_file = file_groups[base_name][0]  # First item is newest
-            count = len(file_groups[base_name])
+        # Initial population with default sort
+        populate_listbox()
 
-            if count > 1:
-                display_text = f"{base_name} ({count} versions, latest: {latest_file['created_at'].strftime('%Y-%m-%d %H:%M')})"
-            else:
-                display_text = f"{base_name} ({latest_file['created_at'].strftime('%Y-%m-%d %H:%M')})"
-
-            file_listbox.insert(tk.END, display_text)
-            listbox_to_file_mapping[listbox_index] = latest_file
-            debug_print(f"DEBUG: Mapped listbox index {listbox_index} to file ID {latest_file['id']} for base name '{base_name}'")
-            listbox_index += 1
+        # Bind sort dropdown change event
+        def on_sort_change(event=None):
+            """Handle sort method change."""
+            debug_print(f"DEBUG: Sort method changed to {sort_var.get()}")
+            populate_listbox()
+            
+        sort_dropdown.bind('<<ComboboxSelected>>', on_sort_change)
 
         # Selection info
         selection_info = Label(list_frame, text="", font=("Arial", 10))
@@ -945,7 +1053,7 @@ class FileManager:
             # Header
             Label(top_frame_hist, text=f"Version History: {base_name}", 
                   font=("Arial", 14, "bold")).pack()
-            Label(top_frame_hist, text="Double-click a version to select it for loading", 
+            Label(top_frame_hist, text="Double-click a version to select it for loading. Use Ctrl+click for multiple selection.", 
                   font=("Arial", 10)).pack(pady=5)
 
             # Version listbox with scrollbar
@@ -955,7 +1063,7 @@ class FileManager:
             hist_scrollbar = tk.Scrollbar(hist_listbox_frame)
             hist_scrollbar.pack(side="right", fill="y")
 
-            version_listbox = tk.Listbox(hist_listbox_frame, yscrollcommand=hist_scrollbar.set, font=FONT)
+            version_listbox = tk.Listbox(hist_listbox_frame, yscrollcommand=hist_scrollbar.set, selectmode=tk.EXTENDED, font=FONT)
             version_listbox.pack(side="left", fill="both", expand=True)
             hist_scrollbar.config(command=version_listbox.yview)
 
@@ -1186,19 +1294,7 @@ class FileManager:
                     file_groups[base_name].sort(key=lambda x: x['created_at'], reverse=True)
                 
                 # Repopulate listbox
-                for base_name, versions in file_groups.items():
-                    latest_version = versions[0]
-                    count = len(versions)
-                    created_str = latest_version['created_at'].strftime('%Y-%m-%d %H:%M')
-                    
-                    if count > 1:
-                        display_text = f"{base_name} ({count} versions, latest: {created_str})"
-                    else:
-                        display_text = f"{base_name} ({created_str})"
-                    
-                    current_index = file_listbox.size()
-                    file_listbox.insert(tk.END, display_text)
-                    listbox_to_file_mapping[current_index] = latest_version
+                populate_listbox()
                 
                 update_selection_info()
                 debug_print("DEBUG: File list refresh completed")
