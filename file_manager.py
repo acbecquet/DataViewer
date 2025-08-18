@@ -883,7 +883,7 @@ class FileManager:
             
             return sorted_groups, sorted_keys
 
-        def populate_listbox():
+        def populate_listbox(filter_keyword = None):
             """Populate the listbox with files according to current sort method."""
             try:
                 debug_print("DEBUG: Populating listbox with sorted files")
@@ -904,9 +904,21 @@ class FileManager:
                     sort_method = "alphabetical_desc"
                 else:
                     sort_method = "newest_first"
+
+                # Apply filter if provided
+                filtered_groups = file_groups.copy()
+                if filter_keyword and filter_keyword.strip():
+                    keyword_lower = filter_keyword.strip().lower()
+                    filtered_groups = {
+                        base_name: versions 
+                        for base_name, versions in file_groups.items() 
+                        if keyword_lower in base_name.lower()
+                    }
+                    debug_print(f"DEBUG: Applied filter '{filter_keyword}' - {len(filtered_groups)} groups remaining")
+              
                 
                 # Sort the file groups
-                sorted_groups, sorted_keys = sort_file_groups(file_groups, sort_method)
+                sorted_groups, sorted_keys = sort_file_groups(filtered_groups, sort_method)
                 
                 # Populate listbox with sorted groups
                 listbox_index = 0
@@ -962,7 +974,7 @@ class FileManager:
 
         # Add sorting controls
         sort_frame = Frame(top_frame)
-        sort_frame.pack(fill="x", pady=10)
+        sort_frame.pack(fill="x", pady=5)
         
         Label(sort_frame, text="Sort by:", font=("Arial", 10)).pack(side="left", padx=(0, 5))
         
@@ -984,6 +996,12 @@ class FileManager:
         sort_dropdown['values'] = [option[0] for option in sort_options]
         sort_dropdown.set("Newest First")
 
+        # Right side - Filter controls
+        filter_var = tk.StringVar()
+        Label(sort_frame, text="Filter:", font=("Arial", 10)).pack(side="right", padx=(5, 0))
+        filter_entry = tk.Entry(sort_frame, textvariable=filter_var, width=20, font=("Arial", 10))
+        filter_entry.pack(side="right", padx=(0, 5))
+
         # Create listbox with scrollbar
         listbox_frame = Frame(list_frame)
 
@@ -1000,6 +1018,29 @@ class FileManager:
         file_listbox.pack(side="left", fill="both", expand=True)
         scrollbar.config(command=file_listbox.yview)
 
+        # Selection info label (create before functions that use it)
+        selection_info = Label(list_frame, text="", font=("Arial", 10))
+        selection_info.pack(pady=5)
+
+        # DEFINE update_selection_info FIRST since populate_listbox needs it
+        def update_selection_info():
+            """Update the selection information label."""
+            debug_print("DEBUG: Updating selection info")
+            try:
+                selected_count = len(file_listbox.curselection())
+                if comparison_mode:
+                    if selected_count < 2:
+                        selection_info.config(text=f"Selected: {selected_count} files (need at least 2 for comparison)", 
+                                            fg="red")
+                    else:
+                        selection_info.config(text=f"Selected: {selected_count} files (ready for comparison)", 
+                                            fg="green")
+                else:
+                    selection_info.config(text=f"Selected: {selected_count} files", fg="black")
+                debug_print(f"DEBUG: Selection info updated - {selected_count} files selected")
+            except Exception as e:
+                debug_print(f"DEBUG: Error updating selection info: {e}")
+
         # Initial population with default sort
         populate_listbox()
 
@@ -1007,27 +1048,20 @@ class FileManager:
         def on_sort_change(event=None):
             """Handle sort method change."""
             debug_print(f"DEBUG: Sort method changed to {sort_var.get()}")
-            populate_listbox()
+            current_filter = filter_var.get()
+            populate_listbox(current_filter if current_filter else None)
             
         sort_dropdown.bind('<<ComboboxSelected>>', on_sort_change)
 
-        # Selection info
-        selection_info = Label(list_frame, text="", font=("Arial", 10))
-        selection_info.pack(pady=5)
-
-        # DEFINE ALL FUNCTIONS FIRST BEFORE CREATING BUTTONS
-        def update_selection_info():
-            """Update the selection information label."""
-            selected_count = len(file_listbox.curselection())
-            if comparison_mode:
-                if selected_count < 2:
-                    selection_info.config(text=f"Selected: {selected_count} files (need at least 2 for comparison)", 
-                                        fg="red")
-                else:
-                    selection_info.config(text=f"Selected: {selected_count} files (ready for comparison)", 
-                                        fg="green")
-            else:
-                selection_info.config(text=f"Selected: {selected_count} files", fg="black")
+        # Bind filter entry change event
+        def on_filter_change(event=None):
+            """Handle filter keyword change."""
+            filter_keyword = filter_var.get()
+            debug_print(f"DEBUG: Filter keyword changed to '{filter_keyword}'")
+            populate_listbox(filter_keyword if filter_keyword else None)
+          
+        filter_entry.bind('<KeyRelease>', on_filter_change)
+        filter_entry.bind('<FocusOut>', on_filter_change)
 
         def show_version_history_dialog(base_name, versions, main_listbox_index):
             """Show dialog with version history and allow version selection."""
