@@ -1219,6 +1219,7 @@ def get_processing_functions():
         "Rapid Puff Test": process_rapid_puff_test,
         "Intense Test": process_intense_test,
         "Big Headspace Low T Test": process_big_head_low_t_test,
+        "Big Headspace Serial Test": process_big_head_serial_test,
         "Anti-Burn Protection Test": process_burn_protection_test,
         "Big Headspace High T Test": process_big_head_high_t_test,
         "Upside Down Test": process_upside_down_test,
@@ -1373,6 +1374,16 @@ def process_burn_protection_test(data):
 
 def process_big_head_high_t_test(data):
     """Process data for the Big Headspace High T Test sheet."""
+    return process_plot_sheet(
+        data,
+        headers_row=3,
+        data_start_row=4,
+        num_columns_per_sample=12,
+        custom_extracted_data_fn=no_efficiency_extracted_data
+    )
+
+def process_big_head_serial_test(data):
+    """Process data for the Big Headspace Serial Test sheet."""
     return process_plot_sheet(
         data,
         headers_row=3,

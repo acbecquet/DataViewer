@@ -66,7 +66,7 @@ Key Points:
 - Record all measurements consistently
     """,
 
-"User Simulation Test": """
+    "User Simulation Test": """
 SOP - User Test Simulation:
 
 Day 1: Collect Initial Draw Resistance, TPM for 50 puffs, then use puff per day calculator to determine number of puffs. Make sure to enter initial oil mass.
@@ -81,8 +81,8 @@ Key Points:
 - No resistance measurements during extended testing
     """,
     
-    "Big Headspace High Temperature": """
-SOP - Big Headspace High Temperature Test:
+    "Big Headspace High T Test": """
+SOP - Big Headspace High T Test:
 
 Drain device to 30% remaining and then place in the oven at 40C.
 After 1 hour, collect 10 puffs, tracking TPM and draw resistance for each puff. Repeat this 3 times, for 30 total puffs.
@@ -93,13 +93,41 @@ Key Points:
 - Monitor for thermal effects
 - Document temperature-related observations
     """,
+
+    "Big Headspace Serial Test": """
+SOP - Big Headspace Serial Test:
+
+Drain device to 30% remaining and then place in the oven upright at 40C.
+After 1 hour, collect 10 puffs, tracking TPM and draw resistance for each puff. Repeat this 3 times, 
+the second time placing the samples horizontal, airway up, and the third placed horizontal, airway down.
+Be sure to take detailed notes on clogging or any other failure modes.
+
+Key Points:
+- 40C big headspace test
+- Monitor for thermal effects
+- Document temperature-related observations
+    """,
+
+    "Big Headspace Low T Test": """
+SOP - Big Headspace Low T Test:
+
+Drain device to 30% remaining and then place in refrigerator at 4C.
+After 1 hour, collect 10 puffs, tracking TPM and draw resistance for each puff. Repeat this 3 times, for 30 total puffs.
+Be sure to take detailed notes on viscosity changes and any failure modes.
+
+Key Points:
+- 4C big headspace test
+- Monitor for cold temperature effects
+- Document viscosity and flow changes
+    """,
     
     "Extended Test": """
 SOP - Extended Test:
 
 Long-duration testing to assess device lifetime and performance degradation.
 Sessions of 10 puffs with a 60mL/3s/30s puffing regime. Rest 15 minutes between sessions.
-Monitor for performance and consistency over time. Measure initial and final draw resistance, and measure TPM every 10 puffs.
+Monitor for performance and consistency over time. Measure initial and final draw resistance,
+and measure TPM every 10 puffs.
 
 Key Points:
 - Extended duration testing
@@ -120,6 +148,187 @@ Key Points:
 - Key performance metrics only
 - Initial device assessment
 - Basic functionality verification
+    """,
+
+    "Lifetime Test": """
+SOP - Lifetime Test:
+
+Evaluation of Performance over a device lifetime. Observe TPM change over time, draw pressure change, and clogging or oil accumulation.
+Monitor device until complete depletion or failure.
+
+Key Points:
+- Full device lifetime assessment
+- Track performance degradation
+- Document failure modes
+- Measure until device end-of-life
+    """,
+
+    "Device Life Test": """
+SOP - Device Life Test:
+
+Comprehensive evaluation of device performance throughout its operational lifetime.
+Test until device failure or oil depletion. Record TPM, draw resistance, and any performance changes.
+Document all failure modes and performance degradation patterns.
+
+Key Points:
+- Complete lifecycle testing
+- Performance tracking over time
+- Failure mode documentation
+- End-of-life characterization
+    """,
+
+    "Horizontal Puffing Test": """
+SOP - Horizontal Puffing Test:
+
+Assessment of device performance while placed horizontally.
+Focus on key performance indicators such as clogging and burn.
+Test device in horizontal position for entire duration.
+
+Key Points:
+- Horizontal orientation testing
+- Monitor for position-related issues
+- Track clogging and burn performance
+- Compare to vertical performance
+    """,
+
+    "Long Puff Test": """
+SOP - Long Puff Test:
+
+Extended puff duration testing to evaluate device performance under prolonged draw conditions.
+Use extended puff durations (5-10 seconds) at standard volume. Monitor for overheating and performance changes.
+Record TPM, draw resistance, and any thermal effects.
+
+Key Points:
+- Extended puff duration protocol
+- Monitor thermal performance
+- Track device response to long draws
+- Document overheating issues
+    """,
+
+    "Rapid Puff Test": """
+SOP - Rapid Puff Test:
+
+High-frequency puffing protocol to stress-test device performance.
+Conduct rapid successive puffs with minimal rest intervals (5-10 seconds between puffs).
+Monitor for overheating, performance degradation, and device failure.
+
+Key Points:
+- High-frequency puffing protocol
+- Minimal rest intervals
+- Stress testing conditions
+- Monitor thermal and performance effects
+    """,
+
+    "Viscosity Compatibility": """
+SOP - Viscosity Compatibility Test:
+
+Test device performance with oils of varying viscosity levels.
+Use oils ranging from low (20-50 cP) to high viscosity (200-500 cP).
+Record TPM, draw resistance, and flow characteristics for each viscosity level.
+
+Key Points:
+- Multiple viscosity levels
+- Flow performance assessment
+- Compatibility evaluation
+- Document viscosity-related issues
+    """,
+
+    "Upside Down Test": """
+SOP - Upside Down Test:
+
+Evaluate device performance when inverted (upside down orientation).
+Test for leakage, flow disruption, and performance changes.
+Monitor for air bubble formation and oil flow issues.
+
+Key Points:
+- Inverted orientation testing
+- Monitor for leakage
+- Assess flow performance
+- Document orientation-related effects
+    """,
+
+    "Big Headspace Pocket Test": """
+SOP - Big Headspace Pocket Test:
+
+Drain device to 30% remaining and simulate pocket storage conditions.
+Subject device to body temperature (37C) and mechanical stress.
+Test performance after exposure to pocket-like conditions.
+
+Key Points:
+- Body temperature exposure
+- Mechanical stress simulation
+- Post-exposure performance testing
+- Document storage-related effects
+    """,
+
+    "Low Temperature Stability": """
+SOP - Low Temperature Stability Test:
+
+Evaluate device performance and oil stability at low temperatures.
+Store device at 4C for extended period, then test performance.
+Monitor for crystallization, viscosity changes, and flow issues.
+
+Key Points:
+- Low temperature storage
+- Oil stability assessment
+- Performance after cold exposure
+- Document temperature-related changes
+    """,
+
+    "Vacuum Test": """
+SOP - Vacuum Test:
+
+Test device performance under reduced atmospheric pressure conditions.
+Simulate high-altitude or vacuum environments.
+Monitor for vapor formation, oil expansion, and performance changes.
+
+Key Points:
+- Reduced pressure conditions
+- Monitor vapor formation
+- Assess performance under vacuum
+- Document pressure-related effects
+    """,
+
+    "Negative Pressure Test": """
+SOP - Negative Pressure Test:
+
+Evaluate device response to negative pressure conditions.
+Test for structural integrity and performance under reduced pressure.
+Monitor for oil expansion, air bubble formation, and flow disruption.
+
+Key Points:
+- Negative pressure conditions
+- Structural integrity assessment
+- Flow performance evaluation
+- Document pressure-related issues
+    """,
+
+    "Various Oil Compatibility": """
+SOP - Various Oil Compatibility Test:
+
+Test device compatibility with different oil formulations and additives.
+Use representative oil types including different carrier oils, viscosity modifiers, and additives.
+Evaluate performance, compatibility, and any material interactions.
+
+Key Points:
+- Multiple oil formulations
+- Compatibility assessment
+- Material interaction evaluation
+- Performance comparison across oils
+    """,
+
+    "Sheet1": """
+SOP - General Test Protocol:
+
+Standard testing protocol for miscellaneous or custom test configurations.
+Follow appropriate measurement procedures based on test objectives.
+Record all relevant data and observations.
+
+Key Points:
+- Flexible test protocol
+- Standard measurement procedures
+- Comprehensive data recording
+- Adapt to specific test requirements
     """,
     
     "default": """
