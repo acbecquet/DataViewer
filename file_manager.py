@@ -10,6 +10,7 @@ This module handles all file-related operations including:
 
 # Standard library imports
 import os
+import re
 import copy
 import shutil
 import time
@@ -140,7 +141,7 @@ class FileManager:
 
                 if legacy_mode == "file":
                     debug_print("DEBUG: Processing as legacy file")
-                    converted = processing.convert_legacy_file_using_template(file_path)
+                    converted = processing.process_legacy_file_auto_detect(file_path)
                     key = f"Legacy_{os.path.basename(file_path)}"
                     final_sheets = {key: {"data": converted, "is_empty": converted.empty}}
                     full_sample_data = converted
@@ -838,7 +839,7 @@ class FileManager:
 
         def extract_base_filename(filename):
             """Extract base filename without timestamp and extension."""
-            import re
+            
             # Remove common timestamp patterns and extensions
             base = re.sub(r'\s+\d{4}-\d{2}-\d{2}.*', '', filename)  # Remove date patterns
             base = re.sub(r'\s+copy.*', '', base, flags=re.IGNORECASE)  # Remove "copy" variants
@@ -2102,6 +2103,230 @@ class FileManager:
             return None
 
     def extract_header_data_from_excel_file(self, file_path, selected_test):
+        """Extract header data from Excel file with enhanced old format support."""
+        try:
+            debug_print(f"DEBUG: Extracting header data from Excel file for test: {selected_test}")
+            wb = load_workbook(file_path, read_only=True)
+        
+            if selected_test not in wb.sheetnames:
+                debug_print(f"DEBUG: Sheet '{selected_test}' not found in workbook")
+                return None
+            
+            ws = wb[selected_test]
+        
+            # First, detect if this sheet uses old or new format
+            format_type = self.detect_sheet_format(ws)
+            debug_print(f"DEBUG: Detected sheet format: {format_type}")
+        
+            if format_type == "old":
+                return self.extract_old_format_header_data(ws, selected_test)
+            else:
+                return self.extract_new_format_header_data(ws, selected_test)
+            
+        except Exception as e:
+            debug_print(f"ERROR: Exception extracting header data from Excel file: {e}")
+            traceback.print_exc()
+            return None
+
+    def detect_sheet_format(self, ws):
+        """Detect if a sheet uses old or new template format."""
+        try:
+            # Look for old format indicators in first few rows
+            old_format_indicators = 0
+            new_format_indicators = 0
+        
+            for row in range(1, 6):  # Check first 5 rows
+                for col in range(1, 11):  # Check first 10 columns
+                    try:
+                        cell_val = str(ws.cell(row=row, column=col).value or "").lower().strip()
+                    
+                        # Old format indicators
+                        if re.search(r"project\s*:", cell_val):
+                            old_format_indicators += 1
+                            debug_print(f"DEBUG: Found 'Project:' at row {row}, col {col}")
+                        if re.search(r"ri\s*\(\s*ohms?\s*\)", cell_val):
+                            old_format_indicators += 1
+                            debug_print(f"DEBUG: Found 'Ri (Ohms)' at row {row}, col {col}")
+                        if re.search(r"rf\s*\(\s*ohms?\s*\)", cell_val):
+                            old_format_indicators += 1
+                            debug_print(f"DEBUG: Found 'Rf (Ohms)' at row {row}, col {col}")
+                    
+                        # New format indicators
+                        if re.search(r"sample\s*(id|name)\s*:", cell_val):
+                            new_format_indicators += 1
+                            debug_print(f"DEBUG: Found 'Sample ID/Name:' at row {row}, col {col}")
+                        if re.search(r"resistance\s*\(\s*ohms?\s*\)\s*:", cell_val) and "ri" not in cell_val and "rf" not in cell_val:
+                            new_format_indicators += 1
+                            debug_print(f"DEBUG: Found 'Resistance (Ohms):' at row {row}, col {col}")
+                        
+                    except Exception:
+                        continue
+        
+            debug_print(f"DEBUG: Format detection - Old indicators: {old_format_indicators}, New indicators: {new_format_indicators}")
+        
+            if old_format_indicators > new_format_indicators:
+                return "old"
+            elif new_format_indicators > old_format_indicators:
+                return "new"
+            else:
+                return "new"  # Default to new format
+            
+        except Exception as e:
+            debug_print(f"DEBUG: Error detecting sheet format: {e}")
+            return "new"
+
+    def extract_old_format_header_data(self, ws, selected_test):
+        """Extract header data from old format sheet."""
+        debug_print("DEBUG: Extracting header data using old format logic")
+    
+        # Extract common data from fixed positions
+        common_data = {
+            'date': str(ws.cell(row=1, column=3).value or ""),
+            'tester': str(ws.cell(row=1, column=5).value or ""),
+            'media': str(ws.cell(row=2, column=2).value or ""),
+            'viscosity': str(ws.cell(row=2, column=3).value or ""),
+            'puffing_regime': str(ws.cell(row=2, column=7).value or "Standard")
+        }
+    
+        debug_print(f"DEBUG: Extracted old format common data: {common_data}")
+    
+        # Extract sample data by scanning for Project and Sample pairs
+        samples = []
+        sample_count = 0
+    
+        # Scan looking for sample blocks - in old format, look for Project/Sample pairs
+        for i in range(6):  # Check up to 6 samples maximum
+            # Calculate base column for this sample (12 columns per sample)
+            base_col = 6 + (i * 12)
+        
+            # Look for Project and Sample in the header area
+            project_value = None
+            sample_value = None
+            resistance_value = None
+        
+            # Search in the first few rows for Project and Sample
+            for row in range(1, 4):
+                for col_offset in range(12):  # Search within this sample's block
+                    col = base_col + col_offset
+                    try:
+                        cell_val = str(ws.cell(row=row, column=col).value or "").lower().strip()
+                        next_cell_val = str(ws.cell(row=row, column=col+1).value or "").strip()
+                    
+                        if re.search(r"project\s*:", cell_val) and next_cell_val:
+                            project_value = next_cell_val
+                            debug_print(f"DEBUG: Found project '{project_value}' at row {row}, col {col}")
+                        elif re.search(r"sample\s*:", cell_val) and next_cell_val:
+                            sample_value = next_cell_val  
+                            debug_print(f"DEBUG: Found sample '{sample_value}' at row {row}, col {col}")
+                        elif re.search(r"ri\s*\(\s*ohms?\s*\)", cell_val) and next_cell_val:
+                            resistance_value = next_cell_val
+                            debug_print(f"DEBUG: Found resistance '{resistance_value}' at row {row}, col {col}")
+                    except Exception:
+                        continue
+        
+            # If we found project and/or sample values, create a sample entry
+            if project_value or sample_value:
+                # Combine project and sample for the ID
+                if project_value and sample_value:
+                    sample_id = f"{project_value} {sample_value}".strip()
+                elif project_value:
+                    sample_id = project_value.strip()
+                elif sample_value:
+                    sample_id = sample_value.strip()
+                else:
+                    sample_id = f"Sample {sample_count + 1}"
+            
+                samples.append({
+                    'id': sample_id,
+                    'resistance': resistance_value or ""
+                })
+                sample_count += 1
+                debug_print(f"DEBUG: Created old format sample {sample_count}: ID='{sample_id}', Resistance='{resistance_value}'")
+            else:
+                # No more samples found
+                debug_print(f"DEBUG: No more old format samples found after checking {i+1} positions")
+                break
+    
+        if sample_count == 0:
+            debug_print("DEBUG: No old format samples found, using default single sample")
+            samples = [{'id': 'Sample 1', 'resistance': ''}]
+            sample_count = 1
+    
+        header_data = {
+            'common': common_data,
+            'samples': samples,
+            'test': selected_test,
+            'num_samples': sample_count
+        }
+    
+        debug_print(f"DEBUG: Final old format header data: {sample_count} samples")
+        debug_print(f"DEBUG: Old format samples: {samples}")
+        debug_print(f"DEBUG: Old format common: {common_data}")
+    
+        return header_data
+
+    def extract_new_format_header_data(self, ws, selected_test):
+        """Extract header data from new format sheet (existing logic)."""
+        debug_print("DEBUG: Extracting header data using new format logic")
+    
+        # Your existing new format extraction logic here
+        common_data = {
+            'date': str(ws.cell(row=1, column=4).value or ""),
+            'tester': str(ws.cell(row=3, column=4).value or ""),  
+            'media': str(ws.cell(row=2, column=2).value or ""),
+            'viscosity': str(ws.cell(row=3, column=2).value or ""),
+            'puffing_regime': str(ws.cell(row=2, column=7).value or "Standard")
+        }
+    
+        debug_print(f"DEBUG: Extracted new format common data: {common_data}")
+    
+        # Extract sample data by scanning the first row for sample IDs
+        samples = []
+        sample_count = 0
+    
+        # Scan the first row looking for sample blocks (starting from column 6, then every 12 columns)
+        for i in range(6):  # Check up to 6 samples maximum
+            # Sample ID position: row 1, columns 6, 18, 30, 42, 54, 66
+            sample_id_col = 6 + (i * 12)
+            resistance_col = 4 + (i * 12)  # Row 2, columns 4, 16, 28, 40, 52, 64
+    
+            # Check if there's a sample ID at this position
+            sample_id_cell = ws.cell(row=1, column=sample_id_col)
+            resistance_cell = ws.cell(row=2, column=resistance_col)
+    
+            if sample_id_cell.value:
+                sample_id = str(sample_id_cell.value).strip()
+                resistance = str(resistance_cell.value or "").strip()
+        
+                samples.append({
+                    'id': str(sample_id).strip(),
+                    'resistance': str(resistance).strip() if resistance else ""
+                })
+                sample_count += 1
+                debug_print(f"DEBUG: Found new format sample {sample_count}: ID='{sample_id}', Resistance='{resistance}'")
+            else:
+                # If no sample ID, we've reached the end of samples
+                debug_print(f"DEBUG: No more new format samples found after checking {i+1} positions")
+                break
+    
+        if sample_count == 0:
+            debug_print("DEBUG: No new format samples found, using default single sample")
+            samples = [{'id': 'Sample 1', 'resistance': ''}]
+            sample_count = 1
+    
+        header_data = {
+            'common': common_data,
+            'samples': samples,
+            'test': selected_test,
+            'num_samples': sample_count
+        }
+    
+        debug_print(f"DEBUG: Final new format header data: {sample_count} samples")
+        debug_print(f"DEBUG: New format samples: {samples}")
+        debug_print(f"DEBUG: New format common: {common_data}")
+    
+        return header_data
+    def extract_header_data_from_excel_file_old(self, file_path, selected_test):
         """Extract header data from Excel file using openpyxl (existing method)."""
         debug_print(f"DEBUG: Extracting header data from Excel file: {file_path} for test {selected_test}")
     

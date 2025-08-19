@@ -1,6 +1,7 @@
 ﻿"""
 Processing module for the DataViewer Application. Developed by Charlie Becquet.
 """
+import re
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -1006,16 +1007,47 @@ def process_plot_sheet(data, headers_row=3, data_start_row=4, num_columns_per_sa
 
 def no_efficiency_extracted_data(sample_data, raw_data, sample_index):
     """
-    Custom function to extract data without efficiency metrics, using new burn/clog/leak extraction.
-
-    Args:
-        sample_data (pd.DataFrame): The DataFrame containing the sample data.
-        raw_data (pd.DataFrame): The raw Excel data before processing.
-        sample_index (int): The index of the current sample.
-
-    Returns:
-        dict: Extracted data without efficiency metrics.
+    Custom function to extract data without efficiency metrics, using enhanced sample name extraction with suffix support.
     """
+    print(f"DEBUG: Processing sample {sample_index + 1} (no efficiency) with enhanced name extraction")
+    
+    # Extract sample name with old format support (same logic as above)
+    sample_name = f"Sample {sample_index + 1}"  # Default fallback
+    
+    if sample_data.shape[1] > 8:  # Ensure we have enough columns
+        headers = sample_data.columns.astype(str)
+        
+        # Look for old format patterns with suffix support
+        project_value = None
+        sample_value = None
+        
+        for i, header in enumerate(headers):
+            header_lower = str(header).lower().strip()
+            
+            # Enhanced pattern matching to handle suffixed headers
+            if header_lower.startswith("project:") and i + 1 < len(headers):
+                project_value = str(headers[i + 1]).strip()
+                # Remove the suffix from the project value if it exists
+                if project_value.endswith(f'.{sample_index}'):
+                    project_value = project_value[:-len(f'.{sample_index}')]
+            elif header_lower.startswith("sample:") and i + 1 < len(headers):
+                sample_value = str(headers[i + 1]).strip()
+        
+        # Combine project and sample values if found (old format)
+        if project_value and sample_value:
+            if project_value.lower() not in ['nan', 'none', ''] and sample_value.lower() not in ['nan', 'none', '']:
+                sample_name = f"{project_value} {sample_value}".strip()
+        elif project_value and project_value.lower() not in ['nan', 'none', '']:
+            sample_name = project_value.strip()
+        elif sample_value and sample_value.lower() not in ['nan', 'none', '']:
+            sample_name = sample_value.strip()
+        else:
+            # Try new format - Sample ID at column 5
+            if len(headers) > 5:
+                sample_id_value = str(headers[5]).strip()
+                if sample_id_value and sample_id_value.lower() not in ['nan', 'none', '', 'unnamed: 5']:
+                    sample_name = sample_id_value
+    
     tpm_data = pd.to_numeric(sample_data.iloc[3:, 8], errors='coerce').dropna()
     avg_tpm = round_values(tpm_data.mean()) if not tpm_data.empty else None
     std_tpm = round_values(tpm_data.std()) if not tpm_data.empty else None
@@ -1024,17 +1056,18 @@ def no_efficiency_extracted_data(sample_data, raw_data, sample_index):
     burn, clog, leak = extract_burn_clog_leak_from_raw_data(raw_data, sample_index)
     
     return {
-        "Sample Name": sample_data.columns[5],
-        "Media": sample_data.iloc[0, 1],
-        "Viscosity": sample_data.iloc[1, 1],
+        "Sample Name": sample_name,  # Now uses enhanced extraction
+        "Media": sample_data.iloc[0, 1] if sample_data.shape[0] > 0 else "",
+        "Viscosity": sample_data.iloc[1, 1] if sample_data.shape[0] > 1 else "",
         "Voltage, Resistance, Power": f"{sample_data.iloc[1, 5]} V, "
                                        f"{round_values(sample_data.iloc[0, 3])} ohm, "
-                                       f"{round_values(sample_data.iloc[0, 5])} W",
+                                       f"{round_values(sample_data.iloc[0, 5])} W"
+                                       if sample_data.shape[0] > 1 and sample_data.shape[1] > 5 else "",
         "Average TPM": avg_tpm,
         "Standard Deviation": std_tpm,
-        "Burn?": burn,   # Now uses new extraction
-        "Clog?": clog,   # Now uses new extraction  
-        "Leak?": leak    # Now uses new extraction
+        "Burn?": burn,
+        "Clog?": clog,
+        "Leak?": leak
     }
 
 def process_generic_sheet(data, headers_row=3, data_start_row=4):
@@ -1715,7 +1748,7 @@ def extract_burn_clog_leak_from_raw_data(data, sample_index, num_columns_per_sam
     
     return burn, clog, leak
 
-def updated_extracted_data_function_with_raw_data(sample_data, raw_data, sample_index):
+def updated_extracted_data_function_with_raw_data_old(sample_data, raw_data, sample_index):
     """
     Updated extraction function that gets burn/clog/leak from raw data.
     """
@@ -1747,6 +1780,140 @@ def updated_extracted_data_function_with_raw_data(sample_data, raw_data, sample_
         "Clog?": clog,  # From raw data with proper offset
         "Leak?": leak   # From raw data with proper offset
     }
+
+def updated_extracted_data_function_with_raw_data(sample_data, raw_data, sample_index):
+    """
+    Updated extraction function that gets burn/clog/leak from raw data.
+    Enhanced to handle both old and new template formats for sample names with suffix support.
+    """
+    print(f"DEBUG: Processing sample {sample_index + 1} with enhanced name extraction")
+    
+    # Extract sample name with old format support
+    sample_name = f"Sample {sample_index + 1}"  # Default fallback
+    
+    if sample_data.shape[1] > 8:  # Ensure we have enough columns
+        # Check if this is old format by looking for "Project:" and "Sample:" headers
+        headers = sample_data.columns.astype(str)
+        print(f"DEBUG: Sample {sample_index + 1} headers: {headers[:10].tolist()}")
+        
+        # Look for old format patterns with suffix support
+        project_col = None
+        sample_col = None
+        project_value = None
+        sample_value = None
+        
+        for i, header in enumerate(headers):
+            header_lower = str(header).lower().strip()
+            
+            # Enhanced pattern matching to handle suffixed headers
+            if header_lower.startswith("project:"):  # Matches "project:" and "project:.1", etc.
+                project_col = i
+                if i + 1 < len(headers):
+                    project_value = str(headers[i + 1]).strip()
+                    # Remove the suffix from the project value if it exists
+                    if project_value.endswith(f'.{sample_index}'):
+                        project_value = project_value[:-len(f'.{sample_index}')]
+                    print(f"DEBUG: Found project value: '{project_value}' at column {i + 1}")
+            elif header_lower.startswith("sample:"):  # Matches "sample:" and "sample:.1", etc.
+                sample_col = i
+                if i + 1 < len(headers):
+                    sample_value = str(headers[i + 1]).strip()
+                    # The sample value should not need suffix removal since it's the actual sample name
+                    print(f"DEBUG: Found sample value: '{sample_value}' at column {i + 1}")
+        
+        # Combine project and sample values if found (old format)
+        if project_value and sample_value:
+            if project_value.lower() not in ['nan', 'none', ''] and sample_value.lower() not in ['nan', 'none', '']:
+                sample_name = f"{project_value} {sample_value}".strip()
+                print(f"DEBUG: Combined old format sample name: '{sample_name}'")
+        elif project_value and project_value.lower() not in ['nan', 'none', '']:
+            sample_name = project_value.strip()
+            print(f"DEBUG: Using project value as sample name: '{sample_name}'")
+        elif sample_value and sample_value.lower() not in ['nan', 'none', '']:
+            sample_name = sample_value.strip()
+            print(f"DEBUG: Using sample value as sample name: '{sample_name}'")
+        else:
+            # Try new format - Sample ID at column 5
+            if len(headers) > 5:
+                sample_id_value = str(headers[5]).strip()
+                if sample_id_value and sample_id_value.lower() not in ['nan', 'none', '', 'unnamed: 5']:
+                    sample_name = sample_id_value
+                    print(f"DEBUG: Using new format sample ID: '{sample_name}'")
+    
+    print(f"DEBUG: Final sample name for sample {sample_index + 1}: '{sample_name}'")
+    
+    # Extract burn/clog/leak using the enhanced method
+    burn, clog, leak = extract_burn_clog_leak_from_raw_data(raw_data, sample_index)
+    
+    # Extract other data (TPM, voltage, etc.)
+    tpm_data = pd.to_numeric(sample_data.iloc[3:, 8], errors='coerce').dropna()
+    avg_tpm = round_values(tpm_data.mean()) if not tpm_data.empty else None
+    std_tpm = round_values(tpm_data.std()) if not tpm_data.empty else None
+    
+    # Extract media and viscosity
+    media = ""
+    viscosity = ""
+    if sample_data.shape[0] > 1:
+        media = str(sample_data.iloc[0, 1]) if sample_data.shape[1] > 1 else ""
+        viscosity = str(sample_data.iloc[1, 1]) if sample_data.shape[1] > 1 else ""
+    
+    # Extract voltage, resistance, power
+    voltage = ""
+    resistance = ""
+    power = ""
+    if sample_data.shape[0] > 1 and sample_data.shape[1] > 5:
+        voltage = str(sample_data.iloc[1, 5]) if not pd.isna(sample_data.iloc[1, 5]) else ""
+        resistance = round_values(sample_data.iloc[0, 3]) if not pd.isna(sample_data.iloc[0, 3]) else ""
+        power = round_values(sample_data.iloc[0, 5]) if not pd.isna(sample_data.iloc[0, 5]) else ""
+    
+    # Calculate initial oil mass and usage efficiency
+    initial_oil_mass = ""
+    usage_efficiency = ""
+    if sample_data.shape[0] > 3 and sample_data.shape[1] > 2:
+        before_weight = pd.to_numeric(sample_data.iloc[3, 1], errors='coerce')
+        after_weight_col = sample_data.iloc[3:, 2]
+        last_valid_weight = None
+        
+        for weight in reversed(after_weight_col):
+            weight_val = pd.to_numeric(weight, errors='coerce')
+            if not pd.isna(weight_val) and weight_val > 0:
+                last_valid_weight = weight_val
+                break
+        
+        if not pd.isna(before_weight) and last_valid_weight is not None:
+            oil_consumed = before_weight - last_valid_weight
+            initial_oil_mass = f"{round_values(oil_consumed):.4f}g"
+            
+            total_puffs = len(tpm_data)
+            if total_puffs > 0 and avg_tpm:
+                total_aerosol = avg_tpm * total_puffs
+                if oil_consumed > 0:
+                    efficiency = (total_aerosol / (oil_consumed * 1000)) * 100
+                    usage_efficiency = f"{round_values(efficiency):.1f}%"
+    
+    return {
+        "Sample Name": sample_name,  # Now uses enhanced extraction
+        "Media": media,
+        "Viscosity": viscosity,
+        "Voltage, Resistance, Power": f"{voltage} V, {resistance} ohm, {power} W" if voltage or resistance or power else "",
+        "Average TPM": avg_tpm,
+        "Standard Deviation": std_tpm,
+        "Initial Oil Mass": initial_oil_mass,
+        "Usage Efficiency": usage_efficiency,
+        "Burn?": burn,
+        "Clog?": clog,
+        "Leak?": leak
+    }
+
+
+def round_values(value, decimals=2):
+    """Helper function to safely round numeric values."""
+    try:
+        if pd.isna(value):
+            return ""
+        return round(float(value), decimals)
+    except (ValueError, TypeError):
+        return value
 
 # ==================== AGGREGATION FUNCTIONS ====================
 
@@ -2236,3 +2403,394 @@ def convert_legacy_standards_using_template(legacy_file_path: str, template_path
     
     wb_template.save(new_file_path)
     return load_excel_file(new_file_path)
+
+def extract_samples_from_old_file_v2(file_path: str, sheet_name: Optional[str] = None) -> list:
+    """
+    Enhanced version of extract_samples_from_old_file that handles both old and new template formats.
+    
+    Old format differences:
+    - Has separate "Project:" and "Sample:" fields instead of "Sample ID:"
+    - Has "Ri (Ohms)" and "Rf (Ohms)" instead of just "Resistance (Ohms)"
+    - Test type is in sheet name, not top-left corner
+    
+    Returns a list of dictionaries, one per sample, each containing:
+        - 'sample_name': Combined from Project + Sample for old format
+        - 'puffs': A pandas Series of the puffs column
+        - 'tpm': A pandas Series of the TPM column
+        - 'header_row': The index of the header row
+        - Additional metadata if detected
+    """
+    print(f"DEBUG: Starting enhanced extraction from file: {file_path}")
+    print(f"DEBUG: Target sheet: {sheet_name}")
+    
+    # Read the sheet without assuming a header row
+    df = read_sheet_with_values(file_path, sheet_name)
+    samples = []
+    nrows, ncols = df.shape
+    
+    print(f"DEBUG: Sheet dimensions: {nrows} rows x {ncols} columns")
+
+    # Enhanced regex patterns for metadata - now includes both old and new format patterns
+    meta_data_patterns = {
+        "sample_name": [
+            r"(cart(ridge)?\s*#|sample\s*(name|id))",  # New format: "Cart #", "Sample ID"
+            r"puffing\s*data\s*for\s*:?\s*",  # New format: "puffing data for:"
+            r"sample\s*:?\s*"  # Old format: "Sample:"
+        ],
+        "project": [
+            r"project\s*:?\s*"  # Old format: "Project:"
+        ],
+        "resistance": [
+            r"\bri\s*\(?\s*ohms?\s*\)?\s*:?\s*",  # Old format: "Ri (Ohms)" - prioritize this
+            r"resistance\s*\(?ohms?\)?\s*:?\s*"   # New format: "Resistance (Ohms)"
+        ],
+        "voltage": [r"voltage\s*:?\s*"],
+        "viscosity": [r"viscosity\b\s*:?\s*"],
+        "puffing_regime": [r"\b(puff(ing)?\s*regime|puff\s*settings?)\s*:?\s*"],
+        "initial_oil_mass": [r"initial\s*oil\s*mass\b\s*:?\s*"],
+        "date": [r"date\s*:?\s*"],
+        "media": [r"media\s*:?\s*"]
+    }
+
+    data_header_patterns = {
+        "puffs": r"puffs",
+        "tpm": r"tpm\s*\(mg\s*/\s*puff\)",
+        "before_weight": r"before\s*weight/g",
+        "after_weight": r"after\s*weight/g",
+        "draw_pressure": r"pv1|draw\s*pressure\s*\(kpa\)",
+        "smell": r"smell",
+        "notes": r"notes"
+    }
+
+    numeric_columns = {"puffs", "tpm", "before_weight", "after_weight", "draw_pressure"}
+
+    # Track processed columns for sample data and metadata separately
+    processed_cols = {row: [] for row in range(nrows)}
+    processed_meta_data = {row: [] for row in range(nrows)}
+    proximity_threshold = 1
+
+    print(f"DEBUG: Starting cell-by-cell scanning...")
+
+    # Loop over every cell in the sheet
+    for row in range(nrows):
+        for col in range(ncols):
+            # Skip if too close to previously processed sample header
+            if any(abs(col - proc_col) < proximity_threshold for proc_col in processed_cols[row]):
+                continue
+
+            cell_val = df.iat[row, col]
+            if header_matches(cell_val, data_header_patterns["puffs"]):
+                print(f"DEBUG: Found puffs header at row {row}, col {col}")
+                
+                # New sample header found
+                sample = {"sample_name": str(cell_val).strip(), "header_row": row}
+                processed_cols[row].append(col)
+
+                # Extract metadata (up to 3 rows above)
+                start_search_row = max(0, row - 3)
+                meta_data_found = {}
+                project_value = None
+                sample_value = None
+                
+                print(f"DEBUG: Searching for metadata from row {start_search_row} to {row-1}")
+                
+                for r in range(row - 1, start_search_row - 1, -1):
+                    for c in range(ncols):
+                        if any(abs(c - pm) < proximity_threshold for pm in processed_meta_data[r]):
+                            continue
+                        
+                        cell_val_above = df.iat[r, c]
+                        
+                        # Special handling for old format Project and Sample fields
+                        for key, patterns in meta_data_patterns.items():
+                            if key in meta_data_found and key not in ["project", "sample_name"]:
+                                continue
+                            
+                            for pattern in patterns:
+                                if header_matches(cell_val_above, pattern):
+                                    value = df.iat[r, c + 1] if (c + 1 < ncols) else None
+                                    
+                                    if key == "project":
+                                        project_value = value
+                                        print(f"DEBUG: Found project value: {project_value}")
+                                    elif key == "sample_name" and pattern == r"sample\s*:?\s*":
+                                        # This is the "Sample:" field from old format
+                                        sample_value = value
+                                        print(f"DEBUG: Found sample value: {sample_value}")
+                                    else:
+                                        meta_data_found[key] = value
+                                        print(f"DEBUG: Found {key}: {value}")
+                                    
+                                    processed_meta_data[r].append(c)
+                                    break
+                            
+                            if key in meta_data_found and key not in ["project", "sample_name"]:
+                                break
+
+                # Combine Project and Sample for old format, or use existing sample_name for new format
+                if project_value is not None and sample_value is not None:
+                    # Old format: combine Project and Sample
+                    combined_sample_name = f"{project_value} {sample_value}".strip()
+                    meta_data_found["sample_name"] = combined_sample_name
+                    print(f"DEBUG: Combined old format sample name: {combined_sample_name}")
+                elif project_value is not None and sample_value is None:
+                    # Only project found, use that
+                    meta_data_found["sample_name"] = str(project_value).strip()
+                    print(f"DEBUG: Using project as sample name: {project_value}")
+                elif sample_value is not None and project_value is None:
+                    # Only sample found, use that
+                    meta_data_found["sample_name"] = str(sample_value).strip()
+                    print(f"DEBUG: Using sample as sample name: {sample_value}")
+                elif "sample_name" not in meta_data_found:
+                    # Fallback to default
+                    meta_data_found["sample_name"] = f"Sample {len(samples) + 1}"
+                    print(f"DEBUG: Using fallback sample name: {meta_data_found['sample_name']}")
+
+                sample.update(meta_data_found)
+
+                # Extract column data for this sample
+                data_cols = {}
+                print(f"DEBUG: Extracting column data starting from col {col}")
+                
+                for key, pattern in data_header_patterns.items():
+                    # Look to the right from the current header cell
+                    for j in range(col, ncols):
+                        if header_matches(df.iat[row, j], pattern):
+                            print(f"DEBUG: Found {key} column at position {j}")
+                            raw_data = df.iloc[row + 1:, j]
+                            if key in numeric_columns:
+                                data_cols[key] = pd.to_numeric(raw_data, errors='coerce').dropna()
+                            else:
+                                data_cols[key] = raw_data.astype(str).replace("nan", "")
+                            break
+
+                # Only add the sample if both "puffs" and "tpm" data were found
+                if "puffs" in data_cols and "tpm" in data_cols:
+                    sample.update(data_cols)
+                    samples.append(sample)
+                    print(f"DEBUG: Successfully added sample {len(samples)}: {meta_data_found.get('sample_name', 'Unknown')}")
+                else:
+                    print(f"DEBUG: Skipping sample - missing required data. Found: {list(data_cols.keys())}")
+
+    print(f"DEBUG: Extraction complete. Found {len(samples)} valid samples")
+    for i, sample in enumerate(samples):
+        print(f"DEBUG: Sample {i+1}: {sample.get('sample_name', 'Unknown')} - {len(sample.get('puffs', []))} puffs")
+    
+    return samples
+
+
+def convert_legacy_file_using_template_v2(legacy_file_path: str, template_path: str = None) -> pd.DataFrame:
+    """
+    Enhanced version that handles both old and new template formats.
+    Uses the enhanced extraction function and properly handles:
+    - Combined Project + Sample fields from old format
+    - Ri vs Rf resistance selection
+    - Test type detection from sheet name for old format
+    """
+    print(f"DEBUG: Starting enhanced template conversion for: {legacy_file_path}")
+    
+    # Determine the template path
+    if template_path is None:
+        template_path = os.path.join(os.path.abspath("."), "resources", 
+                                     "Standardized Test Template - LATEST VERSION - 2025 Jan.xlsx")
+    
+    template_sheet = "Intense Test"
+    wb = load_workbook(template_path)
+    if template_sheet not in wb.sheetnames:
+        raise ValueError(f"Sheet '{template_sheet}' not found in template file.")
+    ws = wb[template_sheet]
+
+    # Load legacy samples using our enhanced extraction function
+    legacy_samples = extract_samples_from_old_file_v2(legacy_file_path)
+    if not legacy_samples:
+        raise ValueError("No valid legacy sample data found.")
+
+    print(f"DEBUG: Successfully extracted {len(legacy_samples)} samples")
+
+    # Enhanced metadata mapping with old format support
+    meta_data_MAPPING = {
+        "Sample ID:": (
+            [r"cart\s*#:?", r"sample\s*(name|id):?"], 
+            (1, 5)
+        ),
+        "Voltage:": ([r"voltage:?"], (3, 5)),
+        "Viscosity:": ([r"viscosity:?"], (3, 1)),
+        "Resistance (Ohms):": (
+            [r"ri\s*\(\s*ohms?\s*\)", r"resistance\s*\(?ohms?\)?\s*:?\s*"], 
+            (2, 3)
+        ),
+        "Puffing Regime:": ([r"puffing\s*regime:?", r"puff\s*regime:?"], (2, 7)),
+        "Initial Oil Mass:": ([r"initial\s*oil\s*mass:?"], (3, 7)),
+        "Date:": ([r"date:?"], (1, 3)),
+        "Media:": ([r"media:?"], (2, 1))
+    }
+
+    # Data column mapping relative to the sample block start
+    DATA_COL_MAPPING = {
+        "puffs": (0, True),
+        "before_weight": (1, True),
+        "after_weight": (2, True),
+        "draw_pressure": (3, True),
+        "smell": (5, False),
+        "notes": (7, False),
+        "tpm": (8, True)
+    }
+
+    # Process each legacy sample
+    for sample_idx, sample in enumerate(legacy_samples):
+        col_offset = 1 + (sample_idx * 12)
+        print(f"DEBUG: Processing sample {sample_idx + 1} at columns {col_offset} to {col_offset + 11}")
+
+        # Metadata Handling
+        sample_name = sample.get("sample_name", f"Sample {sample_idx + 1}")
+        ws.cell(row=1, column=col_offset, value=os.path.splitext(os.path.basename(legacy_file_path))[0])
+
+        meta_data_values = {
+            "Sample ID:": sample.get("sample_name", ""),
+            "Voltage:": sample.get("voltage", ""),
+            "Viscosity:": sample.get("viscosity", ""),
+            "Resistance (Ohms):": sample.get("resistance", ""),
+            "Puffing Regime:": sample.get("puffing_regime", ""),
+            "Initial Oil Mass:": sample.get("initial_oil_mass", ""),
+            "Date:": sample.get("date", ""),
+            "Media:": sample.get("media", "")
+        }
+
+        # Write metadata to template
+        for template_key, (patterns, (tpl_row, tpl_col_offset)) in meta_data_MAPPING.items():
+            value = meta_data_values.get(template_key, "")
+            ws.cell(row=tpl_row, column=col_offset + tpl_col_offset, value=value)
+            if value:
+                print(f"DEBUG: Set {template_key} to '{value}' at row {tpl_row}, col {col_offset + tpl_col_offset}")
+
+        # Data column processing
+        for data_key, (col_idx, is_numeric) in DATA_COL_MAPPING.items():
+            if data_key in sample:
+                data_series = sample[data_key]
+                target_col = col_offset + col_idx
+                
+                print(f"DEBUG: Writing {data_key} data to column {target_col} ({len(data_series)} values)")
+                
+                for i, value in enumerate(data_series):
+                    if pd.notna(value) and value != "":
+                        target_row = 5 + i  # Data starts at row 5
+                        try:
+                            if is_numeric:
+                                numeric_value = float(value) if pd.notna(value) else None
+                                if numeric_value is not None:
+                                    ws.cell(row=target_row, column=target_col, value=numeric_value)
+                            else:
+                                ws.cell(row=target_row, column=target_col, value=str(value))
+                        except (ValueError, TypeError) as e:
+                            print(f"DEBUG: Error writing value {value} to row {target_row}, col {target_col}: {e}")
+                            ws.cell(row=target_row, column=target_col, value=str(value))
+
+        # Clear unused rows for this sample block
+        first_empty_row = None
+        for i in range(len(sample.get("after_weight", []))):
+            target_row = 5 + i
+            after_weight_value = sample.get("after_weight", pd.Series()).iloc[i] if i < len(sample.get("after_weight", [])) else None
+            if pd.isna(after_weight_value) or after_weight_value == "":
+                first_empty_row = target_row
+                break
+        
+        if first_empty_row:
+            print(f"DEBUG: Clearing rows from {first_empty_row} onwards for sample {sample_idx + 1}")
+            for clear_row in range(first_empty_row, first_empty_row + 50):
+                for clear_col in range(col_offset, col_offset + 12):
+                    ws.cell(row=clear_row, column=clear_col, value=None)
+
+    # Remove other sheets and rename
+    sheets_to_keep = [template_sheet]
+    for sheet_name in list(wb.sheetnames):
+        if sheet_name not in sheets_to_keep:
+            del wb[sheet_name]
+
+    # Rename the sheet based on the legacy file name
+    base_name = os.path.splitext(os.path.basename(legacy_file_path))[0]
+    new_sheet_name = f"{base_name} Data"[:31]
+    ws.title = new_sheet_name
+    
+    # Save to legacy data folder
+    folder_path = os.path.join(os.path.abspath("."), "legacy data")
+    if not os.path.exists(folder_path):
+        os.makedirs(folder_path)
+    
+    new_file_name = f"{base_name} Legacy.xlsx"
+    new_file_path = os.path.join(folder_path, new_file_name)
+    wb.save(new_file_path)
+    
+    print(f"DEBUG: Saved processed file to: {new_file_path}")
+    return load_excel_file(new_file_path)[new_sheet_name]
+
+
+def detect_template_format(file_path: str, sheet_name: Optional[str] = None) -> str:
+    """
+    Detect whether this is an old or new template format.
+    
+    Returns:
+        "old": Old format with Project/Sample fields and Ri/Rf
+        "new": New format with Sample ID and single Resistance
+        "unknown": Could not determine format
+    """
+    try:
+        print(f"DEBUG: Detecting template format for {file_path}")
+        df = read_sheet_with_values(file_path, sheet_name)
+        nrows, ncols = df.shape
+        
+        # Look for old format indicators in first few rows
+        old_format_indicators = 0
+        new_format_indicators = 0
+        
+        for row in range(min(5, nrows)):
+            for col in range(min(10, ncols)):
+                cell_val = str(df.iat[row, col]).lower().strip()
+                
+                # Old format indicators
+                if re.search(r"project\s*:", cell_val):
+                    old_format_indicators += 1
+                    print(f"DEBUG: Found 'Project:' at row {row}, col {col}")
+                if re.search(r"ri\s*\(\s*ohms?\s*\)", cell_val):
+                    old_format_indicators += 1
+                    print(f"DEBUG: Found 'Ri (Ohms)' at row {row}, col {col}")
+                if re.search(r"rf\s*\(\s*ohms?\s*\)", cell_val):
+                    old_format_indicators += 1
+                    print(f"DEBUG: Found 'Rf (Ohms)' at row {row}, col {col}")
+                
+                # New format indicators
+                if re.search(r"sample\s*(id|name)\s*:", cell_val):
+                    new_format_indicators += 1
+                    print(f"DEBUG: Found 'Sample ID/Name:' at row {row}, col {col}")
+                if re.search(r"resistance\s*\(\s*ohms?\s*\)\s*:", cell_val) and "ri" not in cell_val and "rf" not in cell_val:
+                    new_format_indicators += 1
+                    print(f"DEBUG: Found 'Resistance (Ohms):' at row {row}, col {col}")
+        
+        print(f"DEBUG: Format detection - Old indicators: {old_format_indicators}, New indicators: {new_format_indicators}")
+        
+        if old_format_indicators > new_format_indicators:
+            return "old"
+        elif new_format_indicators > old_format_indicators:
+            return "new"
+        else:
+            return "unknown"
+            
+    except Exception as e:
+        print(f"DEBUG: Error detecting template format: {e}")
+        return "unknown"
+
+# Enhanced main processing function that auto-detects format
+def process_legacy_file_auto_detect(legacy_file_path: str, template_path: str = None) -> pd.DataFrame:
+    """
+    Automatically detect template format and use appropriate processing function.
+    """
+    print(f"DEBUG: Auto-detecting format for {legacy_file_path}")
+    
+    format_type = detect_template_format(legacy_file_path)
+    print(f"DEBUG: Detected format: {format_type}")
+    
+    if format_type == "old":
+        print(f"DEBUG: Using enhanced processing for old format")
+        return convert_legacy_file_using_template_v2(legacy_file_path, template_path)
+    else:
+        print(f"DEBUG: Using standard processing for new/unknown format")
+        return convert_legacy_file_using_template(legacy_file_path, template_path)
