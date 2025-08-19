@@ -757,6 +757,8 @@ Would you like to download and install the update?"""
         filemenu.add_command(label="Load Excel", command=lambda: self.file_manager.load_initial_file())
         filemenu.add_command(label="Load VAP3", command=self.open_vap3_file)
         filemenu.add_separator()
+        filemenu.add_command(label = "Batch Load Folder", command=self.file_manager.batch_load_folder)
+        filemenu.add_separator()
         filemenu.add_command(label="Save As VAP3", command=self.save_as_vap3)
         filemenu.add_separator()
         filemenu.add_command(label="Update Database", accelerator="Ctrl+U", command=self.update_database)
