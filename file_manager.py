@@ -2427,39 +2427,31 @@ class FileManager:
         return header_data
 
     def validate_header_data(self, header_data):
-        """Validate that header data is complete enough for data collection."""
+        """Validate that header data has sufficient content for data collection."""
         debug_print("DEBUG: Validating extracted header data")
-        
+    
         if not header_data:
             debug_print("DEBUG: Header data is None")
             return False
-            
-        # Check for required common data
-        common_data = header_data.get('common', {})
-        tester = common_data.get('tester', '').strip()
-        if not tester:
-            debug_print("DEBUG: Tester name is missing or empty")
-            return False
         
-        debug_print(f"DEBUG: Found tester: '{tester}'")
-            
-        # Check for samples
+        # Check for samples - this is the only requirement to proceed
         samples = header_data.get('samples', [])
         if not samples:
             debug_print("DEBUG: No samples found")
             return False
-            
+        
         # Check that at least one sample has an ID
         has_valid_sample = False
         for sample in samples:
             if sample.get('id', '').strip():
                 has_valid_sample = True
                 break
-                
+            
         if not has_valid_sample:
             debug_print("DEBUG: No samples with valid IDs found")
             return False
-            
+    
+        debug_print(f"DEBUG: Found {len(samples)} samples with valid IDs - proceeding to data collection")
         debug_print("DEBUG: Header data validation passed")
         return True
 

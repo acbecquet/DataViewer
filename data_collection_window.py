@@ -1072,19 +1072,25 @@ class DataCollectionWindow:
 
     def update_header_display(self):
         """Update the header information displayed in the UI."""
-        
+    
         # Update the header labels (if they exist)
         try:
             # Update any header text that shows tester name, etc.
             for widget in self.window.winfo_children():
                 if hasattr(widget, 'winfo_children'):
                     self.update_header_labels_recursive(widget)
-            
-            # Keep original tab labels unchanged
+        
+            # Update tab labels with actual sample IDs from header data
             for i in range(min(self.num_samples, len(self.sample_frames))):
-                self.notebook.tab(i, text=f"Sample {i+1}")
-                debug_print(f"DEBUG: Keeping tab {i} as 'Sample {i+1}'")
-                    
+                if i < len(self.header_data.get('samples', [])):
+                    sample_id = self.header_data['samples'][i].get('id', f"Sample {i+1}")
+                    tab_text = f"Sample {i+1} - {sample_id}"
+                    self.notebook.tab(i, text=tab_text)
+                    debug_print(f"DEBUG: Updated tab {i} to '{tab_text}'")
+                else:
+                    self.notebook.tab(i, text=f"Sample {i+1}")
+                    debug_print(f"DEBUG: Keeping tab {i} as 'Sample {i+1}' (no header data)")
+                
         except Exception as e:
             debug_print(f"DEBUG: Error updating header display: {e}")
 
@@ -2817,7 +2823,19 @@ Developed by Charlie Becquet
             debug_print(f"ERROR: Failed to mark file as modified: {e}")
 
     def calculate_tpm(self, sample_id):
-        """Calculate TPM (Total Particulate Matter) for all rows with valid data."""
+        """Calculate TPM values for all rows for a specific sample"""
+    
+        # Ensure all required lists are the same length
+        max_length = max(
+            len(self.data[sample_id]["puffs"]),
+            len(self.data[sample_id]["before_weight"]), 
+            len(self.data[sample_id]["after_weight"])
+        )
+    
+        # Extend lists if needed
+        while len(self.data[sample_id]["tpm"]) < max_length:
+            self.data[sample_id]["tpm"].append(None)
+    
         valid_tpm_values = []
     
         for i in range(len(self.data[sample_id]["puffs"])):
@@ -2825,49 +2843,50 @@ Developed by Charlie Becquet
                 # Get weight values
                 before_weight_str = self.data[sample_id]["before_weight"][i]
                 after_weight_str = self.data[sample_id]["after_weight"][i]
-            
+        
                 # Skip if either weight is missing
                 if not before_weight_str or not after_weight_str:
                     continue
-                
+            
                 # Convert to float
                 before_weight = float(before_weight_str)
                 after_weight = float(after_weight_str)
-            
+        
                 # Validate weights
                 if before_weight <= after_weight:
                     continue
-                
-                # Calculate puffs in this interval
-                
-                puff_interval = int(self.data[sample_id]["puffs"][i])
-              
-                puffs_in_interval = 10 # default 10
             
-                if i > 0:
+                # Calculate puffs in this interval
+                current_puff = int(self.data[sample_id]["puffs"][i])
+            
+                if i == 0:
+                    # First row: use the current puff count (e.g., 20 puffs from 0 to 20)
+                    puffs_in_interval = current_puff
+                else:
+                    # Subsequent rows: difference from previous puff count
                     prev_puff = int(self.data[sample_id]["puffs"][i - 1])
-                    puffs_in_interval = puff_interval - prev_puff
-                
+                    puffs_in_interval = current_puff - prev_puff
+            
                 # Skip if invalid puff interval
                 if puffs_in_interval <= 0:
                     continue
-                
+            
                 # Calculate TPM (mg/puff)
                 weight_consumed = before_weight - after_weight  # in grams
                 tpm = (weight_consumed * 1000) / puffs_in_interval  # Convert to mg per puff
-            
+        
                 # Store result
                 self.data[sample_id]["tpm"][i] = round(tpm, 3)
                 valid_tpm_values.append(tpm)
-                
+            
             except Exception:
                 # Ensure tpm list is long enough even for failed calculations
                 while len(self.data[sample_id]["tpm"]) <= i:
                     self.data[sample_id]["tpm"].append(None)
-    
+
         # Update average TPM
         self.data[sample_id]["avg_tpm"] = sum(valid_tpm_values) / len(valid_tpm_values) if valid_tpm_values else 0.0
-    
+
         return len(valid_tpm_values) > 0
 
     def validate_weight_entry(self, sample_id, row_idx, column_name, value):

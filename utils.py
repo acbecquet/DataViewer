@@ -388,7 +388,7 @@ def get_plot_sheet_names():
     """
     return [
         "Quick Screening Test", "Lifetime Test", "Device Life Test", "Horizontal Puffing Test", "Extended Test", "Long Puff Test",
-        "Rapid Puff Test", "Intense Test", "Big Headspace Low T Test", "Big Headspace High T Test",
+        "Rapid Puff Test", "Intense Test", "Big Headspace Low T Test", "Big Headspace High T Test", "Big Headspace Serial Test",
         "Viscosity Compatibility", "Upside Down Test", "Big Headspace Pocket Test",
         "Low Temperature Stability","Vacuum Test", "Negative Pressure Test", "Viscosity Compatibility", "User Test Simulation", "User Simulation Test","Various Oil Compatibility", "Sheet1"
     ]
