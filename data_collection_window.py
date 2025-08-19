@@ -1071,28 +1071,71 @@ class DataCollectionWindow:
         debug_print(f"DEBUG: Recreated {self.num_samples} sample tabs")
 
     def update_header_display(self):
-        """Update the header information displayed in the UI."""
+        """Update the header display and sample information across all tabs."""
+        debug_print("DEBUG: Updating header display after header edit")
     
-        # Update the header labels (if they exist)
         try:
-            # Update any header text that shows tester name, etc.
-            for widget in self.window.winfo_children():
-                if hasattr(widget, 'winfo_children'):
-                    self.update_header_labels_recursive(widget)
+            # Update the sample information display
+            self.update_all_sample_info()
         
-            # Update tab labels with actual sample IDs from header data
-            for i in range(min(self.num_samples, len(self.sample_frames))):
-                if i < len(self.header_data.get('samples', [])):
-                    sample_id = self.header_data['samples'][i].get('id', f"Sample {i+1}")
-                    tab_text = f"Sample {i+1} - {sample_id}"
-                    self.notebook.tab(i, text=tab_text)
-                    debug_print(f"DEBUG: Updated tab {i} to '{tab_text}'")
-                else:
-                    self.notebook.tab(i, text=f"Sample {i+1}")
-                    debug_print(f"DEBUG: Keeping tab {i} as 'Sample {i+1}' (no header data)")
-                
+            # If the number of samples changed, recreate the tabs
+            current_sample_count = len(self.sample_tabs)
+            new_sample_count = self.header_data.get("num_samples", 1)
+        
+            if current_sample_count != new_sample_count:
+                debug_print(f"DEBUG: Sample count changed from {current_sample_count} to {new_sample_count}, recreating tabs")
+                self.recreate_sample_tabs()
+            else:
+                # Just update the existing tab labels and sample info
+                for i, sample_data in enumerate(self.header_data.get("samples", [])):
+                    if i < len(self.sample_tabs):
+                        sample_id = sample_data.get("id", f"Sample {i+1}") if isinstance(sample_data, dict) else str(sample_data)
+                        self.notebook.tab(i, text=f"Sample {i+1} - {sample_id}")
+        
+            # Update the window title
+            self.update_window_title()
+        
+            # Refresh the current tab display
+            current_tab = self.notebook.select()
+            if current_tab:
+                tab_index = self.notebook.index(current_tab)
+                self.on_tab_change(tab_index)
+            
+            debug_print("DEBUG: Header display update completed")
+        
         except Exception as e:
-            debug_print(f"DEBUG: Error updating header display: {e}")
+            debug_print(f"ERROR: Failed to update header display: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def update_all_sample_info(self):
+        """Update sample information display for all samples."""
+        debug_print("DEBUG: Updating sample information for all samples")
+    
+        for i, sample_data in enumerate(self.header_data.get("samples", [])):
+            try:
+                sample_id = sample_data.get("id", f"Sample {i+1}") if isinstance(sample_data, dict) else str(sample_data)
+            
+                # Update the sample info display if it exists
+                if hasattr(self, 'sample_info_displays') and i < len(self.sample_info_displays):
+                    info_display = self.sample_info_displays[i]
+                
+                    # Update the text content
+                    info_text = f"Media: {sample_data.get('media', 'Unknown')}\n"
+                    info_text += f"Viscosity: {sample_data.get('viscosity', 'Unknown')}\n"
+                    info_text += f"Initial Oil Mass: {sample_data.get('oil_mass', 'Unknown')}\n"
+                    info_text += f"Resistance: {sample_data.get('resistance', 'Unknown')}\n"
+                    info_text += f"Voltage: {sample_data.get('voltage', 'Unknown')}\n"
+                    info_text += f"Puffing Regime: {sample_data.get('puffing_regime', 'Unknown')}\n"
+                    info_text += f"Device Type: {self.header_data.get('common', {}).get('device_type', 'Unknown')}"
+                
+                    info_display.config(state='normal')
+                    info_display.delete('1.0', tk.END)
+                    info_display.insert('1.0', info_text)
+                    info_display.config(state='disabled')
+                
+            except Exception as e:
+                debug_print(f"ERROR: Failed to update sample info for sample {i}: {e}")
 
     def update_header_labels_recursive(self, widget):
         """Recursively update header labels in the widget tree."""
@@ -1949,23 +1992,22 @@ Developed by Charlie Becquet
         debug_print(f"DEBUG: Excel file saved successfully to {self.file_path}")
     
     def _save_to_loaded_sheets(self):
-        """Save data to the loaded sheets in memory."""
+        """Save data directly to the loaded sheets in memory."""
         debug_print("DEBUG: _save_to_loaded_sheets() starting")
-    
+
         # Use original filename if available, otherwise fall back to file_path
         display_filename = self.original_filename if self.original_filename else os.path.basename(self.file_path)
-    
+
         debug_print(f"DEBUG: Saving to loaded sheets with display filename: {display_filename}")
-    
+
         try:
             # Find the correct file data in all_filtered_sheets
-            
             current_file_data = None
-        
+    
             # For .vap3 files, the matching logic needs to be more flexible
             if self.file_path.endswith('.vap3'):
                 debug_print("DEBUG: .vap3 file detected, using flexible matching")
-            
+        
                 # Try multiple matching strategies for .vap3 files
                 for file_data in self.parent.all_filtered_sheets:
                     # First try original filename match
@@ -1976,7 +2018,7 @@ Developed by Charlie Becquet
                         current_file_data = file_data
                         debug_print(f"DEBUG: Found matching .vap3 file by original filename: {self.original_filename}")
                         break
-                
+            
                     # Then try display filename match
                     if (display_filename and 
                         (file_data.get("file_name") == display_filename or
@@ -1984,7 +2026,7 @@ Developed by Charlie Becquet
                         current_file_data = file_data
                         debug_print(f"DEBUG: Found matching .vap3 file by display filename: {display_filename}")
                         break
-            
+        
                 # If still no match, just use the first loaded file for .vap3 files
                 if not current_file_data and self.parent.all_filtered_sheets:
                     current_file_data = self.parent.all_filtered_sheets[0]
@@ -2007,10 +2049,10 @@ Developed by Charlie Becquet
             if not hasattr(self.parent, 'filtered_sheets') or self.test_name not in self.parent.filtered_sheets:
                 debug_print(f"ERROR: Sheet {self.test_name} not found in loaded data")
                 raise Exception(f"Sheet '{self.test_name}' not found in loaded data")
-        
+    
             sheet_data = self.parent.filtered_sheets[self.test_name]['data'].copy()
             debug_print(f"DEBUG: Found loaded sheet data with shape: {sheet_data.shape}")
-    
+
             # Determine format based on test type
             if self.test_name in ["User Test Simulation", "User Simulation Test"]:
                 columns_per_sample = 8  # [Chronography, Puffs, Before Weight, After Weight, Draw Pressure, Failure, Notes, TPM]
@@ -2018,98 +2060,112 @@ Developed by Charlie Becquet
             else:
                 columns_per_sample = 12  # [Puffs, Before Weight, After Weight, Draw Pressure, Resistance, Smell, Clog, Notes, TPM, etc.]
                 debug_print("DEBUG: Saving in standard format")
-    
+
             total_data_written = 0
-    
-            # Save data for each sample
-            for sample_idx in range(self.num_samples):
-                sample_id = f"Sample {sample_idx + 1}"
-                col_offset = sample_idx * columns_per_sample
-        
-                debug_print(f"DEBUG: Saving data for {sample_id} with column offset {col_offset}")
-        
+
+            # Write data for each sample
+            for sample_idx, sample_id in enumerate(self.header_data["samples"]):
+                if isinstance(sample_id, dict):
+                    sample_name = sample_id.get("id", f"Sample {sample_idx + 1}")
+                else:
+                    sample_name = str(sample_id)
+
+                if sample_name not in self.data:
+                    debug_print(f"DEBUG: No data found for sample: {sample_name}")
+                    continue
+
+                debug_print(f"DEBUG: Processing sample: {sample_name}")
+
+                # Calculate column offset for this sample
+                col_offset = 5 + (sample_idx * columns_per_sample)  # Start after header columns
+
                 sample_data_written = 0
-                data_start_row = 4  # Data starts at row 5 (0-indexed row 4)
-        
-                # Clear existing data in this sample's area first
-                for clear_row in range(data_start_row, len(sheet_data)):
-                    for clear_col in range(col_offset, col_offset + columns_per_sample):
-                        if clear_col < len(sheet_data.columns):
-                            sheet_data.iloc[clear_row, clear_col] = ""
-        
-                # Write new data for this sample
-                for i in range(len(self.data[sample_id]["puffs"])):
-                    data_row_idx = data_start_row + i
-                
-                    # Ensure we don't exceed the DataFrame bounds
-                    if data_row_idx >= len(sheet_data):
-                        break
-                
+
+                # Get the data for this sample
+                sample_data = self.data[sample_name]
+                data_length = len(sample_data["puffs"])
+
+                for i in range(data_length):
+                    # Skip empty rows
+                    if (not sample_data["puffs"][i] and 
+                        not sample_data["before_weight"][i] and 
+                        not sample_data["after_weight"][i]):
+                        continue
+
+                    # Calculate the row index in the sheet (starting from row 4, which is index 3)
+                    data_row_idx = 3 + i  # Puffing data starts at row 4 (index 3)
+
+                    # Ensure the sheet has enough rows
+                    while data_row_idx >= len(sheet_data):
+                        # Add a new row with NaN values
+                        new_row = pd.Series([None] * len(sheet_data.columns), index=sheet_data.columns)
+                        sheet_data = pd.concat([sheet_data, new_row.to_frame().T], ignore_index=True)
+
                     try:
-                        # Prepare data values based on test type
+                        # Prepare values to write based on format
                         if self.test_name in ["User Test Simulation", "User Simulation Test"]:
-                            # User Test Simulation format: [Chronography, Puffs, Before Weight, After Weight, Draw Pressure, Failure, Notes, TPM]
                             values_to_write = [
-                                self.data[sample_id]["chronography"][i] if i < len(self.data[sample_id]["chronography"]) else "",
-                                self.data[sample_id]["puffs"][i] if i < len(self.data[sample_id]["puffs"]) else "",
-                                self.data[sample_id]["before_weight"][i] if i < len(self.data[sample_id]["before_weight"]) else "",
-                                self.data[sample_id]["after_weight"][i] if i < len(self.data[sample_id]["after_weight"]) else "",
-                                self.data[sample_id]["draw_pressure"][i] if i < len(self.data[sample_id]["draw_pressure"]) else "",
-                                self.data[sample_id]["smell"][i] if i < len(self.data[sample_id]["smell"]) else "",  # "Failure" stored in smell field
-                                self.data[sample_id]["notes"][i] if i < len(self.data[sample_id]["notes"]) else "",
-                                self.data[sample_id]["tpm"][i] if i < len(self.data[sample_id]["tpm"]) and self.data[sample_id]["tpm"][i] is not None else ""
+                                sample_data["chronography"][i] if i < len(sample_data["chronography"]) else "",
+                                sample_data["puffs"][i] if i < len(sample_data["puffs"]) else "",
+                                sample_data["before_weight"][i] if i < len(sample_data["before_weight"]) else "",
+                                sample_data["after_weight"][i] if i < len(sample_data["after_weight"]) else "",
+                                sample_data["draw_pressure"][i] if i < len(sample_data["draw_pressure"]) else "",
+                                sample_data["failure"][i] if i < len(sample_data["failure"]) else "",
+                                sample_data["notes"][i] if i < len(sample_data["notes"]) else "",
+                                sample_data["tpm"][i] if i < len(sample_data["tpm"]) and sample_data["tpm"][i] is not None else ""
                             ]
-                    
                         else:
-                            # Standard format: [Puffs, Before Weight, After Weight, Draw Pressure, Resistance, Smell, Clog, Notes, TPM]
+                            # Standard format
                             values_to_write = [
-                                self.data[sample_id]["puffs"][i] if i < len(self.data[sample_id]["puffs"]) else "",
-                                self.data[sample_id]["before_weight"][i] if i < len(self.data[sample_id]["before_weight"]) else "",
-                                self.data[sample_id]["after_weight"][i] if i < len(self.data[sample_id]["after_weight"]) else "",
-                                self.data[sample_id]["draw_pressure"][i] if i < len(self.data[sample_id]["draw_pressure"]) else "",
-                                self.data[sample_id]["resistance"][i] if i < len(self.data[sample_id]["resistance"]) else "",
-                                self.data[sample_id]["smell"][i] if i < len(self.data[sample_id]["smell"]) else "",
-                                self.data[sample_id]["clog"][i] if i < len(self.data[sample_id]["clog"]) else "",
-                                self.data[sample_id]["notes"][i] if i < len(self.data[sample_id]["notes"]) else "",
-                                self.data[sample_id]["tpm"][i] if i < len(self.data[sample_id]["tpm"]) and self.data[sample_id]["tpm"][i] is not None else ""
+                                sample_data["puffs"][i] if i < len(sample_data["puffs"]) else "",
+                                sample_data["before_weight"][i] if i < len(sample_data["before_weight"]) else "",
+                                sample_data["after_weight"][i] if i < len(sample_data["after_weight"]) else "",
+                                sample_data["draw_pressure"][i] if i < len(sample_data["draw_pressure"]) else "",
+                                sample_data["resistance"][i] if i < len(sample_data["resistance"]) else "",
+                                sample_data["smell"][i] if i < len(sample_data["smell"]) else "",
+                                sample_data["clog"][i] if i < len(sample_data["clog"]) else "",
+                                sample_data["notes"][i] if i < len(sample_data["notes"]) else "",
+                                sample_data["tpm"][i] if i < len(sample_data["tpm"]) and sample_data["tpm"][i] is not None else ""
                             ]
-                
+            
                         # Write values to the appropriate columns
                         for col_idx, value in enumerate(values_to_write):
                             target_col = col_offset + col_idx
                             if target_col < len(sheet_data.columns):
                                 sheet_data.iloc[data_row_idx, target_col] = value
-                
+            
                         sample_data_written += 1
-                
+            
                     except Exception as e:
-                        debug_print(f"DEBUG: Error writing row {i} for {sample_id}: {e}")
+                        debug_print(f"DEBUG: Error writing row {i} for {sample_name}: {e}")
                         continue
-        
-                total_data_written += sample_data_written
-                debug_print(f"DEBUG: Wrote {sample_data_written} data rows for {sample_id}")
     
+                total_data_written += sample_data_written
+                debug_print(f"DEBUG: Wrote {sample_data_written} data rows for {sample_name}")
+
             # Update the loaded sheet data in memory
             self.parent.filtered_sheets[self.test_name]['data'] = sheet_data
             debug_print(f"DEBUG: Updated loaded sheet data with {total_data_written} total data rows")
-    
+
             # Also update the UI state in all_filtered_sheets
             if hasattr(self.parent, 'all_filtered_sheets'):
                 for file_data in self.parent.all_filtered_sheets:
                     if self.test_name in file_data.get('filtered_sheets', {}):
                         file_data['filtered_sheets'][self.test_name]['data'] = sheet_data.copy()
-                        debug_print("DEBUG: Updated all_filtered_sheets with new data")
+                        # CRITICAL: Save header data to the filtered_sheets structure
+                        file_data['filtered_sheets'][self.test_name]['header_data'] = self.header_data.copy()
+                        debug_print("DEBUG: Updated all_filtered_sheets with new data and header data")
                         break
-    
+
+            # CRITICAL: Ensure header data is stored in the main filtered_sheets
             if self.test_name in self.parent.filtered_sheets:
-                self.parent.filtered_sheets[self.test_name]['header_data'] = self.header_data
+                self.parent.filtered_sheets[self.test_name]['header_data'] = self.header_data.copy()
                 debug_print("DEBUG: Stored header data in filtered_sheets for .vap3 persistence")
-    
                
             debug_print("DEBUG: Successfully saved data to loaded sheets")
-    
+
             debug_print("DEBUG: Loaded sheets save completed - main GUI data should now be current")
-    
+
             # Ensure the main GUI's current filtered_sheets reflects the updated data
             if hasattr(self.parent, 'filtered_sheets') and self.test_name in self.parent.filtered_sheets:
                 # The data should already be updated, but let's ensure it's current
