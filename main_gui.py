@@ -134,7 +134,7 @@ def is_empty_sample(sample_data):
         
         for field in plotting_fields:
             value = str(sample_dict.get(field, '')).strip()
-            debug_print(f"DEBUG: Checking field '{field}': '{value}'")
+            #debug_print(f"DEBUG: Checking field '{field}': '{value}'")
             
             # Skip completely empty values
             if not value or value in ['', 'nan', 'No data', 'None']:
@@ -146,12 +146,12 @@ def is_empty_sample(sample_data):
                 # Remove pd.isna() call and use math.isnan() or simple check
                 import math
                 if numeric_val != 0 and not math.isnan(numeric_val):
-                    debug_print(f"DEBUG: Sample has plotting data in '{field}': {numeric_val}")
+                    #debug_print(f"DEBUG: Sample has plotting data in '{field}': {numeric_val}")
                     return False  # Has data, not empty
             except (ValueError, TypeError):
                 # If it's not numeric but has meaningful content, it's not empty
                 if len(value) > 0 and value not in ['nan', 'None', 'No data', '']:
-                    debug_print(f"DEBUG: Sample has non-numeric plotting data in '{field}': '{value}'")
+                    #debug_print(f"DEBUG: Sample has non-numeric plotting data in '{field}': '{value}'")
                     return False
         
         
@@ -2031,16 +2031,16 @@ Would you like to download and install the update?"""
             )
 
             # IMPORTANT: Set column widths BEFORE row heights to prevent auto-sizing interference
-            debug_print("DEBUG: Setting column widths first to prevent auto-sizing...")
+            #debug_print("DEBUG: Setting column widths first to prevent auto-sizing...")
             for col_idx, width in enumerate(col_widths):
                 try:
                     sheet.column_width(column=col_idx, width=int(width))
-                    debug_print(f"DEBUG: Set column {col_idx} width to {int(width)}px")
+                    #debug_print(f"DEBUG: Set column {col_idx} width to {int(width)}px")
                 except Exception as e:
                     debug_print(f"DEBUG: Error setting column {col_idx} width: {e}")
 
             # Set row heights AFTER column widths
-            debug_print("DEBUG: Setting individual row heights...")
+            #debug_print("DEBUG: Setting individual row heights...")
             for row_idx, height in enumerate(row_heights):
                 try:
                     sheet.row_height(row=row_idx, height=int(height))
@@ -2084,17 +2084,17 @@ Would you like to download and install the update?"""
             sheet.refresh()
         
             # Double-check our column widths after refresh (in case tksheet changed them)
-            debug_print("DEBUG: Verifying column widths after refresh...")
+            #debug_print("DEBUG: Verifying column widths after refresh...")
             for col_idx, expected_width in enumerate(col_widths):
                 try:
                     actual_width = sheet.column_width(column=col_idx)
                     if abs(actual_width - expected_width) > 5:  # Allow 5px tolerance
-                        debug_print(f"DEBUG: Column {col_idx} width mismatch - expected: {expected_width}, actual: {actual_width}, resetting...")
+                        #debug_print(f"DEBUG: Column {col_idx} width mismatch - expected: {expected_width}, actual: {actual_width}, resetting...")
                         sheet.column_width(column=col_idx, width=int(expected_width))
                 except Exception as e:
                     debug_print(f"DEBUG: Error verifying column {col_idx} width: {e}")
         
-            debug_print("DEBUG: tksheet table displayed successfully.")
+            #debug_print("DEBUG: tksheet table displayed successfully.")
 
             # Store reference to sheet for potential future use
             if not hasattr(self, 'current_sheet_widget'):
@@ -2119,7 +2119,7 @@ Would you like to download and install the update?"""
     def store_vap3_data_for_data_collection(self, vap_data):
         """Store VAP3 data for access by data collection windows."""
         try:
-            debug_print("DEBUG: Storing VAP3 data for data collection access")
+            #debug_print("DEBUG: Storing VAP3 data for data collection access")
         
             # Store the complete VAP3 data for data collection windows to access
             self.current_vap_data = vap_data

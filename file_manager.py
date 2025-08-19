@@ -1558,7 +1558,7 @@ class FileManager:
         if not self.gui.current_file:
             return
         
-        debug_print(f"DEBUG: Updating UI for current file: {self.gui.current_file}")
+        #debug_print(f"DEBUG: Updating UI for current file: {self.gui.current_file}")
     
         # Ensure main GUI is properly initialized first
         self.ensure_main_gui_initialized()
@@ -1566,11 +1566,11 @@ class FileManager:
         # Update file dropdown
         if hasattr(self.gui, 'file_dropdown_var'):
             self.gui.file_dropdown_var.set(self.gui.current_file)
-            debug_print(f"DEBUG: Set file dropdown to: {self.gui.current_file}")
+            #debug_print(f"DEBUG: Set file dropdown to: {self.gui.current_file}")
     
         # Update sheet dropdown
         self.gui.populate_or_update_sheet_dropdown()
-        debug_print("DEBUG: Updated sheet dropdown")
+        #debug_print("DEBUG: Updated sheet dropdown")
     
         # Update displayed sheet
         current_sheet = self.gui.selected_sheet.get()
@@ -1578,7 +1578,7 @@ class FileManager:
             first_sheet = list(self.gui.filtered_sheets.keys())[0] if self.gui.filtered_sheets else None
             if first_sheet:
                 self.gui.selected_sheet.set(first_sheet)
-                debug_print(f"DEBUG: Set selected sheet to first sheet: {first_sheet}")
+                #debug_print(f"DEBUG: Set selected sheet to first sheet: {first_sheet}")
                 # Add a small delay to ensure UI is ready
                 self.gui.root.after(100, lambda: self.gui.update_displayed_sheet(first_sheet))
             else:
@@ -1588,7 +1588,7 @@ class FileManager:
             # Add a small delay to ensure UI is ready
             self.gui.root.after(100, lambda: self.gui.update_displayed_sheet(current_sheet))
     
-        debug_print("DEBUG: UI update for current file complete")
+        #debug_print("DEBUG: UI update for current file complete")
 
     def add_data(self) -> None:
         """Handle adding a new data file directly and update UI accordingly."""

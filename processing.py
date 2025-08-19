@@ -56,7 +56,7 @@ def get_y_data_for_plot_type(sample_data, plot_type):
         pd.Series: y-data for plotting.
     """
     if plot_type == "TPM":
-        debug_print("DEBUG: Calculating TPM from weight differences with puffing intervals")
+        #debug_print("DEBUG: Calculating TPM from weight differences with puffing intervals")
         
         # Get puffs, before weights, and after weights
         puffs = pd.to_numeric(sample_data.iloc[3:, 0], errors='coerce')  # Column 0 for Extended Test
@@ -80,11 +80,11 @@ def get_y_data_for_plot_type(sample_data, plot_type):
                     if pd.isna(current_puffs) or current_puffs == 0:
                         # Both puffs and interval are invalid, default to 10
                         fallback_puffs = 10
-                        debug_print(f"DEBUG: Row {i} - Both puffs ({current_puffs}) and interval ({puff_interval}) invalid, using default {fallback_puffs}")
+                        #debug_print(f"DEBUG: Row {i} - Both puffs ({current_puffs}) and interval ({puff_interval}) invalid, using default {fallback_puffs}")
                         puffing_intervals.loc[idx] = fallback_puffs
                     else:
                         # Use current puffs value
-                        debug_print(f"DEBUG: Row {i} - Interval {puff_interval} <= 0, using current puffs {current_puffs}")
+                        #debug_print(f"DEBUG: Row {i} - Interval {puff_interval} <= 0, using current puffs {current_puffs}")
                         puffing_intervals.loc[idx] = current_puffs
                 else:
                     puffing_intervals.loc[idx] = puff_interval
@@ -99,7 +99,7 @@ def get_y_data_for_plot_type(sample_data, plot_type):
                 calculated_tpm.loc[idx] = weight_diff.loc[idx] / puffing_intervals.loc[idx]
             else:
                 calculated_tpm.loc[idx] = np.nan
-                debug_print(f"DEBUG: Skipping TPM calculation for row with invalid interval: {puffing_intervals.loc[idx]}")
+                #debug_print(f"DEBUG: Skipping TPM calculation for row with invalid interval: {puffing_intervals.loc[idx]}")
         return calculated_tpm
         
     elif plot_type == "Power Efficiency":
@@ -651,28 +651,28 @@ def plot_all_samples(full_sample_data: pd.DataFrame, plot_type: str, num_columns
             start_col = i * num_columns_per_sample
             sample_data = full_sample_data.iloc[:, start_col:start_col + num_columns_per_sample]
 
-            debug_print(f"DEBUG: Sample {i+1} data shape: {sample_data.shape}")
-            debug_print(f"DEBUG: Sample {i+1} columns: {sample_data.columns.tolist()}")
+            #debug_print(f"DEBUG: Sample {i+1} data shape: {sample_data.shape}")
+            #debug_print(f"DEBUG: Sample {i+1} columns: {sample_data.columns.tolist()}")
     
             x_data = sample_data.iloc[3:, 0].dropna()
-            debug_print(f"DEBUG: Sample {i+1} x_data (puffs) length: {len(x_data)}, first few values: {x_data.head().tolist()}")
+            #debug_print(f"DEBUG: Sample {i+1} x_data (puffs) length: {len(x_data)}, first few values: {x_data.head().tolist()}")
 
             y_data = get_y_data_for_plot_type(sample_data, plot_type)
-            debug_print(f"DEBUG: Sample {i+1} raw y_data length: {len(y_data)}, first few values: {y_data.head().tolist()}")
+            #debug_print(f"DEBUG: Sample {i+1} raw y_data length: {len(y_data)}, first few values: {y_data.head().tolist()}")
     
             y_data = pd.to_numeric(y_data, errors='coerce').dropna()
-            debug_print(f"DEBUG: Sample {i+1} numeric y_data length: {len(y_data)}, first few values: {y_data.head().tolist()}")
+            #debug_print(f"DEBUG: Sample {i+1} numeric y_data length: {len(y_data)}, first few values: {y_data.head().tolist()}")
 
             common_index = x_data.index.intersection(y_data.index)
-            debug_print(f"DEBUG: Sample {i+1} common_index length: {len(common_index)}")
+            #debug_print(f"DEBUG: Sample {i+1} common_index length: {len(common_index)}")
     
             x_data = x_data.loc[common_index]
             y_data = y_data.loc[common_index]
     
             x_data = fix_x_axis_sequence(x_data)
-            debug_print(f"DEBUG: Sample {i+1} fixed x_data length: {len(x_data)}, first few values: {x_data.head().tolist()}")
+            #debug_print(f"DEBUG: Sample {i+1} fixed x_data length: {len(x_data)}, first few values: {x_data.head().tolist()}")
 
-            debug_print(f"DEBUG: Sample {i+1} final x_data length: {len(x_data)}, y_data length: {len(y_data)}")
+            #debug_print(f"DEBUG: Sample {i+1} final x_data length: {len(x_data)}, y_data length: {len(y_data)}")
 
             if not x_data.empty and not y_data.empty:
                 # Use provided sample name if available, otherwise extract from data
@@ -947,7 +947,27 @@ def process_plot_sheet(data, headers_row=3, data_start_row=4, num_columns_per_sa
                         # Fallback to old signature
                         extracted_data = custom_extracted_data_fn(sample_data)
                 else:
-                    # Use our new function that extracts from raw data
+                    # Check if sample has sufficient data before processing
+                    if sample_data.shape[0] < 4 or sample_data.shape[1] < 3:
+                        debug_print(f"DEBUG: Sample {i+1} has insufficient data shape {sample_data.shape}, creating placeholder")
+                        placeholder_data = {
+                            "Sample Name": f"Sample {i+1}",
+                            "Media": "",
+                            "Viscosity": "",
+                            "Voltage, Resistance, Power": "",
+                            "Average TPM": "No data",
+                            "Standard Deviation": "No data",
+                            "Initial Oil Mass": "",
+                            "Usage Efficiency": "",
+                            "Burn?": "",
+                            "Clog?": "",
+                            "Leak?": ""
+                        }
+                        samples.append(placeholder_data)
+                        full_sample_data.append(sample_data)
+                        continue
+                    
+                    # If we get here, sample has sufficient data
                     extracted_data = updated_extracted_data_function_with_raw_data(sample_data, raw_data, i)
 
                 samples.append(extracted_data)
@@ -1748,39 +1768,6 @@ def extract_burn_clog_leak_from_raw_data(data, sample_index, num_columns_per_sam
     
     return burn, clog, leak
 
-def updated_extracted_data_function_with_raw_data_old(sample_data, raw_data, sample_index):
-    """
-    Updated extraction function that gets burn/clog/leak from raw data.
-    """
-    # Calculate TPM statistics from sample_data
-    tpm_data = pd.to_numeric(sample_data.iloc[3:, 8], errors='coerce').dropna()
-    avg_tpm = round_values(tpm_data.mean()) if not tpm_data.empty else None
-    std_tpm = round_values(tpm_data.std()) if not tpm_data.empty else None
-    
-    # Extract burn/clog/leak from raw data with proper offsets
-    burn, clog, leak = extract_burn_clog_leak_from_raw_data(raw_data, sample_index)
-    
-    # Safe extraction with fallbacks for other data from sample_data
-    sample_name = sample_data.columns[5] if len(sample_data.columns) > 5 else f"Sample {sample_index + 1}"
-    media = sample_data.iloc[0, 1] if sample_data.shape[0] > 0 and sample_data.shape[1] > 1 else ""
-    viscosity = sample_data.iloc[1, 1] if sample_data.shape[0] > 1 and sample_data.shape[1] > 1 else ""
-    
-    return {
-        "Sample Name": sample_name,
-        "Media": media,
-        "Viscosity": viscosity,
-        "Voltage, Resistance, Power": f"{sample_data.iloc[1, 5] if sample_data.shape[0] > 1 and sample_data.shape[1] > 5 else ''} V, "
-                                       f"{round_values(sample_data.iloc[0, 3]) if sample_data.shape[0] > 0 and sample_data.shape[1] > 3 else ''} ohm, "
-                                       f"{round_values(sample_data.iloc[0, 5]) if sample_data.shape[0] > 0 and sample_data.shape[1] > 5 else ''} W",
-        "Average TPM": avg_tpm,
-        "Standard Deviation": std_tpm,
-        "Initial Oil Mass": round_values(sample_data.iloc[1,7]) if sample_data.shape[0] > 1 and sample_data.shape[1] > 7 else "",
-        "Usage Efficiency": round_values(sample_data.iloc[1,8]) if sample_data.shape[0] > 1 and sample_data.shape[1] > 8 else "",
-        "Burn?": burn,  # From raw data with proper offset
-        "Clog?": clog,  # From raw data with proper offset
-        "Leak?": leak   # From raw data with proper offset
-    }
-
 def updated_extracted_data_function_with_raw_data(sample_data, raw_data, sample_index):
     """
     Updated extraction function that gets burn/clog/leak from raw data.
@@ -1788,17 +1775,34 @@ def updated_extracted_data_function_with_raw_data(sample_data, raw_data, sample_
     """
     print(f"DEBUG: Processing sample {sample_index + 1} with enhanced name extraction")
     
-    # Extract sample name with old format support
+    # Add bounds checking for sample_data dimensions
+    print(f"DEBUG: Sample {sample_index + 1} data shape: {sample_data.shape}")
+    
+    # Check if sample has sufficient data before processing
+    if sample_data.shape[0] < 4 or sample_data.shape[1] < 3:
+        print(f"DEBUG: Sample {sample_index + 1} has insufficient data shape {sample_data.shape}, skipping")
+        return {
+            "Sample Name": f"Sample {sample_index + 1}",
+            "Media": "",
+            "Viscosity": "",
+            "Voltage, Resistance, Power": "",
+            "Average TPM": "No data",
+            "Standard Deviation": "No data", 
+            "Initial Oil Mass": "",
+            "Usage Efficiency": "",
+            "Burn?": "",
+            "Clog?": "",
+            "Leak?": ""
+        }
+    
+    # Extract sample name with enhanced suffix handling
     sample_name = f"Sample {sample_index + 1}"  # Default fallback
     
-    if sample_data.shape[1] > 8:  # Ensure we have enough columns
-        # Check if this is old format by looking for "Project:" and "Sample:" headers
+    if sample_data.shape[1] > 4:  # Ensure we have enough columns
         headers = sample_data.columns.astype(str)
         print(f"DEBUG: Sample {sample_index + 1} headers: {headers[:10].tolist()}")
         
-        # Look for old format patterns with suffix support
-        project_col = None
-        sample_col = None
+        # Look for sample ID patterns with suffix support
         project_value = None
         sample_value = None
         
@@ -1806,93 +1810,119 @@ def updated_extracted_data_function_with_raw_data(sample_data, raw_data, sample_
             header_lower = str(header).lower().strip()
             
             # Enhanced pattern matching to handle suffixed headers
-            if header_lower.startswith("project:"):  # Matches "project:" and "project:.1", etc.
-                project_col = i
-                if i + 1 < len(headers):
-                    project_value = str(headers[i + 1]).strip()
-                    # Remove the suffix from the project value if it exists
-                    if project_value.endswith(f'.{sample_index}'):
-                        project_value = project_value[:-len(f'.{sample_index}')]
-                    print(f"DEBUG: Found project value: '{project_value}' at column {i + 1}")
-            elif header_lower.startswith("sample:"):  # Matches "sample:" and "sample:.1", etc.
-                sample_col = i
+            # Check for "sample id:" patterns (handles "sample id:", "sample id:.1", etc.)
+            if (header_lower == "sample id:" or 
+                (header_lower.startswith("sample id:.") and header_lower[11:].isdigit())):
                 if i + 1 < len(headers):
                     sample_value = str(headers[i + 1]).strip()
-                    # The sample value should not need suffix removal since it's the actual sample name
-                    print(f"DEBUG: Found sample value: '{sample_value}' at column {i + 1}")
+                    print(f"DEBUG: Using new format sample ID: '{sample_value}'")
+                    break
+            
+            # Check for old format "project:" patterns
+            elif (header_lower == "project:" or 
+                  (header_lower.startswith("project:.") and header_lower[9:].isdigit())):
+                if i + 1 < len(headers):
+                    project_value = str(headers[i + 1]).strip()
+                    # Remove pandas suffix from the project value if it exists
+                    if '.' in project_value and project_value.split('.')[-1].isdigit():
+                        project_value = '.'.join(project_value.split('.')[:-1])
+                    print(f"DEBUG: Found project value: '{project_value}' at column {i + 1}")
+            
+            # Check for old format "sample:" patterns  
+            elif (header_lower == "sample:" or
+                  (header_lower.startswith("sample:.") and header_lower[8:].isdigit())):
+                if i + 1 < len(headers):
+                    temp_sample_value = str(headers[i + 1]).strip()
+                    # Don't overwrite if we already found one from Sample ID
+                    if not sample_value:
+                        sample_value = temp_sample_value
+                    print(f"DEBUG: Found sample value: '{temp_sample_value}' at column {i + 1}")
         
-        # Combine project and sample values if found (old format)
-        if project_value and sample_value:
-            if project_value.lower() not in ['nan', 'none', ''] and sample_value.lower() not in ['nan', 'none', '']:
+        # Determine final sample name based on what we found
+        if sample_value and sample_value.lower() not in ['nan', 'none', '', f'unnamed: {5}']:
+            if project_value and project_value.lower() not in ['nan', 'none', '']:
+                # Old format: combine project + sample
                 sample_name = f"{project_value} {sample_value}".strip()
                 print(f"DEBUG: Combined old format sample name: '{sample_name}'")
+            else:
+                # New format or standalone sample value
+                sample_name = sample_value.strip()
+                print(f"DEBUG: Using sample value as sample name: '{sample_name}'")
         elif project_value and project_value.lower() not in ['nan', 'none', '']:
             sample_name = project_value.strip()
             print(f"DEBUG: Using project value as sample name: '{sample_name}'")
-        elif sample_value and sample_value.lower() not in ['nan', 'none', '']:
-            sample_name = sample_value.strip()
-            print(f"DEBUG: Using sample value as sample name: '{sample_name}'")
         else:
-            # Try new format - Sample ID at column 5
+            # Fallback: try direct column 5 access (for new format)
             if len(headers) > 5:
-                sample_id_value = str(headers[5]).strip()
-                if sample_id_value and sample_id_value.lower() not in ['nan', 'none', '', 'unnamed: 5']:
-                    sample_name = sample_id_value
-                    print(f"DEBUG: Using new format sample ID: '{sample_name}'")
+                fallback_value = str(headers[5]).strip()
+                if fallback_value and fallback_value.lower() not in ['nan', 'none', '', 'unnamed: 5']:
+                    sample_name = fallback_value
+                    print(f"DEBUG: Using fallback sample name from column 5: '{sample_name}'")
     
     print(f"DEBUG: Final sample name for sample {sample_index + 1}: '{sample_name}'")
     
-    # Extract burn/clog/leak using the enhanced method
+    # Extract burn/clog/leak from raw data with proper offsets
     burn, clog, leak = extract_burn_clog_leak_from_raw_data(raw_data, sample_index)
     
-    # Extract other data (TPM, voltage, etc.)
-    tpm_data = pd.to_numeric(sample_data.iloc[3:, 8], errors='coerce').dropna()
+    # Calculate TPM statistics from sample_data with bounds checking
+    tpm_data = pd.Series(dtype=float)
+    if sample_data.shape[0] > 3 and sample_data.shape[1] > 8:
+        tpm_data = pd.to_numeric(sample_data.iloc[3:, 8], errors='coerce').dropna()
     avg_tpm = round_values(tpm_data.mean()) if not tpm_data.empty else None
     std_tpm = round_values(tpm_data.std()) if not tpm_data.empty else None
     
-    # Extract media and viscosity
+    # Extract media and viscosity with bounds checking
     media = ""
     viscosity = ""
-    if sample_data.shape[0] > 1:
-        media = str(sample_data.iloc[0, 1]) if sample_data.shape[1] > 1 else ""
-        viscosity = str(sample_data.iloc[1, 1]) if sample_data.shape[1] > 1 else ""
+    if sample_data.shape[0] > 1 and sample_data.shape[1] > 1:
+        media = str(sample_data.iloc[0, 1]) if not pd.isna(sample_data.iloc[0, 1]) else ""
+        viscosity = str(sample_data.iloc[1, 1]) if not pd.isna(sample_data.iloc[1, 1]) else ""
     
-    # Extract voltage, resistance, power
+    # Extract voltage, resistance, power with bounds checking
     voltage = ""
     resistance = ""
     power = ""
     if sample_data.shape[0] > 1 and sample_data.shape[1] > 5:
         voltage = str(sample_data.iloc[1, 5]) if not pd.isna(sample_data.iloc[1, 5]) else ""
-        resistance = round_values(sample_data.iloc[0, 3]) if not pd.isna(sample_data.iloc[0, 3]) else ""
+        if sample_data.shape[1] > 3:
+            resistance = round_values(sample_data.iloc[0, 3]) if not pd.isna(sample_data.iloc[0, 3]) else ""
         power = round_values(sample_data.iloc[0, 5]) if not pd.isna(sample_data.iloc[0, 5]) else ""
     
-    # Calculate initial oil mass and usage efficiency
+    # Calculate initial oil mass and usage efficiency with bounds checking
     initial_oil_mass = ""
     usage_efficiency = ""
     if sample_data.shape[0] > 3 and sample_data.shape[1] > 2:
-        before_weight = pd.to_numeric(sample_data.iloc[3, 1], errors='coerce')
-        after_weight_col = sample_data.iloc[3:, 2]
-        last_valid_weight = None
-        
-        for weight in reversed(after_weight_col):
-            weight_val = pd.to_numeric(weight, errors='coerce')
-            if not pd.isna(weight_val) and weight_val > 0:
-                last_valid_weight = weight_val
-                break
-        
-        if not pd.isna(before_weight) and last_valid_weight is not None:
-            oil_consumed = before_weight - last_valid_weight
-            initial_oil_mass = f"{round_values(oil_consumed):.4f}g"
+        try:
+            before_weight = pd.to_numeric(sample_data.iloc[3, 1], errors='coerce')
+            after_weight_col = sample_data.iloc[3:, 2]
+            last_valid_weight = None
             
-            total_puffs = len(tpm_data)
-            if total_puffs > 0 and avg_tpm:
-                total_aerosol = avg_tpm * total_puffs
-                if oil_consumed > 0:
-                    efficiency = (total_aerosol / (oil_consumed * 1000)) * 100
-                    usage_efficiency = f"{round_values(efficiency):.1f}%"
+            # Add error handling for the problematic loop
+            try:
+                for weight in reversed(after_weight_col):
+                    weight_val = pd.to_numeric(weight, errors='coerce')
+                    if not pd.isna(weight_val) and weight_val > 0:
+                        last_valid_weight = weight_val
+                        break
+            except (IndexError, KeyError) as e:
+                print(f"DEBUG: Error processing after_weight_col for sample {sample_index + 1}: {e}")
+                last_valid_weight = None
+            
+            if not pd.isna(before_weight) and last_valid_weight is not None:
+                oil_consumed = before_weight - last_valid_weight
+                initial_oil_mass = f"{round_values(oil_consumed):.4f}g"
+                
+                total_puffs = len(tpm_data)
+                if total_puffs > 0 and avg_tpm:
+                    total_aerosol = avg_tpm * total_puffs
+                    if oil_consumed > 0:
+                        efficiency = (total_aerosol / (oil_consumed * 1000)) * 100
+                        usage_efficiency = f"{round_values(efficiency):.1f}%"
+        except (IndexError, KeyError) as e:
+            print(f"DEBUG: Error calculating oil mass/efficiency for sample {sample_index + 1}: {e}")
     
     return {
-        "Sample Name": sample_name,  # Now uses enhanced extraction
+        "Sample Name": sample_name,
         "Media": media,
         "Viscosity": viscosity,
         "Voltage, Resistance, Power": f"{voltage} V, {resistance} ohm, {power} W" if voltage or resistance or power else "",
@@ -2407,7 +2437,6 @@ def convert_legacy_standards_using_template(legacy_file_path: str, template_path
 def extract_samples_from_old_file_v2(file_path: str, sheet_name: Optional[str] = None) -> list:
     """
     Enhanced version of extract_samples_from_old_file that handles both old and new template formats.
-    
     Old format differences:
     - Has separate "Project:" and "Sample:" fields instead of "Sample ID:"
     - Has "Ri (Ohms)" and "Rf (Ohms)" instead of just "Resistance (Ohms)"
@@ -2446,77 +2475,100 @@ def extract_samples_from_old_file_v2(file_path: str, sheet_name: Optional[str] =
         ],
         "voltage": [r"voltage\s*:?\s*"],
         "viscosity": [r"viscosity\b\s*:?\s*"],
-        "puffing_regime": [r"\b(puff(ing)?\s*regime|puff\s*settings?)\s*:?\s*"],
-        "initial_oil_mass": [r"initial\s*oil\s*mass\b\s*:?\s*"],
-        "date": [r"date\s*:?\s*"],
-        "media": [r"media\s*:?\s*"]
+        "puffing_regime": [r"\b(puff(ing)?\s*regime|puff\s*settings?)"]
     }
 
+    # Data header patterns for finding actual data columns
     data_header_patterns = {
-        "puffs": r"puffs",
-        "tpm": r"tpm\s*\(mg\s*/\s*puff\)",
-        "before_weight": r"before\s*weight/g",
-        "after_weight": r"after\s*weight/g",
-        "draw_pressure": r"pv1|draw\s*pressure\s*\(kpa\)",
-        "smell": r"smell",
-        "notes": r"notes"
+        "puffs": r"\bpuffs?\b",
+        "tpm": r"\btpm\b",
+        "before_weight": r"before.{0,10}weight",
+        "after_weight": r"after.{0,10}weight",
+        "draw_pressure": r"draw.{0,10}pressure",
+        "smell": r"\bsmell\b",
+        "notes": r"\bnotes?\b"
     }
 
     numeric_columns = {"puffs", "tpm", "before_weight", "after_weight", "draw_pressure"}
 
-    # Track processed columns for sample data and metadata separately
-    processed_cols = {row: [] for row in range(nrows)}
-    processed_meta_data = {row: [] for row in range(nrows)}
-    proximity_threshold = 1
+    # Track which rows and columns have been used for metadata to avoid duplication
+    processed_meta_data = {r: [] for r in range(nrows)}
+    processed_cols = {r: [] for r in range(nrows)}
+    proximity_threshold = 2  # Minimum distance between samples
 
     print(f"DEBUG: Starting cell-by-cell scanning...")
 
-    # Loop over every cell in the sheet
+    # Cell-by-cell scanning for "puffs" headers (indicates sample start)
     for row in range(nrows):
         for col in range(ncols):
-            # Skip if too close to previously processed sample header
+            # Skip this cell if it's near a previously processed sample header in the same row.
             if any(abs(col - proc_col) < proximity_threshold for proc_col in processed_cols[row]):
                 continue
 
             cell_val = df.iat[row, col]
             if header_matches(cell_val, data_header_patterns["puffs"]):
-                print(f"DEBUG: Found puffs header at row {row}, col {col}")
-                
-                # New sample header found
+                # New sample header found.
                 sample = {"sample_name": str(cell_val).strip(), "header_row": row}
+
+                # Mark this column as processed for sample data.
                 processed_cols[row].append(col)
 
-                # Extract metadata (up to 3 rows above)
+                # Calculate the expected column range for this sample (12 columns per sample)
+                sample_start_col = col
+                sample_end_col = col + 12
+                
+                print(f"DEBUG: Found puffs header at row {row}, col {col}")
+                print(f"DEBUG: Searching for metadata from row {max(0, row - 3)} to {row - 1} within columns {sample_start_col} to {sample_end_col}")
+
+                # Extract metadata (up to 3 rows above) within this sample's column range
                 start_search_row = max(0, row - 3)
                 meta_data_found = {}
                 project_value = None
                 sample_value = None
                 
-                print(f"DEBUG: Searching for metadata from row {start_search_row} to {row-1}")
-                
                 for r in range(row - 1, start_search_row - 1, -1):
-                    for c in range(ncols):
+                    for c in range(sample_start_col, min(sample_end_col, ncols)):  # Only search within sample range
+                        # Skip if this cell in metadata row was already used.
                         if any(abs(c - pm) < proximity_threshold for pm in processed_meta_data[r]):
                             continue
                         
                         cell_val_above = df.iat[r, c]
                         
-                        # Special handling for old format Project and Sample fields
+                        # Check for project pattern
+                        for pattern in meta_data_patterns["project"]:
+                            if header_matches(cell_val_above, pattern):
+                                value = df.iat[r, c + 1] if (c + 1 < ncols) else None
+                                if value and str(value).strip().lower() not in ['nan', 'none', '']:
+                                    project_value = str(value).strip()
+                                    print(f"DEBUG: Found project value: {project_value}")
+                                    processed_meta_data[r].append(c)
+                                break
+                        
+                        # Check for sample pattern  
+                        for pattern in meta_data_patterns["sample_name"]:
+                            if header_matches(cell_val_above, pattern):
+                                value = df.iat[r, c + 1] if (c + 1 < ncols) else None
+                                if value and str(value).strip().lower() not in ['nan', 'none', '']:
+                                    sample_value = str(value).strip()
+                                    print(f"DEBUG: Found sample value: {sample_value}")
+                                    processed_meta_data[r].append(c)
+                                break
+                        
+                        # Check for other metadata
                         for key, patterns in meta_data_patterns.items():
-                            if key in meta_data_found and key not in ["project", "sample_name"]:
-                                continue
-                            
+                            if key in meta_data_found or key in ["project", "sample_name"]:
+                                continue  # Already found this key for the current sample or handled above
                             for pattern in patterns:
                                 if header_matches(cell_val_above, pattern):
                                     value = df.iat[r, c + 1] if (c + 1 < ncols) else None
-                                    
-                                    if key == "project":
-                                        project_value = value
-                                        print(f"DEBUG: Found project value: {project_value}")
-                                    elif key == "sample_name" and pattern == r"sample\s*:?\s*":
-                                        # This is the "Sample:" field from old format
-                                        sample_value = value
-                                        print(f"DEBUG: Found sample value: {sample_value}")
+                                    if key == "resistance":
+                                        # Special handling for resistance - prefer Ri over Rf for old format
+                                        if re.search(r"\bri\s*\(", str(cell_val_above).lower()):
+                                            meta_data_found[key] = value
+                                            print(f"DEBUG: Found resistance (Ri): {value}")
+                                        elif "resistance" not in meta_data_found:
+                                            meta_data_found[key] = value
+                                            print(f"DEBUG: Found resistance: {value}")
                                     else:
                                         meta_data_found[key] = value
                                         print(f"DEBUG: Found {key}: {value}")
@@ -2548,13 +2600,13 @@ def extract_samples_from_old_file_v2(file_path: str, sheet_name: Optional[str] =
 
                 sample.update(meta_data_found)
 
-                # Extract column data for this sample
+                # Extract column data for this sample within the sample's column range
                 data_cols = {}
                 print(f"DEBUG: Extracting column data starting from col {col}")
                 
                 for key, pattern in data_header_patterns.items():
-                    # Look to the right from the current header cell
-                    for j in range(col, ncols):
+                    # Look to the right from the current header cell within the sample range
+                    for j in range(col, min(sample_end_col, ncols)):
                         if header_matches(df.iat[row, j], pattern):
                             print(f"DEBUG: Found {key} column at position {j}")
                             raw_data = df.iloc[row + 1:, j]
