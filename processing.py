@@ -2,6 +2,7 @@
 Processing module for the DataViewer Application. Developed by Charlie Becquet.
 """
 import re
+import math
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -585,13 +586,13 @@ def fix_x_axis_sequence(x_data):
                 old_value = x_values[i]
                 x_values[i] = x_values[i-1] + 10
                 fixes_applied += 1
-                debug_print(f"DEBUG: Fixed x-axis sequence at index {i}: {old_value} -> {x_values[i]} (was decreasing)")
+                #debug_print(f"DEBUG: Fixed x-axis sequence at index {i}: {old_value} -> {x_values[i]} (was decreasing)")
             elif x_values[i] == x_values[i-1]:
                 # If values are equal, add small increment to maintain increasing sequence
                 old_value = x_values[i]
                 x_values[i] = x_values[i-1] + 5
                 fixes_applied += 1
-                debug_print(f"DEBUG: Fixed duplicate x-axis value at index {i}: {old_value} -> {x_values[i]}")
+                #debug_print(f"DEBUG: Fixed duplicate x-axis value at index {i}: {old_value} -> {x_values[i]}")
         
         if fixes_applied > 0:
             debug_print(f"DEBUG: Applied {fixes_applied} fixes to x-axis sequence")
@@ -2464,23 +2465,23 @@ def extract_samples_from_old_file_v2(file_path: str, sheet_name: Optional[str] =
         "sample_name": [
             r"(cart(ridge)?\s*#|sample\s*(name|id))",  # New format: "Cart #", "Sample ID"
             r"puffing\s*data\s*for\s*:?\s*",  # New format: "puffing data for:"
-            r"sample\s*:?\s*"  # Old format: "Sample:"
+            r"^sample\s*:?\s*(?:\.\d+)?$"  # Old format: "Sample:", "Sample:.1", "Sample:.2", etc.
         ],
         "project": [
-            r"project\s*:?\s*"  # Old format: "Project:"
+            r"^project\s*:?\s*(?:\.\d+)?$"  # Old format: "Project:", "Project:.1", "Project:.2", etc.
         ],
         "resistance": [
-            r"\bri\s*\(?\s*ohms?\s*\)?\s*:?\s*",  # Old format: "Ri (Ohms)" - prioritize this
-            r"resistance\s*\(?ohms?\)?\s*:?\s*"   # New format: "Resistance (Ohms)"
+            r"\bri\s*\(?\s*ohms?\s*\)?\s*:?\s*(?:\.\d+)?",  # Old format: "Ri (Ohms)", "Ri (Ohms).1", etc.
+            r"resistance\s*\(?ohms?\)?\s*:?\s*(?:\.\d+)?"   # New format: "Resistance (Ohms)", "Resistance (Ohms).1", etc.
         ],
-        "voltage": [r"voltage\s*:?\s*"],
-        "viscosity": [r"viscosity\b\s*:?\s*"],
-        "puffing_regime": [r"\b(puff(ing)?\s*regime|puff\s*settings?)"]
+        "voltage": [r"voltage\s*:?\s*(?:\.\d+)?"],  # "voltage:", "voltage:.1", etc.
+        "viscosity": [r"viscosity\b\s*:?\s*(?:\.\d+)?"],  # "viscosity:", "viscosity:.1", etc.
+        "puffing_regime": [r"\b(puff(ing)?\s*regime|puff\s*settings?)\s*:?\s*(?:\.\d+)?"]  # With suffixes
     }
 
-    # Data header patterns for finding actual data columns
+    # FIXED: More specific data header patterns to avoid false matches
     data_header_patterns = {
-        "puffs": r"\bpuffs?\b",
+        "puffs": r"^puffs?$",  # EXACT match for "puff" or "puffs" - not part of another phrase
         "tpm": r"\btpm\b",
         "before_weight": r"before.{0,10}weight",
         "after_weight": r"after.{0,10}weight",
@@ -2494,30 +2495,38 @@ def extract_samples_from_old_file_v2(file_path: str, sheet_name: Optional[str] =
     # Track which rows and columns have been used for metadata to avoid duplication
     processed_meta_data = {r: [] for r in range(nrows)}
     processed_cols = {r: [] for r in range(nrows)}
-    proximity_threshold = 2  # Minimum distance between samples
+    proximity_threshold = 8  # Increased to 8 to account for 12-column sample blocks
 
     print(f"DEBUG: Starting cell-by-cell scanning...")
 
     # Cell-by-cell scanning for "puffs" headers (indicates sample start)
     for row in range(nrows):
         for col in range(ncols):
-            # Skip this cell if it's near a previously processed sample header in the same row.
+            # Skip this cell if it's near a previously processed sample header in the same row
             if any(abs(col - proc_col) < proximity_threshold for proc_col in processed_cols[row]):
                 continue
 
             cell_val = df.iat[row, col]
+            # More strict matching - check if it's exactly "puffs" and not part of another phrase
             if header_matches(cell_val, data_header_patterns["puffs"]):
-                # New sample header found.
+                print(f"DEBUG: Found puffs header at row {row}, col {col}")
+                
+                # Additional validation: ensure this is actually the start of a sample block
+                # Check if this column is at expected sample positions (0, 12, 24, 36, ...)
+                if col % 12 != 0:
+                    print(f"DEBUG: Skipping col {col} - not at expected sample start position (should be multiple of 12)")
+                    continue
+                
+                # New sample header found
                 sample = {"sample_name": str(cell_val).strip(), "header_row": row}
 
-                # Mark this column as processed for sample data.
+                # Mark this column as processed for sample data
                 processed_cols[row].append(col)
 
                 # Calculate the expected column range for this sample (12 columns per sample)
                 sample_start_col = col
                 sample_end_col = col + 12
                 
-                print(f"DEBUG: Found puffs header at row {row}, col {col}")
                 print(f"DEBUG: Searching for metadata from row {max(0, row - 3)} to {row - 1} within columns {sample_start_col} to {sample_end_col}")
 
                 # Extract metadata (up to 3 rows above) within this sample's column range
@@ -2526,78 +2535,68 @@ def extract_samples_from_old_file_v2(file_path: str, sheet_name: Optional[str] =
                 project_value = None
                 sample_value = None
                 
+                # FIXED: More thorough metadata search with better debugging
                 for r in range(row - 1, start_search_row - 1, -1):
-                    for c in range(sample_start_col, min(sample_end_col, ncols)):  # Only search within sample range
-                        # Skip if this cell in metadata row was already used.
-                        if any(abs(c - pm) < proximity_threshold for pm in processed_meta_data[r]):
+                    for c in range(sample_start_col, min(sample_end_col, ncols)):
+                        # Skip if this cell in metadata row was already used
+                        if any(abs(c - pm) < 2 for pm in processed_meta_data[r]):  # Reduced threshold for metadata
                             continue
                         
                         cell_val_above = df.iat[r, c]
+                        cell_str = str(cell_val_above).strip().lower()
                         
-                        # Check for project pattern
-                        for pattern in meta_data_patterns["project"]:
-                            if header_matches(cell_val_above, pattern):
-                                value = df.iat[r, c + 1] if (c + 1 < ncols) else None
+                        # ENHANCED: More explicit project pattern matching
+                        if header_matches(cell_val_above, meta_data_patterns["project"][0]):
+                            # Look for the value in the next cell (to the right)
+                            if c + 1 < ncols:
+                                value = df.iat[r, c + 1]
                                 if value and str(value).strip().lower() not in ['nan', 'none', '']:
                                     project_value = str(value).strip()
                                     print(f"DEBUG: Found project value: {project_value}")
                                     processed_meta_data[r].append(c)
-                                break
                         
-                        # Check for sample pattern  
-                        for pattern in meta_data_patterns["sample_name"]:
-                            if header_matches(cell_val_above, pattern):
-                                value = df.iat[r, c + 1] if (c + 1 < ncols) else None
+                        # ENHANCED: More explicit sample pattern matching
+                        elif header_matches(cell_val_above, meta_data_patterns["sample_name"][2]):  # Use the old format pattern
+                            # Look for the value in the next cell (to the right)
+                            if c + 1 < ncols:
+                                value = df.iat[r, c + 1]
                                 if value and str(value).strip().lower() not in ['nan', 'none', '']:
                                     sample_value = str(value).strip()
                                     print(f"DEBUG: Found sample value: {sample_value}")
                                     processed_meta_data[r].append(c)
-                                break
                         
-                        # Check for other metadata
-                        for key, patterns in meta_data_patterns.items():
-                            if key in meta_data_found or key in ["project", "sample_name"]:
-                                continue  # Already found this key for the current sample or handled above
-                            for pattern in patterns:
-                                if header_matches(cell_val_above, pattern):
-                                    value = df.iat[r, c + 1] if (c + 1 < ncols) else None
-                                    if key == "resistance":
-                                        # Special handling for resistance - prefer Ri over Rf for old format
-                                        if re.search(r"\bri\s*\(", str(cell_val_above).lower()):
-                                            meta_data_found[key] = value
-                                            print(f"DEBUG: Found resistance (Ri): {value}")
-                                        elif "resistance" not in meta_data_found:
-                                            meta_data_found[key] = value
-                                            print(f"DEBUG: Found resistance: {value}")
-                                    else:
+                        # Check for other metadata patterns
+                        else:
+                            for key, patterns in meta_data_patterns.items():
+                                if key in meta_data_found or key in ["project", "sample_name"]:
+                                    continue  # Already found this key or handled above
+                                for pattern in patterns:
+                                    if header_matches(cell_val_above, pattern):
+                                        value = df.iat[r, c + 1] if (c + 1 < ncols) else None
                                         meta_data_found[key] = value
-                                        print(f"DEBUG: Found {key}: {value}")
-                                    
-                                    processed_meta_data[r].append(c)
+                                        processed_meta_data[r].append(c)
+                                        break
+                                if key in meta_data_found:
                                     break
-                            
-                            if key in meta_data_found and key not in ["project", "sample_name"]:
-                                break
 
-                # Combine Project and Sample for old format, or use existing sample_name for new format
-                if project_value is not None and sample_value is not None:
-                    # Old format: combine Project and Sample
-                    combined_sample_name = f"{project_value} {sample_value}".strip()
-                    meta_data_found["sample_name"] = combined_sample_name
+                # Combine project and sample for old format sample names
+                if project_value and sample_value:
+                    combined_sample_name = f"{project_value} {sample_value}"
                     print(f"DEBUG: Combined old format sample name: {combined_sample_name}")
-                elif project_value is not None and sample_value is None:
-                    # Only project found, use that
-                    meta_data_found["sample_name"] = str(project_value).strip()
+                    meta_data_found["sample_name"] = combined_sample_name
+                elif project_value:
+                    meta_data_found["sample_name"] = project_value
                     print(f"DEBUG: Using project as sample name: {project_value}")
-                elif sample_value is not None and project_value is None:
-                    # Only sample found, use that
-                    meta_data_found["sample_name"] = str(sample_value).strip()
+                elif sample_value:
+                    meta_data_found["sample_name"] = sample_value
                     print(f"DEBUG: Using sample as sample name: {sample_value}")
-                elif "sample_name" not in meta_data_found:
-                    # Fallback to default
-                    meta_data_found["sample_name"] = f"Sample {len(samples) + 1}"
-                    print(f"DEBUG: Using fallback sample name: {meta_data_found['sample_name']}")
+                else:
+                    # Use fallback sample name based on position
+                    fallback_name = f"Sample {len(samples) + 1}"
+                    print(f"DEBUG: Using fallback sample name: {fallback_name}")
+                    meta_data_found["sample_name"] = fallback_name
 
+                print(f"DEBUG: Final metadata found for sample: {meta_data_found}")
                 sample.update(meta_data_found)
 
                 # Extract column data for this sample within the sample's column range
@@ -2630,6 +2629,79 @@ def extract_samples_from_old_file_v2(file_path: str, sheet_name: Optional[str] =
     
     return samples
 
+def is_legacy_sample_empty(sample):
+    """
+    Check if a legacy sample has meaningful data.
+    Similar to is_empty_sample() but works on legacy sample data structure.
+    
+    Args:
+        sample (dict): Legacy sample data with fields like 'puffs', 'tpm', etc.
+        
+    Returns:
+        bool: True if sample is empty/invalid, False if it has meaningful data
+    """
+    try:
+        # Check for TPM data (primary indicator of valid sample)
+        tpm_data = sample.get('tpm', [])
+        if hasattr(tpm_data, '__len__') and len(tpm_data) > 0:
+            # Convert to list if it's a pandas Series
+            if hasattr(tpm_data, 'tolist'):
+                tpm_values = tpm_data.tolist()
+            else:
+                tpm_values = list(tpm_data)
+            
+            # Check if there are any non-zero, non-NaN TPM values
+            for val in tpm_values:
+                try:
+                    numeric_val = float(val)
+                    if numeric_val > 0 and not math.isnan(numeric_val):
+                        print(f"DEBUG: Sample '{sample.get('sample_name', 'Unknown')}' has valid TPM data: {numeric_val}")
+                        return False  # Has meaningful data
+                except (ValueError, TypeError):
+                    continue
+        
+        # Check puffs data as secondary indicator
+        puffs_data = sample.get('puffs', [])
+        if hasattr(puffs_data, '__len__') and len(puffs_data) > 0:
+            # If we have puffs but no valid TPM, it might still be a valid sample
+            # that just needs to be tested
+            print(f"DEBUG: Sample '{sample.get('sample_name', 'Unknown')}' has puffs but no valid TPM data")
+            return False
+        
+        print(f"DEBUG: Sample '{sample.get('sample_name', 'Unknown')}' is empty - no meaningful data")
+        return True  # No meaningful data found
+        
+    except Exception as e:
+        print(f"DEBUG: Error checking legacy sample: {e}")
+        return False  # If error, assume not empty to be safe
+
+
+def filter_legacy_samples(legacy_samples):
+    """
+    Filter legacy samples to only include those with meaningful data.
+    
+    Args:
+        legacy_samples (list): List of legacy sample dictionaries
+        
+    Returns:
+        list: Filtered list containing only samples with meaningful data
+    """
+    import math
+    
+    filtered_samples = []
+    
+    for i, sample in enumerate(legacy_samples):
+        sample_name = sample.get('sample_name', f'Sample {i+1}')
+        
+        if not is_legacy_sample_empty(sample):
+            filtered_samples.append(sample)
+            print(f"DEBUG: Keeping sample {len(filtered_samples)}: {sample_name}")
+        else:
+            print(f"DEBUG: Filtering out empty sample: {sample_name}")
+    
+    print(f"DEBUG: Filtered from {len(legacy_samples)} to {len(filtered_samples)} meaningful samples")
+    return filtered_samples
+
 
 def convert_legacy_file_using_template_v2(legacy_file_path: str, template_path: str = None) -> pd.DataFrame:
     """
@@ -2638,7 +2710,9 @@ def convert_legacy_file_using_template_v2(legacy_file_path: str, template_path: 
     - Combined Project + Sample fields from old format
     - Ri vs Rf resistance selection
     - Test type detection from sheet name for old format
+    - Filters out empty samples before writing to template
     """
+    import math  # Add this import for the filtering functions
     print(f"DEBUG: Starting enhanced template conversion for: {legacy_file_path}")
     
     # Determine the template path
@@ -2653,11 +2727,19 @@ def convert_legacy_file_using_template_v2(legacy_file_path: str, template_path: 
     ws = wb[template_sheet]
 
     # Load legacy samples using our enhanced extraction function
-    legacy_samples = extract_samples_from_old_file_v2(legacy_file_path)
-    if not legacy_samples:
+    all_legacy_samples = extract_samples_from_old_file_v2(legacy_file_path)
+    if not all_legacy_samples:
         raise ValueError("No valid legacy sample data found.")
 
-    print(f"DEBUG: Successfully extracted {len(legacy_samples)} samples")
+    print(f"DEBUG: Successfully extracted {len(all_legacy_samples)} samples")
+    
+    # Filter samples to only include those with meaningful data
+    legacy_samples = filter_legacy_samples(all_legacy_samples)
+    
+    if not legacy_samples:
+        raise ValueError("No samples with meaningful data found after filtering.")
+    
+    print(f"DEBUG: Processing {len(legacy_samples)} filtered samples for template conversion")
 
     # Enhanced metadata mapping with old format support
     meta_data_MAPPING = {
@@ -2688,7 +2770,7 @@ def convert_legacy_file_using_template_v2(legacy_file_path: str, template_path: 
         "tpm": (8, True)
     }
 
-    # Process each legacy sample
+    # Process each FILTERED legacy sample
     for sample_idx, sample in enumerate(legacy_samples):
         col_offset = 1 + (sample_idx * 12)
         print(f"DEBUG: Processing sample {sample_idx + 1} at columns {col_offset} to {col_offset + 11}")
@@ -2711,59 +2793,55 @@ def convert_legacy_file_using_template_v2(legacy_file_path: str, template_path: 
         # Write metadata to template
         for template_key, (patterns, (tpl_row, tpl_col_offset)) in meta_data_MAPPING.items():
             value = meta_data_values.get(template_key, "")
-            ws.cell(row=tpl_row, column=col_offset + tpl_col_offset, value=value)
             if value:
                 print(f"DEBUG: Set {template_key} to '{value}' at row {tpl_row}, col {col_offset + tpl_col_offset}")
+                ws.cell(row=tpl_row, column=col_offset + tpl_col_offset, value=value)
 
-        # Data column processing
-        for data_key, (col_idx, is_numeric) in DATA_COL_MAPPING.items():
+        # Data Handling
+        for data_key, (data_col_offset, is_numeric) in DATA_COL_MAPPING.items():
             if data_key in sample:
                 data_series = sample[data_key]
-                target_col = col_offset + col_idx
+                target_col = col_offset + data_col_offset
                 
-                print(f"DEBUG: Writing {data_key} data to column {target_col} ({len(data_series)} values)")
+                # Convert pandas Series to list for consistent handling
+                if hasattr(data_series, 'tolist'):
+                    data_values = data_series.tolist()
+                elif hasattr(data_series, '__iter__'):
+                    data_values = list(data_series)
+                else:
+                    data_values = [data_series] if data_series else []
                 
-                for i, value in enumerate(data_series):
-                    if pd.notna(value) and value != "":
-                        target_row = 5 + i  # Data starts at row 5
+                # Remove NaN and empty values
+                clean_values = []
+                for val in data_values:
+                    if pd.notna(val) and str(val).strip() != '':
+                        clean_values.append(val)
+                
+                print(f"DEBUG: Writing {data_key} data to column {target_col} ({len(clean_values)} values)")
+                
+                # Write the data starting from row 4 (data_start_row)
+                for row_idx, value in enumerate(clean_values, start=4):
+                    if is_numeric:
                         try:
-                            if is_numeric:
-                                numeric_value = float(value) if pd.notna(value) else None
-                                if numeric_value is not None:
-                                    ws.cell(row=target_row, column=target_col, value=numeric_value)
-                            else:
-                                ws.cell(row=target_row, column=target_col, value=str(value))
-                        except (ValueError, TypeError) as e:
-                            print(f"DEBUG: Error writing value {value} to row {target_row}, col {target_col}: {e}")
-                            ws.cell(row=target_row, column=target_col, value=str(value))
+                            numeric_value = float(value)
+                            ws.cell(row=row_idx, column=target_col, value=numeric_value)
+                        except (ValueError, TypeError):
+                            ws.cell(row=row_idx, column=target_col, value=value)
+                    else:
+                        ws.cell(row=row_idx, column=target_col, value=str(value))
 
-        # Clear unused rows for this sample block
-        first_empty_row = None
-        for i in range(len(sample.get("after_weight", []))):
-            target_row = 5 + i
-            after_weight_value = sample.get("after_weight", pd.Series()).iloc[i] if i < len(sample.get("after_weight", [])) else None
-            if pd.isna(after_weight_value) or after_weight_value == "":
-                first_empty_row = target_row
-                break
-        
-        if first_empty_row:
-            print(f"DEBUG: Clearing rows from {first_empty_row} onwards for sample {sample_idx + 1}")
-            for clear_row in range(first_empty_row, first_empty_row + 50):
-                for clear_col in range(col_offset, col_offset + 12):
-                    ws.cell(row=clear_row, column=clear_col, value=None)
-
-    # Remove other sheets and rename
+    # Keep only the Intense Test sheet
     sheets_to_keep = [template_sheet]
     for sheet_name in list(wb.sheetnames):
         if sheet_name not in sheets_to_keep:
             del wb[sheet_name]
 
-    # Rename the sheet based on the legacy file name
+    # Rename the sheet based on the legacy file name (limited to 31 characters)
     base_name = os.path.splitext(os.path.basename(legacy_file_path))[0]
-    new_sheet_name = f"{base_name} Data"[:31]
+    new_sheet_name = f"Legacy_{base_name}"[:31]
     ws.title = new_sheet_name
     
-    # Save to legacy data folder
+    # Ensure legacy data directory exists
     folder_path = os.path.join(os.path.abspath("."), "legacy data")
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)

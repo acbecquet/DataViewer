@@ -154,7 +154,7 @@ def clean_columns(data):
         # Keep column if it's named OR if it has any data
         if not (is_unnamed and is_completely_empty):
             columns_to_keep.append(i)
-            print(f"DEBUG: Keeping column {i} ({col}): unnamed={is_unnamed}, empty={is_completely_empty}")
+            #print(f"DEBUG: Keeping column {i} ({col}): unnamed={is_unnamed}, empty={is_completely_empty}")
         else:
             print(f"DEBUG: Removing column {i} ({col}): unnamed={is_unnamed}, empty={is_completely_empty}")
     
