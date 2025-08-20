@@ -2003,11 +2003,11 @@ Developed by Charlie Becquet
         try:
             # Find the correct file data in all_filtered_sheets
             current_file_data = None
-    
+
             # For .vap3 files, the matching logic needs to be more flexible
             if self.file_path.endswith('.vap3'):
                 debug_print("DEBUG: .vap3 file detected, using flexible matching")
-        
+
                 # Try multiple matching strategies for .vap3 files
                 for file_data in self.parent.all_filtered_sheets:
                     # First try original filename match
@@ -2018,7 +2018,7 @@ Developed by Charlie Becquet
                         current_file_data = file_data
                         debug_print(f"DEBUG: Found matching .vap3 file by original filename: {self.original_filename}")
                         break
-            
+
                     # Then try display filename match
                     if (display_filename and 
                         (file_data.get("file_name") == display_filename or
@@ -2026,7 +2026,7 @@ Developed by Charlie Becquet
                         current_file_data = file_data
                         debug_print(f"DEBUG: Found matching .vap3 file by display filename: {display_filename}")
                         break
-        
+
                 # If still no match, just use the first loaded file for .vap3 files
                 if not current_file_data and self.parent.all_filtered_sheets:
                     current_file_data = self.parent.all_filtered_sheets[0]
@@ -2049,7 +2049,7 @@ Developed by Charlie Becquet
             if not hasattr(self.parent, 'filtered_sheets') or self.test_name not in self.parent.filtered_sheets:
                 debug_print(f"ERROR: Sheet {self.test_name} not found in loaded data")
                 raise Exception(f"Sheet '{self.test_name}' not found in loaded data")
-    
+
             sheet_data = self.parent.filtered_sheets[self.test_name]['data'].copy()
             debug_print(f"DEBUG: Found loaded sheet data with shape: {sheet_data.shape}")
 
@@ -2063,54 +2063,46 @@ Developed by Charlie Becquet
 
             total_data_written = 0
 
-            # Write data for each sample
-            for sample_idx, sample_id in enumerate(self.header_data["samples"]):
-                if isinstance(sample_id, dict):
-                    sample_name = sample_id.get("id", f"Sample {sample_idx + 1}")
-                else:
-                    sample_name = str(sample_id)
+            # Save data for each sample
+            for sample_idx in range(self.num_samples):
+                sample_name = f"Sample {sample_idx + 1}"
+                col_offset = sample_idx * columns_per_sample
 
-                if sample_name not in self.data:
-                    debug_print(f"DEBUG: No data found for sample: {sample_name}")
-                    continue
+                debug_print(f"DEBUG: Saving data for {sample_name} with column offset {col_offset}")
 
-                debug_print(f"DEBUG: Processing sample: {sample_name}")
-
-                # Calculate column offset for this sample
-                col_offset = 5 + (sample_idx * columns_per_sample)  # Start after header columns
-
+                sample_data = self.data[sample_name]
                 sample_data_written = 0
 
-                # Get the data for this sample
-                sample_data = self.data[sample_name]
-                data_length = len(sample_data["puffs"])
+                # Get the length of data to write
+                if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+                    data_length = len(sample_data.get("chronography", []))
+                else:
+                    data_length = len(sample_data.get("puffs", []))
 
+                debug_print(f"DEBUG: {sample_name} has {data_length} rows of data to write")
+
+                # Write data starting from row 3 (index 3)
                 for i in range(data_length):
-                    # Skip empty rows
-                    if (not sample_data["puffs"][i] and 
-                        not sample_data["before_weight"][i] and 
-                        not sample_data["after_weight"][i]):
-                        continue
-
-                    # Calculate the row index in the sheet (starting from row 4, which is index 3)
-                    data_row_idx = 3 + i  # Puffing data starts at row 4 (index 3)
-
-                    # Ensure the sheet has enough rows
-                    while data_row_idx >= len(sheet_data):
-                        # Add a new row with NaN values
-                        new_row = pd.Series([None] * len(sheet_data.columns), index=sheet_data.columns)
-                        sheet_data = pd.concat([sheet_data, new_row.to_frame().T], ignore_index=True)
+                    data_row_idx = 3 + i  # Changed from 4 + i to 3 + i
 
                     try:
-                        # Prepare values to write based on format
+                        if data_row_idx >= len(sheet_data):
+                            debug_print(f"DEBUG: Extending sheet data to accommodate row {data_row_idx}")
+                            # Extend the DataFrame with empty rows
+                            new_rows = data_row_idx - len(sheet_data) + 1
+                            empty_df = pd.DataFrame([[""] * len(sheet_data.columns)] * new_rows, 
+                                                  columns=sheet_data.columns)
+                            sheet_data = pd.concat([sheet_data, empty_df], ignore_index=True)
+
                         if self.test_name in ["User Test Simulation", "User Simulation Test"]:
+                            # User simulation format
                             values_to_write = [
                                 sample_data["chronography"][i] if i < len(sample_data["chronography"]) else "",
                                 sample_data["puffs"][i] if i < len(sample_data["puffs"]) else "",
                                 sample_data["before_weight"][i] if i < len(sample_data["before_weight"]) else "",
                                 sample_data["after_weight"][i] if i < len(sample_data["after_weight"]) else "",
                                 sample_data["draw_pressure"][i] if i < len(sample_data["draw_pressure"]) else "",
-                                sample_data["failure"][i] if i < len(sample_data["failure"]) else "",
+                                sample_data["smell"][i] if i < len(sample_data["smell"]) else "",  # failure
                                 sample_data["notes"][i] if i < len(sample_data["notes"]) else "",
                                 sample_data["tpm"][i] if i < len(sample_data["tpm"]) and sample_data["tpm"][i] is not None else ""
                             ]
@@ -2127,25 +2119,41 @@ Developed by Charlie Becquet
                                 sample_data["notes"][i] if i < len(sample_data["notes"]) else "",
                                 sample_data["tpm"][i] if i < len(sample_data["tpm"]) and sample_data["tpm"][i] is not None else ""
                             ]
-            
+
                         # Write values to the appropriate columns
                         for col_idx, value in enumerate(values_to_write):
                             target_col = col_offset + col_idx
                             if target_col < len(sheet_data.columns):
                                 sheet_data.iloc[data_row_idx, target_col] = value
-            
+
                         sample_data_written += 1
-            
+
                     except Exception as e:
                         debug_print(f"DEBUG: Error writing row {i} for {sample_name}: {e}")
                         continue
-    
+
                 total_data_written += sample_data_written
                 debug_print(f"DEBUG: Wrote {sample_data_written} data rows for {sample_name}")
 
             # Update the loaded sheet data in memory
             self.parent.filtered_sheets[self.test_name]['data'] = sheet_data
             debug_print(f"DEBUG: Updated loaded sheet data with {total_data_written} total data rows")
+
+            # FIX: Save sample notes to header data
+            debug_print("DEBUG: Saving sample notes to header data")
+            if not hasattr(self, 'header_data') or not self.header_data:
+                self.header_data = {'samples': []}
+
+            # Ensure header_data has enough sample entries
+            while len(self.header_data['samples']) < self.num_samples:
+                self.header_data['samples'].append({})
+
+            # Save sample notes to header data
+            for i in range(self.num_samples):
+                sample_id = f"Sample {i + 1}"
+                if sample_id in self.data and 'sample_notes' in self.data[sample_id]:
+                    self.header_data['samples'][i]['sample_notes'] = self.data[sample_id]['sample_notes']
+                    debug_print(f"DEBUG: Saved sample notes for {sample_id}: {self.data[sample_id]['sample_notes'][:50]}...")
 
             # Also update the UI state in all_filtered_sheets
             if hasattr(self.parent, 'all_filtered_sheets'):
@@ -2161,7 +2169,7 @@ Developed by Charlie Becquet
             if self.test_name in self.parent.filtered_sheets:
                 self.parent.filtered_sheets[self.test_name]['header_data'] = self.header_data.copy()
                 debug_print("DEBUG: Stored header data in filtered_sheets for .vap3 persistence")
-               
+           
             debug_print("DEBUG: Successfully saved data to loaded sheets")
 
             debug_print("DEBUG: Loaded sheets save completed - main GUI data should now be current")
@@ -3245,11 +3253,11 @@ Developed by Charlie Becquet
                     self.data[sample_id]["notes"] = []
                     self.data[sample_id]["tpm"] = []
         
-                # Load data starting from row 5 (DataFrame index 4)
+                # Load data starting from row 4 (DataFrame index 3)
                 sample_had_data = False
                 row_count = 0
         
-                data_start_row = 4  # Data starts at row 5 (0-indexed row 4)
+                data_start_row = 3  # Data starts at row 4 (0-indexed row 3)
         
                 for data_row_idx in range(data_start_row, min(len(sheet_data), 100)):  # Limit to reasonable number of rows
                     try:
@@ -4193,7 +4201,7 @@ Developed by Charlie Becquet
         # Stats text frame (fixed height section) - now with grid layout for 3 columns
         text_frame = ttk.Frame(main_stats_frame)
         text_frame.pack(side='top', fill='x', pady=(5, 10))
-        self.text_frame_ref = text_frame
+        self.text_frame_ref = text_frame  # Store the reference properly
     
         # Configure grid weights for equal column sizing: 33% / 33% / 33%
         text_frame.columnconfigure(0, weight=1, uniform="equal_columns")  
@@ -4204,47 +4212,21 @@ Developed by Charlie Becquet
         left_column = ttk.LabelFrame(text_frame, text="TPM Statistics", padding=5)
         left_column.grid(row=0, column=0, sticky='nsew', padx=(0, 2))
         left_column.grid_columnconfigure(0, weight=1)
-        # Stats display (left column)
-        self.avg_tpm_label = ttk.Label(left_column, text="Average TPM: 0.000", font=('Arial', 10))
-        self.avg_tpm_label.pack(anchor='w')
-
-        self.latest_tpm_label = ttk.Label(left_column, text="Latest TPM: 0.000", font=('Arial', 10))
-        self.latest_tpm_label.pack(anchor='w')
-
-        self.std_dev_label = ttk.Label(left_column, text="Std Dev (last 5 sessions): 0.000", font=('Arial', 10))
-        self.std_dev_label.pack(anchor='w')
-
-        self.current_puffs_label = ttk.Label(left_column, text="Current Puffs: 0", font=('Arial', 10))
-        self.current_puffs_label.pack(anchor='w')
     
-        # Middle column - Sample information 
+        # Create text widget for stats display
+        self.sample_stats_text = tk.Text(left_column, height=6, wrap='word', font=('Arial', 10), state='disabled')
+        self.sample_stats_text.pack(fill='both', expand=True)
+    
+        # Middle column - Sample information
         middle_column = ttk.LabelFrame(text_frame, text="Sample Information", padding=5)
         middle_column.grid(row=0, column=1, sticky='nsew', padx=2)
         middle_column.grid_columnconfigure(0, weight=1)
     
-        # Sample information labels (middle column)
-        self.media_label = ttk.Label(middle_column, text="Media: N/A", font=('Arial', 10))
-        self.media_label.pack(anchor='w')
-    
-        self.viscosity_label = ttk.Label(middle_column, text="Viscosity: N/A", font=('Arial', 10))
-        self.viscosity_label.pack(anchor='w')
-    
-        self.oil_mass_label = ttk.Label(middle_column, text="Initial Oil Mass: N/A", font=('Arial', 10))
-        self.oil_mass_label.pack(anchor='w')
-    
-        self.resistance_label = ttk.Label(middle_column, text="Resistance: N/A", font=('Arial', 10))
-        self.resistance_label.pack(anchor='w')
-    
-        self.voltage_label = ttk.Label(middle_column, text="Voltage: N/A", font=('Arial', 10))
-        self.voltage_label.pack(anchor='w')
-    
-        self.puffing_regime_label = ttk.Label(middle_column, text="Puffing Regime: N/A", font=('Arial', 10))
-        self.puffing_regime_label.pack(anchor='w')
-    
-        self.device_type_label = ttk.Label(middle_column, text="Device Type: N/A", font=('Arial', 10))
-        self.device_type_label.pack(anchor='w')
-    
-        # Right column - Sample Test Notes 
+        # Create text widget for sample info
+        self.sample_info_text = tk.Text(middle_column, height=6, wrap='word', font=('Arial', 10), state='disabled')
+        self.sample_info_text.pack(fill='both', expand=True)
+
+        # Right column - Sample test notes
         right_column = ttk.LabelFrame(text_frame, text="Sample Test Notes", padding=5)
         right_column.grid(row=0, column=2, sticky='nsew', padx=(2, 0))
         right_column.grid_columnconfigure(0, weight=1)
@@ -4426,155 +4408,97 @@ Developed by Charlie Becquet
         debug_print(f"DEBUG: TPM plot updated for {current_sample_id} with smart y-axis bounds")
 
     def update_stats_panel(self, event=None):
-        """Update the TPM statistics panel to show only current sample with enhanced stats."""
+        """Update the enhanced TPM statistics panel."""
         debug_print("DEBUG: Updating enhanced TPM statistics panel")
-
-        # Debug: Check if our grid configuration is still intact
-        if hasattr(self, 'text_frame_ref'):
-            debug_print(f"DEBUG: text_frame column 0 weight: {self.text_frame_ref.grid_columnconfigure(0)}")
-            debug_print(f"DEBUG: text_frame column 1 weight: {self.text_frame_ref.grid_columnconfigure(1)}")
-            debug_print(f"DEBUG: text_frame column 2 weight: {self.text_frame_ref.grid_columnconfigure(2)}")
-
-        # Get currently selected sample
-        try:
-            current_tab_index = self.notebook.index(self.notebook.select())
-            current_sample_id = f"Sample {current_tab_index + 1}"
-            debug_print(f"DEBUG: Updating stats for {current_sample_id}")
-        except:
-            current_sample_id = "Sample 1"  
-            current_tab_index = 0
-
-        # Store which sample we're updating for verification in on_notes_changed
-        self.last_updated_sample = current_sample_id
-
-        # Get sample name
-        sample_name = "Unknown Sample"
-        if current_tab_index < len(self.header_data.get('samples', [])):
-            sample_name = self.header_data['samples'][current_tab_index].get('id', f"Sample {current_tab_index + 1}")
-
-        # Update sample label
-        if hasattr(self, 'current_sample_label'):
-            self.current_sample_label.config(text=f"{current_sample_id}: {sample_name}")
-
-        # Calculate TPM values if needed
-        self.calculate_tpm(current_sample_id)
-
-        # Get TPM values and data for current sample (filtering out None values)
-        tpm_values = [v for v in self.data[current_sample_id]["tpm"] if v is not None]
-
-        if tpm_values:
-            # Calculate statistics
-            avg_tpm = sum(tpm_values) / len(tpm_values)
-            latest_tpm = tpm_values[-1]
-
-            # Calculate standard deviation of last 5 sessions (or all if < 5)
-            recent_tpm_values = tpm_values[-5:] if len(tpm_values) >= 5 else tpm_values
-            std_dev = statistics.stdev(recent_tpm_values) if len(recent_tpm_values) > 1 else 0.0
-
-            # Find current puff count (furthest down row with after_weight data)
-            current_puff_count = 0
-            for i in range(len(self.data[current_sample_id]["after_weight"]) - 1, -1, -1):
-                if (self.data[current_sample_id]["after_weight"][i] and 
-                    str(self.data[current_sample_id]["after_weight"][i]).strip()):
-                    current_puff_count = self.data[current_sample_id]["puffs"][i] if i < len(self.data[current_sample_id]["puffs"]) else 0
-                    break
-
-            self.data[current_sample_id]["avg_tpm"] = avg_tpm
-        else:
-            avg_tpm = 0.0
-            latest_tpm = 0.0
-            std_dev = 0.0
-            current_puff_count = 0
-            recent_tpm_values = []
-
-        # Update TPM statistics labels
-        if hasattr(self, 'avg_tpm_label'):
-            self.avg_tpm_label.config(text=f"Average TPM: {avg_tpm:.6f}" if tpm_values else "Average TPM: N/A")
-
-        if hasattr(self, 'latest_tpm_label'):
-            self.latest_tpm_label.config(text=f"Latest TPM: {latest_tpm:.6f}" if tpm_values else "Latest TPM: N/A")
-
-        if hasattr(self, 'std_dev_label'):
-            sessions_text = f"(last {len(recent_tpm_values)} sessions)" if tpm_values else ""
-            self.std_dev_label.config(text=f"Std Dev {sessions_text}: {std_dev:.6f}" if tpm_values else "Std Dev: N/A")
-
-        if hasattr(self, 'current_puffs_label'):
-            self.current_puffs_label.config(text=f"Current Puffs: {current_puff_count}")
-
-        # Update sample information labels
-        if current_tab_index < len(self.header_data.get('samples', [])):
-            sample_data = self.header_data['samples'][current_tab_index]
     
-            if hasattr(self, 'media_label'):
-                media = sample_data.get('media', 'N/A')
-                self.media_label.config(text=f"Media: {media}")
+        if not hasattr(self, 'stats_frame') or not self.stats_frame.winfo_exists():
+            debug_print("DEBUG: Stats frame not available")
+            return
+    
+        # Get current sample info
+        current_tab = self.notebook.index(self.notebook.select())
+        current_sample_id = f"Sample {current_tab + 1}"
+    
+        # Update column weights for equal distribution - FIX: Use text_frame_ref instead of text_frame
+        if hasattr(self, 'text_frame_ref') and self.text_frame_ref.winfo_exists():
+            for i in range(3):
+                col_config = self.text_frame_ref.grid_columnconfigure(i)
+                debug_print(f"DEBUG: text_frame column {i} weight: {col_config}")
+    
+        # Update stats for current sample
+        debug_print(f"DEBUG: Updating stats for {current_sample_id}")
+    
+        # Calculate TPM statistics
+        sample_data = self.data[current_sample_id]
+        tpm_values = [float(tpm) for tpm in sample_data.get("tpm", []) if tpm and str(tpm).strip() and tpm != ""]
+    
+        if tpm_values:
+            avg_tpm = statistics.mean(tpm_values)
+            latest_tpm = tpm_values[-1] if tpm_values else 0
+            current_puffs = len([p for p in sample_data.get("puffs", []) if p and str(p).strip()])
         
-            if hasattr(self, 'viscosity_label'):
-                viscosity = sample_data.get('viscosity', 'N/A')
-                self.viscosity_label.config(text=f"Viscosity: {viscosity}")
+            # Update statistics text
+            sample_info_text = f"""Sample 1: {self.header_data['samples'][current_tab]['id'] if current_tab < len(self.header_data.get('samples', [])) else current_sample_id}
+
+                TPM Statistics
+                Average TPM: {avg_tpm:.5f}
+                Latest TPM: {latest_tpm:.5f}
+                Std Dev (last 5 sessions): {statistics.stdev(tpm_values[-5:]) if len(tpm_values) >= 2 else 0:.6f}
+                Current Puffs: {current_puffs}"""
         
-            if hasattr(self, 'oil_mass_label'):
-                oil_mass = sample_data.get('oil_mass', 'N/A')
-                self.oil_mass_label.config(text=f"Initial Oil Mass: {oil_mass}")
-        
-            if hasattr(self, 'resistance_label'):
-                resistance = sample_data.get('resistance', 'N/A')
-                self.resistance_label.config(text=f"Resistance: {resistance}")
-        
-            if hasattr(self, 'voltage_label'):
-                voltage = sample_data.get('voltage', 'N/A')
-                self.voltage_label.config(text=f"Voltage: {voltage}")
-        
-            if hasattr(self, 'puffing_regime_label'):
-                puffing_regime = sample_data.get('puffing_regime', 'N/A')
-                self.puffing_regime_label.config(text=f"Puffing Regime: {puffing_regime}")
-        
-            # Get device type from common data
-            device_type = self.header_data.get('common', {}).get('device_type', 'N/A')
-            if hasattr(self, 'device_type_label'):
-                self.device_type_label.config(text=f"Device Type: {device_type}")
+            # Update sample information
+            sample_info = self.header_data['samples'][current_tab] if current_tab < len(self.header_data.get('samples', [])) else {}
+            sample_info_display = f"""Sample Information
+                Media: {sample_info.get('media', '')}
+                Viscosity: {sample_info.get('viscosity', '')}
+                Initial Oil Mass: {sample_info.get('oil_mass', '')}
+                Resistance: {sample_info.get('resistance', '')}
+                Voltage: {sample_info.get('voltage', '')}
+                Puffing Regime: {sample_info.get('puffing_regime', '')}
+                Device Type: {self.header_data.get('common', {}).get('device_type', '')}"""
+    
         else:
-            # Set all to N/A if no header data available
-            if hasattr(self, 'media_label'):
-                self.media_label.config(text="Media: N/A")
-            if hasattr(self, 'viscosity_label'):
-                self.viscosity_label.config(text="Viscosity: N/A")
-            if hasattr(self, 'oil_mass_label'):
-                self.oil_mass_label.config(text="Initial Oil Mass: N/A")
-            if hasattr(self, 'resistance_label'):
-                self.resistance_label.config(text="Resistance: N/A")
-            if hasattr(self, 'voltage_label'):
-                self.voltage_label.config(text="Voltage: N/A")
-            if hasattr(self, 'puffing_regime_label'):
-                self.puffing_regime_label.config(text="Puffing Regime: N/A")
-            if hasattr(self, 'device_type_label'):
-                self.device_type_label.config(text="Device Type: N/A")
+            sample_info_text = f"Sample 1: {current_sample_id}\n\nNo TPM data available"
+            sample_info_display = "Sample Information\nNo data available"
+    
+        # Update text widgets if they exist
+        if hasattr(self, 'sample_stats_text') and self.sample_stats_text.winfo_exists():
+            self.sample_stats_text.config(state='normal')
+            self.sample_stats_text.delete('1.0', 'end')
+            self.sample_stats_text.insert('1.0', sample_info_text)
+            self.sample_stats_text.config(state='disabled')
+    
+        if hasattr(self, 'sample_info_text') and self.sample_info_text.winfo_exists():
+            self.sample_info_text.config(state='normal')
+            self.sample_info_text.delete('1.0', 'end')
+            self.sample_info_text.insert('1.0', sample_info_display)
+            self.sample_info_text.config(state='disabled')
 
         # Update sample notes with proper protection against recursive events
         if hasattr(self, 'sample_notes_text') and self.sample_notes_text.winfo_exists():
             # Set flag to prevent recursive event handling
             self.updating_notes = True
             debug_print(f"DEBUG: Setting updating_notes flag to True for {current_sample_id}")
-        
+    
             try:
                 # Completely unbind events temporarily  
                 self.sample_notes_text.unbind('<KeyRelease>')
                 self.sample_notes_text.unbind('<FocusOut>')
-            
+        
                 # Ensure the widget doesn't have focus before updating content
                 if self.sample_notes_text == self.window.focus_get():
                     self.window.focus_set()
                     self.window.update_idletasks()
                     debug_print("DEBUG: Removed focus from notes widget before content update")
-            
+        
                 # Clear and set notes content
                 self.sample_notes_text.delete('1.0', 'end')
                 notes_content = self.data[current_sample_id].get("sample_notes", "")
                 if notes_content:
                     self.sample_notes_text.insert('1.0', notes_content)
-            
+        
                 debug_print(f"DEBUG: Updated notes widget content for {current_sample_id}: '{notes_content[:50]}...'")
-            
+        
             finally:
                 # Always re-enable event binding and clear flag
                 self.sample_notes_text.bind('<KeyRelease>', self.on_notes_changed)

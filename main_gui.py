@@ -580,24 +580,172 @@ Would you like to download and install the update?"""
 
         if is_plotting_sheet:
             # Use grid layout for precise control of width proportions
-            self.dynamic_frame.columnconfigure(0, weight=5)
-            self.dynamic_frame.columnconfigure(1, weight=5)
-        
-            self.dynamic_frame.rowconfigure(0, weight = 1)
+            self.dynamic_frame.columnconfigure(0, weight=5)  # Table column
+            self.dynamic_frame.columnconfigure(1, weight=5)  # Plot column
+    
+            self.dynamic_frame.rowconfigure(0, weight=1)
 
-            # Table takes exactly 50% width
-            self.table_frame = ttk.Frame(self.dynamic_frame)
-            self.table_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 5), pady=5)
+            # LEFT SIDE: Table area split into top (table) and bottom (notes)
+            left_side_frame = ttk.Frame(self.dynamic_frame)
+            left_side_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 5), pady=5)
         
-            # Plot takes remaining 50% width
+            # Create a PanedWindow to split table and notes vertically
+            left_paned = ttk.PanedWindow(left_side_frame, orient="vertical")
+            left_paned.pack(fill="both", expand=True)
+        
+            # Top pane: Table (60% of height)
+            self.table_frame = ttk.Frame(left_paned)
+            left_paned.add(self.table_frame, weight=3)
+        
+            # Bottom pane: Sample Notes (40% of height)
+            self.notes_frame = ttk.LabelFrame(left_paned, text="Test Sample Notes", padding=5)
+            left_paned.add(self.notes_frame, weight=2)
+        
+            # Configure the notes display area
+            self.create_notes_display_area()
+        
+            # RIGHT SIDE: Plot takes remaining 50% width
             self.plot_frame = ttk.Frame(self.dynamic_frame)
             self.plot_frame.grid(row=0, column=1, sticky="nsew", padx=(5, 0), pady=5)
-        
+    
             self.constrain_plot_width()
         else:
-            # Non-plotting sheets use the full space
+            # Non-plotting sheets use the full space (no changes here)
             self.table_frame = ttk.Frame(self.dynamic_frame, height=display_height)
             self.table_frame.pack(fill="both", expand=True, padx=5, pady=5)
+
+    def create_notes_display_area(self):
+        """Create the notes display area for plotting sheets."""
+        if not hasattr(self, 'notes_frame') or not self.notes_frame.winfo_exists():
+            return
+    
+        # Clear existing notes widgets
+        for widget in self.notes_frame.winfo_children():
+            widget.destroy()
+    
+        # Create a notebook for different samples' notes
+        self.notes_notebook = ttk.Notebook(self.notes_frame)
+        self.notes_notebook.pack(fill="both", expand=True)
+    
+        # Initially empty - will be populated when data is loaded
+        self.notes_text_widgets = {}
+
+    def update_notes_display(self, sheet_name):
+        """Update the notes display area with sample notes from the current sheet."""
+        if not hasattr(self, 'notes_frame') or not self.notes_frame.winfo_exists():
+            return
+    
+        debug_print(f"DEBUG: Updating notes display for sheet: {sheet_name}")
+    
+        # Get the sheet info
+        sheet_info = self.filtered_sheets.get(sheet_name)
+        if not sheet_info:
+            debug_print(f"DEBUG: No sheet info found for {sheet_name}")
+            return
+    
+        # Get header data which contains sample notes
+        header_data = sheet_info.get('header_data')
+        if not header_data:
+            debug_print(f"DEBUG: No header data found for {sheet_name}")
+            # Create empty display
+            self.create_empty_notes_display()
+            return
+    
+        samples_data = header_data.get('samples', [])
+        if not samples_data:
+            debug_print(f"DEBUG: No samples data found in header_data for {sheet_name}")
+            self.create_empty_notes_display()
+            return
+    
+        debug_print(f"DEBUG: Found {len(samples_data)} samples with potential notes")
+    
+        # Clear existing notebook tabs
+        for tab in self.notes_notebook.tabs():
+            self.notes_notebook.forget(tab)
+    
+        self.notes_text_widgets.clear()
+    
+        # Create tabs for each sample with notes
+        for i, sample_data in enumerate(samples_data):
+            sample_id = sample_data.get('id', f'Sample {i+1}')
+            sample_notes = sample_data.get('sample_notes', '')
+        
+            if sample_notes or i < 4:  # Show first 4 samples or any with notes
+                # Create tab for this sample
+                tab_frame = ttk.Frame(self.notes_notebook)
+                self.notes_notebook.add(tab_frame, text=f"Sample {i+1}")
+            
+                # Create text widget with scrollbar for notes
+                notes_container = ttk.Frame(tab_frame)
+                notes_container.pack(fill="both", expand=True, padx=5, pady=5)
+            
+                # Sample info at the top
+                info_frame = ttk.Frame(notes_container)
+                info_frame.pack(fill="x", pady=(0, 5))
+            
+                sample_info_label = ttk.Label(info_frame, text=f"Sample: {sample_id}", 
+                                            font=('Arial', 10, 'bold'))
+                sample_info_label.pack(anchor='w')
+            
+                # Additional sample info
+                if sample_data.get('media'):
+                    media_label = ttk.Label(info_frame, text=f"Media: {sample_data.get('media', 'N/A')}")
+                    media_label.pack(anchor='w')
+            
+                if sample_data.get('viscosity'):
+                    viscosity_label = ttk.Label(info_frame, text=f"Viscosity: {sample_data.get('viscosity', 'N/A')}")
+                    viscosity_label.pack(anchor='w')
+            
+                # Notes text area
+                text_frame = ttk.Frame(notes_container)
+                text_frame.pack(fill="both", expand=True)
+            
+                notes_text = tk.Text(text_frame, wrap='word', font=('Arial', 9), 
+                                   state='disabled', bg='#f8f8f8')
+                notes_scrollbar = ttk.Scrollbar(text_frame, orient='vertical', 
+                                              command=notes_text.yview)
+                notes_text.configure(yscrollcommand=notes_scrollbar.set)
+            
+                notes_text.pack(side='left', fill='both', expand=True)
+                notes_scrollbar.pack(side='right', fill='y')
+            
+                # Insert the notes content
+                notes_text.config(state='normal')
+                if sample_notes:
+                    notes_text.insert('1.0', sample_notes)
+                else:
+                    notes_text.insert('1.0', "No test notes available for this sample.")
+                notes_text.config(state='disabled')
+            
+                # Store reference for potential updates
+                self.notes_text_widgets[f"Sample {i+1}"] = notes_text
+            
+                debug_print(f"DEBUG: Created notes tab for Sample {i+1} with {len(sample_notes)} characters")
+    
+        # If no tabs were created, show empty display
+        if not self.notes_notebook.tabs():
+            self.create_empty_notes_display()
+    
+        debug_print(f"DEBUG: Notes display updated with {len(self.notes_notebook.tabs())} tabs")
+
+    def create_empty_notes_display(self):
+        """Create an empty notes display when no sample notes are available."""
+        if not hasattr(self, 'notes_notebook'):
+            return
+        
+        # Clear existing tabs
+        for tab in self.notes_notebook.tabs():
+            self.notes_notebook.forget(tab)
+    
+        # Create a single tab with empty message
+        empty_frame = ttk.Frame(self.notes_notebook)
+        self.notes_notebook.add(empty_frame, text="No Notes")
+    
+        empty_label = ttk.Label(empty_frame, 
+                              text="No sample test notes available.\nUse the Data Collection window to add notes.",
+                              font=('Arial', 10), 
+                              justify='center')
+        empty_label.pack(expand=True, pady=20)
 
     def constrain_plot_width(self):
         """Ensure the plot doesn't exceed 50% of the window width."""
@@ -1205,6 +1353,9 @@ Would you like to download and install the update?"""
             # Handle empty sheets
             if is_empty or data.empty:
                 self._handle_empty_sheet(sheet_name, is_plotting_sheet)
+                if is_plotting_sheet:
+                    # Still create empty notes display for plotting sheets
+                    self.create_empty_notes_display()
                 self.root.update_idletasks()
                 return
 
@@ -1257,8 +1408,11 @@ Would you like to download and install the update?"""
                         self.display_plot(full_sample_data)
                     else:
                         self._show_empty_plot_message()
+
+                    self.update_notes_display(sheet_name)
                 except Exception as e:
                     debug_print(f"ERROR: Failed to display plot: {e}")
+                    self._show_empty_plot_message()
 
             self.root.update_idletasks()
 
