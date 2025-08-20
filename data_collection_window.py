@@ -411,6 +411,11 @@ class DataCollectionWindow:
         # Default puff interval
         self.puff_interval = 10  # Default to 10
 
+        # Initialize tab tracking for notes handling
+        self.previous_tab_index = 0
+        self.updating_notes = False
+        debug_print("DEBUG: Initialized tab change tracking variables")
+
         # Set up keyboard shortcut flags
         self.hotkeys_enabled = True
         self.hotkey_bindings = {}
@@ -763,8 +768,46 @@ class DataCollectionWindow:
         self.create_tpm_stats_panel()
 
         # Bind notebook tab change event
-        self.notebook.bind("<<NotebookTabChanged>>", self.update_stats_panel)
+        self.notebook.bind("<<NotebookTabChanged>>", self.on_tab_changed)
    
+    def on_tab_changed(self, event=None):
+        """Handle notebook tab changes to properly save/load notes."""
+        debug_print("DEBUG: Tab changed - handling notes save/load")
+    
+        # Save current notes before switching if notes widget exists and has focus
+        if hasattr(self, 'sample_notes_text') and self.sample_notes_text.winfo_exists():
+            try:
+                # Get the current notes content before tab switch
+                current_notes = self.sample_notes_text.get('1.0', 'end-1c')
+            
+                # Get the previous tab that was selected (before this change)
+                if hasattr(self, 'previous_tab_index'):
+                    prev_sample_id = f"Sample {self.previous_tab_index + 1}"
+                    self.data[prev_sample_id]["sample_notes"] = current_notes
+                    debug_print(f"DEBUG: Saved notes for previous tab {prev_sample_id}: '{current_notes[:30]}...'")
+            
+                # Force the text widget to lose focus
+                self.sample_notes_text.selection_clear()
+                self.window.focus_set()  # Move focus to main window
+            
+                # Process any pending events (including FocusOut)
+                self.window.update_idletasks()
+                debug_print("DEBUG: Forced notes widget to lose focus and processed pending events")
+            
+            except Exception as e:
+                debug_print(f"DEBUG: Error handling focus during tab change: {e}")
+    
+        # Store current tab for next change
+        try:
+            current_tab_index = self.notebook.index(self.notebook.select())
+            self.previous_tab_index = current_tab_index
+            debug_print(f"DEBUG: Stored current tab index: {current_tab_index}")
+        except:
+            pass
+    
+        # Small delay to ensure all events are processed, then update the panel
+        self.window.after(10, self.update_stats_panel)
+
     def log(self, message, level="info"):
         """Log a message with the specified level."""
         logger = logging.getLogger("DataCollectionWindow")
@@ -2226,31 +2269,47 @@ Developed by Charlie Becquet
         # This method manages the overall process
         self.sample_frames = []
         self.sample_sheets = []
-    
+
         # Calls create_sample_tab() for EACH sample
         for i in range(self.num_samples):
             sample_id = f"Sample {i+1}"
             sample_frame = ttk.Frame(self.notebook, padding=10, style='TFrame')
             sample_name = self.header_data['samples'][i].get('id', f"Sample {i+1}")
-        
+    
             self.notebook.add(sample_frame, text=f"Sample {i+1} - {sample_name}")
             self.sample_frames.append(sample_frame)
-        
+    
             # Create individual tab content
             sheet = self.create_sample_tab(sample_frame, sample_id, i)
             self.sample_sheets.append(sheet)
 
-            # At the end, add this binding for tab selection events:
-        self.notebook.bind("<<NotebookTabChanged>>", self.on_tab_changed)
-        debug_print("DEBUG: Bound tab change event handler")
+        # REMOVED: Duplicate binding that was conflicting
+        # self.notebook.bind("<<NotebookTabChanged>>", self.on_tab_changed)
+        debug_print("DEBUG: Sample tabs created without duplicate binding")
 
     def on_tab_changed(self, event=None):
-        """Handle tab change events to properly manage notes focus."""
-        debug_print("DEBUG: Tab changed - handling notes focus")
+        """Handle notebook tab changes to properly save/load notes."""
+        debug_print("DEBUG: Tab changed - handling notes save/load")
     
-        # Force any active text editing to complete and lose focus
+        # Get the NEW tab index (after the change)
+        try:
+            new_tab_index = self.notebook.index(self.notebook.select())
+            debug_print(f"DEBUG: New tab index: {new_tab_index}")
+        except:
+            new_tab_index = 0
+            debug_print("DEBUG: Failed to get new tab index, defaulting to 0")
+    
+        # Save notes for the PREVIOUS tab (before the change) if we have notes widget
         if hasattr(self, 'sample_notes_text') and self.sample_notes_text.winfo_exists():
             try:
+                # Get the current notes content
+                current_notes = self.sample_notes_text.get('1.0', 'end-1c')
+            
+                # Save to the PREVIOUS tab's data using our tracked index
+                previous_sample_id = f"Sample {self.current_tab_index + 1}"
+                self.data[previous_sample_id]["sample_notes"] = current_notes
+                debug_print(f"DEBUG: Saved notes from previous tab {previous_sample_id}: '{current_notes[:30]}...'")
+            
                 # Force the text widget to lose focus
                 self.sample_notes_text.selection_clear()
                 self.window.focus_set()  # Move focus to main window
@@ -2260,7 +2319,11 @@ Developed by Charlie Becquet
                 debug_print("DEBUG: Forced notes widget to lose focus and processed pending events")
             
             except Exception as e:
-                debug_print(f"DEBUG: Error handling focus during tab change: {e}")
+                debug_print(f"DEBUG: Error saving notes during tab change: {e}")
+    
+        # Update our tracking to the new tab
+        self.current_tab_index = new_tab_index
+        debug_print(f"DEBUG: Updated current_tab_index to: {new_tab_index}")
     
         # Small delay to ensure all events are processed, then update the panel
         self.window.after(10, self.update_stats_panel)
@@ -3844,7 +3907,7 @@ Developed by Charlie Becquet
 
         self.window.destroy()
 
-    # ADD NEW: Transfer sample images to main GUI
+ 
     def _transfer_sample_images_to_main_gui(self):
         """Transfer sample images to main GUI with proper labeling for display."""
         try:
@@ -4020,8 +4083,7 @@ Developed by Charlie Becquet
                 messagebox.showerror("Save Error", error_msg)
             
             return False
-    
-    # ADD NEW: Sample image saving method
+
     def _save_sample_images(self):
         """Save sample images to the appropriate file format."""
         try:
@@ -4202,53 +4264,58 @@ Developed by Charlie Becquet
         text_frame = ttk.Frame(main_stats_frame)
         text_frame.pack(side='top', fill='x', pady=(5, 10))
         self.text_frame_ref = text_frame  # Store the reference properly
-    
+ 
         # Configure grid weights for equal column sizing: 33% / 33% / 33%
         text_frame.columnconfigure(0, weight=1, uniform="equal_columns")  
         text_frame.columnconfigure(1, weight=1, uniform="equal_columns")  
         text_frame.columnconfigure(2, weight=1, uniform="equal_columns")  
-    
-        # Left column - TPM statistics 
+ 
+        # Left column - TPM statistics - CHANGED: Use Labels instead of Text widget
         left_column = ttk.LabelFrame(text_frame, text="TPM Statistics", padding=5)
         left_column.grid(row=0, column=0, sticky='nsew', padx=(0, 2))
         left_column.grid_columnconfigure(0, weight=1)
-    
-        # Create text widget for stats display - FIXED: Add proper styling
-        self.sample_stats_text = tk.Text(left_column, height=6, wrap='word', font=('Arial', 10), 
-                                       state='disabled', bg='#f8f8f8', relief='flat', 
-                                       borderwidth=1, highlightthickness=0)
-        self.sample_stats_text.pack(fill='both', expand=True)
-    
-        # Middle column - Sample information
+ 
+        # Create label for stats display - FIXED: Use Label instead of Text
+        self.sample_stats_label = ttk.Label(left_column, text="No TPM data available", 
+                                           font=('Arial', 10), background='#f8f8f8', 
+                                           relief='flat', borderwidth=1, anchor='nw', justify='left')
+        self.sample_stats_label.pack(fill='both', expand=True, padx=2, pady=2)
+        debug_print("DEBUG: Created TPM stats label widget")
+ 
+        # Middle column - Sample information - CHANGED: Use Labels instead of Text widget
         middle_column = ttk.LabelFrame(text_frame, text="Sample Information", padding=5)
         middle_column.grid(row=0, column=1, sticky='nsew', padx=2)
         middle_column.grid_columnconfigure(0, weight=1)
-    
-        # Create text widget for sample info - FIXED: Add proper styling
-        self.sample_info_text = tk.Text(middle_column, height=6, wrap='word', font=('Arial', 10), 
-                                      state='disabled', bg='#f8f8f8', relief='flat', 
-                                      borderwidth=1, highlightthickness=0)
-        self.sample_info_text.pack(fill='both', expand=True)
+ 
+        # Create label for sample info - FIXED: Use Label instead of Text
+        self.sample_info_label = ttk.Label(middle_column, text="No sample data available", 
+                                          font=('Arial', 10), background='#f8f8f8', 
+                                          relief='flat', borderwidth=1, anchor='nw', justify='left')
+        self.sample_info_label.pack(fill='both', expand=True, padx=2, pady=2)
+        debug_print("DEBUG: Created sample info label widget")
 
-        # Right column - Sample test notes
+        # Right column - Sample test notes - KEPT: Text widget for editing
         right_column = ttk.LabelFrame(text_frame, text="Sample Test Notes", padding=5)
         right_column.grid(row=0, column=2, sticky='nsew', padx=(2, 0))
         right_column.grid_columnconfigure(0, weight=1)
-    
+ 
         # Create text widget for notes with scrollbar in right column
         notes_container = ttk.Frame(right_column)
         notes_container.pack(fill='both', expand=True)
-    
+ 
         self.sample_notes_text = tk.Text(notes_container, height=6, wrap='word', font=('Arial', 10))
         notes_scrollbar = ttk.Scrollbar(notes_container, orient='vertical', command=self.sample_notes_text.yview)
         self.sample_notes_text.configure(yscrollcommand=notes_scrollbar.set)
-    
+ 
         self.sample_notes_text.pack(side='left', fill='both', expand=True)
         notes_scrollbar.pack(side='right', fill='y')
-    
+ 
         # Bind notes text changes to save function
         self.sample_notes_text.bind('<KeyRelease>', self.on_notes_changed)
         self.sample_notes_text.bind('<FocusOut>', self.on_notes_changed)
+        debug_print("DEBUG: Bound notes change events")
+
+        # Plot container frame (use original expandable approach)
 
         # Plot container frame (use original expandable approach)
         plot_container = ttk.Frame(main_stats_frame)
@@ -4275,28 +4342,22 @@ Developed by Charlie Becquet
         if self.updating_notes:
             debug_print("DEBUG: Ignoring notes change during panel update")
             return
-        
+    
         debug_print("DEBUG: Sample notes changed")
 
         try:
-            current_tab_index = self.notebook.index(self.notebook.select())
-            current_sample_id = f"Sample {current_tab_index + 1}"
-        
+            # Use our tracked tab index instead of querying the notebook
+            current_sample_id = f"Sample {self.current_tab_index + 1}"
+            debug_print(f"DEBUG: Using tracked tab index {self.current_tab_index} for sample {current_sample_id}")
+    
             # Get the current notes content
             notes_content = self.sample_notes_text.get('1.0', 'end-1c')
-        
-            # Double-check: verify this content should belong to the current sample
-            # by checking if we're not in the middle of updating
-            if hasattr(self, 'last_updated_sample'):
-                if self.last_updated_sample != current_sample_id:
-                    debug_print(f"DEBUG: Ignoring notes change - sample mismatch: {current_sample_id} vs {self.last_updated_sample}")
-                    return
-        
+    
             # Store in data structure
             self.data[current_sample_id]["sample_notes"] = notes_content
-        
+    
             debug_print(f"DEBUG: Updated notes for {current_sample_id}: '{notes_content[:30]}...'")
-        
+    
         except Exception as e:
             debug_print(f"DEBUG: Error updating sample notes: {e}")
 
@@ -4414,95 +4475,100 @@ Developed by Charlie Becquet
     def update_stats_panel(self, event=None):
         """Update the enhanced TPM statistics panel."""
         debug_print("DEBUG: Updating enhanced TPM statistics panel")
-    
+ 
         if not hasattr(self, 'stats_frame') or not self.stats_frame.winfo_exists():
             debug_print("DEBUG: Stats frame not available")
             return
-    
+ 
         # Get current sample info
         current_tab = self.notebook.index(self.notebook.select())
         current_sample_id = f"Sample {current_tab + 1}"
-    
+ 
         # Update column weights for equal distribution - FIX: Use text_frame_ref instead of text_frame
         if hasattr(self, 'text_frame_ref') and self.text_frame_ref.winfo_exists():
             for i in range(3):
                 col_config = self.text_frame_ref.grid_columnconfigure(i)
                 debug_print(f"DEBUG: text_frame column {i} weight: {col_config}")
-    
+ 
         # Update stats for current sample
         debug_print(f"DEBUG: Updating stats for {current_sample_id}")
+ 
+        # Get the actual sample name from header data - FIXED: Proper sample name extraction
+        actual_sample_name = "Unknown Sample"
+        if (hasattr(self, 'header_data') and 
+            'samples' in self.header_data and 
+            current_tab < len(self.header_data['samples'])):
+            sample_info = self.header_data['samples'][current_tab]
+            if isinstance(sample_info, dict):
+                actual_sample_name = sample_info.get('id', f"Sample {current_tab + 1}")
+            else:
+                actual_sample_name = str(sample_info)
     
+        debug_print(f"DEBUG: Using sample name: {actual_sample_name}")
+
+        # Update the main sample label - FIXED: Show correct sample name
+        if hasattr(self, 'current_sample_label') and self.current_sample_label.winfo_exists():
+            self.current_sample_label.config(text=f"Sample {current_tab + 1}: {actual_sample_name}")
+            debug_print(f"DEBUG: Updated main sample label to: Sample {current_tab + 1}: {actual_sample_name}")
+ 
         # Calculate TPM statistics
         sample_data = self.data[current_sample_id]
         tpm_values = [float(tpm) for tpm in sample_data.get("tpm", []) if tpm and str(tpm).strip() and tpm != ""]
-    
+ 
         if tpm_values:
             avg_tpm = statistics.mean(tpm_values)
             latest_tpm = tpm_values[-1] if tpm_values else 0
             current_puffs = len([p for p in sample_data.get("puffs", []) if p and str(p).strip()])
-        
-            # Update statistics text
-            sample_info_text = f"""Sample 1: {self.header_data['samples'][current_tab]['id'] if current_tab < len(self.header_data.get('samples', [])) else current_sample_id}
-
-                TPM Statistics
-                Average TPM: {avg_tpm:.5f}
-                Latest TPM: {latest_tpm:.5f}
-                Std Dev (last 5 sessions): {statistics.stdev(tpm_values[-5:]) if len(tpm_values) >= 2 else 0:.6f}
-                Current Puffs: {current_puffs}"""
-        
-            # Update sample information
+     
+            # Update statistics text - FIXED: Remove redundant headers
+            sample_info_text = f"Average TPM: {avg_tpm:.5f}\nLatest TPM: {latest_tpm:.5f}\nStd Dev (last 5 sessions): {statistics.stdev(tpm_values[-5:]) if len(tpm_values) >= 2 else 0:.6f}\nCurrent Puffs: {current_puffs}"
+     
+            # Update sample information - FIXED: Remove redundant headers  
             sample_info = self.header_data['samples'][current_tab] if current_tab < len(self.header_data.get('samples', [])) else {}
-            sample_info_display = f"""Sample Information
-                Media: {sample_info.get('media', '')}
-                Viscosity: {sample_info.get('viscosity', '')}
-                Initial Oil Mass: {sample_info.get('oil_mass', '')}
-                Resistance: {sample_info.get('resistance', '')}
-                Voltage: {sample_info.get('voltage', '')}
-                Puffing Regime: {sample_info.get('puffing_regime', '')}
-                Device Type: {self.header_data.get('common', {}).get('device_type', '')}"""
-    
+            sample_info_display = f"Media: {sample_info.get('media', '')}\nViscosity: {sample_info.get('viscosity', '')}\nInitial Oil Mass: {sample_info.get('oil_mass', '')}\nResistance: {sample_info.get('resistance', '')}\nVoltage: {sample_info.get('voltage', '')}\nPuffing Regime: {sample_info.get('puffing_regime', '')}\nDevice Type: {self.header_data.get('common', {}).get('device_type', '')}"
+     
+            debug_print(f"DEBUG: Formatted TPM stats text: {sample_info_text[:50]}...")
+            debug_print(f"DEBUG: Formatted sample info text: {sample_info_display[:50]}...")
+ 
         else:
-            sample_info_text = f"Sample 1: {current_sample_id}\n\nNo TPM data available"
-            sample_info_display = "Sample Information\nNo data available"
-    
-        # Update text widgets if they exist
-        if hasattr(self, 'sample_stats_text') and self.sample_stats_text.winfo_exists():
-            self.sample_stats_text.config(state='normal')
-            self.sample_stats_text.delete('1.0', 'end')
-            self.sample_stats_text.insert('1.0', sample_info_text)
-            self.sample_stats_text.config(state='disabled')
-    
-        if hasattr(self, 'sample_info_text') and self.sample_info_text.winfo_exists():
-            self.sample_info_text.config(state='normal')
-            self.sample_info_text.delete('1.0', 'end')
-            self.sample_info_text.insert('1.0', sample_info_display)
-            self.sample_info_text.config(state='disabled')
+            sample_info_text = "No TPM data available"
+            sample_info_display = "No data available"
+            debug_print("DEBUG: No TPM data available for current sample")
+ 
+        # Update label widgets - FIXED: Use config(text=...) for labels instead of text widget operations
+        if hasattr(self, 'sample_stats_label') and self.sample_stats_label.winfo_exists():
+            self.sample_stats_label.config(text=sample_info_text)
+            debug_print("DEBUG: Updated TPM stats label")
+ 
+        if hasattr(self, 'sample_info_label') and self.sample_info_label.winfo_exists():
+            self.sample_info_label.config(text=sample_info_display)
+            debug_print("DEBUG: Updated sample info label")
 
         # Update sample notes with proper protection against recursive events
         if hasattr(self, 'sample_notes_text') and self.sample_notes_text.winfo_exists():
             # Set flag to prevent recursive event handling
             self.updating_notes = True
             debug_print(f"DEBUG: Setting updating_notes flag to True for {current_sample_id}")
-    
+ 
             try:
                 # Completely unbind events temporarily  
                 self.sample_notes_text.unbind('<KeyRelease>')
                 self.sample_notes_text.unbind('<FocusOut>')
-        
+     
                 # Ensure the widget doesn't have focus before updating content
                 if self.sample_notes_text == self.window.focus_get():
                     self.window.focus_set()
                     self.window.update_idletasks()
                     debug_print("DEBUG: Removed focus from notes widget before content update")
-        
+     
                 # Clear and set notes content
                 self.sample_notes_text.delete('1.0', 'end')
                 notes_content = self.data[current_sample_id].get("sample_notes", "")
                 if notes_content:
                     self.sample_notes_text.insert('1.0', notes_content)
-        
+     
                 debug_print(f"DEBUG: Updated notes widget content for {current_sample_id}: '{notes_content[:50]}...'")
-        
+     
             finally:
                 # Always re-enable event binding and clear flag
                 self.sample_notes_text.bind('<KeyRelease>', self.on_notes_changed)
@@ -4513,7 +4579,7 @@ Developed by Charlie Becquet
         # Update TPM plot for current sample
         self.update_tpm_plot_for_current_sample()
 
-        debug_print(f"DEBUG: Enhanced stats updated for {current_sample_id}")
+        debug_print(f"DEBUG: Enhanced stats updated for {current_sample_id} with correct sample name: {actual_sample_name}")
     
     def go_to_previous_sample(self):
         """Navigate to the previous sample tab."""
@@ -4521,6 +4587,11 @@ Developed by Charlie Becquet
             return
         current_tab = self.notebook.index(self.notebook.select())
         target_tab = (current_tab - 1) % len(self.sample_frames) 
+    
+        # Update our tracking BEFORE changing tabs
+        self.current_tab_index = current_tab
+        debug_print(f"DEBUG: go_to_previous_sample updating current_tab_index to {current_tab}")
+    
         self.notebook.select(target_tab)
 
     def go_to_next_sample(self):
@@ -4529,6 +4600,11 @@ Developed by Charlie Becquet
             return
         current_tab = self.notebook.index(self.notebook.select())
         target_tab = (current_tab + 1) % len(self.sample_frames)  
+    
+        # Update our tracking BEFORE changing tabs
+        self.current_tab_index = current_tab
+        debug_print(f"DEBUG: go_to_next_sample updating current_tab_index to {current_tab}")
+    
         self.notebook.select(target_tab)
     
     def get_column_name(self, col_idx):
