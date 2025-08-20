@@ -4213,8 +4213,10 @@ Developed by Charlie Becquet
         left_column.grid(row=0, column=0, sticky='nsew', padx=(0, 2))
         left_column.grid_columnconfigure(0, weight=1)
     
-        # Create text widget for stats display
-        self.sample_stats_text = tk.Text(left_column, height=6, wrap='word', font=('Arial', 10), state='disabled')
+        # Create text widget for stats display - FIXED: Add proper styling
+        self.sample_stats_text = tk.Text(left_column, height=6, wrap='word', font=('Arial', 10), 
+                                       state='disabled', bg='#f8f8f8', relief='flat', 
+                                       borderwidth=1, highlightthickness=0)
         self.sample_stats_text.pack(fill='both', expand=True)
     
         # Middle column - Sample information
@@ -4222,8 +4224,10 @@ Developed by Charlie Becquet
         middle_column.grid(row=0, column=1, sticky='nsew', padx=2)
         middle_column.grid_columnconfigure(0, weight=1)
     
-        # Create text widget for sample info
-        self.sample_info_text = tk.Text(middle_column, height=6, wrap='word', font=('Arial', 10), state='disabled')
+        # Create text widget for sample info - FIXED: Add proper styling
+        self.sample_info_text = tk.Text(middle_column, height=6, wrap='word', font=('Arial', 10), 
+                                      state='disabled', bg='#f8f8f8', relief='flat', 
+                                      borderwidth=1, highlightthickness=0)
         self.sample_info_text.pack(fill='both', expand=True)
 
         # Right column - Sample test notes

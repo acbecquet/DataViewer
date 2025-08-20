@@ -2067,7 +2067,7 @@ class FileManager:
                                         break
 
                         # Extract sample-specific data from this sample's column block
-                        sample_start_col = col_offset - 4  # Go back to start of this sample's block
+                        sample_start_col = col_offset - 5  # Go back to start of this sample's block
                     
                         # Resistance - typically at sample_start_col + 3 (row 0)
                         if sample_start_col + 3 < len(sheet_data.columns) and len(sheet_data) > 0:
