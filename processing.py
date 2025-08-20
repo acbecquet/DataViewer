@@ -102,7 +102,56 @@ def get_y_data_for_plot_type(sample_data, plot_type):
                 calculated_tpm.loc[idx] = np.nan
                 #debug_print(f"DEBUG: Skipping TPM calculation for row with invalid interval: {puffing_intervals.loc[idx]}")
         return calculated_tpm
+
+    elif plot_type == "Normalized TPM":
+        debug_print("DEBUG: Calculating Normalized TPM by dividing TPM by puff time")
         
+        # Get regular TPM data first
+        tpm_data = get_y_data_for_plot_type(sample_data, "TPM")
+        tpm_numeric = pd.to_numeric(tpm_data, errors='coerce')
+        debug_print(f"DEBUG: Got {len(tpm_numeric.dropna())} TPM values for normalization")
+        
+        # Extract puffing regime from this sample's position: row 1 (index 0), column 8 (index 7)
+        puff_time = None
+        puffing_regime = None
+        
+        try:
+            puffing_regime_cell = sample_data.iloc[0, 7]  # Row 1, Column 8 (H) for this sample
+            if pd.notna(puffing_regime_cell):
+                puffing_regime = str(puffing_regime_cell).strip()
+                debug_print(f"DEBUG: Found puffing regime at [0,7]: '{puffing_regime}'")
+                
+                # Extract puff time using regex pattern - FIXED for case sensitivity
+                import re
+                pattern = r'ml/(\\d+(?:\\.\\d+)?)s/'  # Case insensitive search below
+                match = re.search(pattern, puffing_regime, re.IGNORECASE)  # ADDED re.IGNORECASE
+                if match:
+                    puff_time = float(match.group(1))
+                    debug_print(f"DEBUG: Extracted puff time: {puff_time}s from '{puffing_regime}'")
+                else:
+                    debug_print(f"DEBUG: Could not extract puff time from pattern: '{puffing_regime}'")
+            else:
+                debug_print("DEBUG: No puffing regime found at expected position [0,7]")
+                
+        except (ValueError, IndexError, TypeError, AttributeError) as e:
+            debug_print(f"DEBUG: Error extracting puffing regime from [0,7]: {e}")
+        
+        # Apply normalization if puff time was found, otherwise use default
+        if puff_time is not None and puff_time > 0:
+            normalized_tpm = tpm_numeric / puff_time
+            debug_print(f"DEBUG: Successfully normalized TPM by puff time {puff_time}s")
+            debug_print(f"DEBUG: Normalized TPM values: {normalized_tpm.dropna().tolist()}")
+            debug_print(f"DEBUG: Original TPM range: {tpm_numeric.min():.3f} - {tpm_numeric.max():.3f} mg/puff")
+            debug_print(f"DEBUG: Normalized TPM range: {normalized_tpm.min():.3f} - {normalized_tpm.max():.3f} mg/s")
+            return normalized_tpm
+        else:
+            debug_print("DEBUG: Cannot calculate normalized TPM - puff time not found or invalid")
+            debug_print("DEBUG: Using default puff time of 3.0s for normalization")
+            default_puff_time = 3.0
+            normalized_tpm = tpm_numeric / default_puff_time
+            debug_print(f"DEBUG: Normalized TPM with default {default_puff_time}s: {normalized_tpm.dropna().tolist()}")
+            return normalized_tpm       
+
     elif plot_type == "Power Efficiency":
         debug_print("DEBUG: Calculating Power Efficiency from TPM/Power")
         
@@ -163,6 +212,7 @@ def get_y_label_for_plot_type(plot_type):
     """
     y_label_mapping = {
         "TPM": 'TPM (mg/puff)',
+        "Normalized TPM": 'Normalized TPM (mg/s)',
         "Draw Pressure": 'Draw Pressure (kPa)',
         "Resistance": 'Resistance (Ohms)',
         "Power Efficiency": 'Power Efficiency (mg/W)',
@@ -316,7 +366,11 @@ def plot_user_test_simulation_samples(full_sample_data: pd.DataFrame, num_column
     prevent_x_label_overlap(ax2)
 
     # Set consistent y-axis limits
-    if y_max > 9 and y_max <= 50:
+    if plot_type == "Normalized TPM":
+        ax1.set_ylim(-0.2, 4)
+        ax2.set_ylim(-0.2, 4)
+        debug_print("DEBUG: Set User Test Simulation Normalized TPM y-limits to -0.2 to 4")
+    elif y_max > 9 and y_max <= 50:
         ax1.set_ylim(0, y_max)
         ax2.set_ylim(0, y_max)
     else:
@@ -697,7 +751,11 @@ def plot_all_samples(full_sample_data: pd.DataFrame, plot_type: str, num_columns
 
         prevent_x_label_overlap(ax)
 
-        if y_max > 9 and y_max <= 50:
+        # Set y-axis limits based on plot type
+        if plot_type == "Normalized TPM":
+            ax.set_ylim(-0.2, 4)
+            debug_print("DEBUG: Set Normalized TPM y-limits to -0.2 to 4")
+        elif y_max > 9 and y_max <= 50:
             ax.set_ylim(0, y_max)
         else:
             ax.set_ylim(0, 9)

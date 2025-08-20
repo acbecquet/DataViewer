@@ -457,8 +457,8 @@ Would you like to download and install the update?"""
         
 
         # Plot options
-        self.standard_plot_options = ["TPM", "Draw Pressure", "Resistance", "Power Efficiency", "TPM (Bar)"]
-        self.user_test_simulation_plot_options = ["TPM", "Draw Pressure", "Power Efficiency", "TPM (Bar)"]
+        self.standard_plot_options = ["TPM","Normalized TPM", "Draw Pressure", "Resistance", "Power Efficiency", "TPM (Bar)"]
+        self.user_test_simulation_plot_options = ["TPM", "Normalized TPM", "Draw Pressure", "Power Efficiency", "TPM (Bar)"]
         self.plot_options = self.standard_plot_options
 
         self.check_buttons = None
