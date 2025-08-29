@@ -1373,6 +1373,11 @@ Would you like to download and install the update?"""
                     filtered_processed_data = filter_empty_samples_from_dataframe(processed_data)
                     debug_print(f"DEBUG: After filtering plotting sheet - processed_data shape: {filtered_processed_data.shape}")
                     processed_data = filtered_processed_data
+
+                    # Also filter the full sample data for plotting
+                    filtered_full_sample_data = filter_empty_samples_from_full_data(full_sample_data, self.num_columns_per_sample)
+                    debug_print(f"DEBUG: After filtering plotting sheet - full_sample_data shape: {filtered_full_sample_data.shape}")
+                    full_sample_data = filtered_full_sample_data
                 else:
                     # For non-plotting sheets, keep all data as-is
                     debug_print(f"DEBUG: Non-plotting sheet - preserving all data as-is")

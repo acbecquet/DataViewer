@@ -1958,15 +1958,47 @@ def updated_extracted_data_function_with_raw_data(sample_data, raw_data, sample_
             resistance = round_values(sample_data.iloc[0, 3]) if not pd.isna(sample_data.iloc[0, 3]) else ""
         power = round_values(sample_data.iloc[0, 5]) if not pd.isna(sample_data.iloc[0, 5]) else ""
     
-    # Calculate initial oil mass and usage efficiency with bounds checking
+    # Extract initial oil mass and usage efficiency directly from cells H3 and I3
     initial_oil_mass = ""
     usage_efficiency = ""
+
+    # Extract initial oil mass from cell H3 (Excel row 3, column H = pandas row 1, column 7 with -1 row indexing)
+    try:
+        if sample_data.shape[0] > 1 and sample_data.shape[1] > 7:
+            oil_mass_val = sample_data.iloc[1, 7]  # H3 = row 1, column 7 with -1 row indexing
+            if not pd.isna(oil_mass_val) and str(oil_mass_val).strip().lower() != 'nan':
+                initial_oil_mass = f"{round_values(float(oil_mass_val))}g"
+                print(f"DEBUG: Extracted initial oil mass from H3: {initial_oil_mass}")
+    except Exception as e:
+        print(f"DEBUG: Error extracting initial oil mass from H3 for sample {sample_index + 1}: {e}")
+
+    # Extract usage efficiency from cell I3 (Excel row 3, column I = pandas row 1, column 8 with -1 row indexing)
+    try:
+        if sample_data.shape[0] > 1 and sample_data.shape[1] > 8:
+            efficiency_val = sample_data.iloc[1, 8]  # I3 = row 1, column 8 with -1 row indexing
+            if not pd.isna(efficiency_val) and str(efficiency_val).strip().lower() != 'nan':
+                # Handle both percentage and decimal formats
+                efficiency_str = str(efficiency_val).strip()
+                if '%' not in efficiency_str:
+                    # If it's a decimal, convert to percentage
+                    try:
+                        efficiency_num = float(efficiency_str)
+                        usage_efficiency = f"{round_values(efficiency_num * 100):.1f}%"
+                    except:
+                        usage_efficiency = efficiency_str
+                else:
+                    usage_efficiency = efficiency_str
+                print(f"DEBUG: Extracted usage efficiency from I3: {usage_efficiency}")
+    except Exception as e:
+        print(f"DEBUG: Error extracting usage efficiency from I3 for sample {sample_index + 1}: {e}")
+
+    # Keep the weight difference calculation logic for debugging/validation (but don't use for display)
     if sample_data.shape[0] > 3 and sample_data.shape[1] > 2:
         try:
             before_weight = pd.to_numeric(sample_data.iloc[3, 1], errors='coerce')
             after_weight_col = sample_data.iloc[3:, 2]
             last_valid_weight = None
-            
+        
             # Add error handling for the problematic loop
             try:
                 for weight in reversed(after_weight_col):
@@ -1977,19 +2009,19 @@ def updated_extracted_data_function_with_raw_data(sample_data, raw_data, sample_
             except (IndexError, KeyError) as e:
                 print(f"DEBUG: Error processing after_weight_col for sample {sample_index + 1}: {e}")
                 last_valid_weight = None
-            
+        
             if not pd.isna(before_weight) and last_valid_weight is not None:
                 oil_consumed = before_weight - last_valid_weight
-                initial_oil_mass = f"{round_values(oil_consumed):.4f}g"
-                
+                print(f"DEBUG: Calculated oil consumption (for validation): {round_values(oil_consumed):.4f}g")
+            
                 total_puffs = len(tpm_data)
                 if total_puffs > 0 and avg_tpm:
                     total_aerosol = avg_tpm * total_puffs
                     if oil_consumed > 0:
-                        efficiency = (total_aerosol / (oil_consumed * 1000)) * 100
-                        usage_efficiency = f"{round_values(efficiency):.1f}%"
+                        calculated_efficiency = (total_aerosol / (oil_consumed * 1000)) * 100
+                        print(f"DEBUG: Calculated efficiency (for validation): {round_values(calculated_efficiency):.1f}%")
         except (IndexError, KeyError) as e:
-            print(f"DEBUG: Error calculating oil mass/efficiency for sample {sample_index + 1}: {e}")
+            print(f"DEBUG: Error in validation calculations for sample {sample_index + 1}: {e}")
     
     return {
         "Sample Name": sample_name,
