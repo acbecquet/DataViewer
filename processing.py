@@ -123,7 +123,7 @@ def get_y_data_for_plot_type(sample_data, plot_type):
                 
                 # Extract puff time using regex pattern - FIXED for case sensitivity
                 import re
-                pattern = r'ml/(\\d+(?:\\.\\d+)?)s/'  # Case insensitive search below
+                pattern = r'mL/(\d+(?:\.\d+)?)s/'
                 match = re.search(pattern, puffing_regime, re.IGNORECASE)  # ADDED re.IGNORECASE
                 if match:
                     puff_time = float(match.group(1))
@@ -1671,19 +1671,25 @@ def process_user_test_simulation(data):
                 
                 debug_print(f"DEBUG: Sample '{sample_name}' TPM stats - Avg: {avg_tpm}, Std: {std_tpm}")
                 
-                # Calculate usage efficiency if we have the necessary data
                 usage_efficiency = ""
-                if initial_oil_mass and avg_tpm != "No data":
-                    try:
-                        oil_mass_num = float(initial_oil_mass)
-                        avg_tpm_num = float(avg_tpm)
-                        if oil_mass_num > 0:
-                            # Simple efficiency calculation - you may want to adjust this formula
-                            efficiency = (avg_tpm_num / oil_mass_num) * 100
-                            usage_efficiency = f"{efficiency:.2f}%"
-                            debug_print(f"DEBUG: Calculated usage efficiency: {usage_efficiency}")
-                    except (ValueError, TypeError):
-                        debug_print(f"DEBUG: Could not calculate usage efficiency")
+                try:
+                    if sample_data.shape[0] > 1 and sample_data.shape[1] > 8:
+                        efficiency_val = sample_data.iloc[1, 8]  # I3 = row 1, column 8 with -1 row indexing
+                        if not pd.isna(efficiency_val) and str(efficiency_val).strip().lower() != 'nan':
+                            # Handle both percentage and decimal formats
+                            efficiency_str = str(efficiency_val).strip()
+                            if '%' not in efficiency_str:
+                                # If it's a decimal, convert to percentage
+                                try:
+                                    efficiency_num = float(efficiency_str)
+                                    usage_efficiency = f"{round_values(efficiency_num * 100):.1f}%"
+                                except:
+                                    usage_efficiency = efficiency_str
+                            else:
+                                usage_efficiency = efficiency_str
+                            debug_print(f"DEBUG: User Test Simulation - Extracted usage efficiency from I3: {usage_efficiency}")
+                except Exception as e:
+                    debug_print(f"DEBUG: User Test Simulation - Error extracting usage efficiency from I3: {e}")
                 
                 # Create voltage, resistance, power combined string
                 voltage_resistance_power = ""
