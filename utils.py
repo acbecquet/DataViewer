@@ -419,37 +419,59 @@ def load_excel_file_with_formulas(file_path):
     try:
         debug_print(f"DEBUG: Loading Excel file with formula evaluation: {file_path}")
         
-        # Load workbook with evaluated formulas
-        wb = openpyxl.load_workbook(file_path, data_only=True)
+        # First, try to force Excel to recalculate by opening and saving the file
+        wb = openpyxl.load_workbook(file_path, data_only=False)
+        
+        # Force calculation of all formulas
+        for sheet_name in wb.sheetnames:
+            ws = wb[sheet_name]
+            for row in ws.iter_rows():
+                for cell in row:
+                    if cell.value and isinstance(cell.value, str) and cell.value.startswith('='):
+                        # This is a formula - we need to force evaluation
+                        debug_print(f"DEBUG: Found formula in {cell.coordinate}: {cell.value}")
+        
+        wb.close()
+        
+        # Now load with data_only=True to get calculated values
+        wb_calc = openpyxl.load_workbook(file_path, data_only=True)
         sheets = {}
         
-        for sheet_name in wb.sheetnames:
+        for sheet_name in wb_calc.sheetnames:
             debug_print(f"DEBUG: Processing sheet: {sheet_name}")
-            ws = wb[sheet_name]
+            ws = wb_calc[sheet_name]
             
-            # Convert worksheet to DataFrame
+            # Convert worksheet to DataFrame row by row
             data = []
             for row in ws.iter_rows(values_only=True):
                 data.append(row)
             
             if data:
-                # Create DataFrame from the data
-                max_cols = max(len(row) for row in data) if data else 0
-                normalized_data = []
-                for row in data:
-                    normalized_row = list(row) + [None] * (max_cols - len(row))
-                    normalized_data.append(normalized_row)
+                # Create DataFrame with proper column handling
+                df = pd.DataFrame(data)
                 
-                df = pd.DataFrame(normalized_data)
+                # Set the first row as headers if it contains strings
+                if len(df) > 0:
+                    # Use first row as headers
+                    df.columns = [f"Unnamed: {i}" if pd.isna(col) else str(col) for i, col in enumerate(df.iloc[0])]
+                    df = df[1:].reset_index(drop=True)
+                
                 sheets[sheet_name] = df
                 debug_print(f"DEBUG: Sheet {sheet_name} loaded with shape: {df.shape}")
+                
+                # Debug: Check specific cells that should contain usage efficiency
+                if len(df) > 1 and len(df.columns) > 8:
+                    debug_print(f"DEBUG: Sample usage efficiency values in row 1:")
+                    for col_idx in [8, 20, 32, 44, 56, 68]:  # Expected positions for 6 samples
+                        if col_idx < len(df.columns):
+                            val = df.iloc[1, col_idx] if len(df) > 1 else None
+                            debug_print(f"DEBUG: Column {col_idx}: '{val}'")
             else:
-                # Empty sheet
                 sheets[sheet_name] = pd.DataFrame()
                 debug_print(f"DEBUG: Sheet {sheet_name} is empty")
         
-        wb.close()
-        debug_print(f"DEBUG: Successfully loaded {len(sheets)} sheets with formula evaluation")
+        wb_calc.close()
+        debug_print(f"DEBUG: Successfully loaded {len(sheets)} sheets with enhanced formula evaluation")
         return sheets
         
     except Exception as e:

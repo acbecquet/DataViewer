@@ -23,7 +23,8 @@ from utils import (
     validate_sheet_data,
     header_matches,
     load_excel_file,
-    debug_print
+    debug_print,
+    load_excel_file_with_formulas
 )
 
 def get_valid_plot_options(plot_options: List[str], full_sample_data: pd.DataFrame) -> List[str]:
@@ -1850,8 +1851,6 @@ def updated_extracted_data_function_with_raw_data(sample_data, raw_data, sample_
     Enhanced to handle both old and new template formats for sample names with suffix support.
     """
     print(f"DEBUG: Processing sample {sample_index + 1} with enhanced name extraction")
-    
-    # Add bounds checking for sample_data dimensions
     print(f"DEBUG: Sample {sample_index + 1} data shape: {sample_data.shape}")
     
     # Check if sample has sufficient data before processing
@@ -1876,7 +1875,6 @@ def updated_extracted_data_function_with_raw_data(sample_data, raw_data, sample_
     
     if sample_data.shape[1] > 4:  # Ensure we have enough columns
         headers = sample_data.columns.astype(str)
-        print(f"DEBUG: Sample {sample_index + 1} headers: {headers[:10].tolist()}")
         
         # Look for sample ID patterns with suffix support
         project_value = None
@@ -1891,7 +1889,6 @@ def updated_extracted_data_function_with_raw_data(sample_data, raw_data, sample_
                 (header_lower.startswith("sample id:.") and header_lower[11:].isdigit())):
                 if i + 1 < len(headers):
                     sample_value = str(headers[i + 1]).strip()
-                    print(f"DEBUG: Using new format sample ID: '{sample_value}'")
                     break
             
             # Check for old format "project:" patterns
@@ -1902,7 +1899,6 @@ def updated_extracted_data_function_with_raw_data(sample_data, raw_data, sample_
                     # Remove pandas suffix from the project value if it exists
                     if '.' in project_value and project_value.split('.')[-1].isdigit():
                         project_value = '.'.join(project_value.split('.')[:-1])
-                    print(f"DEBUG: Found project value: '{project_value}' at column {i + 1}")
             
             # Check for old format "sample:" patterns  
             elif (header_lower == "sample:" or
@@ -1912,28 +1908,23 @@ def updated_extracted_data_function_with_raw_data(sample_data, raw_data, sample_
                     # Don't overwrite if we already found one from Sample ID
                     if not sample_value:
                         sample_value = temp_sample_value
-                    print(f"DEBUG: Found sample value: '{temp_sample_value}' at column {i + 1}")
         
         # Determine final sample name based on what we found
         if sample_value and sample_value.lower() not in ['nan', 'none', '', f'unnamed: {5}']:
             if project_value and project_value.lower() not in ['nan', 'none', '']:
                 # Old format: combine project + sample
                 sample_name = f"{project_value} {sample_value}".strip()
-                print(f"DEBUG: Combined old format sample name: '{sample_name}'")
             else:
                 # New format or standalone sample value
                 sample_name = sample_value.strip()
-                print(f"DEBUG: Using sample value as sample name: '{sample_name}'")
         elif project_value and project_value.lower() not in ['nan', 'none', '']:
             sample_name = project_value.strip()
-            print(f"DEBUG: Using project value as sample name: '{sample_name}'")
         else:
             # Fallback: try direct column 5 access (for new format)
             if len(headers) > 5:
                 fallback_value = str(headers[5]).strip()
                 if fallback_value and fallback_value.lower() not in ['nan', 'none', '', 'unnamed: 5']:
                     sample_name = fallback_value
-                    print(f"DEBUG: Using fallback sample name from column 5: '{sample_name}'")
     
     print(f"DEBUG: Final sample name for sample {sample_index + 1}: '{sample_name}'")
     
@@ -1964,70 +1955,77 @@ def updated_extracted_data_function_with_raw_data(sample_data, raw_data, sample_
             resistance = round_values(sample_data.iloc[0, 3]) if not pd.isna(sample_data.iloc[0, 3]) else ""
         power = round_values(sample_data.iloc[0, 5]) if not pd.isna(sample_data.iloc[0, 5]) else ""
     
-    # Extract initial oil mass and usage efficiency directly from cells H3 and I3
-    initial_oil_mass = ""
+    # Calculate usage efficiency using the actual Excel formula logic
     usage_efficiency = ""
+    calculated_efficiency = None
 
-    # Extract initial oil mass from cell H3 (Excel row 3, column H = pandas row 1, column 7 with -1 row indexing)
     try:
-        if sample_data.shape[0] > 1 and sample_data.shape[1] > 7:
-            oil_mass_val = sample_data.iloc[1, 7]  # H3 = row 1, column 7 with -1 row indexing
-            if not pd.isna(oil_mass_val) and str(oil_mass_val).strip().lower() != 'nan':
-                initial_oil_mass = f"{round_values(float(oil_mass_val))}g"
-                print(f"DEBUG: Extracted initial oil mass from H3: {initial_oil_mass}")
-    except Exception as e:
-        print(f"DEBUG: Error extracting initial oil mass from H3 for sample {sample_index + 1}: {e}")
-
-    # Extract usage efficiency from cell I3 (Excel row 3, column I = pandas row 1, column 8 with -1 row indexing)
-    try:
-        if sample_data.shape[0] > 1 and sample_data.shape[1] > 8:
-            efficiency_val = sample_data.iloc[1, 8]  # I3 = row 1, column 8 with -1 row indexing
-            if not pd.isna(efficiency_val) and str(efficiency_val).strip().lower() != 'nan':
-                # Handle both percentage and decimal formats
-                efficiency_str = str(efficiency_val).strip()
-                if '%' not in efficiency_str:
-                    # If it's a decimal, convert to percentage
-                    try:
-                        efficiency_num = float(efficiency_str)
-                        usage_efficiency = f"{round_values(efficiency_num * 100):.1f}%"
-                    except:
-                        usage_efficiency = efficiency_str
-                else:
-                    usage_efficiency = efficiency_str
-                print(f"DEBUG: Extracted usage efficiency from I3: {usage_efficiency}")
-    except Exception as e:
-        print(f"DEBUG: Error extracting usage efficiency from I3 for sample {sample_index + 1}: {e}")
-
-    # Keep the weight difference calculation logic for debugging/validation (but don't use for display)
-    if sample_data.shape[0] > 3 and sample_data.shape[1] > 2:
-        try:
-            before_weight = pd.to_numeric(sample_data.iloc[3, 1], errors='coerce')
-            after_weight_col = sample_data.iloc[3:, 2]
-            last_valid_weight = None
+        if sample_data.shape[0] > 3 and sample_data.shape[1] > 8:
+            # Get initial oil mass from H3 (column 7, row 1 with -1 indexing)
+            initial_oil_mass_val = None
+            if sample_data.shape[1] > 7:
+                initial_oil_mass_val = sample_data.iloc[1, 7]
         
-            # Add error handling for the problematic loop
-            try:
-                for weight in reversed(after_weight_col):
-                    weight_val = pd.to_numeric(weight, errors='coerce')
-                    if not pd.isna(weight_val) and weight_val > 0:
-                        last_valid_weight = weight_val
-                        break
-            except (IndexError, KeyError) as e:
-                print(f"DEBUG: Error processing after_weight_col for sample {sample_index + 1}: {e}")
-                last_valid_weight = None
+            # Get puffs values from column A (column 0) starting from row 4 (row 3 with -1 indexing)
+            puffs_values = pd.to_numeric(sample_data.iloc[3:, 0], errors='coerce').dropna()
         
-            if not pd.isna(before_weight) and last_valid_weight is not None:
-                oil_consumed = before_weight - last_valid_weight
-                print(f"DEBUG: Calculated oil consumption (for validation): {round_values(oil_consumed):.4f}g")
+            # Get TPM values from column I (column 8) starting from row 4 (row 3 with -1 indexing)
+            tpm_values = pd.to_numeric(sample_data.iloc[3:, 8], errors='coerce').dropna()
+        
+            if (initial_oil_mass_val is not None and not pd.isna(initial_oil_mass_val) and 
+                len(puffs_values) > 0 and len(tpm_values) > 0):
             
-                total_puffs = len(tpm_data)
-                if total_puffs > 0 and avg_tpm:
-                    total_aerosol = avg_tpm * total_puffs
-                    if oil_consumed > 0:
-                        calculated_efficiency = (total_aerosol / (oil_consumed * 1000)) * 100
-                        print(f"DEBUG: Calculated efficiency (for validation): {round_values(calculated_efficiency):.1f}%")
-        except (IndexError, KeyError) as e:
-            print(f"DEBUG: Error in validation calculations for sample {sample_index + 1}: {e}")
+                try:
+                    initial_oil_mass_mg = float(initial_oil_mass_val) * 1000  # Convert g to mg
+                
+                    # Calculate total aerosol mass following Excel formula logic
+                    total_aerosol_mass_mg = 0
+                
+                    # Align the arrays to same length
+                    min_length = min(len(puffs_values), len(tpm_values))
+                    puffs_aligned = puffs_values.iloc[:min_length]
+                    tpm_aligned = tpm_values.iloc[:min_length]
+                
+                    for i in range(min_length):
+                        tpm_val = tpm_aligned.iloc[i]
+                        puffs_val = puffs_aligned.iloc[i]
+                    
+                        if not pd.isna(tpm_val) and not pd.isna(puffs_val):
+                            if i == 0:
+                                # First measurement: TPM * total puffs
+                                aerosol_mass = tpm_val * puffs_val
+                            else:
+                                # Subsequent measurements: TPM * (current_puffs - previous_puffs)
+                                previous_puffs = puffs_aligned.iloc[i-1]
+                                if not pd.isna(previous_puffs):
+                                    incremental_puffs = puffs_val - previous_puffs
+                                    aerosol_mass = tpm_val * incremental_puffs
+                                else:
+                                    aerosol_mass = tpm_val * puffs_val
+                        
+                            total_aerosol_mass_mg += aerosol_mass
+                
+                    # Calculate usage efficiency: (total aerosol mass / initial oil mass) * 100
+                    if initial_oil_mass_mg > 0:
+                        calculated_efficiency = (total_aerosol_mass_mg / initial_oil_mass_mg) * 100
+                        usage_efficiency = f"{round_values(calculated_efficiency):.1f}%"
+                    
+                        print(f"DEBUG: Usage efficiency calculation for sample {sample_index + 1}:")
+                        print(f"  - Initial oil mass: {initial_oil_mass_val}g ({initial_oil_mass_mg}mg)")
+                        print(f"  - Data points: {min_length}")
+                        print(f"  - Total aerosol mass: {round_values(total_aerosol_mass_mg):.2f}mg")
+                        print(f"  - Calculated usage efficiency: {usage_efficiency}")
+                    else:
+                        print(f"DEBUG: Invalid initial oil mass for sample {sample_index + 1}: {initial_oil_mass_val}")
+                    
+                except (ValueError, TypeError) as e:
+                    print(f"DEBUG: Error converting values for sample {sample_index + 1}: {e}")
+            else:
+                print(f"DEBUG: Missing data for sample {sample_index + 1}: oil_mass={initial_oil_mass_val}, puffs_count={len(puffs_values)}, tpm_count={len(tpm_values)}")
+                
+    except Exception as e:
+        print(f"DEBUG: Error calculating usage efficiency for sample {sample_index + 1}: {e}")
+
     
     return {
         "Sample Name": sample_name,
@@ -2036,13 +2034,12 @@ def updated_extracted_data_function_with_raw_data(sample_data, raw_data, sample_
         "Voltage, Resistance, Power": f"{voltage} V, {resistance} ohm, {power} W" if voltage or resistance or power else "",
         "Average TPM": avg_tpm,
         "Standard Deviation": std_tpm,
-        "Initial Oil Mass": initial_oil_mass,
+        "Initial Oil Mass": initial_oil_mass_val,
         "Usage Efficiency": usage_efficiency,
         "Burn?": burn,
         "Clog?": clog,
         "Leak?": leak
     }
-
 
 def round_values(value, decimals=2):
     """Helper function to safely round numeric values."""

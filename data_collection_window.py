@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import statistics
 from openpyxl.styles import PatternFill
-from utils import FONT, debug_print, show_success_message
+from utils import FONT, debug_print, show_success_message, load_excel_file_with_formulas
 import threading
 import subprocess
 
@@ -2033,6 +2033,29 @@ Developed by Charlie Becquet
 
         wb.save(self.file_path)
         debug_print(f"DEBUG: Excel file saved successfully to {self.file_path}")
+        self._refresh_main_gui_notes_display
+
+    def _refresh_main_gui_notes_display(self):
+        """Refresh the main GUI notes display with updated sample notes."""
+        try:
+            debug_print("DEBUG: Refreshing main GUI notes display")
+        
+            # Ensure the main GUI has the updated header data with sample notes
+            if hasattr(self.parent, 'filtered_sheets') and self.test_name in self.parent.filtered_sheets:
+                # Update header data in the main GUI's filtered sheets
+                debug_print(f"DEBUG: self.header_data before update: {self.header_data}")
+
+                self.parent.filtered_sheets[self.test_name]['header_data'] = self.header_data
+                debug_print(f"DEBUG: Updated header_data in main GUI for {self.test_name}")
+
+            
+                # Trigger notes display update in main GUI
+                if hasattr(self.parent, 'update_notes_display'):
+                    self.parent.update_notes_display(self.test_name)
+                    debug_print(f"DEBUG: Triggered main GUI notes display update for {self.test_name}")
+            
+        except Exception as e:
+            debug_print(f"ERROR: Failed to refresh main GUI notes display: {e}")
     
     def _save_to_loaded_sheets(self):
         """Save data directly to the loaded sheets in memory."""
@@ -2181,6 +2204,10 @@ Developed by Charlie Becquet
             # Update the loaded sheet data in memory
             self.parent.filtered_sheets[self.test_name]['data'] = sheet_data
             debug_print(f"DEBUG: Updated loaded sheet data with {total_data_written} total data rows")
+
+            self._refresh_main_gui_notes_display()
+
+            debug_print("DEBUG: _save_to_loaded_sheets completed successfully")
 
             # FIX: Save sample notes to header data
             debug_print("DEBUG: Saving sample notes to header data")
@@ -2879,16 +2906,24 @@ Developed by Charlie Becquet
                 debug_print("DEBUG: File doesn't exist or isn't Excel, skipping Excel update")
                 return
             
-            # Reload just this sheet from the Excel file
-            import pandas as pd
-            new_sheet_data = pd.read_excel(self.file_path, sheet_name=self.test_name)
+            from utils import load_excel_file
+
+            debug_print(f"DEBUG: Reloading Excel file with formula evaluation: {self.file_path}")
+            excel_data = load_excel_file(self.file_path)
         
+            if self.test_name not in excel_data:
+                debug_print(f"DEBUG: Sheet {self.test_name} not found in reloaded data")
+                return
+            
+            new_sheet_data = excel_data[self.test_name]
+            debug_print(f"DEBUG: Reloaded sheet {self.test_name} with shape: {new_sheet_data.shape}")
+    
             # Update the main GUI's filtered_sheets
             if hasattr(self.parent, 'filtered_sheets') and self.test_name in self.parent.filtered_sheets:
                 self.parent.filtered_sheets[self.test_name]['data'] = new_sheet_data
                 self.parent.filtered_sheets[self.test_name]['is_empty'] = new_sheet_data.empty
                 debug_print(f"DEBUG: Updated sheet {self.test_name} in main GUI filtered_sheets")
-        
+    
             # Update all_filtered_sheets for the current file
             if hasattr(self.parent, 'all_filtered_sheets') and hasattr(self.parent, 'current_file'):
                 for file_data in self.parent.all_filtered_sheets:
@@ -2898,7 +2933,7 @@ Developed by Charlie Becquet
                             file_data["filtered_sheets"][self.test_name]['is_empty'] = new_sheet_data.empty
                             debug_print(f"DEBUG: Updated sheet {self.test_name} in all_filtered_sheets for file {self.parent.current_file}")
                         break
-        
+    
         except Exception as e:
             debug_print(f"ERROR: Failed to update Excel data in main GUI: {e}")
             raise
@@ -4582,30 +4617,65 @@ Developed by Charlie Becquet
         debug_print(f"DEBUG: Enhanced stats updated for {current_sample_id} with correct sample name: {actual_sample_name}")
     
     def go_to_previous_sample(self):
-        """Navigate to the previous sample tab."""
+        """Navigate to the previous sample tab with proper notes saving."""
         if not self.hotkeys_enabled:
             return
+    
+        # SAVE CURRENT NOTES BEFORE SWITCHING
+        self._save_current_notes_before_tab_switch()
+    
         current_tab = self.notebook.index(self.notebook.select())
-        target_tab = (current_tab - 1) % len(self.sample_frames) 
+        target_tab = (current_tab - 1) % len(self.sample_frames)
     
-        # Update our tracking BEFORE changing tabs
+        debug_print(f"DEBUG: go_to_previous_sample switching from tab {current_tab} to {target_tab}")
+    
+        # Update our tracking to current tab (this will be the "previous" tab after the switch)
         self.current_tab_index = current_tab
-        debug_print(f"DEBUG: go_to_previous_sample updating current_tab_index to {current_tab}")
     
+        # Switch to the target tab
         self.notebook.select(target_tab)
 
     def go_to_next_sample(self):
-        """Navigate to the next sample tab."""
+        """Navigate to the next sample tab with proper notes saving."""
         if not self.hotkeys_enabled:
             return
+    
+        # SAVE CURRENT NOTES BEFORE SWITCHING
+        self._save_current_notes_before_tab_switch()
+    
         current_tab = self.notebook.index(self.notebook.select())
-        target_tab = (current_tab + 1) % len(self.sample_frames)  
+        target_tab = (current_tab + 1) % len(self.sample_frames)
     
-        # Update our tracking BEFORE changing tabs
+        debug_print(f"DEBUG: go_to_next_sample switching from tab {current_tab} to {target_tab}")
+    
+        # Update our tracking to current tab (this will be the "previous" tab after the switch)
         self.current_tab_index = current_tab
-        debug_print(f"DEBUG: go_to_next_sample updating current_tab_index to {current_tab}")
     
+        # Switch to the target tab
         self.notebook.select(target_tab)
+
+    def _save_current_notes_before_tab_switch(self):
+        """Save the current notes before switching tabs."""
+        if hasattr(self, 'sample_notes_text') and self.sample_notes_text.winfo_exists():
+            try:
+                # Get current notes content
+                current_notes = self.sample_notes_text.get('1.0', 'end-1c')
+            
+                # Get current tab index
+                current_tab = self.notebook.index(self.notebook.select())
+                current_sample_id = f"Sample {current_tab + 1}"
+            
+                # Save notes to data structure
+                self.data[current_sample_id]["sample_notes"] = current_notes
+                debug_print(f"DEBUG: Saved notes for {current_sample_id} before tab switch: '{current_notes[:30]}...'")
+            
+                # Force the text widget to lose focus to ensure any pending changes are captured
+                self.sample_notes_text.selection_clear()
+                self.window.focus_set()
+                self.window.update_idletasks()
+            
+            except Exception as e:
+                debug_print(f"DEBUG: Error saving notes before tab switch: {e}")
     
     def get_column_name(self, col_idx):
         """Get the internal column name based on column index."""

@@ -642,7 +642,7 @@ Would you like to download and install the update?"""
         if not sheet_info:
             debug_print(f"DEBUG: No sheet info found for {sheet_name}")
             return
-    
+        print(f"DEBUG: Sheet info:{sheet_info}")
         # Get header data which contains sample notes
         header_data = sheet_info.get('header_data')
         if not header_data:
