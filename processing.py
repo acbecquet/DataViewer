@@ -1847,6 +1847,129 @@ def extract_burn_clog_leak_from_raw_data(data, sample_index, num_columns_per_sam
 
 def updated_extracted_data_function_with_raw_data(sample_data, raw_data, sample_index):
     """
+    Updated extraction function with new header structure.
+    Enhanced to handle both old and new template formats for sample names with suffix support.
+    """
+    print(f"DEBUG: Processing sample {sample_index + 1} with enhanced name extraction")
+    print(f"DEBUG: Sample {sample_index + 1} data shape: {sample_data.shape}")
+    
+    # Check if sample has sufficient data before processing
+    if sample_data.shape[0] < 4 or sample_data.shape[1] < 3:
+        print(f"DEBUG: Sample {sample_index + 1} has insufficient data shape {sample_data.shape}, skipping")
+        return {
+            "Sample Name": f"Sample {sample_index + 1}",
+            "Media": "",
+            "Viscosity": "",
+            "Puffing Regime": "",
+            "Voltage, Resistance, Power": "",
+            "Average TPM": "No data",
+            "Standard Deviation": "No data",
+            "Draw Pressure": "",
+            "Burn": "",
+            "Clog": "",
+            "Notes": ""
+        }
+    
+    # Extract sample name using existing logic (keep all your existing sample name extraction code)
+    sample_name = f"Sample {sample_index + 1}"
+    headers = sample_data.iloc[0, :].tolist() if sample_data.shape[0] > 0 else []
+    
+    project_value = ""
+    sample_value = ""
+    
+    for i, header in enumerate(headers):
+        if pd.isna(header):
+            continue
+        header_lower = str(header).lower().strip()
+        
+        # Check for "Sample ID:" at column 5 (new format)
+        if header_lower == "sample id:" or header_lower.startswith("sample id"):
+            if i + 1 < len(headers):
+                sample_value = str(headers[i + 1]).strip()
+                break  # Prefer new format
+        
+        # Check for old format patterns
+        elif (header_lower.startswith("project:") or 
+              (header_lower.startswith("project:.") and header_lower[9:].isdigit())):
+            if i + 1 < len(headers):
+                project_value = str(headers[i + 1]).strip()
+                if '.' in project_value and project_value.split('.')[-1].isdigit():
+                    project_value = '.'.join(project_value.split('.')[:-1])
+        
+        elif (header_lower == "sample:" or
+              (header_lower.startswith("sample:.") and header_lower[8:].isdigit())):
+            if i + 1 < len(headers):
+                temp_sample_value = str(headers[i + 1]).strip()
+                if not sample_value:
+                    sample_value = temp_sample_value
+    
+    # Determine final sample name
+    if sample_value and sample_value.lower() not in ['nan', 'none', '', f'unnamed: 5']:
+        if project_value and project_value.lower() not in ['nan', 'none', '']:
+            sample_name = f"{project_value} {sample_value}".strip()
+        else:
+            sample_name = sample_value.strip()
+    elif project_value and project_value.lower() not in ['nan', 'none', '']:
+        sample_name = project_value.strip()
+    else:
+        if len(headers) > 5:
+            fallback_value = str(headers[5]).strip()
+            if fallback_value and fallback_value.lower() not in ['nan', 'none', '', 'unnamed: 5']:
+                sample_name = fallback_value
+    
+    # Extract TPM data
+    tpm_data = pd.Series(dtype=float)
+    if sample_data.shape[0] > 3 and sample_data.shape[1] > 8:
+        tpm_data = pd.to_numeric(sample_data.iloc[3:, 8], errors='coerce').dropna()
+    avg_tpm = round_values(tpm_data.mean()) if not tpm_data.empty else None
+    std_tpm = round_values(tpm_data.std()) if not tpm_data.empty else None
+    
+    # Extract draw pressure (average from column 3, similar to TPM)
+    draw_pressure_data = pd.Series(dtype=float)
+    if sample_data.shape[0] > 3 and sample_data.shape[1] > 3:
+        draw_pressure_data = pd.to_numeric(sample_data.iloc[3:, 3], errors='coerce').dropna()
+    avg_draw_pressure = round_values(draw_pressure_data.mean()) if not draw_pressure_data.empty else ""
+    
+    # Extract burn/clog/leak using existing method
+    burn, clog, leak = extract_burn_clog_leak_from_raw_data(raw_data, sample_index)
+    
+    # Extract puffing regime from header data (row 1, column 7)
+    puffing_regime = ""
+    if sample_data.shape[0] > 1 and sample_data.shape[1] > 7:
+        puffing_regime = str(sample_data.iloc[1, 7]) if pd.notna(sample_data.iloc[1, 7]) else ""
+    
+    # Extract notes from header data (check multiple locations)
+    notes = ""
+    if sample_data.shape[0] > 2 and sample_data.shape[1] > 7:
+        # Check row 2, column 7 for notes
+        notes_candidate = str(sample_data.iloc[2, 7]) if pd.notna(sample_data.iloc[2, 7]) else ""
+        if notes_candidate and not notes_candidate.lower().startswith('unnamed'):
+            notes = notes_candidate
+    
+    # Keep the existing combined format for voltage, resistance, power
+    voltage_resistance_power = ""
+    if sample_data.shape[0] > 1 and sample_data.shape[1] > 5:
+        voltage = sample_data.iloc[1, 5]
+        resistance = round_values(sample_data.iloc[0, 3]) if sample_data.shape[1] > 3 else ""
+        power = round_values(sample_data.iloc[0, 5])
+        voltage_resistance_power = f"{voltage} V, {resistance} ohm, {power} W"
+    
+    return {
+        "Sample Name": sample_name,
+        "Media": sample_data.iloc[0, 1] if sample_data.shape[0] > 0 else "",
+        "Viscosity": sample_data.iloc[1, 1] if sample_data.shape[0] > 1 else "",
+        "Puffing Regime": puffing_regime,
+        "Voltage, Resistance, Power": voltage_resistance_power,  # Combined as requested
+        "Average TPM": avg_tpm,
+        "Standard Deviation": std_tpm,
+        "Draw Pressure": avg_draw_pressure,
+        "Burn": burn,
+        "Clog": clog,
+        "Notes": notes
+    }
+
+def updated_extracted_data_function_with_raw_data_old(sample_data, raw_data, sample_index):
+    """
     Updated extraction function that gets burn/clog/leak from raw data.
     Enhanced to handle both old and new template formats for sample names with suffix support.
     """

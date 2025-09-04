@@ -5,6 +5,8 @@ import shutil
 import pandas as pd
 import math
 import matplotlib.pyplot as plt
+import tkinter as tk
+from tkinter import ttk
 from PIL import Image
 from pptx import Presentation
 from pptx.enum.text import PP_ALIGN
@@ -15,6 +17,90 @@ import processing
 from utils import get_save_path, plotting_sheet_test, get_plot_sheet_names, debug_print, show_success_message
 from resource_utils import get_resource_path
 from tkinter import messagebox  # For showing info/errors
+
+class HeaderSelectorDialog:
+    def __init__(self, parent):
+        self.parent = parent
+        self.result = None
+        self.dialog = None
+        
+        # Default header order - matching your new requirements
+        self.default_headers = [
+            "Sample Name", "Media", "Viscosity", "Puffing Regime", 
+            "Voltage, Resistance, Power", "Average TPM", 
+            "Standard Deviation", "Draw Pressure", "Burn", "Clog", "Notes"
+        ]
+        
+        self.header_vars = {}
+        self.order_vars = {}
+        
+    def show(self):
+        """Show dialog and return selected headers in order"""
+        self.dialog = tk.Toplevel(self.parent)
+        self.dialog.title("Select Report Headers")
+        self.dialog.geometry("400x500")
+        self.dialog.grab_set()
+        
+        # Instructions
+        ttk.Label(self.dialog, text="Select headers and set order (1=leftmost):").pack(pady=10)
+        
+        # Scrollable frame
+        canvas = tk.Canvas(self.dialog)
+        scrollbar = ttk.Scrollbar(self.dialog, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+        
+        # Header selection
+        for i, header in enumerate(self.default_headers):
+            frame = ttk.Frame(scrollable_frame)
+            frame.pack(fill="x", padx=10, pady=2)
+            
+            # Checkbox
+            var = tk.BooleanVar(value=True)  # All enabled by default
+            ttk.Checkbutton(frame, text=header, variable=var).pack(side="left")
+            self.header_vars[header] = var
+            
+            # Order spinbox
+            order_var = tk.StringVar(value=str(i+1))
+            ttk.Spinbox(frame, from_=1, to=15, textvariable=order_var, width=5).pack(side="right")
+            self.order_vars[header] = order_var
+        
+        scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # Buttons
+        button_frame = ttk.Frame(self.dialog)
+        button_frame.pack(fill="x", pady=10)
+        
+        ttk.Button(button_frame, text="OK", command=self.ok).pack(side="right", padx=5)
+        ttk.Button(button_frame, text="Cancel", command=self.cancel).pack(side="right")
+        
+        self.dialog.wait_window()
+        return self.result
+    
+    def ok(self):
+        # Get selected headers with their order
+        selected = []
+        for header in self.default_headers:
+            if self.header_vars[header].get():
+                try:
+                    order = int(self.order_vars[header].get())
+                    selected.append((header, order))
+                except ValueError:
+                    continue
+        
+        # Sort by order and return header names
+        selected.sort(key=lambda x: x[1])
+        self.result = [header for header, _ in selected]
+        self.dialog.destroy()
+    
+    def cancel(self):
+        self.result = None
+        self.dialog.destroy()
+
 
 class ReportGenerator:
     def __init__(self, gui):
@@ -34,6 +120,16 @@ class ReportGenerator:
             filtered_sheets (dict): A dict mapping sheet names to sheet info.
             plot_options (list): The list of plot options.
         """
+
+        header_dialog = HeaderSelectorDialog(self.gui.root)
+        selected_headers = header_dialog.show()
+
+        if not selected_headers:
+            debug_print("DEBUG: Header selection cancelled")
+            raise ValueError("Header selection cancelled")
+    
+        debug_print(f"DEBUG: Selected headers for full report: {selected_headers}")
+
         save_path = get_save_path(".xlsx")
         if not save_path:
             raise ValueError("Save cancelled")
@@ -82,6 +178,12 @@ class ReportGenerator:
                             debug_print(f"DEBUG: Skipping sheet '{sheet_name}' due to empty processed data.")
                             continue
 
+                        # Apply header selection and reordering
+                        debug_print(f"DEBUG: Original processed_data columns: {processed_data.columns.tolist()}")
+                        processed_data = self.reorder_processed_data(processed_data, selected_headers)
+                        debug_print(f"DEBUG: Reordered processed_data columns: {processed_data.columns.tolist()}")
+                        
+
                         self.write_excel_report(writer, sheet_name, processed_data, full_sample_data,
                                                   valid_plot_options, images_to_delete)
                         processed_count += 1
@@ -100,7 +202,7 @@ class ReportGenerator:
                         self.gui.root.update_idletasks()
                     return callback
 
-                self.write_powerpoint_report(ppt_save_path, images_to_delete, plot_options, progress_callback=update_ppt_prog())
+                self.write_powerpoint_report(ppt_save_path, images_to_delete, plot_options, selected_headers, progress_callback=update_ppt_prog())
         
                 # Final progress update
                 self.gui.progress_dialog.update_progress_bar(100)
@@ -128,6 +230,16 @@ class ReportGenerator:
             sheets (dict): A dict mapping sheet names to raw sheet data.
             plot_options (list): List of plot options.
         """
+
+        header_dialog = HeaderSelectorDialog(self.gui.root)
+        selected_headers = header_dialog.show()
+    
+        if not selected_headers:
+            debug_print("DEBUG: Header selection cancelled")
+            return
+    
+        debug_print(f"DEBUG: Selected headers: {selected_headers}")
+
         save_path = get_save_path(".xlsx")
         if not save_path:
             return
@@ -164,6 +276,9 @@ class ReportGenerator:
                 messagebox.showwarning("Warning", f"Sheet '{selected_sheet}' did not yield valid processed data.")
                 return
 
+            processed_data = self.reorder_processed_data(processed_data, selected_headers)
+            debug_print(f"DEBUG: Reordered processed data shape: {processed_data.shape}")
+
             with pd.ExcelWriter(save_path, engine='xlsxwriter') as writer:
                 valid_plot_options = processing.get_valid_plot_options(plot_options, full_sample_data)
                 debug_print(f"DEBUG: Test report valid plot options: {valid_plot_options}")
@@ -181,6 +296,34 @@ class ReportGenerator:
             import traceback
             traceback.print_exc()
             messagebox.showerror("Error", f"An error occurred while generating the test report: {e}")
+
+    def reorder_processed_data(self, processed_data, selected_headers):
+        """
+        Reorder processed_data columns based on selected headers.
+    
+        Args:
+            processed_data: DataFrame with original column order
+            selected_headers: List of header names in desired order
+    
+        Returns:
+            DataFrame with reordered columns
+        """
+        debug_print(f"DEBUG: Reordering columns. Original: {processed_data.columns.tolist()}")
+        debug_print(f"DEBUG: Selected headers: {selected_headers}")
+    
+        # Create new DataFrame with selected columns in order
+        reordered_data = pd.DataFrame()
+    
+        for header in selected_headers:
+            if header in processed_data.columns:
+                reordered_data[header] = processed_data[header]
+                debug_print(f"DEBUG: Added column: {header}")
+            else:
+                debug_print(f"DEBUG: Missing column: {header}, adding empty")
+                reordered_data[header] = [''] * len(processed_data)
+    
+        debug_print(f"DEBUG: Final reordered columns: {reordered_data.columns.tolist()}")
+        return reordered_data
 
     def add_plots_to_slide(self, slide, sheet_name: str, full_sample_data: pd.DataFrame, valid_plot_options: list, images_to_delete: list) -> None:
         plot_top = Inches(1.21)
@@ -315,7 +458,197 @@ class ReportGenerator:
             raise
             traceback.print_exc()
 
-    def write_powerpoint_report(self, ppt_save_path: str, images_to_delete: list, plot_options: list, progress_callback = None) -> None:
+    def write_powerpoint_report(self, ppt_save_path: str, images_to_delete: list, plot_options: list, selected_headers: list = None, progress_callback = None) -> None:
+        try:
+            processed_slides = 0
+            prs = Presentation()
+            prs.slide_width = Inches(13.33)
+            prs.slide_height = Inches(7.5)
+
+            total_slides = 1  # Cover slide
+            for sheet_name in self.gui.filtered_sheets.keys():
+                total_slides += 1  # Main slide
+                if sheet_name in self.gui.sheet_images and self.gui.sheet_images[self.gui.current_file][sheet_name]:
+                    total_slides += 1  # Image slide
+
+            cover_slide = prs.slides.add_slide(prs.slide_layouts[6])
+            bg_path = get_resource_path("resources/Cover_Page_Logo.jpg")
+            cover_slide.shapes.add_picture(bg_path, left=Inches(0), top=Inches(0),
+                                             width=prs.slide_width, height=prs.slide_height)
+            textbox_title = cover_slide.shapes.add_textbox(
+                left=Inches((prs.slide_width.inches - 12) / 2),
+                top=Inches(2.35),
+                width=Inches(12),
+                height=Inches(0.88)
+            )
+            text_frame = textbox_title.text_frame
+            text_frame.margin_top = 0
+            text_frame.margin_bottom = 0
+            for para in list(text_frame.paragraphs):
+                text_frame._element.remove(para._element)
+            p = text_frame.add_paragraph()
+            if self.gui.file_path:
+                p.text = f"{os.path.splitext(os.path.basename(self.gui.file_path))[0]} Standard Test Report"
+            else:
+                p.text = "Standard Test Report"
+            p.alignment = PP_ALIGN.CENTER
+            p.space_before = Pt(0)
+            p.space_after = Pt(0)
+            text_frame.word_wrap = True
+            run = p.runs[0] if p.runs else p.add_run()
+            run.font.name = "Montserrat"
+            run.font.size = Pt(46)
+            run.font.bold = True
+            run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+            cover_slide.shapes._spTree.remove(textbox_title._element)
+            cover_slide.shapes._spTree.append(textbox_title._element)
+            textbox_sub = cover_slide.shapes.add_textbox(
+                left=Inches(5.73),
+                top=Inches(4.05),
+                width=Inches(1.87),
+                height=Inches(0.37)
+            )
+            sub_frame = textbox_sub.text_frame
+            sub_frame.margin_top = 0
+            sub_frame.margin_bottom = 0
+            for para in list(sub_frame.paragraphs):
+                sub_frame._element.remove(para._element)
+            p2 = sub_frame.add_paragraph()
+            p2.text = datetime.today().strftime("%d %B %Y")
+            p2.alignment = PP_ALIGN.CENTER
+            p2.space_before = Pt(0)
+            p2.space_after = Pt(0)
+            sub_frame.word_wrap = False
+            run2 = p2.runs[0] if p2.runs else p2.add_run()
+            run2.font.name = "Montserrat"
+            run2.font.size = Pt(16)
+            run2.font.bold = True
+            run2.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+            cover_slide.shapes._spTree.remove(textbox_sub._element)
+            cover_slide.shapes._spTree.append(textbox_sub._element)
+            logo_path = get_resource_path("resources/ccell_logo_full_white.png")
+            cover_slide.shapes.add_picture(logo_path, left=Inches(5.7), top=Inches(6.12),
+                                             width=Inches(1.93), height=Inches(0.66))
+        
+            # start setting up main slides
+            background_path = get_resource_path("resources/ccell_background.png")
+            logo_path = get_resource_path("resources/ccell_logo_full.png")
+            plot_sheet_names = get_plot_sheet_names()
+
+            processed_slides += 1
+            self._update_ppt_progress(processed_slides, total_slides)
+
+            for sheet_name in self.gui.filtered_sheets.keys():
+                try:
+                    data = self.gui.sheets.get(sheet_name)
+                    if data is None or data.empty:
+                        # Try to get data from filtered_sheets instead
+                        sheet_info = self.gui.filtered_sheets.get(sheet_name)
+                        if sheet_info and "data" in sheet_info:
+                            data = sheet_info["data"]
+                        else:
+                            debug_print(f"Skipping sheet '{sheet_name}': No data available.")
+                            continue
+
+                    process_function = processing.get_processing_function(sheet_name)
+                    processed_data, _, full_sample_data = process_function(data)
+
+                    if processed_data.empty:
+                        debug_print(f"Skipping sheet '{sheet_name}': Processed data is empty.")
+                        continue
+
+                    # Apply header selection and reordering if selected_headers is provided
+                    if selected_headers:
+                        debug_print(f"DEBUG: Applying header reordering for sheet '{sheet_name}'")
+                        debug_print(f"DEBUG: Original columns: {processed_data.columns.tolist()}")
+                        processed_data = self.reorder_processed_data(processed_data, selected_headers)
+                        debug_print(f"DEBUG: Reordered columns: {processed_data.columns.tolist()}")
+
+                    try:
+                        slide_layout = prs.slide_layouts[6]
+                        slide = prs.slides.add_slide(slide_layout)
+                    except IndexError:
+                        raise ValueError(f"Slide layout 6 not found in the PowerPoint template.")
+                    slide.shapes.add_picture(background_path, left=Inches(0), top=Inches(0),
+                                             width=Inches(13.33), height=Inches(7.5))
+                    slide.shapes.add_picture(logo_path, left=Inches(11.21), top=Inches(0.43),
+                                             width=Inches(1.57), height=Inches(0.53))
+                
+                    title_shape = slide.shapes.add_textbox(Inches(0.45), Inches(-0.04), Inches(10.72), Inches(0.64))
+                    text_frame = title_shape.text_frame
+                    text_frame.clear()
+                    p = text_frame.add_paragraph()
+                    p.text = sheet_name
+                    p.alignment = PP_ALIGN.LEFT
+                    run = p.runs[0]
+                    run.font.name = "Montserrat"
+                    run.font.size = Pt(32)
+                    run.font.bold = True
+
+                    is_plotting = sheet_name in plot_sheet_names
+                    if not is_plotting:
+                        if processed_data.empty:
+                            debug_print(f"Skipping non-plotting sheet '{sheet_name}' due to empty data.")
+                            continue
+                        table_width = Inches(13.03)
+                        # For non-plotting sheets, use processed_data (which now has header reordering applied)
+                        self.add_table_to_slide(slide, processed_data, table_width, is_plotting)
+                    else:
+                        table_width = Inches(8.07)
+                        # For plotting sheets, use processed_data (which now has header reordering applied)
+                        self.add_table_to_slide(slide, processed_data, table_width, is_plotting)
+                        valid_plot_options = processing.get_valid_plot_options(plot_options, full_sample_data)
+                        if valid_plot_options:
+                            self.add_plots_to_slide(slide, sheet_name, full_sample_data, valid_plot_options, images_to_delete)
+                        else:
+                            debug_print(f"No valid plot options for sheet '{sheet_name}'. Skipping plots.")
+                    if slide.shapes.title:
+                        title_shape = slide.shapes.title
+                        spTree = slide.shapes._spTree
+                        spTree.remove(title_shape._element)
+                        spTree.append(title_shape._element)
+
+                    processed_slides += 1
+
+                    if progress_callback:
+                        progress_callback(processed_slides, total_slides)
+                
+                    self._update_ppt_progress(processed_slides, total_slides)
+
+                    # Add image slide if images exist
+                    if self.gui.current_file in self.gui.sheet_images and sheet_name in self.gui.sheet_images.get(self.gui.current_file, {}):
+                        debug_print("Images Exist! Adding a slide...")
+                        current_file = self.gui.current_file
+                        image_paths = self.gui.sheet_images.get(current_file, {}).get(sheet_name, [])
+                        valid_image_paths = [path for path in image_paths if os.path.exists(path)]
+                        img_slide = prs.slides.add_slide(prs.slide_layouts[6])
+                        self.setup_image_slide(prs, img_slide, sheet_name)
+                        self.add_images_to_slide(img_slide, valid_image_paths)
+
+                        # Update progress after image slide
+                        processed_slides += 1
+                        self._update_ppt_progress(processed_slides, total_slides)
+
+                except Exception as sheet_error:
+                    debug_print(f"Error processing sheet '{sheet_name}': {sheet_error}")
+                    processed_slides += 1
+                    traceback.print_exc()
+                    continue
+            processing.clean_presentation_tables(prs)
+            prs.save(ppt_save_path)
+            debug_print(f"PowerPoint report saved successfully at {ppt_save_path}.")
+        except Exception as e:
+            print(f"Error writing PowerPoint report: {e}")
+            traceback.print_exc()
+        finally:
+            for image_path in set(images_to_delete):
+                if os.path.exists(image_path):
+                    try:
+                        os.remove(image_path)
+                    except OSError as cleanup_error:
+                        print(f"Error deleting image {image_path}: {cleanup_error}")
+
+    def write_powerpoint_report_old(self, ppt_save_path: str, images_to_delete: list, plot_options: list, progress_callback = None) -> None:
         try:
             processed_slides = 0
             prs = Presentation()
