@@ -1849,8 +1849,9 @@ def updated_extracted_data_function_with_raw_data(sample_data, raw_data, sample_
     """
     Updated extraction function with new header structure.
     Enhanced to handle both old and new template formats for sample names with suffix support.
+    Now includes Usage Efficiency, Normalized TPM, and Initial Oil Mass.
     """
-    print(f"DEBUG: Processing sample {sample_index + 1} with enhanced name extraction")
+    print(f"DEBUG: Processing sample {sample_index + 1} with enhanced name extraction and new fields")
     print(f"DEBUG: Sample {sample_index + 1} data shape: {sample_data.shape}")
     
     # Check if sample has sufficient data before processing
@@ -1864,7 +1865,10 @@ def updated_extracted_data_function_with_raw_data(sample_data, raw_data, sample_
             "Voltage, Resistance, Power": "",
             "Average TPM": "No data",
             "Standard Deviation": "No data",
+            "Normalized TPM": "",
             "Draw Pressure": "",
+            "Usage Efficiency": "",
+            "Initial Oil Mass": "",
             "Burn": "",
             "Clog": "",
             "Notes": ""
@@ -1872,41 +1876,28 @@ def updated_extracted_data_function_with_raw_data(sample_data, raw_data, sample_
     
     # Extract sample name - use the same logic that works in plotting functions
     sample_name = f"Sample {sample_index + 1}"  # Default fallback
-
-    # Try to extract from the same location where plotting functions find it
     try:
-        # Check row 0 for sample ID (column 5 is where Sample ID typically is)
-        if sample_data.shape[0] > 0 and sample_data.shape[1] > 5:
-            sample_id_candidate = sample_data.iloc[0, 5]
-            if pd.notna(sample_id_candidate):
-                sample_id_str = str(sample_id_candidate).strip()
-                if sample_id_str and sample_id_str.lower() not in ['nan', 'none', '', 'unnamed: 5']:
-                    sample_name = sample_id_str
-                    print(f"DEBUG: Extracted sample name from [0,5]: '{sample_name}'")
-    
-        # If not found, try looking in row 0 for any column that looks like a sample name
-        if sample_name == f"Sample {sample_index + 1}":
-            for col_idx in range(min(sample_data.shape[1], 10)):  # Check first 10 columns
-                candidate = sample_data.iloc[0, col_idx] if sample_data.shape[0] > 0 else None
-                if pd.notna(candidate):
-                    candidate_str = str(candidate).strip()
-                    # Look for patterns that indicate a sample name
-                    if (candidate_str and 
-                        candidate_str.lower() not in ['nan', 'none', '', 'media:', 'date:', 'sample id:'] and
-                        not candidate_str.lower().startswith('unnamed:') and
-                        len(candidate_str) > 3 and
-                        not candidate_str.replace('.', '').isdigit()):  # Not just a number
-                        sample_name = candidate_str
-                        print(f"DEBUG: Extracted sample name from [0,{col_idx}]: '{sample_name}'")
-                        break
-
+        if sample_data.shape[1] > 5:
+            sample_name_candidate = sample_data.columns[5]
+            if pd.notna(sample_name_candidate):
+                sample_name_str = str(sample_name_candidate).strip()
+                if sample_name_str and sample_name_str.lower() not in ['nan', 'none', '', 'unnamed: 5']:
+                    sample_name = sample_name_str
+                    print(f"DEBUG: Extracted sample name from columns[5]: '{sample_name}'")
+                else:
+                    print(f"DEBUG: Sample name at columns[5] was invalid: '{sample_name_str}', using default")
+            else:
+                print(f"DEBUG: Sample name at columns[5] was NaN, using default")
+        else:
+            print(f"DEBUG: Not enough columns for sample name extraction, using default")
     except Exception as e:
         print(f"DEBUG: Error extracting sample name for sample {sample_index + 1}: {e}")
         sample_name = f"Sample {sample_index + 1}"
 
     print(f"DEBUG: Final sample name for sample {sample_index + 1}: '{sample_name}'")
     
-    # Extract TPM data
+    
+    # Extract TPM data for calculations
     tpm_data = pd.Series(dtype=float)
     if sample_data.shape[0] > 3 and sample_data.shape[1] > 8:
         tpm_data = pd.to_numeric(sample_data.iloc[3:, 8], errors='coerce').dropna()
@@ -1943,6 +1934,16 @@ def updated_extracted_data_function_with_raw_data(sample_data, raw_data, sample_
         power = round_values(sample_data.iloc[0, 5])
         voltage_resistance_power = f"{voltage} V, {resistance} ohm, {power} W"
     
+    # NEW: Calculate the three missing fields
+    initial_oil_mass = extract_initial_oil_mass(sample_data)
+    usage_efficiency = calculate_usage_efficiency_for_sample(sample_data)
+    normalized_tpm = calculate_normalized_tpm_for_sample(sample_data, tpm_data)
+    
+    print(f"DEBUG: Calculated new fields for sample {sample_index + 1}:")
+    print(f"  - Initial Oil Mass: '{initial_oil_mass}'")
+    print(f"  - Usage Efficiency: '{usage_efficiency}'")
+    print(f"  - Normalized TPM: '{normalized_tpm}'")
+    
     return {
         "Sample Name": sample_name,
         "Media": sample_data.iloc[0, 1] if sample_data.shape[0] > 0 else "",
@@ -1951,7 +1952,10 @@ def updated_extracted_data_function_with_raw_data(sample_data, raw_data, sample_
         "Voltage, Resistance, Power": voltage_resistance_power,  # Combined as requested
         "Average TPM": avg_tpm,
         "Standard Deviation": std_tpm,
+        "Normalized TPM": normalized_tpm,  # NEW FIELD
         "Draw Pressure": avg_draw_pressure,
+        "Usage Efficiency": usage_efficiency,  # NEW FIELD
+        "Initial Oil Mass": initial_oil_mass,  # NEW FIELD
         "Burn": burn,
         "Clog": clog,
         "Notes": notes
@@ -3543,3 +3547,174 @@ def convert_cart_format_to_template(legacy_file_path: str, template_path: str = 
     
     print(f"DEBUG: Saved processed cart format file to: {new_file_path}")
     return load_excel_file(new_file_path)[new_sheet_name]
+
+def calculate_normalized_tpm_for_sample(sample_data, tpm_data):
+    """
+    Calculate normalized TPM by dividing TPM by puff time.
+    Reuses the logic from the plotting functions.
+    
+    Args:
+        sample_data: DataFrame containing sample data
+        tpm_data: Series of TPM values
+        
+    Returns:
+        str: Formatted normalized TPM value or empty string
+    """
+    debug_print("DEBUG: Calculating Normalized TPM for data extraction")
+    
+    try:
+        # Convert TPM data to numeric
+        tpm_numeric = pd.to_numeric(tpm_data, errors='coerce').dropna()
+        if tpm_numeric.empty:
+            debug_print("DEBUG: No valid TPM data for normalization")
+            return ""
+        
+        # Extract puffing regime from row 1, column 8 (index 0, 7)
+        puff_time = None
+        puffing_regime = None
+        
+        if sample_data.shape[0] > 0 and sample_data.shape[1] > 7:
+            puffing_regime_cell = sample_data.iloc[0, 7]  # Row 1, Column 8 (H)
+            if pd.notna(puffing_regime_cell):
+                puffing_regime = str(puffing_regime_cell).strip()
+                debug_print(f"DEBUG: Found puffing regime: '{puffing_regime}'")
+                
+                # Extract puff time using regex pattern
+                import re
+                pattern = r'mL/(\d+(?:\.\d+)?)s/'
+                match = re.search(pattern, puffing_regime, re.IGNORECASE)
+                if match:
+                    puff_time = float(match.group(1))
+                    debug_print(f"DEBUG: Extracted puff time: {puff_time}s")
+                else:
+                    debug_print(f"DEBUG: Could not extract puff time from: '{puffing_regime}'")
+        
+        # Apply normalization
+        if puff_time is not None and puff_time > 0:
+            avg_normalized_tpm = (tpm_numeric / puff_time).mean()
+            result = f"{round_values(avg_normalized_tpm):.2f}"
+            debug_print(f"DEBUG: Calculated normalized TPM: {result} mg/s")
+            return result
+        else:
+            debug_print("DEBUG: Using default puff time of 3.0s for normalization")
+            default_puff_time = 3.0
+            avg_normalized_tpm = (tmp_numeric / default_puff_time).mean()
+            result = f"{round_values(avg_normalized_tpm):.2f}"
+            debug_print(f"DEBUG: Calculated normalized TPM with default: {result} mg/s")
+            return result
+            
+    except Exception as e:
+        debug_print(f"DEBUG: Error calculating normalized TPM: {e}")
+        return ""
+
+def calculate_usage_efficiency_for_sample(sample_data):
+    """
+    Calculate usage efficiency using the Excel formula logic.
+    Formula: ((first_tpm * first_puffs + sum(tpm * incremental_puffs)) / 1000) / initial_oil_mass * 100
+    
+    Args:
+        sample_data: DataFrame containing sample data
+        
+    Returns:
+        str: Formatted usage efficiency percentage or empty string
+    """
+    debug_print("DEBUG: Calculating usage efficiency for sample")
+    
+    try:
+        if sample_data.shape[0] < 4 or sample_data.shape[1] < 9:
+            debug_print(f"DEBUG: Insufficient data shape {sample_data.shape} for usage efficiency calculation")
+            return ""
+        
+        # Get initial oil mass from H3 (column 7, row 1 with -1 indexing = row 2)
+        initial_oil_mass_val = sample_data.iloc[1, 7]
+        if pd.isna(initial_oil_mass_val) or initial_oil_mass_val == 0:
+            debug_print(f"DEBUG: Invalid initial oil mass: {initial_oil_mass_val}")
+            return ""
+        
+        # Get puffs values from column A (column 0) starting from row 4 (row 3 with -1 indexing)
+        puffs_values = pd.to_numeric(sample_data.iloc[3:, 0], errors='coerce').dropna()
+        
+        # Get TPM values from column I (column 8) starting from row 4 (row 3 with -1 indexing)
+        tpm_values = pd.to_numeric(sample_data.iloc[3:, 8], errors='coerce').dropna()
+        
+        if len(puffs_values) == 0 or len(tpm_values) == 0:
+            debug_print(f"DEBUG: No valid puffs ({len(puffs_values)}) or TPM ({len(tpm_values)}) data")
+            return ""
+        
+        initial_oil_mass_mg = float(initial_oil_mass_val) * 1000  # Convert g to mg
+        debug_print(f"DEBUG: Initial oil mass: {initial_oil_mass_val}g ({initial_oil_mass_mg}mg)")
+        
+        # Calculate total aerosol mass following Excel formula logic
+        total_aerosol_mass_mg = 0
+        
+        # Align the arrays to same length
+        min_length = min(len(puffs_values), len(tpm_values))
+        puffs_aligned = puffs_values.iloc[:min_length]
+        tpm_aligned = tpm_values.iloc[:min_length]
+        
+        debug_print(f"DEBUG: Processing {min_length} data points for efficiency calculation")
+        
+        for i in range(min_length):
+            tpm_val = tpm_aligned.iloc[i]
+            puffs_val = puffs_aligned.iloc[i]
+            
+            if not pd.isna(tpm_val) and not pd.isna(puffs_val):
+                if i == 0:
+                    # First measurement: TPM * total puffs
+                    aerosol_mass = tpm_val * puffs_val
+                    debug_print(f"DEBUG: Row {i}: First measurement - {tpm_val} * {puffs_val} = {aerosol_mass}")
+                else:
+                    # Subsequent measurements: TPM * (current_puffs - previous_puffs)
+                    previous_puffs = puffs_aligned.iloc[i-1]
+                    if not pd.isna(previous_puffs):
+                        incremental_puffs = puffs_val - previous_puffs
+                        aerosol_mass = tpm_val * incremental_puffs
+                        debug_print(f"DEBUG: Row {i}: {tpm_val} * ({puffs_val} - {previous_puffs}) = {aerosol_mass}")
+                    else:
+                        aerosol_mass = tpm_val * puffs_val
+                        debug_print(f"DEBUG: Row {i}: Previous puffs NaN, using {tpm_val} * {puffs_val} = {aerosol_mass}")
+                
+                total_aerosol_mass_mg += aerosol_mass
+        
+        # Calculate usage efficiency: (total aerosol mass / initial oil mass) * 100
+        if initial_oil_mass_mg > 0:
+            calculated_efficiency = (total_aerosol_mass_mg / initial_oil_mass_mg) * 100
+            usage_efficiency = f"{round_values(calculated_efficiency):.1f}%"
+            
+            debug_print(f"DEBUG: Usage efficiency calculation complete:")
+            debug_print(f"  - Total aerosol mass: {round_values(total_aerosol_mass_mg):.2f}mg")
+            debug_print(f"  - Initial oil mass: {initial_oil_mass_mg}mg")
+            debug_print(f"  - Calculated usage efficiency: {usage_efficiency}")
+            
+            return usage_efficiency
+        else:
+            debug_print(f"DEBUG: Invalid initial oil mass for efficiency calculation: {initial_oil_mass_mg}")
+            return ""
+            
+    except Exception as e:
+        debug_print(f"DEBUG: Error calculating usage efficiency: {e}")
+        import traceback
+        traceback.print_exc()
+        return ""
+
+def extract_initial_oil_mass(sample_data):
+    """
+    Extract initial oil mass from sample data.
+    
+    Args:
+        sample_data: DataFrame containing sample data
+        
+    Returns:
+        str: Initial oil mass value or empty string
+    """
+    try:
+        if sample_data.shape[0] > 1 and sample_data.shape[1] > 7:
+            initial_oil_mass_val = sample_data.iloc[1, 7]  # Row 2, Column 8 (H)
+            if pd.notna(initial_oil_mass_val):
+                debug_print(f"DEBUG: Extracted initial oil mass: {initial_oil_mass_val}")
+                return str(initial_oil_mass_val)
+        debug_print("DEBUG: Could not extract initial oil mass")
+        return ""
+    except Exception as e:
+        debug_print(f"DEBUG: Error extracting initial oil mass: {e}")
+        return ""
