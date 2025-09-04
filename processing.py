@@ -1870,52 +1870,41 @@ def updated_extracted_data_function_with_raw_data(sample_data, raw_data, sample_
             "Notes": ""
         }
     
-    # Extract sample name using existing logic (keep all your existing sample name extraction code)
-    sample_name = f"Sample {sample_index + 1}"
-    headers = sample_data.iloc[0, :].tolist() if sample_data.shape[0] > 0 else []
+    # Extract sample name - use the same logic that works in plotting functions
+    sample_name = f"Sample {sample_index + 1}"  # Default fallback
+
+    # Try to extract from the same location where plotting functions find it
+    try:
+        # Check row 0 for sample ID (column 5 is where Sample ID typically is)
+        if sample_data.shape[0] > 0 and sample_data.shape[1] > 5:
+            sample_id_candidate = sample_data.iloc[0, 5]
+            if pd.notna(sample_id_candidate):
+                sample_id_str = str(sample_id_candidate).strip()
+                if sample_id_str and sample_id_str.lower() not in ['nan', 'none', '', 'unnamed: 5']:
+                    sample_name = sample_id_str
+                    print(f"DEBUG: Extracted sample name from [0,5]: '{sample_name}'")
     
-    project_value = ""
-    sample_value = ""
-    
-    for i, header in enumerate(headers):
-        if pd.isna(header):
-            continue
-        header_lower = str(header).lower().strip()
-        
-        # Check for "Sample ID:" at column 5 (new format)
-        if header_lower == "sample id:" or header_lower.startswith("sample id"):
-            if i + 1 < len(headers):
-                sample_value = str(headers[i + 1]).strip()
-                break  # Prefer new format
-        
-        # Check for old format patterns
-        elif (header_lower.startswith("project:") or 
-              (header_lower.startswith("project:.") and header_lower[9:].isdigit())):
-            if i + 1 < len(headers):
-                project_value = str(headers[i + 1]).strip()
-                if '.' in project_value and project_value.split('.')[-1].isdigit():
-                    project_value = '.'.join(project_value.split('.')[:-1])
-        
-        elif (header_lower == "sample:" or
-              (header_lower.startswith("sample:.") and header_lower[8:].isdigit())):
-            if i + 1 < len(headers):
-                temp_sample_value = str(headers[i + 1]).strip()
-                if not sample_value:
-                    sample_value = temp_sample_value
-    
-    # Determine final sample name
-    if sample_value and sample_value.lower() not in ['nan', 'none', '', f'unnamed: 5']:
-        if project_value and project_value.lower() not in ['nan', 'none', '']:
-            sample_name = f"{project_value} {sample_value}".strip()
-        else:
-            sample_name = sample_value.strip()
-    elif project_value and project_value.lower() not in ['nan', 'none', '']:
-        sample_name = project_value.strip()
-    else:
-        if len(headers) > 5:
-            fallback_value = str(headers[5]).strip()
-            if fallback_value and fallback_value.lower() not in ['nan', 'none', '', 'unnamed: 5']:
-                sample_name = fallback_value
+        # If not found, try looking in row 0 for any column that looks like a sample name
+        if sample_name == f"Sample {sample_index + 1}":
+            for col_idx in range(min(sample_data.shape[1], 10)):  # Check first 10 columns
+                candidate = sample_data.iloc[0, col_idx] if sample_data.shape[0] > 0 else None
+                if pd.notna(candidate):
+                    candidate_str = str(candidate).strip()
+                    # Look for patterns that indicate a sample name
+                    if (candidate_str and 
+                        candidate_str.lower() not in ['nan', 'none', '', 'media:', 'date:', 'sample id:'] and
+                        not candidate_str.lower().startswith('unnamed:') and
+                        len(candidate_str) > 3 and
+                        not candidate_str.replace('.', '').isdigit()):  # Not just a number
+                        sample_name = candidate_str
+                        print(f"DEBUG: Extracted sample name from [0,{col_idx}]: '{sample_name}'")
+                        break
+
+    except Exception as e:
+        print(f"DEBUG: Error extracting sample name for sample {sample_index + 1}: {e}")
+        sample_name = f"Sample {sample_index + 1}"
+
+    print(f"DEBUG: Final sample name for sample {sample_index + 1}: '{sample_name}'")
     
     # Extract TPM data
     tpm_data = pd.Series(dtype=float)
@@ -1936,7 +1925,7 @@ def updated_extracted_data_function_with_raw_data(sample_data, raw_data, sample_
     # Extract puffing regime from header data (row 1, column 7)
     puffing_regime = ""
     if sample_data.shape[0] > 1 and sample_data.shape[1] > 7:
-        puffing_regime = str(sample_data.iloc[1, 7]) if pd.notna(sample_data.iloc[1, 7]) else ""
+        puffing_regime = str(sample_data.iloc[0, 7]) if pd.notna(sample_data.iloc[0, 7]) else ""
     
     # Extract notes from header data (check multiple locations)
     notes = ""

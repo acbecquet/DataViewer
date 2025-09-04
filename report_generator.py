@@ -28,7 +28,7 @@ class HeaderSelectorDialog:
         self.default_headers = [
             "Sample Name", "Media", "Viscosity", "Puffing Regime", 
             "Voltage, Resistance, Power", "Average TPM", 
-            "Standard Deviation", "Draw Pressure", "Burn", "Clog", "Notes"
+            "Standard Deviation", "Normalized TPM", "Draw Pressure","Usage Efficiency", "Initial Oil Mass","Burn", "Clog", "Notes"
         ]
         
         self.header_vars = {}
@@ -53,9 +53,10 @@ class HeaderSelectorDialog:
         for i, header in enumerate(self.default_headers):
             frame = ttk.Frame(scrollable_frame)
             frame.pack(fill="x", padx=10, pady=2)
-            
-            # Checkbox
-            var = tk.BooleanVar(value=True)  # All enabled by default
+    
+            # Checkbox - new headers default to unchecked
+            default_checked = header not in ["Usage Efficiency", "Initial Oil Mass", "Normalized TPM"]
+            var = tk.BooleanVar(value=default_checked)
             ttk.Checkbutton(frame, text=header, variable=var).pack(side="left")
             self.header_vars[header] = var
             
