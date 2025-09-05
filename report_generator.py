@@ -1,4 +1,4 @@
-# report_generator.py
+﻿# report_generator.py
 import os
 import traceback
 import shutil
@@ -327,6 +327,67 @@ class ReportGenerator:
         return reordered_data
 
     def add_plots_to_slide(self, slide, sheet_name: str, full_sample_data: pd.DataFrame, valid_plot_options: list, images_to_delete: list) -> None:
+        # New cascading plot layout starting under the table
+        plot_start_left = Inches(0.02)
+        plot_top = Inches(5.26)
+        plot_height = Inches(2.0)
+        current_left = plot_start_left
+        
+        debug_print(f"DEBUG: Starting cascading plot layout at left={plot_start_left}, top={plot_top}, height={plot_height}")
+        
+        numeric_data = full_sample_data.apply(pd.to_numeric, errors='coerce')
+        if numeric_data.isna().all(axis=0).all():
+            debug_print(f"No numeric data available for plotting in sheet '{sheet_name}'.")
+            return
+        sample_names = None
+        if hasattr(self, 'header_data') and self.header_data and 'samples' in self.header_data:
+            sample_names = [sample['id'] for sample in self.header_data['samples']]
+            debug_print(f"DEBUG: Extracted sample names from header_data: {sample_names}")
+
+        # Determine if this is User Test Simulation
+        is_user_test_simulation = sheet_name in ["User Test Simulation", "User Simulation Test"]
+        num_columns_per_sample = 8 if is_user_test_simulation else 12
+    
+        for i, plot_option in enumerate(valid_plot_options):
+            plot_image_path = f"{sheet_name}_{plot_option}_plot.png"
+            try:
+                # Correct argument order
+                fig, sample_names_returned = processing.plot_all_samples(numeric_data, plot_option, num_columns_per_sample, sample_names)
+            
+                # Calculate plot width based on aspect ratio to maintain proportions
+                if is_user_test_simulation and hasattr(fig, 'is_split_plot') and fig.is_split_plot:
+                    # For User Test Simulation split plots
+                    plt.savefig(plot_image_path, dpi=150, bbox_inches='tight')
+                    debug_print(f"DEBUG: Saved User Test Simulation split plot: {plot_image_path}")
+                    
+                    # Wider aspect ratio for split plots
+                    plot_width = Inches(3.5)  # Maintain aspect ratio for split plots
+                    debug_print(f"DEBUG: Split plot {i}: positioning at left={current_left}, width={plot_width}")
+                    slide.shapes.add_picture(plot_image_path, current_left, plot_top, plot_width, plot_height)
+                else:
+                    # Standard single plots - maintain current aspect ratio (2.29/1.72 ≈ 1.33)
+                    plt.savefig(plot_image_path, dpi=150)
+                    debug_print(f"DEBUG: Saved standard plot: {plot_image_path}")
+                    
+                    # Calculate width to maintain aspect ratio with 2" height
+                    aspect_ratio = 2.29 / 1.72  # Current aspect ratio from original code
+                    plot_width = plot_height * aspect_ratio  # Maintain aspect ratio
+                    debug_print(f"DEBUG: Standard plot {i}: positioning at left={current_left}, width={plot_width}")
+                    slide.shapes.add_picture(plot_image_path, current_left, plot_top, plot_width, plot_height)
+                
+                # Move to next position for cascade effect
+                current_left += plot_width
+                debug_print(f"DEBUG: Next plot will start at left={current_left}")
+                
+                plt.close()
+                if plot_image_path not in images_to_delete:
+                    images_to_delete.append(plot_image_path)
+            except Exception as e:
+                print(f"Error generating plot '{plot_option}' for sheet '{sheet_name}': {e}")
+                import traceback
+                traceback.print_exc()
+
+    def add_plots_to_slide_old(self, slide, sheet_name: str, full_sample_data: pd.DataFrame, valid_plot_options: list, images_to_delete: list) -> None:
         plot_top = Inches(1.21)
         left_column_x = Inches(8.43)
         right_column_x = Inches(10.84)
@@ -922,9 +983,11 @@ class ReportGenerator:
             return
         table_left = Inches(0.15)
         table_top = Inches(1.19)
-        max_table_height = Inches(5.97)
+        table_width = Inches(12.99)  # Fixed width
+        debug_print(f"DEBUG: Creating table with width {table_width} and auto-adjusting height")
+        # Auto-adjust height based on content - let PowerPoint handle it
         table_shape = slide.shapes.add_table(rows+1, cols, table_left, table_top, table_width,
-                                              Inches(0.4 * (rows + 1))).table
+                                              Inches(0.3 * (rows + 1))).table  # Reduced height multiplier for tighter fit
         header_font = {'name': 'Arial', 'size': Pt(10), 'bold': True}
         cell_font = {'name': 'Arial', 'size': Pt(8), 'bold': False}
         for col_idx, col_name in enumerate(processed_data.columns):
