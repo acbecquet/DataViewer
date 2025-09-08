@@ -284,12 +284,27 @@ class FileManager:
         if original_file_path in self.stored_files_cache:
             debug_print("DEBUG: File already stored in database, skipping")
             return
-    
+
         try:
             debug_print("DEBUG: Storing new file in database...")
             # Show progress dialog
             self.gui.progress_dialog.show_progress_bar("Storing file in database...")
             self.gui.root.update_idletasks()
+
+            # CREATE: Collect sample notes from current filtered_sheets (ADD THIS SECTION)
+            sample_notes_data = {}
+            for sheet_name, sheet_info in self.gui.filtered_sheets.items():
+                header_data = sheet_info.get('header_data')
+                if header_data and 'samples' in header_data:
+                    sheet_notes = {}
+                    for i, sample_data in enumerate(header_data['samples']):
+                        sample_notes = sample_data.get('sample_notes', '')
+                        if sample_notes.strip():
+                            sheet_notes[f"Sample {i+1}"] = sample_notes
+                
+                    if sheet_notes:
+                        sample_notes_data[sheet_name] = sheet_notes
+                        debug_print(f"DEBUG: Collected notes for sheet {sheet_name}: {len(sheet_notes)} samples")
 
             # Create a temporary VAP3 file
             with tempfile.NamedTemporaryFile(suffix='.vap3', delete=False) as temp_file:
@@ -304,17 +319,17 @@ class FileManager:
             plot_settings = {}
             if hasattr(self.gui, 'selected_plot_type'):
                 plot_settings['selected_plot_type'] = self.gui.selected_plot_type.get()
-    
+
             debug_print(f"DEBUG: Plot settings: {plot_settings}")
 
             # Get image crop states safely
             image_crop_states = getattr(self.gui, 'image_crop_states', {})
             if hasattr(self.gui, 'image_loader') and self.gui.image_loader:
                 image_crop_states.update(getattr(self.gui.image_loader, 'image_crop_states', {}))
-    
+
             debug_print(f"DEBUG: Image crop states: {len(image_crop_states)} items")
 
-            # CRITICAL FIX: Collect sample images for database storage
+            # Collect sample images for database storage
             sample_images = {}
             sample_image_crop_states = {}
             sample_header_data = {}
@@ -371,7 +386,7 @@ class FileManager:
         
             debug_print("DEBUG: VAP3 file created successfully with sample images")
 
-            # Store metadata about the original file
+            # MODIFY: Store metadata about the original file (ADD sample_notes to metadata)
             meta_data = {
                 'display_filename': display_filename,
                 'original_filename': os.path.basename(original_file_path),
@@ -381,9 +396,10 @@ class FileManager:
                 'plot_options': getattr(self.gui, 'plot_options', []),
                 'plot_settings': plot_settings,
                 'has_sample_images': bool(sample_images),
-                'sample_count': len(sample_images)
+                'sample_count': len(sample_images),
+                'sample_notes': sample_notes_data  # ADD THIS LINE
             }
-    
+
             debug_print(f"DEBUG: Metadata to store: {meta_data}")
 
             # Store the VAP3 file in the database with the proper display filename

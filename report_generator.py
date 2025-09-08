@@ -38,15 +38,21 @@ class HeaderSelectorDialog:
         """Show dialog and return selected headers in order"""
         self.dialog = tk.Toplevel(self.parent)
         self.dialog.title("Select Report Headers")
-        self.dialog.geometry("400x500")
+        self.dialog.geometry("300x500")
         self.dialog.grab_set()
         
-        # Instructions
-        ttk.Label(self.dialog, text="Select headers and set order (1=leftmost):").pack(pady=10)
+        # Instructions - centered
+        instruction_frame = ttk.Frame(self.dialog)
+        instruction_frame.pack(fill="x", pady=10)
+        ttk.Label(instruction_frame, text="Select headers and set order (1=leftmost):").pack()
         
-        # Scrollable frame
-        canvas = tk.Canvas(self.dialog)
-        scrollbar = ttk.Scrollbar(self.dialog, orient="vertical", command=canvas.yview)
+        # Main content frame for centering the scrollable area
+        content_frame = ttk.Frame(self.dialog)
+        content_frame.pack(fill="both", expand=True, padx=20, pady=(0, 10))
+        
+        # Scrollable frame with explicit height to prevent button overlap
+        canvas = tk.Canvas(content_frame, height=350)
+        scrollbar = ttk.Scrollbar(content_frame, orient="vertical", command=canvas.yview)
         scrollable_frame = ttk.Frame(canvas)
         
         # Header selection
@@ -72,12 +78,24 @@ class HeaderSelectorDialog:
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
         
-        # Buttons
+        # Buttons frame - at the bottom, properly separated from content
         button_frame = ttk.Frame(self.dialog)
-        button_frame.pack(fill="x", pady=10)
+        button_frame.pack(side="bottom", fill="x", pady=10)
         
-        ttk.Button(button_frame, text="OK", command=self.ok).pack(side="right", padx=5)
-        ttk.Button(button_frame, text="Cancel", command=self.cancel).pack(side="right")
+        # Center the buttons using a container frame
+        button_container = ttk.Frame(button_frame)
+        button_container.pack()
+        
+        ttk.Button(button_container, text="Cancel", command=self.cancel).pack(side="left", padx=5)
+        ttk.Button(button_container, text="OK", command=self.ok).pack(side="left", padx=5)
+        
+        # Center the dialog window on screen
+        self.dialog.update_idletasks()
+        width = self.dialog.winfo_width()
+        height = self.dialog.winfo_height()
+        x = (self.dialog.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.dialog.winfo_screenheight() // 2) - (height // 2)
+        self.dialog.geometry(f"{width}x{height}+{x}+{y}")
         
         self.dialog.wait_window()
         return self.result

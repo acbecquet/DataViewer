@@ -3930,6 +3930,8 @@ Developed by Charlie Becquet
         # NEW: Transfer sample images to main GUI for display
         self._transfer_sample_images_to_main_gui()
 
+        self._transfer_sample_notes_to_main_gui()
+
         # Show the main GUI window again before destroying
         if hasattr(self.parent, 'root') and self.main_window_was_visible:
             debug_print("DEBUG: Restoring main GUI window from data collection window")
@@ -3941,6 +3943,82 @@ Developed by Charlie Becquet
             debug_print("DEBUG: Main GUI window restored")
 
         self.window.destroy()
+
+    def _transfer_sample_notes_to_main_gui(self):
+        """Transfer sample notes to main GUI with proper structure for display."""
+        try:
+            debug_print("DEBUG: Transferring sample notes to main GUI")
+        
+            # Ensure we save current notes before transfer
+            self._save_current_notes_before_tab_switch()
+        
+            # Check if we have sample notes to transfer
+            if not hasattr(self, 'data') or not self.data:
+                debug_print("DEBUG: No sample data to transfer notes from")
+                return
+        
+            debug_print(f"DEBUG: Processing notes for {len(self.data)} samples")
+        
+            # Collect all sample notes
+            sample_notes_data = {}
+            notes_found = False
+        
+            for sample_id, sample_data in self.data.items():
+                sample_notes = sample_data.get("sample_notes", "")
+                if sample_notes.strip():  # Only include non-empty notes
+                    sample_notes_data[sample_id] = sample_notes
+                    notes_found = True
+                    debug_print(f"DEBUG: Found notes for {sample_id}: '{sample_notes[:50]}...'")
+        
+            if not notes_found:
+                debug_print("DEBUG: No sample notes found to transfer")
+                return
+        
+            # Ensure header_data structure exists and is properly formatted
+            if not hasattr(self, 'header_data') or not self.header_data:
+                self.header_data = {'samples': []}
+        
+            # Ensure header_data has enough sample entries
+            while len(self.header_data['samples']) < self.num_samples:
+                self.header_data['samples'].append({})
+        
+            # Update header_data with current notes
+            for i in range(self.num_samples):
+                sample_id = f"Sample {i + 1}"
+                if sample_id in sample_notes_data:
+                    self.header_data['samples'][i]['sample_notes'] = sample_notes_data[sample_id]
+                    debug_print(f"DEBUG: Updated header_data with notes for {sample_id}")
+        
+            # Store sample notes in parent for main GUI processing
+            if sample_notes_data:
+                self.parent.pending_sample_notes = {
+                    'test_name': self.test_name,
+                    'header_data': self.header_data.copy(),
+                    'notes_data': sample_notes_data.copy()
+                }
+                debug_print(f"DEBUG: Stored sample notes for main GUI - test: {self.test_name}")
+            
+                # Store notes metadata for reverse lookup (similar to images)
+                if not hasattr(self.parent, 'sample_notes_metadata'):
+                    self.parent.sample_notes_metadata = {}
+                if self.parent.current_file not in self.parent.sample_notes_metadata:
+                    self.parent.sample_notes_metadata[self.parent.current_file] = {}
+            
+                self.parent.sample_notes_metadata[self.parent.current_file][self.test_name] = {
+                    'header_data': self.header_data.copy(),
+                    'notes_data': sample_notes_data.copy(),
+                    'test_name': self.test_name
+                }
+                debug_print(f"DEBUG: Stored sample notes metadata for reverse lookup")
+            
+                # If parent has a method to immediately process notes, call it
+                if hasattr(self.parent, 'process_pending_sample_notes'):
+                    self.parent.process_pending_sample_notes()
+    
+        except Exception as e:
+            debug_print(f"ERROR: Failed to transfer sample notes to main GUI: {e}")
+            import traceback
+            traceback.print_exc()
 
  
     def _transfer_sample_images_to_main_gui(self):

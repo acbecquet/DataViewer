@@ -747,6 +747,42 @@ Would you like to download and install the update?"""
                               justify='center')
         empty_label.pack(expand=True, pady=20)
 
+    def process_pending_sample_notes(self):
+        """Process pending sample notes transferred from data collection window."""
+        try:
+            if not hasattr(self, 'pending_sample_notes') or not self.pending_sample_notes:
+                debug_print("DEBUG: No pending sample notes to process")
+                return
+        
+            debug_print("DEBUG: Processing pending sample notes from data collection")
+        
+            notes_data = self.pending_sample_notes
+            test_name = notes_data.get('test_name')
+            header_data = notes_data.get('header_data')
+        
+            if not test_name or not header_data:
+                debug_print("DEBUG: Invalid notes data structure")
+                return
+        
+            # Update the filtered_sheets with the new header_data containing notes
+            if test_name in self.filtered_sheets:
+                self.filtered_sheets[test_name]['header_data'] = header_data
+                debug_print(f"DEBUG: Updated filtered_sheets with notes for {test_name}")
+            
+                # If this is the currently displayed sheet, refresh the notes display
+                if hasattr(self, 'current_sheet_name') and self.current_sheet_name == test_name:
+                    debug_print(f"DEBUG: Refreshing notes display for current sheet: {test_name}")
+                    self.update_notes_display(test_name)
+        
+            # Clear the pending notes
+            self.pending_sample_notes = None
+            debug_print("DEBUG: Sample notes processing completed")
+        
+        except Exception as e:
+            debug_print(f"ERROR: Failed to process pending sample notes: {e}")
+            import traceback
+            traceback.print_exc()
+
     def constrain_plot_width(self):
         """Ensure the plot doesn't exceed 50% of the window width."""
         if not hasattr(self, 'plot_frame') or not self.plot_frame:
@@ -1594,13 +1630,27 @@ Would you like to download and install the update?"""
     def _update_file_in_database(self, file_data):
         """Update a single file in the database."""
         try:
+            # CREATE: Collect sample notes from current filtered_sheets (ADD THIS SECTION)
+            sample_notes_data = {}
+            filtered_sheets = file_data["filtered_sheets"]
+        
+            for sheet_name, sheet_info in filtered_sheets.items():
+                header_data = sheet_info.get('header_data')
+                if header_data and 'samples' in header_data:
+                    sheet_notes = {}
+                    for i, sample_data in enumerate(header_data['samples']):
+                        sample_notes = sample_data.get('sample_notes', '')
+                        if sample_notes.strip():
+                            sheet_notes[f"Sample {i+1}"] = sample_notes
+                
+                    if sheet_notes:
+                        sample_notes_data[sheet_name] = sheet_notes
+                        debug_print(f"DEBUG: Collected notes for sheet {sheet_name}: {len(sheet_notes)} samples")
+
             # Create temporary VAP3 file
             import tempfile
             with tempfile.NamedTemporaryFile(suffix='.vap3', delete=False) as temp_file:
                 temp_vap3_path = temp_file.name
-        
-            # Prepare data for VAP3 save
-            filtered_sheets = file_data["filtered_sheets"]
         
             # Get associated images for this file
             sheet_images = {}
@@ -1615,79 +1665,80 @@ Would you like to download and install the update?"""
             if hasattr(self, 'selected_plot_type'):
                 plot_settings['selected_plot_type'] = self.selected_plot_type.get()
         
+            # COLLECT: Sample images from current session (ADD THIS SECTION)
+            sample_images = {}
+            sample_image_crop_states = {}
+            sample_header_data = {}
+        
+            # Check for pending sample images
+            if hasattr(self, 'pending_sample_images'):
+                sample_images = getattr(self, 'pending_sample_images', {})
+                sample_image_crop_states = getattr(self, 'pending_sample_image_crop_states', {})
+                sample_header_data = getattr(self, 'pending_sample_header_data', {})
+                debug_print(f"DEBUG: Found pending sample images: {len(sample_images)} samples")
+        
+            # Also check sample_image_metadata for this file
+            if hasattr(self, 'sample_image_metadata'):
+                current_file = file_data["file_name"]
+                if current_file in self.sample_image_metadata:
+                    for sheet_name, metadata in self.sample_image_metadata[current_file].items():
+                        sheet_sample_images = metadata.get('sample_images', {})
+                        if sheet_sample_images:
+                            sample_images.update(sheet_sample_images)
+                            sample_image_crop_states.update(metadata.get('sample_image_crop_states', {}))
+                            if not sample_header_data:
+                                sample_header_data = metadata.get('header_data', {})
+                            debug_print(f"DEBUG: Found sample images in metadata for {sheet_name}: {len(sheet_sample_images)} samples")
+        
             # Save as VAP3
             from vap_file_manager import VapFileManager
             vap_manager = VapFileManager()
         
+            # MODIFY: Add sample images and header data to vap3 save (MODIFY THIS CALL)
             success = vap_manager.save_to_vap3(
                 temp_vap3_path,
                 filtered_sheets,
                 sheet_images,
                 getattr(self, 'plot_options', []),
                 image_crop_states,
-                plot_settings
+                plot_settings,
+                sample_images,              # ADD THIS
+                sample_image_crop_states,   # ADD THIS  
+                sample_header_data          # ADD THIS
             )
         
             if not success:
                 raise Exception("Failed to create temporary VAP3 file")
         
-            # Update database
-            original_filename = file_data.get("original_filename", file_data["file_name"])
-            display_filename = file_data["file_name"]
-            if not display_filename.endswith('.vap3'):
-                display_filename = os.path.splitext(display_filename)[0] + '.vap3'
-        
-            meta_data = {
-                'display_filename': display_filename,
-                'original_filename': original_filename,
+            # MODIFY: Prepare enhanced metadata with sample notes (MODIFY THIS SECTION)
+            metadata = {
+                'display_filename': file_data["file_name"],
+                'original_filename': file_data.get("original_filename", file_data["file_name"]),
                 'original_path': file_data.get("file_path", ""),
                 'creation_date': time.strftime('%Y-%m-%d %H:%M:%S'),
-                'last_modified': time.strftime('%Y-%m-%d %H:%M:%S'),
                 'sheet_count': len(filtered_sheets),
                 'plot_options': getattr(self, 'plot_options', []),
-                'plot_settings': plot_settings
+                'plot_settings': plot_settings,
+                'has_sample_images': bool(sample_images),
+                'sample_count': len(sample_images),
+                'sample_notes': sample_notes_data  # ADD THIS LINE
             }
         
-            # Store/update in database
-            file_id = self.file_manager.db_manager.store_vap3_file(temp_vap3_path, meta_data)
-        
-            # Store sheet metadata
-            processing_module, _ = _lazy_import_processing()
-            if processing_module:
-                for sheet_name, sheet_info in filtered_sheets.items():
-                    is_plotting = processing_module.plotting_sheet_test(sheet_name, sheet_info["data"])
-                    is_empty = sheet_info.get("is_empty", False)
-                
-                    self.file_manager.db_manager.store_sheet_info(
-                        file_id, 
-                        sheet_name, 
-                        is_plotting, 
-                        is_empty
-                    )
-            else:
-                # Fallback if processing can't be loaded
-                for sheet_name, sheet_info in filtered_sheets.items():
-                    # Simple heuristic check
-                    is_plotting = len(sheet_info["data"]) > 0 and len(sheet_info["data"].columns) > 5
-                    is_empty = sheet_info.get("is_empty", False)
-                
-                    self.file_manager.db_manager.store_sheet_info(
-                        file_id, 
-                        sheet_name, 
-                        is_plotting, 
-                        is_empty
-                    )
+            # Store in database
+            file_id = self.file_manager.db_manager.store_vap3_file(temp_vap3_path, metadata)
         
             # Clean up temporary file
             try:
                 os.unlink(temp_vap3_path)
-            except Exception:
+            except:
                 pass
         
-            debug_print(f"DEBUG: Successfully updated file {file_data['file_name']} in database")
+            debug_print(f"DEBUG: Successfully updated file {file_data['file_name']} in database with ID: {file_id}")
         
         except Exception as e:
-            debug_print(f"ERROR: Failed to update file {file_data['file_name']} in database: {e}")
+            debug_print(f"ERROR: Failed to update file {file_data['file_name']}: {e}")
+            import traceback
+            traceback.print_exc()
             raise
    
     def load_images(self, is_plotting_sheet):
