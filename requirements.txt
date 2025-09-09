@@ -23,6 +23,7 @@ opencv-python-headless>=4.5.0
 
 # ===== GUI COMPONENTS =====
 tkintertable==1.3.3
+tksheet==7.5.14
 
 # ===== NETWORKING AND WEB =====
 requests>=2.25.0
