@@ -197,7 +197,7 @@ Source: "dist\\TestingGUI.exe"; DestDir: "{{app}}"; Flags: ignoreversion
 Source: "resources\\*"; DestDir: "{{app}}\\resources"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; Configuration file for database connection (optional)
-Source: "config\\database_config.json"; DestDir: "{{app}}\\config"; Flags: ignoreversion; Check: FileExists(ExpandConstant('{{srcdir}}\\config\\database_config.json'))
+Source: "config\\database_config.json"; DestDir: "{{app}}\\config"; Flags: ignoreversion; Check: FileExists(ExpandConstant('{{src}}\\config\\database_config.json'))
 
 ; REMOVED: Database file - now connects to remote Synology database
 
@@ -275,7 +275,7 @@ def build_executable():
     debug_print(f"Note: Database NOT included - will connect to remote database")
     
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=6000)
         
         if result.returncode == 0:
             success_print("PyInstaller completed successfully")
