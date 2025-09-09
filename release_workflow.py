@@ -197,7 +197,7 @@ Source: "dist\\TestingGUI.exe"; DestDir: "{{app}}"; Flags: ignoreversion
 Source: "resources\\*"; DestDir: "{{app}}\\resources"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; Configuration file for database connection (optional)
-Source: "config\\database_config.json"; DestDir: "{app}\\config"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "config\\database_config.json"; DestDir: "{{app}}\\config"; Flags: ignoreversion skipifsourcedoesntexist
 
 ; REMOVED: Database file - now connects to remote Synology database
 
