@@ -253,7 +253,7 @@ def build_executable():
     # PyInstaller command WITHOUT database inclusion
     cmd = [
         sys.executable, '-m', 'PyInstaller',
-        '--onefile',
+        '--onedir',
         '--windowed',
         '--name=TestingGUI',
         '--icon=resources/ccell_icon.ico',
@@ -262,9 +262,23 @@ def build_executable():
         '--hidden-import=matplotlib.backends.backend_tkagg',
         '--hidden-import=PIL._tkinter_finder',
         '--hidden-import=pkg_resources.py2_warn',
-        '--collect-all=matplotlib',
-        '--collect-all=numpy',
-        '--collect-all=pandas',
+        # Matplotlib 
+        '--hidden-import=matplotlib.pyplot',
+        '--hidden-import=matplotlib.widgets',
+        '--hidden-import=matplotlib.cm',
+        '--hidden-import=matplotlib.figure',
+        '--hidden-import=matplotlib.patches',
+
+        # Pandas - core functionality you use
+        '--hidden-import=pandas.core.arrays',
+        '--hidden-import=pandas.core.groupby',
+        '--hidden-import=pandas.io.formats.format',
+        '--hidden-import=pandas.io.common',
+        '--hidden-import=pandas._libs',
+
+        # Numpy - minimal core
+        '--hidden-import=numpy.core._methods',
+        '--hidden-import=numpy.lib.format',
         '--exclude-module=tkinter.test',  # Exclude problematic test modules
         '--exclude-module=test',
         'main.py'
