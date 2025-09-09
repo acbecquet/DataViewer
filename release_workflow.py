@@ -307,6 +307,13 @@ def build_installer():
     """Build the installer with Inno Setup"""
     debug_print("Building installer with Inno Setup...")
     
+        # Clean up any old installer scripts to avoid conflicts
+    old_scripts = ['script_installer.iss', 'testing_gui_installer.iss']
+    for old_script in old_scripts:
+        if os.path.exists(old_script):
+            os.remove(old_script)
+            debug_print(f"Removed old installer script: {old_script}")
+
     # Check if Inno Setup is installed
     inno_paths = [
         "C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe",

@@ -28,7 +28,7 @@ def read_requirements():
 
 setup(
     name="standardized-testing-gui",
-    version="0.0.5", 
+    version="0.0.6", 
     author="Charlie Becquet",
     description="Standardized Testing GUI for Data Analysis",
     packages=find_packages(),
