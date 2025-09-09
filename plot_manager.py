@@ -30,7 +30,7 @@ def lazy_import_pandas():
 class PlotManager:
     def __init__(self, parent):
         """
-        The PlotManager is initialized with a reference to the TestingGUI (parent)
+        The PlotManager is initialized with a reference to the DataViewer (parent)
         so that it can access shared variables such as selected_plot_type, selected_sheet,
         filtered_sheets, and plot_options.
         """

@@ -3,7 +3,7 @@ main_gui.py
 Optimized version for better startup time and UI responsiveness.
 Developed By Charlie Becquet.
 Main GUI module for the DataViewer Application.
-This module instantiates the high-level TestingGUI class which delegates file I/O,
+This module instantiates the high-level DataViewer class which delegates file I/O,
 plotting, trend analysis, report generation, and progress dialog management
 to separate modules for better modularity and scalability.
 """
@@ -274,7 +274,7 @@ def filter_empty_samples_from_full_data(full_sample_data, num_columns_per_sample
         traceback.print_exc()
         return full_sample_data
 
-class TestingGUI:
+class DataViewer:
     """Main GUI class for the Standardized Testing application."""
 
     def __init__(self, root):

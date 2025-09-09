@@ -27,10 +27,10 @@ def read_requirements():
         ]
 
 setup(
-    name="standardized-testing-gui",
+    name="DataViewer",
     version="0.0.11", 
     author="Charlie Becquet",
-    description="Standardized Testing GUI for Data Analysis",
+    description="DataViewer for Data Analysis",
     packages=find_packages(),
     py_modules=[
         'main', 'main_gui', 'file_manager', 'plot_manager', 
@@ -42,7 +42,7 @@ setup(
     install_requires=read_requirements(),
     entry_points={
         'console_scripts': [
-            'testing-gui=main:main',
+            'DataViewer=main:main',
         ],
     },
     include_package_data=True,

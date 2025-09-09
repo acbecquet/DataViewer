@@ -23,14 +23,36 @@ from utils import FONT, debug_print, show_success_message, load_excel_file_with_
 import threading
 import subprocess
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("datacollection.log"),
-        logging.StreamHandler()
-    ]
-)
+def setup_logging():
+    """Set up logging with proper error handling and writable directory."""
+    try:
+        # Use user's home directory for log files (always writable)
+        log_dir = os.path.expanduser("~/.dataviewer")
+        os.makedirs(log_dir, exist_ok=True)
+        log_file = os.path.join(log_dir, 'datacollection.log')
+        
+        # Configure logging with file and console handlers
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.FileHandler(log_file),
+                logging.StreamHandler()
+            ]
+        )
+        debug_print(f"DEBUG: Logging configured successfully. Log file: {log_file}")
+        
+    except Exception as e:
+        # Fallback to console-only logging if file logging fails
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            handlers=[logging.StreamHandler()]
+        )
+        debug_print(f"WARNING: Could not set up file logging ({e}). Using console only.")
+
+# Call the setup function
+setup_logging()
 
 # Standard Operating Procedures for each test
 TEST_SOPS = {

@@ -42,9 +42,9 @@ import_time = time.time() - import_start
 print(f"TIMING: from utils import get_resource_path took: {import_time:.3f}s")
 
 import_start = time.time()
-from main_gui import TestingGUI
+from main_gui import DataViewer
 import_time = time.time() - import_start
-print(f"TIMING: from main_gui import TestingGUI took: {import_time:.3f}s")
+print(f"TIMING: from main_gui import DataViewer took: {import_time:.3f}s")
 
 def main():
     """Main entry point for the application."""
@@ -55,24 +55,38 @@ def main():
         messagebox.showerror("Error", f"An error occurred: {str(e)}")
 
     log_timing_checkpoint("Main function started")
-
+    log_file = None
     # Set up logging - always use user directory (writable location)
     try:
-        log_dir = os.path.expanduser("~/.standardized-testing-gui")
+        log_dir = os.path.expanduser("~/.DataViewer")
         os.makedirs(log_dir, exist_ok=True)
         log_file = os.path.join(log_dir, 'app.log')
     except Exception:
-        # Fallback to current directory
-        log_file = 'app.log'
+        try:
+            # Fallback to temp directory instead of current directory
+            import tempfile
+            log_file = os.path.join(tempfile.gettempdir(), 'DataViewer_app.log')
+            print(f"DEBUG: Using temp directory for logging: {log_file}")
+        except Exception:
+            # Final fallback: console-only logging
+            log_file = None
+            print("WARNING: Could not set up file logging, using console only")
 
-    logging.basicConfig(
-        filename=str(log_file), 
-        level=logging.DEBUG, 
-        format='%(asctime)s:%(levelname)s:%(message)s'
-    )
+    # Configure logging based on what worked
+    if log_file:
+        logging.basicConfig(
+            filename=str(log_file), 
+            level=logging.DEBUG, 
+            format='%(asctime)s:%(levelname)s:%(message)s'
+        )
+    else:
+        # Console-only logging
+        logging.basicConfig(
+            level=logging.DEBUG, 
+            format='%(asctime)s:%(levelname)s:%(message)s'
+        )
     
     logging.info('Application started')
-    print(f"DEBUG: Log file location: {log_file}")
     log_timing_checkpoint("Logging setup complete")
 
     try:
@@ -85,10 +99,10 @@ def main():
 
         # Initialize and launch the GUI application
         gui_start = time.time()
-        app = TestingGUI(root)
+        app = DataViewer(root)
         gui_time = time.time() - gui_start
-        print(f"TIMING: TestingGUI initialization took: {gui_time:.3f}s")
-        log_timing_checkpoint("TestingGUI initialized")
+        print(f"TIMING: DataViewer initialization took: {gui_time:.3f}s")
+        log_timing_checkpoint("DataViewer initialized")
 
         # Calculate and display total startup time
         total_startup_time = time.time() - startup_timer['start_time']

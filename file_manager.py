@@ -51,7 +51,7 @@ from database_manager import DatabaseManager
 class FileManager:
     """File Management Module for DataViewer.
     
-    This class is initialized with a reference to the main TestingGUI instance
+    This class is initialized with a reference to the main DataViewer instance
     so that it can update its state (sheets, selected_sheet, etc.).
     """
     def __init__(self, gui):
