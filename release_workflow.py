@@ -191,7 +191,10 @@ Name: "desktopicon"; Description: "Create desktop shortcut"; GroupDescription: "
 
 [Files]
 ; Main executable
-Source: "dist\\TestingGUI.exe"; DestDir: "{{app}}"; Flags: ignoreversion
+Source: "dist\\TestingGUI\\TestingGUI.exe"; DestDir: "{{app}}"; Flags: ignoreversion
+
+; Include all the supporting files from the _internal directory
+Source: "dist\\TestingGUI\\_internal\\*"; DestDir: "{{app}}\\_internal"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; Resources folder
 Source: "resources\\*"; DestDir: "{{app}}\\resources"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -294,21 +297,26 @@ def build_executable():
         if result.returncode == 0:
             success_print("PyInstaller completed successfully")
             
-            # Check if executable exists
-            exe_path = 'dist/TestingGUI.exe'
+            # Check if executable exists - FIXED for --onedir
+            exe_path = 'dist/TestingGUI/TestingGUI.exe'  # Changed path for --onedir
             if os.path.exists(exe_path):
                 size_mb = os.path.getsize(exe_path) / (1024 * 1024)
                 success_print(f"Executable created: {exe_path} ({size_mb:.1f} MB)")
+                
+                # Show total directory size for --onedir
+                total_size = sum(os.path.getsize(os.path.join(dirpath, filename))
+                            for dirpath, dirnames, filenames in os.walk('dist/TestingGUI')
+                            for filename in filenames) / (1024 * 1024)
+                success_print(f"Total application size: {total_size:.1f} MB")
                 success_print("Database-free build - will connect to remote Synology database")
                 return True
             else:
                 error_print("Executable not found after build")
+                # Debug: show what's actually in the dist directory
+                debug_print("Contents of dist directory:")
+                for item in os.listdir('dist'):
+                    debug_print(f"  {item}")
                 return False
-        else:
-            error_print("PyInstaller failed")
-            print("STDOUT:", result.stdout)
-            print("STDERR:", result.stderr)
-            return False
             
     except subprocess.TimeoutExpired:
         error_print("PyInstaller timed out (10 minutes)")

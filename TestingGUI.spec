@@ -1,23 +1,12 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_all
-
-datas = [('resources', 'resources')]
-binaries = []
-hiddenimports = ['matplotlib.backends.backend_tkagg', 'PIL._tkinter_finder', 'pkg_resources.py2_warn']
-tmp_ret = collect_all('matplotlib')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('numpy')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('pandas')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 
 a = Analysis(
     ['main.py'],
     pathex=[],
-    binaries=binaries,
-    datas=datas,
-    hiddenimports=hiddenimports,
+    binaries=[],
+    datas=[('resources', 'resources')],
+    hiddenimports=['matplotlib.backends.backend_tkagg', 'PIL._tkinter_finder', 'pkg_resources.py2_warn', 'matplotlib.pyplot', 'matplotlib.widgets', 'matplotlib.cm', 'matplotlib.figure', 'matplotlib.patches', 'pandas.core.arrays', 'pandas.core.groupby', 'pandas.io.formats.format', 'pandas.io.common', 'pandas._libs', 'numpy.core._methods', 'numpy.lib.format'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -30,16 +19,13 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
+    exclude_binaries=True,
     name='TestingGUI',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
@@ -47,4 +33,13 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon=['resources\\ccell_icon.ico'],
+)
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name='TestingGUI',
 )
