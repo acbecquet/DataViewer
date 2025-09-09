@@ -325,6 +325,40 @@ def build_executable():
         error_print(f"PyInstaller error: {e}")
         return False
 
+def cleanup_build_artifacts():
+    """Clean up old build artifacts to prevent conflicts"""
+    debug_print("Cleaning up old build artifacts...")
+    
+    artifacts_to_remove = [
+        'installer_script.iss',
+        'script_installer.iss', 
+        'testing_gui_installer.iss',
+        'build',
+        'dist',
+        '__pycache__',
+        'installer_output'
+    ]
+    
+    removed_items = []
+    for item in artifacts_to_remove:
+        if os.path.exists(item):
+            try:
+                if os.path.isdir(item):
+                    shutil.rmtree(item)
+                else:
+                    os.remove(item)
+                removed_items.append(item)
+                debug_print(f"Removed: {item}")
+            except Exception as e:
+                debug_print(f"Could not remove {item}: {e}")
+    
+    if removed_items:
+        success_print(f"Cleaned up build artifacts: {', '.join(removed_items)}")
+    else:
+        debug_print("No old build artifacts found")
+    
+    return True
+
 def build_installer():
     """Build the installer with Inno Setup"""
     debug_print("Building installer with Inno Setup...")
@@ -459,16 +493,14 @@ def create_database_config():
     return config_path
 
 def create_github_release(version, installer_path, release_notes=""):
-    """Create GitHub release (optional)"""
+    """Create GitHub release with large installer file"""
     debug_print("Creating GitHub release...")
     
-    # Check if GitHub CLI is available
     try:
         result = subprocess.run(['gh', '--version'], capture_output=True, check=True)
         debug_print("GitHub CLI found")
     except (subprocess.CalledProcessError, FileNotFoundError):
-        debug_print("GitHub CLI not found - skipping GitHub release")
-        debug_print("Install from: https://cli.github.com/")
+        debug_print("GitHub CLI not found - install from: https://cli.github.com/")
         return False
     
     try:
@@ -478,18 +510,19 @@ def create_github_release(version, installer_path, release_notes=""):
         if not release_notes:
             release_notes = f"Release v{version}\n\n- Bug fixes and improvements"
         
+        # Create release with the large installer file
         cmd = [
             'gh', 'release', 'create', tag_name,
-            installer_path,
+            installer_path,  # This will upload your large installer
             '--title', title,
             '--notes', release_notes
         ]
         
-        debug_print(f"Creating release: {' '.join(cmd)}")
+        debug_print(f"Creating release with large file: {installer_path}")
         
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=6000)  # 100 minutes
         
-        success_print("GitHub release created!")
+        success_print("GitHub release created with large installer!")
         print(f"Release URL: {result.stdout.strip()}")
         return True
         
@@ -554,6 +587,10 @@ def main():
     print("🏗️  STARTING BUILD PROCESS")
     print("=" * 60)
     
+    if not cleanup_build_artifacts():
+        error_print("Build artifact cleanup failed")
+        return False
+
     # Step 4.5: Clean up unwanted folders FIRST
     if not cleanup_unwanted_folders():
         error_print("Pre-build cleanup failed")
