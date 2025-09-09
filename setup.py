@@ -28,7 +28,7 @@ def read_requirements():
 
 setup(
     name="DataViewer",
-    version="0.0.11", 
+    version="0.0.13", 
     author="Charlie Becquet",
     description="DataViewer for Data Analysis",
     packages=find_packages(),

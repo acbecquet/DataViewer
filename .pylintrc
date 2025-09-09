@@ -1,0 +1,56 @@
+[MAIN]
+# Add your project modules so pylint can find them
+init-hook='import sys; sys.path.append(".")'
+
+# Ignore test files and build artifacts if you have them
+ignore=build,dist,*.egg-info,test_*.py,*_test.py
+
+[MESSAGES CONTROL]
+# Your current disable list plus some GUI/scientific computing specific ones
+disable=
+    missing-module-docstring,
+    missing-class-docstring,
+    missing-function-docstring,
+    line-too-long,
+    too-many-locals,
+    too-many-statements,
+    too-many-branches,
+    too-many-instance-attributes,
+    too-few-public-methods,
+    import-error,
+    no-member,
+    # GUI specific issues
+    too-many-ancestors,
+    invalid-name,
+    # Scientific computing common patterns
+    too-many-arguments,
+    too-many-public-methods,
+    # Tkinter specific
+    unused-argument,
+    attribute-defined-outside-init,
+    # Common in data processing
+    too-many-nested-blocks
+
+[DESIGN]
+# Increased limits for GUI applications (they tend to be larger)
+max-args=12
+max-attributes=20
+max-locals=25
+max-statements=80
+max-public-methods=30
+
+[BASIC]
+# Good variable names for your domain
+good-names=i,j,k,ex,Run,_,df,ax,fig,TPM,tpm,gui,ui,x,y,z,btn,lbl
+
+# Bad variable names to avoid
+bad-names=foo,bar,baz,toto,tutu,tata
+
+[TYPECHECK]
+# Ignore missing members for common GUI/scientific libs
+ignored-modules=tkinter,matplotlib,pandas,numpy,cv2
+ignored-classes=StringVar,IntVar,BooleanVar,DoubleVar
+
+[SIMILARITIES]
+# Relax similarity checking for GUI code (lots of repetitive patterns)
+min-similarity-lines=6

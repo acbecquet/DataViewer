@@ -3,10 +3,26 @@
 Complete release workflow: Version → Build → Release
 Run this after your final commit to handle everything
 """
-import re
-import subprocess
 import sys
 import os
+
+# Force UTF-8 encoding for the entire process
+if sys.platform == 'win32':
+    # Set environment variables for UTF-8
+    os.environ['PYTHONIOENCODING'] = 'utf-8'
+    os.environ['PYTHONUTF8'] = '1'
+    
+    # Configure stdout/stderr encoding
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+
+print("Encoding fix applied for Windows")
+print(f"Default encoding: {sys.getdefaultencoding()}")
+print(f"Stdout encoding: {sys.stdout.encoding}")
+
+import re
+import subprocess
 import json
 import shutil
 from datetime import datetime
@@ -243,7 +259,7 @@ def create_placeholder_icon():
         debug_print(f"Could not convert icon: {e}")
 
 def build_executable():
-    """Build the executable with PyInstaller"""
+    """Build the executable with PyInstaller - WINDOWS ENCODING FIXED"""
     debug_print("Building executable with PyInstaller...")
     
     # Clean previous builds
@@ -253,7 +269,7 @@ def build_executable():
             shutil.rmtree(dir_name)
             debug_print(f"Removed {dir_name}")
     
-    # PyInstaller command WITHOUT database inclusion
+    # PyInstaller command with encoding fixes
     cmd = [
         sys.executable, '-m', 'PyInstaller',
         '--onedir',
@@ -262,57 +278,72 @@ def build_executable():
         '--icon=resources/ccell_icon.ico',
         '--add-data=resources;resources',
         
-        
+        # Package collections - start conservative
         '--collect-all=matplotlib',
         '--collect-all=PIL',           
-        '--collect-all=pptx',  
         '--collect-all=pandas',
         '--collect-all=numpy',
+        '--collect-all=openpyxl',
+        '--collect-all=pptx',  
         '--collect-all=logging',
         '--hidden-import=logging.handlers',
         
-        # ONLY the essential hidden imports that might be missed
-        '--hidden-import=matplotlib.backends.backend_tkagg',  # For GUI integration
-        '--hidden-import=pkg_resources.py2_warn',
+        # Essential hidden imports
+        '--hidden-import=matplotlib.backends.backend_tkagg',
         
+        # Exclude problematic modules
         '--exclude-module=tkinter.test',
         '--exclude-module=test',
+        '--exclude-module=pkg_resources',  # This might help
+        
+        '--clean',
+        '--noconfirm',
         'main.py'
     ]
     
-    debug_print("Running PyInstaller...")
+    debug_print("Running PyInstaller with Windows encoding fixes...")
     debug_print(f"Command: {' '.join(cmd)}")
-    debug_print(f"Note: Database NOT included - will connect to remote database")
+    
+    # Set up UTF-8 environment for subprocess
+    env = os.environ.copy()
+    env['PYTHONIOENCODING'] = 'utf-8'
+    env['PYTHONUTF8'] = '1'
+    env['LC_ALL'] = 'C.UTF-8'  # Additional Unix-style locale
     
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=6000)
+        result = subprocess.run(cmd, capture_output=True, text=True, 
+                              timeout=6000, env=env, encoding='utf-8', errors='replace')
         
         if result.returncode == 0:
             success_print("PyInstaller completed successfully")
             
-            # Check if executable exists - FIXED for --onedir
-            exe_path = 'dist/DataViewer/DataViewer.exe'  # Changed path for --onedir
+            exe_path = 'dist/DataViewer/DataViewer.exe'
             if os.path.exists(exe_path):
                 size_mb = os.path.getsize(exe_path) / (1024 * 1024)
                 success_print(f"Executable created: {exe_path} ({size_mb:.1f} MB)")
                 
-                # Show total directory size for --onedir
                 total_size = sum(os.path.getsize(os.path.join(dirpath, filename))
                             for dirpath, dirnames, filenames in os.walk('dist/DataViewer')
                             for filename in filenames) / (1024 * 1024)
                 success_print(f"Total application size: {total_size:.1f} MB")
-                success_print("Database-free build - will connect to remote Synology database")
                 return True
             else:
                 error_print("Executable not found after build")
-                # Debug: show what's actually in the dist directory
-                debug_print("Contents of dist directory:")
-                for item in os.listdir('dist'):
-                    debug_print(f"  {item}")
                 return False
+        else:
+            error_print("PyInstaller failed")
+            debug_print("STDERR:")
+            # Handle potential encoding issues in error output
+            try:
+                debug_print(result.stderr)
+            except UnicodeError:
+                debug_print("Error output contains encoding issues - showing safe version:")
+                safe_stderr = result.stderr.encode('ascii', 'ignore').decode('ascii')
+                debug_print(safe_stderr)
+            return False
             
     except subprocess.TimeoutExpired:
-        error_print("PyInstaller timed out (10 minutes)")
+        error_print("PyInstaller timed out")
         return False
     except Exception as e:
         error_print(f"PyInstaller error: {e}")
