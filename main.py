@@ -56,24 +56,17 @@ def main():
 
     log_timing_checkpoint("Main function started")
 
-    # Set up logging - use user directory for installed package
+    # Set up logging - always use user directory (writable location)
     try:
-        # Try to use application data directory
-        if hasattr(sys, '_MEIPASS'):
-            # PyInstaller
-            log_dir = os.path.dirname(__file__)
-        else:
-            # Installed package or development
-            log_dir = os.path.expanduser("~/.standardized-testing-gui")
-            os.makedirs(log_dir, exist_ok=True)
-        
-        log_file = os.path.join(log_dir, 'app.log')
+        log_dir = Path.home() / '.standardized-testing-gui'
+        log_dir.mkdir(exist_ok=True)
+        log_file = log_dir / 'app.log'
     except Exception:
         # Fallback to current directory
-        log_file = os.path.join(os.path.dirname(__file__), 'app.log')
-    
+        log_file = Path('.') / 'app.log'
+
     logging.basicConfig(
-        filename=log_file, 
+        filename=str(log_file), 
         level=logging.DEBUG, 
         format='%(asctime)s:%(levelname)s:%(message)s'
     )
