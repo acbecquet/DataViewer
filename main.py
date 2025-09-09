@@ -58,12 +58,12 @@ def main():
 
     # Set up logging - always use user directory (writable location)
     try:
-        log_dir = Path.home() / '.standardized-testing-gui'
-        log_dir.mkdir(exist_ok=True)
-        log_file = log_dir / 'app.log'
+        log_dir = os.path.expanduser("~/.standardized-testing-gui")
+        os.makedirs(log_dir, exist_ok=True)
+        log_file = os.path.join(log_dir, 'app.log')
     except Exception:
         # Fallback to current directory
-        log_file = Path('.') / 'app.log'
+        log_file = 'app.log'
 
     logging.basicConfig(
         filename=str(log_file), 
