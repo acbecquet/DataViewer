@@ -3,6 +3,7 @@ import sqlite3
 import json
 import datetime
 import sys
+import time
 
 from typing import Dict, List, Any, Optional
 from utils import debug_print
@@ -15,6 +16,7 @@ def get_database_path():
     import platform
     import string
     from utils import debug_print
+    import os
     
     # CONFIGURATION
     SYNOLOGY_IP = "192.168.222.10"  # Your confirmed working IP
@@ -128,15 +130,37 @@ def get_database_path():
                         except:
                             continue
     
-    # Method 4: Fallback to local database
+    # Method 4: Fallback to local database - FIXED VERSION
     debug_print("WARNING: No accessible shared database found")
     debug_print("INFO: Using local database - changes won't be shared with team")
-    
+
+    # Determine appropriate local database location
     if hasattr(sys, '_MEIPASS'):
-        local_path = os.path.join(sys._MEIPASS, DATABASE_FILENAME)
+        # PyInstaller environment - use user's app data directory, not the temp extraction dir
+
+        if platform.system() == "Windows":
+            app_data = os.environ.get('APPDATA', os.path.expanduser('~'))
+            local_dir = os.path.join(app_data, 'DataViewer')
+        else:
+            local_dir = os.path.expanduser('~/.dataviewer')
+        
+        os.makedirs(local_dir, exist_ok=True)
+        local_path = os.path.join(local_dir, DATABASE_FILENAME)
+        debug_print(f"DEBUG: PyInstaller environment, using app data: {local_path}")
     else:
-        local_path = DATABASE_FILENAME
-    
+        # Development environment - use script directory
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        local_path = os.path.join(script_dir, DATABASE_FILENAME)
+        debug_print(f"DEBUG: Development environment, using script directory: {local_path}")
+
+    # Ensure directory exists (though DatabaseManager will also handle this)
+    local_dir = os.path.dirname(os.path.abspath(local_path))
+    try:
+        os.makedirs(local_dir, exist_ok=True)
+        debug_print(f"DEBUG: Ensured local database directory exists: {local_dir}")
+    except Exception as e:
+        debug_print(f"WARNING: Could not create local database directory {local_dir}: {e}")
+
     debug_print(f"FALLBACK: Using local database: {local_path}")
     return local_path
 
