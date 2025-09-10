@@ -113,12 +113,12 @@ def is_empty_sample(sample_data):
     Check if a sample is empty based only on plotting data:
     - No TPM data
     - No Average TPM
-    - No Draw Pressure  
+    - No Draw Pressure
     - No Resistance
-    
+
     Args:
         sample_data (dict or pd.Series): Sample data to check
-        
+
     Returns:
         bool: True if sample is empty, False otherwise
     """
@@ -128,18 +128,18 @@ def is_empty_sample(sample_data):
             sample_dict = sample_data.to_dict()
         else:
             sample_dict = sample_data
-            
+
         # Only check these plotting fields
         plotting_fields = ['Average TPM', 'Draw Pressure', 'Resistance']
-        
+
         for field in plotting_fields:
             value = str(sample_dict.get(field, '')).strip()
             #debug_print(f"DEBUG: Checking field '{field}': '{value}'")
-            
+
             # Skip completely empty values
             if not value or value in ['', 'nan', 'No data', 'None']:
                 continue
-                
+
             # Check if it's a meaningful numeric value
             try:
                 numeric_val = float(value)
@@ -153,11 +153,11 @@ def is_empty_sample(sample_data):
                 if len(value) > 0 and value not in ['nan', 'None', 'No data', '']:
                     #debug_print(f"DEBUG: Sample has non-numeric plotting data in '{field}': '{value}'")
                     return False
-        
-        
+
+
         debug_print("DEBUG: Sample has no plotting data - is empty")
         return True  # No plotting data found
-        
+
     except Exception as e:
         debug_print(f"DEBUG: Error checking sample: {e}")
         return False  # If error, assume not empty
@@ -169,24 +169,24 @@ def filter_empty_samples_from_dataframe(df):
     if df.empty:
         debug_print("DEBUG: DataFrame is already empty")
         return df
-        
+
     try:
         debug_print(f"DEBUG: Checking {len(df)} samples for plotting data")
-        
+
         # Create mask for samples with plotting data
         has_data_mask = []
-        
+
         for index, row in df.iterrows():
             is_empty = is_empty_sample(row)
             has_data_mask.append(not is_empty)
             debug_print(f"DEBUG: Sample {index} ({'empty' if is_empty else 'has data'}): {row.get('Sample Name', 'Unknown')}")
-            
+
         # Filter the dataframe
         filtered_df = df[has_data_mask].reset_index(drop=True)
-        
+
         debug_print(f"DEBUG: Filtered from {len(df)} to {len(filtered_df)} samples with plotting data")
         return filtered_df
-        
+
     except Exception as e:
         debug_print(f"DEBUG: Error filtering samples: {e}")
         import traceback
@@ -201,34 +201,34 @@ def filter_empty_samples_from_full_data(full_sample_data, num_columns_per_sample
     if not pd or full_sample_data.empty:
         debug_print("DEBUG: No pandas or empty full_sample_data")
         return full_sample_data
-        
+
     try:
         debug_print(f"DEBUG: Full data shape: {full_sample_data.shape}, columns per sample: {num_columns_per_sample}")
-        
+
         # For User Test Simulation (8 columns), we need to match the processed data filtering
         if num_columns_per_sample == 8:
             debug_print("DEBUG: User Test Simulation detected - preserving all data since processed data was already filtered")
             # The processed data filtering already removed empty samples
             # So we keep the full data as-is for User Test Simulation
             return full_sample_data
-        
+
         # For regular tests (12 columns), do the normal filtering
         num_samples = full_sample_data.shape[1] // num_columns_per_sample
         debug_print(f"DEBUG: Checking {num_samples} samples in full plotting data")
-        
+
         if num_samples == 0:
             return full_sample_data
-            
+
         # Find samples with actual TPM data
         samples_with_data = []
-        
+
         for i in range(num_samples):
             start_col = i * num_columns_per_sample
             end_col = start_col + num_columns_per_sample
             sample_data = full_sample_data.iloc[:, start_col:end_col]
-            
+
             debug_print(f"DEBUG: Checking sample {i+1} columns {start_col}-{end_col-1}")
-            
+
             # Check TPM column (usually column 8 in 12-column format)
             has_tpm_data = False
             if num_columns_per_sample >= 9:
@@ -236,25 +236,25 @@ def filter_empty_samples_from_full_data(full_sample_data, num_columns_per_sample
                 if sample_data.shape[1] > tpm_col_idx and sample_data.shape[0] > 3:
                     # Get TPM data from row 3 onwards
                     tpm_data = sample_data.iloc[3:, tpm_col_idx]
-                    
+
                     # Convert to numeric and check for real values
                     numeric_tpm = pd.to_numeric(tpm_data, errors='coerce')
                     valid_tpm = numeric_tpm.dropna()
-                    
+
                     if len(valid_tpm) > 0 and (valid_tpm > 0).any():
                         has_tpm_data = True
                         debug_print(f"DEBUG: Sample {i+1} has TPM data: {valid_tpm.head().tolist()}")
-            
+
             if has_tpm_data:
                 samples_with_data.append(i)
-        
+
         debug_print(f"DEBUG: Found {len(samples_with_data)} samples with TPM data out of {num_samples}")
-        
+
         # If no samples have data, return empty DataFrame
         if not samples_with_data:
             debug_print("DEBUG: No samples with plotting data, returning empty DataFrame")
             return pd.DataFrame()
-            
+
         # Reconstruct with only samples that have data
         filtered_columns = []
         for sample_idx in samples_with_data:
@@ -263,11 +263,11 @@ def filter_empty_samples_from_full_data(full_sample_data, num_columns_per_sample
             sample_cols = list(range(start_col, min(end_col, full_sample_data.shape[1])))
             filtered_columns.extend(sample_cols)
             debug_print(f"DEBUG: Including sample {sample_idx+1} columns {start_col}-{end_col-1}")
-            
+
         filtered_data = full_sample_data.iloc[:, filtered_columns]
         debug_print(f"DEBUG: Filtered plotting data from {full_sample_data.shape[1]} to {filtered_data.shape[1]} columns")
         return filtered_data
-            
+
     except Exception as e:
         debug_print(f"DEBUG: Error filtering plotting data: {e}")
         import traceback
@@ -278,10 +278,10 @@ class DataViewer:
     """Main GUI class for the Standardized Testing application."""
 
     def __init__(self, root):
-        import main 
-        
+        import main
+
         init_start = time.time()
-        
+
         self.root = root
         self.root.title("DataViewer")
         self.report_thread = None
@@ -310,63 +310,63 @@ class DataViewer:
         def check_updates():
             try:
                 update_info = self.update_checker.check_for_updates()
-                
+
                 if update_info and update_info.get('update_available'):
                     self.show_update_dialog(update_info)
             except Exception:
                 pass  # Silently fail for updates
-        
+
         self.root.after(5000, check_updates)
-    
+
     def check_for_updates_background(self):
         """Check for updates without blocking UI"""
         try:
             update_info = self.update_checker.check_for_updates()
-            
+
             if update_info and update_info.get('update_available'):
                 self.show_update_dialog(update_info)
-                
+
         except Exception:
             pass
-    
+
     def show_update_dialog(self, update_info):
         """Show update notification to user"""
         from tkinter import messagebox
-        
+
         latest_version = update_info['latest_version']
         current_version = update_info['current_version']
-        
+
         message = f"""Update Available!
 
 Current Version: {current_version}
 Latest Version: {latest_version}
 
 Would you like to download and install the update?"""
-        
+
         result = messagebox.askyesno("Update Available", message)
-        
+
         if result:
             self.download_and_install_update(update_info)
-    
+
     def download_and_install_update(self, update_info):
         """Download and install the update"""
         if not update_info.get('download_url'):
             messagebox.showerror("Error", "No download URL available")
             return
-        
+
         try:
             show_success_message("Downloading", "Downloading update... This may take a moment.", self.root)
-            
+
             installer_path = self.update_checker.download_update(
                 update_info['download_url'],
                 update_info['installer_name']
             )
-            
+
             if installer_path:
                 self.update_checker.install_update(installer_path)
             else:
                 messagebox.showerror("Error", "Failed to download update")
-                
+
         except Exception as e:
             messagebox.showerror("Error", f"Update failed: {e}")
 
@@ -385,7 +385,7 @@ Would you like to download and install the update?"""
         return self._pandas
 
     def get_numpy(self):
-        """Get numpy with lazy loading.""" 
+        """Get numpy with lazy loading."""
         if not hasattr(self, '_numpy'):
             self._numpy = lazy_import_numpy()
         return self._numpy
@@ -413,18 +413,18 @@ Would you like to download and install the update?"""
         """Initialize manager classes only when needed."""
         if hasattr(self, '_managers_initialized') and self._managers_initialized:
             return
-            
+
         # Import and initialize managers
         from plot_manager import PlotManager
         from file_manager import FileManager
         from report_generator import ReportGenerator
         from progress_dialog import ProgressDialog
-        
+
         self.file_manager = FileManager(self)
         self.plot_manager = PlotManager(self)
         self.report_generator = ReportGenerator(self)
         self.progress_dialog = ProgressDialog(self.root)
-        
+
         self._managers_initialized = True
 
     # Initialization and Configuration
@@ -434,7 +434,7 @@ Would you like to download and install the update?"""
         if not pd:
             debug_print("ERROR: Could not load pandas")
             return None
-            
+
         # Basic variables
         self.sheets: Dict[str, pd.DataFrame] = {}
         self.filtered_sheets: Dict[str, pd.DataFrame] = {}
@@ -454,7 +454,7 @@ Would you like to download and install the update?"""
         self.line_labels = []
         self.original_lines_data = []
         self.checkbox_cid = None
-        
+
 
         # Plot options
         self.standard_plot_options = ["TPM","Normalized TPM", "Draw Pressure", "Resistance", "Power Efficiency", "TPM (Bar)"]
@@ -463,11 +463,11 @@ Would you like to download and install the update?"""
 
         self.check_buttons = None
         self.previous_window_geometry = None
-        self.is_user_test_simulation = False  
-        self.num_columns_per_sample = 12 
+        self.is_user_test_simulation = False
+        self.num_columns_per_sample = 12
 
         self.crop_enable = tk.BooleanVar(value=False)
-        
+
         # Initialize managers - create basic ones immediately for core functionality
         self.lazy_init_managers()
 
@@ -476,22 +476,22 @@ Would you like to download and install the update?"""
         # Icon loading
         icon_path = get_resource_path('resources/ccell_icon.png')
         self.root.iconphoto(False, tk.PhotoImage(file=icon_path))
-    
+
         # Basic UI setup
         self.set_app_colors()
         self.root.state('zoomed')
         self.set_window_size(1, 1)
         self.root.minsize(1200,800)
-    
+
         # Create frames
         self.create_static_frames()
-    
+
         # Create menu immediately - needed for basic functionality
         self.add_menu()
-        
+
         # Setup file dropdown
         self.file_manager.add_or_update_file_dropdown()
-        
+
         # Add static controls
         self.add_static_controls()
 
@@ -582,32 +582,32 @@ Would you like to download and install the update?"""
             # Use grid layout for precise control of width proportions
             self.dynamic_frame.columnconfigure(0, weight=5)  # Table column
             self.dynamic_frame.columnconfigure(1, weight=5)  # Plot column
-    
+
             self.dynamic_frame.rowconfigure(0, weight=1)
 
             # LEFT SIDE: Table area split into top (table) and bottom (notes)
             left_side_frame = ttk.Frame(self.dynamic_frame)
             left_side_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 5), pady=5)
-        
+
             # Create a PanedWindow to split table and notes vertically
             left_paned = ttk.PanedWindow(left_side_frame, orient="vertical")
             left_paned.pack(fill="both", expand=True)
-        
+
             # Top pane: Table (60% of height)
             self.table_frame = ttk.Frame(left_paned)
             left_paned.add(self.table_frame, weight=3)
-        
+
             # Bottom pane: Sample Notes (40% of height)
             self.notes_frame = ttk.LabelFrame(left_paned, text="Test Sample Notes", padding=5)
             left_paned.add(self.notes_frame, weight=2)
-        
+
             # Configure the notes display area
             self.create_notes_display_area()
-        
+
             # RIGHT SIDE: Plot takes remaining 50% width
             self.plot_frame = ttk.Frame(self.dynamic_frame)
             self.plot_frame.grid(row=0, column=1, sticky="nsew", padx=(5, 0), pady=5)
-    
+
             self.constrain_plot_width()
         else:
             # Non-plotting sheets use the full space (no changes here)
@@ -618,15 +618,15 @@ Would you like to download and install the update?"""
         """Create the notes display area for plotting sheets."""
         if not hasattr(self, 'notes_frame') or not self.notes_frame.winfo_exists():
             return
-    
+
         # Clear existing notes widgets
         for widget in self.notes_frame.winfo_children():
             widget.destroy()
-    
+
         # Create a notebook for different samples' notes
         self.notes_notebook = ttk.Notebook(self.notes_frame)
         self.notes_notebook.pack(fill="both", expand=True)
-    
+
         # Initially empty - will be populated when data is loaded
         self.notes_text_widgets = {}
 
@@ -634,9 +634,9 @@ Would you like to download and install the update?"""
         """Update the notes display area with sample notes from the current sheet."""
         if not hasattr(self, 'notes_frame') or not self.notes_frame.winfo_exists():
             return
-    
+
         debug_print(f"DEBUG: Updating notes display for sheet: {sheet_name}")
-    
+
         # Get the sheet info
         sheet_info = self.filtered_sheets.get(sheet_name)
         if not sheet_info:
@@ -650,65 +650,65 @@ Would you like to download and install the update?"""
             # Create empty display
             self.create_empty_notes_display()
             return
-    
+
         samples_data = header_data.get('samples', [])
         if not samples_data:
             debug_print(f"DEBUG: No samples data found in header_data for {sheet_name}")
             self.create_empty_notes_display()
             return
-    
+
         debug_print(f"DEBUG: Found {len(samples_data)} samples with potential notes")
-    
+
         # Clear existing notebook tabs
         for tab in self.notes_notebook.tabs():
             self.notes_notebook.forget(tab)
-    
+
         self.notes_text_widgets.clear()
-    
+
         # Create tabs for each sample with notes
         for i, sample_data in enumerate(samples_data):
             sample_id = sample_data.get('id', f'Sample {i+1}')
             sample_notes = sample_data.get('sample_notes', '')
-        
+
             if sample_notes or i < 4:  # Show first 4 samples or any with notes
                 # Create tab for this sample
                 tab_frame = ttk.Frame(self.notes_notebook)
                 self.notes_notebook.add(tab_frame, text=f"Sample {i+1}")
-            
+
                 # Create text widget with scrollbar for notes
                 notes_container = ttk.Frame(tab_frame)
                 notes_container.pack(fill="both", expand=True, padx=5, pady=5)
-            
+
                 # Sample info at the top
                 info_frame = ttk.Frame(notes_container)
                 info_frame.pack(fill="x", pady=(0, 5))
-            
-                sample_info_label = ttk.Label(info_frame, text=f"Sample: {sample_id}", 
+
+                sample_info_label = ttk.Label(info_frame, text=f"Sample: {sample_id}",
                                             font=('Arial', 10, 'bold'))
                 sample_info_label.pack(anchor='w')
-            
+
                 # Additional sample info
                 if sample_data.get('media'):
                     media_label = ttk.Label(info_frame, text=f"Media: {sample_data.get('media', 'N/A')}")
                     media_label.pack(anchor='w')
-            
+
                 if sample_data.get('viscosity'):
                     viscosity_label = ttk.Label(info_frame, text=f"Viscosity: {sample_data.get('viscosity', 'N/A')}")
                     viscosity_label.pack(anchor='w')
-            
+
                 # Notes text area
                 text_frame = ttk.Frame(notes_container)
                 text_frame.pack(fill="both", expand=True)
-            
-                notes_text = tk.Text(text_frame, wrap='word', font=('Arial', 9), 
+
+                notes_text = tk.Text(text_frame, wrap='word', font=('Arial', 9),
                                    state='disabled', bg='#f8f8f8')
-                notes_scrollbar = ttk.Scrollbar(text_frame, orient='vertical', 
+                notes_scrollbar = ttk.Scrollbar(text_frame, orient='vertical',
                                               command=notes_text.yview)
                 notes_text.configure(yscrollcommand=notes_scrollbar.set)
-            
+
                 notes_text.pack(side='left', fill='both', expand=True)
                 notes_scrollbar.pack(side='right', fill='y')
-            
+
                 # Insert the notes content
                 notes_text.config(state='normal')
                 if sample_notes:
@@ -716,34 +716,34 @@ Would you like to download and install the update?"""
                 else:
                     notes_text.insert('1.0', "No test notes available for this sample.")
                 notes_text.config(state='disabled')
-            
+
                 # Store reference for potential updates
                 self.notes_text_widgets[f"Sample {i+1}"] = notes_text
-            
+
                 debug_print(f"DEBUG: Created notes tab for Sample {i+1} with {len(sample_notes)} characters")
-    
+
         # If no tabs were created, show empty display
         if not self.notes_notebook.tabs():
             self.create_empty_notes_display()
-    
+
         debug_print(f"DEBUG: Notes display updated with {len(self.notes_notebook.tabs())} tabs")
 
     def create_empty_notes_display(self):
         """Create an empty notes display when no sample notes are available."""
         if not hasattr(self, 'notes_notebook'):
             return
-        
+
         # Clear existing tabs
         for tab in self.notes_notebook.tabs():
             self.notes_notebook.forget(tab)
-    
+
         # Create a single tab with empty message
         empty_frame = ttk.Frame(self.notes_notebook)
         self.notes_notebook.add(empty_frame, text="No Notes")
-    
-        empty_label = ttk.Label(empty_frame, 
+
+        empty_label = ttk.Label(empty_frame,
                               text="No sample test notes available.\nUse the Data Collection window to add notes.",
-                              font=('Arial', 10), 
+                              font=('Arial', 10),
                               justify='center')
         empty_label.pack(expand=True, pady=20)
 
@@ -753,31 +753,31 @@ Would you like to download and install the update?"""
             if not hasattr(self, 'pending_sample_notes') or not self.pending_sample_notes:
                 debug_print("DEBUG: No pending sample notes to process")
                 return
-        
+
             debug_print("DEBUG: Processing pending sample notes from data collection")
-        
+
             notes_data = self.pending_sample_notes
             test_name = notes_data.get('test_name')
             header_data = notes_data.get('header_data')
-        
+
             if not test_name or not header_data:
                 debug_print("DEBUG: Invalid notes data structure")
                 return
-        
+
             # Update the filtered_sheets with the new header_data containing notes
             if test_name in self.filtered_sheets:
                 self.filtered_sheets[test_name]['header_data'] = header_data
                 debug_print(f"DEBUG: Updated filtered_sheets with notes for {test_name}")
-            
+
                 # If this is the currently displayed sheet, refresh the notes display
                 if hasattr(self, 'current_sheet_name') and self.current_sheet_name == test_name:
                     debug_print(f"DEBUG: Refreshing notes display for current sheet: {test_name}")
                     self.update_notes_display(test_name)
-        
+
             # Clear the pending notes
             self.pending_sample_notes = None
             debug_print("DEBUG: Sample notes processing completed")
-        
+
         except Exception as e:
             debug_print(f"ERROR: Failed to process pending sample notes: {e}")
             import traceback
@@ -787,14 +787,14 @@ Would you like to download and install the update?"""
         """Ensure the plot doesn't exceed 50% of the window width."""
         if not hasattr(self, 'plot_frame') or not self.plot_frame:
             return
-        
+
         window_width = self.root.winfo_width()
         max_plot_width = window_width // 2
-    
+
         if max_plot_width > 50:
             self.plot_frame.config(width=max_plot_width)
             self.plot_frame.grid_propagate(False)
-        
+
             if hasattr(self, 'table_frame') and self.table_frame:
                 self.table_frame.config(width=max_plot_width)
                 self.table_frame.grid_propagate(False)
@@ -830,7 +830,7 @@ Would you like to download and install the update?"""
         )
         load_database_button.pack(side="left", padx=5)
 
-        # Load from Excel Button  
+        # Load from Excel Button
         load_excel_button = ttk.Button(
             load_button_frame,
             text="Load from File",
@@ -863,7 +863,7 @@ Would you like to download and install the update?"""
                 font=FONT
             )
             self.drop_down_menu.pack(side = "left", pady=(5, 5))
-            
+
             self.drop_down_menu.bind(
                 "<<ComboboxSelected>>",
                 lambda event: self.update_displayed_sheet(self.selected_sheet.get())
@@ -908,7 +908,7 @@ Would you like to download and install the update?"""
         """Handle file selection from the dropdown."""
         if not hasattr(self, 'file_dropdown_var'):
             return
-            
+
         selected_file = self.file_dropdown_var.get()
         if not selected_file or selected_file == self.current_file:
             return
@@ -934,7 +934,7 @@ Would you like to download and install the update?"""
     def add_menu(self) -> None:
         """Create a top-level menu with File, Help, and About options."""
         menubar = tk.Menu(self.root)
-    
+
         # File menu
         filemenu = tk.Menu(menubar, tearoff=0)
         filemenu.add_command(label="New", command=self.show_new_template_dialog)
@@ -949,10 +949,10 @@ Would you like to download and install the update?"""
         filemenu.add_separator()
         filemenu.add_command(label="Exit", command=self.on_app_close)
         menubar.add_cascade(label="File", menu=filemenu)
-    
+
         # View menu
         viewmenu = tk.Menu(menubar, tearoff=0)
-        viewmenu.add_command(label="View Raw Data", 
+        viewmenu.add_command(label="View Raw Data",
                              command=lambda: self.file_manager.open_raw_data_in_excel(self.selected_sheet.get()))
         viewmenu.add_separator()
         viewmenu.add_command(label="Collect TPM Data", command=self.open_data_collection)
@@ -979,14 +979,14 @@ Would you like to download and install the update?"""
         reportmenu.add_command(label="Generate Test Report", command=self.generate_test_report)
         reportmenu.add_command(label="Generate Full Report", command=self.generate_full_report)
         menubar.add_cascade(label="Reports", menu=reportmenu)
-    
+
         # Help menu
         helpmenu = tk.Menu(menubar, tearoff=0)
         helpmenu.add_command(label="Help", command=self.show_help)
         helpmenu.add_separator()
         helpmenu.add_command(label="About", command=self.show_about)
         menubar.add_cascade(label="Help", menu=helpmenu)
-    
+
         self.root.config(menu=menubar)
 
         self.root.bind_all("<Control-u>", lambda e: self.update_database())
@@ -998,22 +998,22 @@ Would you like to download and install the update?"""
     def load_files_from_database_for_comparison(self, selected_files):
         """Load files from database selection for comparison analysis."""
         loaded_files = []
-    
+
         try:
             self.progress_dialog.show_progress_bar("Loading files from database...")
-        
+
             for i, file_info in enumerate(selected_files):
                 try:
                     progress = (i + 1) / len(selected_files) * 100
                     self.progress_dialog.update_progress(progress, f"Loading {file_info.get('filename', 'file')}...")
-                
+
                     if 'filepath' in file_info:
                         self.file_manager.load_excel_file(file_info['filepath'], skip_database_storage=True)
                     elif 'id' in file_info:
                         self.file_manager.load_from_database_by_id(file_info['id'])
                     else:
                         continue
-                
+
                     if self.filtered_sheets:
                         file_data = {
                             'file_name': file_info.get('filename', f'Database_File_{i+1}'),
@@ -1023,14 +1023,14 @@ Would you like to download and install the update?"""
                             'source': 'database'
                         }
                         loaded_files.append(file_data)
-                    
+
                 except Exception as e:
                     debug_print(f"DEBUG: Error loading file {file_info}: {e}")
                     continue
-        
+
             self.progress_dialog.hide_progress_bar()
             return loaded_files
-        
+
         except Exception as e:
             self.progress_dialog.hide_progress_bar()
             debug_print(f"DEBUG: Error in load_files_from_database_for_comparison: {e}")
@@ -1041,21 +1041,21 @@ Would you like to download and install the update?"""
         if not self.all_filtered_sheets:
             show_success_message("Info", "No files are currently loaded. Please load some data files first.", self.root)
             return
-    
+
         from file_selection_dialog import FileSelectionDialog
         file_dialog = FileSelectionDialog(self.root, self.all_filtered_sheets)
         result, selected_files = file_dialog.show()
-    
+
         if not result or not selected_files:
             return
-    
+
         if len(selected_files) < 2:
             messagebox.showwarning("Warning", "Please select at least 2 files for comparison.")
             return
-    
+
         from sample_comparison import SampleComparisonWindow
         comparison_window = SampleComparisonWindow(self, selected_files)
-        comparison_window.show()  
+        comparison_window.show()
 
     def show_new_template_dialog(self) -> None:
         """Show a dialog to create a new template file with selected tests."""
@@ -1069,25 +1069,25 @@ Would you like to download and install the update?"""
         """Enhanced save method that includes sample images from data collection."""
         try:
             debug_print("DEBUG: Saving with sample images")
-        
+
             # Check if we have pending sample images from data collection
             sample_images = getattr(self, 'pending_sample_images', {})
             sample_image_crop_states = getattr(self, 'pending_sample_image_crop_states', {})
             sample_header_data = getattr(self, 'pending_sample_header_data', {})
-        
+
             if sample_images:
                 debug_print(f"DEBUG: Found {len(sample_images)} sample groups to save")
-            
+
                 # Use the enhanced VAP file manager
                 from vap_file_manager import VapFileManager
                 vap_manager = VapFileManager()
-            
+
                 # Get current application state
                 image_crop_states = getattr(self, 'image_crop_states', {})
                 plot_settings = {
                     'selected_plot_type': getattr(self, 'selected_plot_type', tk.StringVar()).get()
                 }
-            
+
                 # Save to VAP3 file with sample images
                 success = vap_manager.save_to_vap3(
                     self.file_path,
@@ -1100,7 +1100,7 @@ Would you like to download and install the update?"""
                     sample_image_crop_states,  # NEW: Sample image crop states
                     sample_header_data  # NEW: Sample header data
                 )
-            
+
                 if success:
                     # Clear pending sample images after successful save
                     if hasattr(self, 'pending_sample_images'):
@@ -1109,10 +1109,10 @@ Would you like to download and install the update?"""
                         delattr(self, 'pending_sample_image_crop_states')
                     if hasattr(self, 'pending_sample_header_data'):
                         delattr(self, 'pending_sample_header_data')
-                
+
                     # Process and display the formatted images
                     self.process_formatted_sample_images()
-                
+
                     debug_print("DEBUG: Successfully saved with sample images")
                     return True
                 else:
@@ -1122,7 +1122,7 @@ Would you like to download and install the update?"""
                 # No sample images, use regular save
                 debug_print("DEBUG: No sample images to save, using regular save")
                 return self.file_manager.save_as_vap3()
-            
+
         except Exception as e:
             debug_print(f"ERROR: Failed to save with sample images: {e}")
             import traceback
@@ -1135,10 +1135,10 @@ Would you like to download and install the update?"""
             if not hasattr(self, 'pending_formatted_images'):
                 debug_print("DEBUG: No pending formatted images to process")
                 return
-    
+
             formatted_images = self.pending_formatted_images
             debug_print(f"DEBUG: Processing {len(formatted_images)} pending sample images")
-    
+
             # CRITICAL FIX: Use the target sheet from data collection, not currently selected sheet
             target_sheet = getattr(self, 'pending_images_target_sheet', None)
             if not target_sheet:
@@ -1148,61 +1148,61 @@ Would you like to download and install the update?"""
                 if not target_sheet:
                     debug_print("DEBUG: No target sheet available for sample images")
                     return
-        
+
             debug_print(f"DEBUG: Using target sheet for images: {target_sheet}")
-    
+
             # Initialize image storage if needed
             if not hasattr(self, 'sheet_images'):
                 self.sheet_images = {}
-    
+
             if self.current_file not in self.sheet_images:
                 self.sheet_images[self.current_file] = {}
-    
+
             if target_sheet not in self.sheet_images[self.current_file]:
                 self.sheet_images[self.current_file][target_sheet] = []
-    
+
             # Add the sample images to the target sheet
             for img_info in formatted_images:
                 img_path = img_info['path']
-        
+
                 # Add to target sheet images if not already present
                 if img_path not in self.sheet_images[self.current_file][target_sheet]:
                     self.sheet_images[self.current_file][target_sheet].append(img_path)
-        
+
                 # Store crop state
                 if not hasattr(self, 'image_crop_states'):
                     self.image_crop_states = {}
                 self.image_crop_states[img_path] = img_info.get('crop_state', False)
-    
+
             # Update the image display ONLY if the target sheet is currently displayed
             current_displayed_sheet = self.selected_sheet.get()
             if target_sheet == current_displayed_sheet:
                 if hasattr(self, 'image_loader') and self.image_loader:
                     debug_print("DEBUG: Refreshing main GUI image display with sample images")
-        
+
                     # Load the updated image list
                     self.image_loader.load_images_from_list(self.sheet_images[self.current_file][target_sheet])
-        
+
                     # Restore crop states
                     for img_path in self.sheet_images[self.current_file][target_sheet]:
                         if img_path in self.image_crop_states:
                             self.image_loader.image_crop_states[img_path] = self.image_crop_states[img_path]
-        
+
                     # Force refresh display
                     self.image_loader.display_images()
-        
+
                     # Update the image frame
                     self.image_frame.update_idletasks()
             else:
                 debug_print(f"DEBUG: Images added to {target_sheet}, but currently displaying {current_displayed_sheet}. Images will appear when {target_sheet} is selected.")
-    
+
             # Clear pending images after processing
             delattr(self, 'pending_formatted_images')
             if hasattr(self, 'pending_images_target_sheet'):
                 delattr(self, 'pending_images_target_sheet')
-    
+
             debug_print(f"DEBUG: Successfully processed sample images for sheet {target_sheet}")
-    
+
         except Exception as e:
             debug_print(f"ERROR: Failed to process pending sample images: {e}")
             import traceback
@@ -1212,61 +1212,61 @@ Would you like to download and install the update?"""
         """Process and display formatted sample images in the main GUI."""
         try:
             formatted_images = getattr(self, 'pending_formatted_images', [])
-        
+
             if not formatted_images:
                 debug_print("DEBUG: No formatted images to process")
                 return
-        
+
             debug_print(f"DEBUG: Processing {len(formatted_images)} formatted sample images")
-        
+
             # Get current sheet name
             current_sheet = self.selected_sheet.get()
             if not current_sheet:
                 debug_print("DEBUG: No current sheet selected")
                 return
-        
+
             # Add images to current sheet's image collection
             if not hasattr(self, 'sheet_images'):
                 self.sheet_images = {}
-        
+
             if self.current_file not in self.sheet_images:
                 self.sheet_images[self.current_file] = {}
-        
+
             if current_sheet not in self.sheet_images[self.current_file]:
                 self.sheet_images[self.current_file][current_sheet] = []
-        
+
             # Add the formatted images
             for img_info in formatted_images:
                 img_path = img_info['path']
-            
+
                 # Add to sheet images if not already present
                 if img_path not in self.sheet_images[self.current_file][current_sheet]:
                     self.sheet_images[self.current_file][current_sheet].append(img_path)
-            
+
                 # Store crop state
                 if not hasattr(self, 'image_crop_states'):
                     self.image_crop_states = {}
                 self.image_crop_states[img_path] = img_info.get('crop_state', False)
-        
+
             # Refresh the image display if we have an image loader
             if hasattr(self, 'image_loader') and self.image_loader:
                 debug_print("DEBUG: Refreshing image display with sample images")
                 self.image_loader.load_images_from_list(self.sheet_images[self.current_file][current_sheet])
-            
+
                 # Restore crop states
                 for img_path in self.sheet_images[self.current_file][current_sheet]:
                     if img_path in self.image_crop_states:
                         self.image_loader.image_crop_states[img_path] = self.image_crop_states[img_path]
-            
+
                 # Force refresh display
                 self.image_loader.display_images()
-        
+
             # Clear pending formatted images
             if hasattr(self, 'pending_formatted_images'):
                 delattr(self, 'pending_formatted_images')
-        
+
             debug_print(f"DEBUG: Successfully processed sample images for sheet {current_sheet}")
-        
+
         except Exception as e:
             debug_print(f"ERROR: Failed to process formatted sample images: {e}")
             import traceback
@@ -1396,14 +1396,14 @@ Would you like to download and install the update?"""
                 return
 
             # Process the sheet data
-            try:        
+            try:
                 process_function = processing.get_processing_function(sheet_name)
                 processed_data, _, full_sample_data = process_function(data)
-            
+
                 # Apply empty sample filtering ONLY to plotting sheets
                 debug_print(f"DEBUG: Before filtering - processed_data shape: {processed_data.shape}, full_sample_data shape: {full_sample_data.shape}")
                 debug_print(f"DEBUG: is_plotting_sheet: {is_plotting_sheet}")
-            
+
                 if is_plotting_sheet:
                     # Filter empty samples from processed data for plotting sheets
                     filtered_processed_data = filter_empty_samples_from_dataframe(processed_data)
@@ -1417,7 +1417,7 @@ Would you like to download and install the update?"""
                 else:
                     # For non-plotting sheets, keep all data as-is
                     debug_print(f"DEBUG: Non-plotting sheet - preserving all data as-is")
-            
+
                 self.current_sheet_data = processed_data
 
                 # Handle User Test Simulation
@@ -1474,7 +1474,7 @@ Would you like to download and install the update?"""
         """Setup image loader for current sheet."""
         for widget in self.image_frame.winfo_children():
             widget.destroy()
-            
+
         if hasattr(self, 'image_loader'):
             del self.image_loader
 
@@ -1503,11 +1503,11 @@ Would you like to download and install the update?"""
             # Create completely empty DataFrame with proper columns for empty state
             columns = [
                 "Sample Name", "Media", "Viscosity", "Voltage, Resistance, Power",
-                "Average TPM", "Standard Deviation", "Initial Oil Mass", 
+                "Average TPM", "Standard Deviation", "Initial Oil Mass",
                 "Usage Efficiency", "Burn?", "Clog?", "Leak?"
             ]
             empty_data = pd.DataFrame(columns=columns)
-            
+
             debug_print("DEBUG: Displaying empty plotting sheet with no samples")
             self.display_table(self.table_frame, empty_data, sheet_name, is_plotting_sheet)
             self._show_empty_plot_message()
@@ -1523,7 +1523,7 @@ Would you like to download and install the update?"""
         if hasattr(self, 'plot_frame') and self.plot_frame:
             for widget in self.plot_frame.winfo_children():
                 widget.destroy()
-            
+
             empty_plot_label = tk.Label(
                 self.plot_frame,
                 text="No data to plot yet.\nUse 'Collect Data' to add measurements.",
@@ -1549,7 +1549,7 @@ Would you like to download and install the update?"""
                 file_data['is_modified'] = False
                 if 'last_modified' in file_data:
                     del file_data['last_modified']
-    
+
         # Update window title to remove modified indicator
         current_title = self.root.title()
         if current_title.endswith(" *"):
@@ -1559,47 +1559,47 @@ Would you like to download and install the update?"""
         """Update the database with all staged changes."""
         try:
             modified_files = self.get_modified_files()
-        
+
             if not modified_files:
                 show_success_message("No Changes", "No files have been modified. Nothing to update.", self.root)
                 return
-        
+
             # Show confirmation dialog
             file_names = [f["file_name"] for f in modified_files]
             message = f"Update database with changes to the following files?\n\n"
             message += "\n".join([f"• {name}" for name in file_names])
-        
+
             if not messagebox.askyesno("Confirm Database Update", message):
                 return
-        
+
             # Show progress dialog
             self.progress_dialog.show_progress_bar("Updating database...")
             self.root.update_idletasks()
-        
+
             total_files = len(modified_files)
             successful_updates = 0
             failed_updates = []
-        
+
             for i, file_data in enumerate(modified_files):
                 try:
                     # Update progress
                     progress = int(((i + 1) / total_files) * 100)
                     self.progress_dialog.update_progress_bar(progress)
                     self.root.update_idletasks()
-                
+
                     debug_print(f"DEBUG: Updating database for file: {file_data['file_name']}")
-                
+
                     # Save current file state as VAP3 and store in database
                     self._update_file_in_database(file_data)
                     successful_updates += 1
-                
+
                 except Exception as e:
                     debug_print(f"ERROR: Failed to update file {file_data['file_name']}: {e}")
                     failed_updates.append(file_data['file_name'])
-        
+
             # Clean up
             self.progress_dialog.hide_progress_bar()
-        
+
             # Show results
             if failed_updates:
                 if successful_updates > 0:
@@ -1616,10 +1616,10 @@ Would you like to download and install the update?"""
                 # Complete success
                 message = f"Successfully updated {successful_updates} file(s) in the database."
                 show_success_message("Database Updated", message, self.root)
-            
+
                 # Clear modification flags
                 self.clear_modified_flags()
-        
+
         except Exception as e:
             self.progress_dialog.hide_progress_bar()
             messagebox.showerror("Error", f"Failed to update database: {e}")
@@ -1633,7 +1633,7 @@ Would you like to download and install the update?"""
             # CREATE: Collect sample notes from current filtered_sheets (ADD THIS SECTION)
             sample_notes_data = {}
             filtered_sheets = file_data["filtered_sheets"]
-        
+
             for sheet_name, sheet_info in filtered_sheets.items():
                 header_data = sheet_info.get('header_data')
                 if header_data and 'samples' in header_data:
@@ -1642,7 +1642,7 @@ Would you like to download and install the update?"""
                         sample_notes = sample_data.get('sample_notes', '')
                         if sample_notes.strip():
                             sheet_notes[f"Sample {i+1}"] = sample_notes
-                
+
                     if sheet_notes:
                         sample_notes_data[sheet_name] = sheet_notes
                         debug_print(f"DEBUG: Collected notes for sheet {sheet_name}: {len(sheet_notes)} samples")
@@ -1651,32 +1651,32 @@ Would you like to download and install the update?"""
             import tempfile
             with tempfile.NamedTemporaryFile(suffix='.vap3', delete=False) as temp_file:
                 temp_vap3_path = temp_file.name
-        
+
             # Get associated images for this file
             sheet_images = {}
             if hasattr(self, 'sheet_images') and file_data["file_name"] in self.sheet_images:
                 sheet_images = {file_data["file_name"]: self.sheet_images[file_data["file_name"]]}
-        
+
             # Get image crop states
             image_crop_states = getattr(self, 'image_crop_states', {})
-        
+
             # Plot settings
             plot_settings = {}
             if hasattr(self, 'selected_plot_type'):
                 plot_settings['selected_plot_type'] = self.selected_plot_type.get()
-        
+
             # COLLECT: Sample images from current session (ADD THIS SECTION)
             sample_images = {}
             sample_image_crop_states = {}
             sample_header_data = {}
-        
+
             # Check for pending sample images
             if hasattr(self, 'pending_sample_images'):
                 sample_images = getattr(self, 'pending_sample_images', {})
                 sample_image_crop_states = getattr(self, 'pending_sample_image_crop_states', {})
                 sample_header_data = getattr(self, 'pending_sample_header_data', {})
                 debug_print(f"DEBUG: Found pending sample images: {len(sample_images)} samples")
-        
+
             # Also check sample_image_metadata for this file
             if hasattr(self, 'sample_image_metadata'):
                 current_file = file_data["file_name"]
@@ -1689,11 +1689,11 @@ Would you like to download and install the update?"""
                             if not sample_header_data:
                                 sample_header_data = metadata.get('header_data', {})
                             debug_print(f"DEBUG: Found sample images in metadata for {sheet_name}: {len(sheet_sample_images)} samples")
-        
+
             # Save as VAP3
             from vap_file_manager import VapFileManager
             vap_manager = VapFileManager()
-        
+
             # MODIFY: Add sample images and header data to vap3 save (MODIFY THIS CALL)
             success = vap_manager.save_to_vap3(
                 temp_vap3_path,
@@ -1703,13 +1703,13 @@ Would you like to download and install the update?"""
                 image_crop_states,
                 plot_settings,
                 sample_images,              # ADD THIS
-                sample_image_crop_states,   # ADD THIS  
+                sample_image_crop_states,   # ADD THIS
                 sample_header_data          # ADD THIS
             )
-        
+
             if not success:
                 raise Exception("Failed to create temporary VAP3 file")
-        
+
             # MODIFY: Prepare enhanced metadata with sample notes (MODIFY THIS SECTION)
             metadata = {
                 'display_filename': file_data["file_name"],
@@ -1723,24 +1723,24 @@ Would you like to download and install the update?"""
                 'sample_count': len(sample_images),
                 'sample_notes': sample_notes_data  # ADD THIS LINE
             }
-        
+
             # Store in database
             file_id = self.file_manager.db_manager.store_vap3_file(temp_vap3_path, metadata)
-        
+
             # Clean up temporary file
             try:
                 os.unlink(temp_vap3_path)
             except:
                 pass
-        
+
             debug_print(f"DEBUG: Successfully updated file {file_data['file_name']} in database with ID: {file_id}")
-        
+
         except Exception as e:
             debug_print(f"ERROR: Failed to update file {file_data['file_name']}: {e}")
             import traceback
             traceback.print_exc()
             raise
-   
+
     def load_images(self, is_plotting_sheet):
         """Load and display images in the dynamic image_frame."""
         if not hasattr(self, 'image_frame') or not self.image_frame.winfo_exists():
@@ -1775,7 +1775,7 @@ Would you like to download and install the update?"""
             if test_name not in self.filtered_sheets:
                 # Try to find a matching sheet name
                 for sheet_name in self.filtered_sheets.keys():
-                    if (sheet_name.lower() == test_name.lower() or 
+                    if (sheet_name.lower() == test_name.lower() or
                         test_name.lower() in sheet_name.lower() or
                         sheet_name.lower() in test_name.lower()):
                         target_sheet = sheet_name
@@ -1796,7 +1796,7 @@ Would you like to download and install the update?"""
                         }
                         formatted_images.append(img_info)
                         debug_print(f"DEBUG: Added image for {sample_id}: {img_path}")
-                    
+
                 except Exception as e:
                     debug_print(f"ERROR: Failed to process images for {sample_id}: {e}")
                     continue
@@ -1849,7 +1849,7 @@ Would you like to download and install the update?"""
         else:
             # Get the original filename for .vap3 files loaded from database
             original_filename = None
-        
+
             # Check if this file was loaded from database and has original filename metadata
             if hasattr(self, 'all_filtered_sheets') and self.all_filtered_sheets:
                 current_file_data = None
@@ -1857,16 +1857,16 @@ Would you like to download and install the update?"""
                     if file_data.get("file_path") == self.file_path:
                         current_file_data = file_data
                         break
-            
+
                 if current_file_data:
                     # Check for original filename in metadata
                     original_filename = current_file_data.get('original_filename')
                     if not original_filename:
                         # Try database filename as fallback
                         original_filename = current_file_data.get('database_filename')
-                
+
                     debug_print(f"DEBUG: Found original filename for data collection: {original_filename}")
-        
+
             self.file_manager.show_test_start_menu(self.file_path, original_filename=original_filename)
 
     def open_sensory_data_collection(self):
@@ -1877,30 +1877,30 @@ Would you like to download and install the update?"""
         print("DEBUG: Storing main window state before opening sensory window")
         current_state = self.root.state()
         print(f"DEBUG: Current window state: {current_state}")
-    
+
         self.root.withdraw()
 
         def on_sensory_window_close():
             print("DEBUG: Sensory window close callback triggered")
             print("DEBUG: Restoring main window...")
-        
+
             # Restore the main window
             self.root.deiconify()
             print("DEBUG: Main window deiconified")
-        
-            # Restore fullscreen state 
+
+            # Restore fullscreen state
             self.root.state('zoomed')
             print("DEBUG: Main window restored to fullscreen/zoomed state")
-        
+
             # Restore app colors and styling
             self.set_app_colors()
             print("DEBUG: App colors and styling restored")
-        
+
             # Bring window to front and focus
             self.root.lift()
             self.root.focus_set()
             print("DEBUG: Main window brought to front and focused")
-        
+
             # Force a complete redraw of the interface
             self.root.update_idletasks()
             print("DEBUG: Main window redraw completed")
@@ -1918,8 +1918,8 @@ Would you like to download and install the update?"""
         startup_dialog.configure(bg=APP_BACKGROUND_COLOR)
 
         ttk.Label(
-            startup_dialog, 
-            text="Start Data Collection", 
+            startup_dialog,
+            text="Start Data Collection",
             font=("Arial", 16, "bold"),
             background=APP_BACKGROUND_COLOR
         ).pack(pady=(20, 10))
@@ -1965,24 +1965,24 @@ Would you like to download and install the update?"""
     def handle_data_collection_load(self, dialog):
         """Handle 'Load Existing File' from data collection dialog."""
         dialog.destroy()
-        
+
         file_path = self.file_manager.ask_open_file()
         if file_path:
             try:
                 self.file_manager.load_excel_file(file_path)
-                
+
                 self.all_filtered_sheets.append({
                     "file_name": os.path.basename(file_path),
                     "file_path": file_path,
                     "filtered_sheets": copy.deepcopy(self.filtered_sheets)
                 })
-                
+
                 self.file_manager.update_file_dropdown()
                 self.file_manager.set_active_file(os.path.basename(file_path))
                 self.file_manager.update_ui_for_current_file()
-                
+
                 self.file_manager.show_test_start_menu(file_path)
-                
+
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to load file: {e}")
 
@@ -2024,7 +2024,7 @@ Would you like to download and install the update?"""
         # Handle completely empty data (after filtering)
         if data.empty:
             debug_print(f"DEBUG: Data is completely empty after filtering for sheet '{sheet_name}'")
-        
+
             # Create placeholder indicating ready for data collection
             placeholder_label = tk.Label(
                 frame,
@@ -2081,7 +2081,7 @@ Would you like to download and install the update?"""
             debug_print(f"ERROR: Critical error in data preparation: {data_prep_error}")
             import traceback
             traceback.print_exc()
-    
+
             # Show error message to user
             error_label = tk.Label(
                 frame,
@@ -2097,7 +2097,7 @@ Would you like to download and install the update?"""
         try:
             table_frame = ttk.Frame(frame, padding=(2, 1))
             table_frame.pack(fill='both', expand=True)
-        
+
             # Configure grid weights for proper resizing
             table_frame.grid_rowconfigure(0, weight=1)
             table_frame.grid_columnconfigure(0, weight=1)
@@ -2108,33 +2108,33 @@ Would you like to download and install the update?"""
             font_size = 10  # Font size in points
             char_width_pixels = 8  # Approximate pixels per character for Arial 10pt
             font_height_pixels = 12  # Font height in pixels
-        
+
             # Set maximum column width based on "Test Method" column from your image (1920x1080 screen)
             max_column_width = 380  # Pixels
             min_column_width = 120  # Minimum for readability
-        
+
             # Calculate max characters per line dynamically
             max_chars_per_line = max_column_width // char_width_pixels
             debug_print(f"DEBUG: Using max_column_width={max_column_width}px, char_width={char_width_pixels}px, max_chars_per_line={max_chars_per_line}")
-        
+
             # Row height parameters
             min_row_height = 25  # Minimum row height
             row_padding = 8  # Extra pixels for padding
 
             # Pre-process data for text wrapping using existing wrap_text function
             debug_print("DEBUG: Pre-processing text for table display with wrapping using utils.wrap_text.")
-    
+
             # Apply text wrapping to all cells and calculate dimensions
             wrapped_data = data.copy()
             row_heights = []
             col_widths = []
-    
+
             debug_print(f"DEBUG: Processing {len(data)} rows and {len(data.columns)} columns for text wrapping")
-        
+
             # First pass: Calculate column widths based on content
             for col_idx, col_name in enumerate(data.columns):
                 max_chars_in_column = len(str(col_name))  # Start with header length
-            
+
                 # Check all cells in this column
                 for row_idx in range(len(data)):
                     try:
@@ -2143,7 +2143,7 @@ Would you like to download and install the update?"""
                             cell_text = ''
                         else:
                             cell_text = str(cell_value).strip()
-                    
+
                         if cell_text:
                             # Find the longest line after wrapping
                             wrapped_text = wrap_text(cell_text, max_width=max_chars_per_line)
@@ -2151,60 +2151,60 @@ Would you like to download and install the update?"""
                                 lines = wrapped_text.split('\n')
                                 max_line_length = max(len(line) for line in lines)
                                 max_chars_in_column = max(max_chars_in_column, max_line_length)
-                        
+
                     except Exception as cell_error:
                         debug_print(f"DEBUG: Error processing cell at ({row_idx}, {col_idx}) for width: {cell_error}")
                         continue
-            
+
                 # Convert character count to pixel width, respecting min/max limits
                 calculated_width = max_chars_in_column * char_width_pixels + 5  # 20px padding
                 column_width = max(min_column_width, min(max_column_width, calculated_width))
                 col_widths.append(column_width)
-            
+
                 debug_print(f"DEBUG: Column '{col_name}' - max_chars: {max_chars_in_column}, calculated_width: {calculated_width}px, final_width: {column_width}px")
-        
+
             # Second pass: Apply text wrapping and calculate row heights
             for row_idx in range(len(data)):
                 max_lines_in_row = 1
-            
+
                 for col_idx, col_name in enumerate(data.columns):
                     try:
                         cell_value = data.iloc[row_idx, col_idx]
-                    
+
                         # Convert to string and handle empty/nan values
                         if pd.isna(cell_value) or cell_value in ['nan', 'None', 'NaN', '']:
                             cell_text = ''
                         else:
                             cell_text = str(cell_value).strip()
-                    
+
                         if cell_text:
                             # Use the existing wrap_text function from utils
                             wrapped_text = wrap_text(cell_text, max_width=max_chars_per_line)
                             wrapped_data.iloc[row_idx, col_idx] = wrapped_text
-                        
+
                             # Calculate lines for row height
                             if wrapped_text:
                                 line_count = wrapped_text.count('\n') + 1
                                 max_lines_in_row = max(max_lines_in_row, line_count)
                         else:
                             wrapped_data.iloc[row_idx, col_idx] = ''
-                        
+
                     except Exception as cell_error:
                         debug_print(f"DEBUG: Error processing cell at ({row_idx}, {col_idx}): {cell_error}")
                         wrapped_data.iloc[row_idx, col_idx] = str(cell_value) if 'cell_value' in locals() else ''
                         continue
-            
+
                 # Calculate row height based on max lines in this row
                 row_height = max(min_row_height, max_lines_in_row * font_height_pixels + row_padding)
                 row_heights.append(row_height)
-    
+
             debug_print(f"DEBUG: Calculated row heights: min={min(row_heights)}, max={max(row_heights)}, avg={sum(row_heights)/len(row_heights):.1f}")
             debug_print(f"DEBUG: Calculated column widths: min={min(col_widths)}, max={max(col_widths)}, avg={sum(col_widths)/len(col_widths):.1f}")
 
             # Prepare data for tksheet
             headers = list(data.columns)
             rows_data = wrapped_data.values.tolist()
-        
+
             debug_print(f"DEBUG: Prepared {len(headers)} columns and {len(rows_data)} rows for tksheet")
 
             # Create tksheet widget with auto-sizing DISABLED
@@ -2262,7 +2262,7 @@ Would you like to download and install the update?"""
             # Disable any remaining auto-sizing features that might interfere
             sheet.disable_bindings(
                 "edit_cell",
-                "edit_header", 
+                "edit_header",
                 "edit_index",
                 "copy",
                 "cut",
@@ -2270,14 +2270,14 @@ Would you like to download and install the update?"""
                 "delete",
                 "insert_columns",
                 "insert_rows",
-                "delete_columns", 
+                "delete_columns",
                 "delete_rows"
             )
 
             # Enable only viewing and selection bindings
             sheet.enable_bindings(
                 "single_select",
-                "drag_select", 
+                "drag_select",
                 "select_all",
                 "column_select",
                 "row_select",
@@ -2294,7 +2294,7 @@ Would you like to download and install the update?"""
 
             # FINAL: Force refresh and ensure our sizing sticks
             sheet.refresh()
-        
+
             # Double-check our column widths after refresh (in case tksheet changed them)
             #debug_print("DEBUG: Verifying column widths after refresh...")
             for col_idx, expected_width in enumerate(col_widths):
@@ -2305,7 +2305,7 @@ Would you like to download and install the update?"""
                         sheet.column_width(column=col_idx, width=int(expected_width))
                 except Exception as e:
                     debug_print(f"DEBUG: Error verifying column {col_idx} width: {e}")
-        
+
             #debug_print("DEBUG: tksheet table displayed successfully.")
 
             # Store reference to sheet for potential future use
@@ -2317,7 +2317,7 @@ Would you like to download and install the update?"""
             debug_print(f"ERROR: Failed to create tksheet table: {table_error}")
             import traceback
             traceback.print_exc()
-    
+
             # Show error message to user
             error_label = tk.Label(
                 frame,
@@ -2332,10 +2332,10 @@ Would you like to download and install the update?"""
         """Store VAP3 data for access by data collection windows."""
         try:
             #debug_print("DEBUG: Storing VAP3 data for data collection access")
-        
+
             # Store the complete VAP3 data for data collection windows to access
             self.current_vap_data = vap_data
-        
+
             # Log what we're storing
             sample_images = vap_data.get('sample_images', {})
             if sample_images:
@@ -2344,7 +2344,7 @@ Would you like to download and install the update?"""
                     debug_print(f"DEBUG: Stored {sample_id}: {len(images)} images")
             else:
                 debug_print("DEBUG: No sample images in VAP3 data")
-            
+
         except Exception as e:
             debug_print(f"ERROR: Failed to store VAP3 data: {e}")
             import traceback
@@ -2401,7 +2401,7 @@ Would you like to download and install the update?"""
         try:
             self.root.update_idletasks()
             self.report_generator.generate_full_report(
-                self.filtered_sheets, 
+                self.filtered_sheets,
                 self.plot_options
             )
             success = True
@@ -2416,14 +2416,14 @@ Would you like to download and install the update?"""
                 self.report_generator.cleanup_temp_files()
             self.progress_dialog.hide_progress_bar()
 
-            if success:  
+            if success:
                 show_success_message("Success", "Full report saved successfully.", self.root)
 
-            self.root.update_idletasks() 
+            self.root.update_idletasks()
 
     def generate_test_report(self):
         selected_sheet = self.selected_sheet.get()
-    
+
         self.progress_dialog.show_progress_bar("Generating test report...")
         try:
             self.report_generator.generate_test_report(selected_sheet, self.filtered_sheets, self.plot_options)
@@ -2464,18 +2464,18 @@ Would you like to download and install the update?"""
             self.bottom_frame.pack_propagate(False)
             self.bottom_frame.grid_propagate(False)
             self.bottom_frame.update_idletasks()
-    
+
         if hasattr(self, 'previous_minsize'):
             self.root.minsize(*self.previous_minsize)
         else:
             self.root.minsize(1200, 800)
-    
+
         if hasattr(self, 'previous_window_geometry'):
             self.root.geometry(self.previous_window_geometry)
             self.center_window(self.root)
-    
+
         current_sheet = self.selected_sheet.get()
-    
+
         if current_sheet in self.filtered_sheets:
             self.update_displayed_sheet(current_sheet)
         elif self.filtered_sheets:
