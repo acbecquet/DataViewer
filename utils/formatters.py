@@ -1,332 +1,361 @@
-# utils/validators.py
+ï»¿# utils/formatters.py
 """
-utils/validators.py
-Data validation functions for the DataViewer application.
+utils/formatters.py
+Data formatting utilities for the DataViewer application.
+Provides consistent formatting for numbers, dates, and other data types.
 """
 
-import os
-import re
-from pathlib import Path
-from typing import Tuple, List, Any, Optional
 import pandas as pd
 import numpy as np
-from .constants import (
-    EXCEL_EXTENSIONS, VAP3_EXTENSIONS, CSV_EXTENSIONS,
-    MIN_DATA_ROWS, MIN_DATA_COLUMNS, MAX_FILE_SIZE_MB,
-    MAX_COLUMN_NAME_LENGTH, MAX_SHEET_NAME_LENGTH
-)
+from datetime import datetime, date
+from typing import Any, Optional, Union
 
+try:
+    from .debug import debug_print, error_print
+except ImportError:
+    def debug_print(msg): print(f"DEBUG: {msg}")
+    def error_print(msg, exc=None): print(f"ERROR: {msg}")
 
-def validate_file_path(file_path: str) -> Tuple[bool, str]:
-    """Validate if a file path is valid and accessible."""
-    if not file_path:
-        return False, "File path is empty"
+def format_number(value: Any, decimals: int = 2, thousands_sep: str = ',') -> str:
+    """
+    Format a number with specified decimal places and thousands separator.
     
+    Args:
+        value: Number to format
+        decimals (int): Number of decimal places
+        thousands_sep (str): Thousands separator character
+        
+    Returns:
+        str: Formatted number string
+    """
     try:
-        path = Path(file_path)
+        if pd.isna(value) or value is None:
+            return ""
         
-        # Check if file exists
-        if not path.exists():
-            return False, f"File does not exist: {file_path}"
+        # Convert to float
+        num_value = float(value)
         
-        # Check if it's actually a file
-        if not path.is_file():
-            return False, f"Path is not a file: {file_path}"
+        # Handle infinity and very large numbers
+        if np.isinf(num_value):
+            return "âˆž" if num_value > 0 else "-âˆž"
         
-        # Check file size
-        file_size_mb = path.stat().st_size / (1024 * 1024)
-        if file_size_mb > MAX_FILE_SIZE_MB:
-            return False, f"File too large: {file_size_mb:.1f}MB (max {MAX_FILE_SIZE_MB}MB)"
+        # Format with specified decimals
+        if decimals == 0:
+            formatted = f"{int(num_value):,}".replace(',', thousands_sep)
+        else:
+            formatted = f"{num_value:,.{decimals}f}".replace(',', thousands_sep)
         
-        # Check if file is readable
-        try:
-            with open(file_path, 'rb') as f:
-                f.read(1)  # Try to read one byte
-        except PermissionError:
-            return False, f"Permission denied: {file_path}"
-        except Exception as e:
-            return False, f"Cannot read file: {e}"
+        return formatted
         
-        print(f"DEBUG: validate_file_path({file_path}): VALID ({file_size_mb:.1f}MB)")
-        return True, "File path is valid"
+    except (ValueError, TypeError, OverflowError) as e:
+        debug_print(f"Error formatting number {value}: {e}")
+        return str(value) if value is not None else ""
+
+def format_percentage(value: Any, decimals: int = 1) -> str:
+    """
+    Format a value as a percentage.
+    
+    Args:
+        value: Value to format (0.15 -> 15.0%)
+        decimals (int): Number of decimal places
+        
+    Returns:
+        str: Formatted percentage string
+    """
+    try:
+        if pd.isna(value) or value is None:
+            return ""
+        
+        num_value = float(value)
+        
+        # Handle infinity
+        if np.isinf(num_value):
+            return "âˆž%" if num_value > 0 else "-âˆž%"
+        
+        # Convert to percentage and format
+        percentage = num_value * 100
+        return f"{percentage:.{decimals}f}%"
+        
+    except (ValueError, TypeError, OverflowError) as e:
+        debug_print(f"Error formatting percentage {value}: {e}")
+        return str(value) if value is not None else ""
+
+def format_scientific(value: Any, precision: int = 2) -> str:
+    """
+    Format a number in scientific notation.
+    
+    Args:
+        value: Number to format
+        precision (int): Number of significant digits
+        
+    Returns:
+        str: Formatted scientific notation string
+    """
+    try:
+        if pd.isna(value) or value is None:
+            return ""
+        
+        num_value = float(value)
+        
+        # Handle infinity and zero
+        if np.isinf(num_value):
+            return "âˆž" if num_value > 0 else "-âˆž"
+        
+        if num_value == 0:
+            return "0.00e+00"
+        
+        # Format in scientific notation
+        return f"{num_value:.{precision}e}"
+        
+    except (ValueError, TypeError, OverflowError) as e:
+        debug_print(f"Error formatting scientific {value}: {e}")
+        return str(value) if value is not None else ""
+
+def format_datetime(value: Any, format_string: str = "%Y-%m-%d %H:%M:%S") -> str:
+    """
+    Format a datetime value.
+    
+    Args:
+        value: Datetime value to format
+        format_string (str): Format string for datetime
+        
+    Returns:
+        str: Formatted datetime string
+    """
+    try:
+        if pd.isna(value) or value is None:
+            return ""
+        
+        # Handle different types of datetime inputs
+        if isinstance(value, (datetime, date)):
+            dt_value = value
+        elif isinstance(value, pd.Timestamp):
+            dt_value = value.to_pydatetime()
+        elif isinstance(value, str):
+            # Try to parse string as datetime
+            dt_value = pd.to_datetime(value)
+        else:
+            # Try to convert to datetime
+            dt_value = pd.to_datetime(value)
+        
+        return dt_value.strftime(format_string)
+        
+    except (ValueError, TypeError) as e:
+        debug_print(f"Error formatting datetime {value}: {e}")
+        return str(value) if value is not None else ""
+
+def format_currency(value: Any, currency_symbol: str = "$", decimals: int = 2) -> str:
+    """
+    Format a value as currency.
+    
+    Args:
+        value: Value to format
+        currency_symbol (str): Currency symbol to use
+        decimals (int): Number of decimal places
+        
+    Returns:
+        str: Formatted currency string
+    """
+    try:
+        if pd.isna(value) or value is None:
+            return ""
+        
+        num_value = float(value)
+        
+        # Handle negative values
+        if num_value < 0:
+            return f"-{currency_symbol}{format_number(abs(num_value), decimals)}"
+        else:
+            return f"{currency_symbol}{format_number(num_value, decimals)}"
+        
+    except (ValueError, TypeError) as e:
+        debug_print(f"Error formatting currency {value}: {e}")
+        return str(value) if value is not None else ""
+
+def format_file_size(size_bytes: Union[int, float]) -> str:
+    """
+    Format file size in human-readable format.
+    
+    Args:
+        size_bytes: Size in bytes
+        
+    Returns:
+        str: Formatted file size string
+    """
+    try:
+        if size_bytes == 0:
+            return "0 B"
+        
+        size_bytes = float(size_bytes)
+        
+        # Define size units
+        units = ['B', 'KB', 'MB', 'GB', 'TB']
+        unit_index = 0
+        
+        while size_bytes >= 1024 and unit_index < len(units) - 1:
+            size_bytes /= 1024
+            unit_index += 1
+        
+        # Format with appropriate decimal places
+        if unit_index == 0:  # Bytes
+            return f"{int(size_bytes)} {units[unit_index]}"
+        else:
+            return f"{size_bytes:.1f} {units[unit_index]}"
+        
+    except (ValueError, TypeError) as e:
+        debug_print(f"Error formatting file size {size_bytes}: {e}")
+        return str(size_bytes) if size_bytes is not None else ""
+
+def format_duration(seconds: Union[int, float]) -> str:
+    """
+    Format duration in human-readable format.
+    
+    Args:
+        seconds: Duration in seconds
+        
+    Returns:
+        str: Formatted duration string
+    """
+    try:
+        if pd.isna(seconds) or seconds is None:
+            return ""
+        
+        total_seconds = int(float(seconds))
+        
+        if total_seconds < 60:
+            return f"{total_seconds}s"
+        elif total_seconds < 3600:  # Less than 1 hour
+            minutes = total_seconds // 60
+            remaining_seconds = total_seconds % 60
+            return f"{minutes}m {remaining_seconds}s"
+        else:  # 1 hour or more
+            hours = total_seconds // 3600
+            remaining_minutes = (total_seconds % 3600) // 60
+            remaining_seconds = total_seconds % 60
+            return f"{hours}h {remaining_minutes}m {remaining_seconds}s"
+        
+    except (ValueError, TypeError) as e:
+        debug_print(f"Error formatting duration {seconds}: {e}")
+        return str(seconds) if seconds is not None else ""
+
+def format_table_cell(value: Any, max_width: int = 20) -> str:
+    """
+    Format a cell value for table display with width truncation.
+    
+    Args:
+        value: Cell value to format
+        max_width (int): Maximum width for cell content
+        
+    Returns:
+        str: Formatted cell string
+    """
+    try:
+        if pd.isna(value) or value is None:
+            return ""
+        
+        # Convert to string
+        str_value = str(value)
+        
+        # Truncate if too long
+        if len(str_value) > max_width:
+            str_value = str_value[:max_width-3] + "..."
+        
+        return str_value
         
     except Exception as e:
-        error_msg = f"File path validation error: {e}"
-        print(f"ERROR: validate_file_path({file_path}): {error_msg}")
-        return False, error_msg
+        debug_print(f"Error formatting table cell {value}: {e}")
+        return str(value) if value is not None else ""
 
-
-def validate_excel_file(file_path: str) -> Tuple[bool, str]:
-    """Validate if a file is a valid Excel file."""
-    # First validate basic file path
-    is_valid, message = validate_file_path(file_path)
-    if not is_valid:
-        return False, message
+def format_dataframe_for_display(df: pd.DataFrame, 
+                                max_rows: int = 100, 
+                                max_cols: int = 20,
+                                cell_width: int = 15) -> pd.DataFrame:
+    """
+    Format a DataFrame for display with size and content limits.
     
+    Args:
+        df (pd.DataFrame): DataFrame to format
+        max_rows (int): Maximum number of rows to display
+        max_cols (int): Maximum number of columns to display
+        cell_width (int): Maximum width for cell content
+        
+    Returns:
+        pd.DataFrame: Formatted DataFrame
+    """
     try:
-        path = Path(file_path)
-        
-        # Check file extension
-        if path.suffix.lower() not in EXCEL_EXTENSIONS:
-            return False, f"Not an Excel file: {path.suffix}"
-        
-        # Try to read the Excel file
-        try:
-            # Just try to get sheet names without loading data
-            excel_file = pd.ExcelFile(file_path, engine='openpyxl')
-            sheet_names = excel_file.sheet_names
-            excel_file.close()
-            
-            if not sheet_names:
-                return False, "Excel file contains no sheets"
-            
-            print(f"DEBUG: validate_excel_file({file_path}): VALID ({len(sheet_names)} sheets)")
-            return True, f"Valid Excel file with {len(sheet_names)} sheets"
-            
-        except Exception as e:
-            return False, f"Cannot read Excel file: {e}"
-        
-    except Exception as e:
-        error_msg = f"Excel file validation error: {e}"
-        print(f"ERROR: validate_excel_file({file_path}): {error_msg}")
-        return False, error_msg
-
-
-def validate_data_frame(df: pd.DataFrame, min_rows: int = None, min_cols: int = None) -> Tuple[bool, List[str]]:
-    """Validate a DataFrame for basic data quality requirements."""
-    issues = []
-    
-    # Use default minimums if not specified
-    min_rows = min_rows or MIN_DATA_ROWS
-    min_cols = min_cols or MIN_DATA_COLUMNS
-    
-    try:
-        # Check if DataFrame exists
-        if df is None:
-            issues.append("DataFrame is None")
-            return False, issues
-        
-        # Check if DataFrame is empty
         if df.empty:
-            issues.append("DataFrame is empty")
-            return False, issues
+            return df
         
-        # Check minimum dimensions
-        if len(df) < min_rows:
-            issues.append(f"Insufficient rows: {len(df)} < {min_rows}")
+        # Limit rows and columns
+        display_df = df.iloc[:max_rows, :max_cols].copy()
         
-        if len(df.columns) < min_cols:
-            issues.append(f"Insufficient columns: {len(df.columns)} < {min_cols}")
+        # Format cell contents
+        for col in display_df.columns:
+            if display_df[col].dtype == 'object':
+                display_df[col] = display_df[col].apply(
+                    lambda x: format_table_cell(x, cell_width)
+                )
+            elif np.issubdtype(display_df[col].dtype, np.number):
+                display_df[col] = display_df[col].apply(
+                    lambda x: format_number(x, 2) if not pd.isna(x) else ""
+                )
         
-        # Check for all-null columns
-        null_columns = df.columns[df.isnull().all()].tolist()
-        if null_columns:
-            issues.append(f"Columns with all null values: {', '.join(null_columns)}")
-        
-        # Check for duplicate column names
-        duplicate_columns = df.columns[df.columns.duplicated()].tolist()
-        if duplicate_columns:
-            issues.append(f"Duplicate column names: {', '.join(duplicate_columns)}")
-        
-        # Check for excessively long column names
-        long_columns = [col for col in df.columns if len(str(col)) > MAX_COLUMN_NAME_LENGTH]
-        if long_columns:
-            issues.append(f"Column names too long: {', '.join(long_columns[:3])}{'...' if len(long_columns) > 3 else ''}")
-        
-        # Check for unusual data types
-        object_columns = df.select_dtypes(include=['object']).columns.tolist()
-        if len(object_columns) == len(df.columns):
-            issues.append("All columns are object type (possible parsing issue)")
-        
-        # Check for excessive missing data
-        missing_percentage = (df.isnull().sum().sum() / (len(df) * len(df.columns))) * 100
-        if missing_percentage > 50:
-            issues.append(f"High percentage of missing data: {missing_percentage:.1f}%")
-        
-        is_valid = len(issues) == 0
-        print(f"DEBUG: validate_data_frame - {len(df)} rows, {len(df.columns)} cols - {'VALID' if is_valid else 'INVALID'} ({len(issues)} issues)")
-        
-        return is_valid, issues
+        debug_print(f"Formatted DataFrame for display: {display_df.shape}")
+        return display_df
         
     except Exception as e:
-        error_msg = f"DataFrame validation error: {e}"
-        print(f"ERROR: validate_data_frame: {error_msg}")
-        return False, [error_msg]
+        error_print(f"Error formatting DataFrame for display: {e}")
+        return df
 
-
-def validate_sheet_data(sheet_data: dict, sheet_name: str) -> Tuple[bool, List[str]]:
-    """Validate sheet data dictionary structure."""
-    issues = []
+def auto_format_value(value: Any, column_name: str = "") -> str:
+    """
+    Automatically format a value based on its type and column name.
     
+    Args:
+        value: Value to format
+        column_name (str): Column name for context-aware formatting
+        
+    Returns:
+        str: Formatted value string
+    """
     try:
-        # Check if sheet data exists
-        if not sheet_data:
-            issues.append(f"Sheet data is empty for '{sheet_name}'")
-            return False, issues
+        if pd.isna(value) or value is None:
+            return ""
         
-        # Check for required keys
-        required_keys = ['data']
-        for key in required_keys:
-            if key not in sheet_data:
-                issues.append(f"Missing required key '{key}' in sheet '{sheet_name}'")
+        column_lower = column_name.lower()
         
-        # Validate DataFrame if present
-        if 'data' in sheet_data and isinstance(sheet_data['data'], pd.DataFrame):
-            df_valid, df_issues = validate_data_frame(sheet_data['data'])
-            if not df_valid:
-                issues.extend([f"Sheet '{sheet_name}': {issue}" for issue in df_issues])
+        # Check for percentage columns
+        if any(keyword in column_lower for keyword in ['percent', '%', 'efficiency', 'rate']):
+            if isinstance(value, (int, float)) and 0 <= value <= 1:
+                return format_percentage(value)
+            elif isinstance(value, (int, float)) and value > 1:
+                return format_percentage(value / 100)
         
-        # Validate sheet name
-        if len(sheet_name) > MAX_SHEET_NAME_LENGTH:
-            issues.append(f"Sheet name too long: '{sheet_name}' ({len(sheet_name)} > {MAX_SHEET_NAME_LENGTH})")
+        # Check for currency columns
+        if any(keyword in column_lower for keyword in ['price', 'cost', 'amount', '$']):
+            return format_currency(value)
         
-        # Check for invalid characters in sheet name
-        invalid_chars = ['\\', '/', '*', '[', ']', ':', '?']
-        if any(char in sheet_name for char in invalid_chars):
-            issues.append(f"Sheet name contains invalid characters: '{sheet_name}'")
+        # Check for date columns
+        if any(keyword in column_lower for keyword in ['date', 'time', 'created', 'updated']):
+            return format_datetime(value)
         
-        is_valid = len(issues) == 0
-        print(f"DEBUG: validate_sheet_data('{sheet_name}') - {'VALID' if is_valid else 'INVALID'} ({len(issues)} issues)")
+        # Check for size columns
+        if any(keyword in column_lower for keyword in ['size', 'bytes', 'length']):
+            if isinstance(value, (int, float)) and value > 1000:
+                return format_file_size(value)
         
-        return is_valid, issues
+        # Default numeric formatting
+        if isinstance(value, (int, float)):
+            if abs(value) >= 1000000:
+                return format_scientific(value)
+            else:
+                return format_number(value)
+        
+        # Default string formatting
+        return format_table_cell(value)
         
     except Exception as e:
-        error_msg = f"Sheet data validation error for '{sheet_name}': {e}"
-        print(f"ERROR: validate_sheet_data: {error_msg}")
-        return False, [error_msg]
+        debug_print(f"Error auto-formatting value {value}: {e}")
+        return str(value) if value is not None else ""
 
-
-def validate_numeric_data(data: Any, allow_nan: bool = True) -> Tuple[bool, str]:
-    """Validate if data can be converted to numeric."""
-    try:
-        if data is None:
-            return False, "Data is None"
-        
-        if pd.isna(data):
-            return allow_nan, "Data is NaN" if not allow_nan else "Data is NaN (allowed)"
-        
-        # Try to convert to float
-        try:
-            float_val = float(data)
-            
-            # Check for infinity
-            if np.isinf(float_val):
-                return False, "Data is infinite"
-            
-            print(f"DEBUG: validate_numeric_data({data}): VALID (converted to {float_val})")
-            return True, "Valid numeric data"
-            
-        except (ValueError, TypeError):
-            # Try pandas numeric conversion
-            numeric_val = pd.to_numeric(data, errors='coerce')
-            if pd.isna(numeric_val):
-                return False, f"Cannot convert to numeric: {data}"
-            
-            return True, "Valid numeric data (converted)"
-        
-    except Exception as e:
-        error_msg = f"Numeric validation error: {e}"
-        print(f"ERROR: validate_numeric_data({data}): {error_msg}")
-        return False, error_msg
-
-
-def validate_temperature_range(temperature: float) -> Tuple[bool, str]:
-    """Validate temperature is within reasonable range."""
-    try:
-        # Convert to float if needed
-        temp = float(temperature)
-        
-        # Check for reasonable temperature range (celsius)
-        min_temp = -273.15  # Absolute zero
-        max_temp = 1000.0   # Reasonable upper limit for most applications
-        
-        if temp < min_temp:
-            return False, f"Temperature below absolute zero: {temp}°C"
-        
-        if temp > max_temp:
-            return False, f"Temperature unreasonably high: {temp}°C"
-        
-        print(f"DEBUG: validate_temperature_range({temp}°C): VALID")
-        return True, "Valid temperature"
-        
-    except (ValueError, TypeError):
-        return False, f"Invalid temperature value: {temperature}"
-
-
-def validate_viscosity_value(viscosity: float) -> Tuple[bool, str]:
-    """Validate viscosity value is positive and reasonable."""
-    try:
-        # Convert to float if needed
-        visc = float(viscosity)
-        
-        # Viscosity must be positive
-        if visc <= 0:
-            return False, f"Viscosity must be positive: {visc}"
-        
-        # Check for reasonable range (Pa·s)
-        min_visc = 1e-6   # Very thin liquids
-        max_visc = 1e6    # Very thick materials
-        
-        if visc < min_visc:
-            return False, f"Viscosity unreasonably low: {visc} Pa·s"
-        
-        if visc > max_visc:
-            return False, f"Viscosity unreasonably high: {visc} Pa·s"
-        
-        print(f"DEBUG: validate_viscosity_value({visc} Pa·s): VALID")
-        return True, "Valid viscosity"
-        
-    except (ValueError, TypeError):
-        return False, f"Invalid viscosity value: {viscosity}"
-
-
-def validate_file_extension(file_path: str, allowed_extensions: List[str]) -> Tuple[bool, str]:
-    """Validate file has an allowed extension."""
-    try:
-        path = Path(file_path)
-        extension = path.suffix.lower()
-        
-        if not extension:
-            return False, "File has no extension"
-        
-        allowed_lower = [ext.lower() for ext in allowed_extensions]
-        
-        if extension not in allowed_lower:
-            return False, f"Extension '{extension}' not in allowed list: {', '.join(allowed_extensions)}"
-        
-        print(f"DEBUG: validate_file_extension({file_path}): VALID ({extension})")
-        return True, f"Valid extension: {extension}"
-        
-    except Exception as e:
-        error_msg = f"Extension validation error: {e}"
-        print(f"ERROR: validate_file_extension({file_path}): {error_msg}")
-        return False, error_msg
-
-
-def validate_model_name(model_name: str) -> Tuple[bool, str]:
-    """Validate model name follows naming conventions."""
-    try:
-        if not model_name:
-            return False, "Model name is empty"
-        
-        if len(model_name) < 3:
-            return False, "Model name too short (minimum 3 characters)"
-        
-        if len(model_name) > 50:
-            return False, "Model name too long (maximum 50 characters)"
-        
-        # Check for valid characters (alphanumeric, underscore, hyphen)
-        if not re.match(r'^[a-zA-Z0-9_-]+$', model_name):
-            return False, "Model name contains invalid characters (use only letters, numbers, underscore, hyphen)"
-        
-        # Must start with letter
-        if not model_name[0].isalpha():
-            return False, "Model name must start with a letter"
-        
-        print(f"DEBUG: validate_model_name('{model_name}'): VALID")
-        return True, "Valid model name"
-        
-    except Exception as e:
-        error_msg = f"Model name validation error: {e}"
-        print(f"ERROR: validate_model_name('{model_name}'): {error_msg}")
-        return False, error_msg
+print("DEBUG: formatters.py - Formatting functions loaded successfully")
