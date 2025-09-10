@@ -1,0 +1,40 @@
+[MAIN]
+# Add your project modules so pylint can find them
+init-hook='import sys; sys.path.append(".")'
+# Ignore test files and build artifacts if you have them
+ignore=build,dist,*.egg-info,test_*.py,*_test.py
+
+[MESSAGES CONTROL]
+# Much more strict - only disable what's absolutely necessary for GUI/scientific apps
+disable=
+    missing-module-docstring,
+    # GUI specific issues that are hard to avoid
+    too-many-ancestors,
+    # Scientific computing - only the most common unavoidable patterns
+    import-error,
+
+# Everything else stays enabled to catch redundant patterns
+
+[DESIGN]
+# Stricter limits to encourage simpler code
+max-args=8
+max-attributes=15
+max-locals=15
+max-statements=50
+max-public-methods=20
+max-module-lines=1500  # Force you to split large files
+
+[BASIC]
+# Only essential good names
+good-names=i,j,k,ex,Run,_,df,ax,fig,x,y,z
+# Keep bad names to avoid poor naming
+bad-names=foo,bar,baz,toto,tutu,tata,data,info,temp,tmp
+
+[TYPECHECK]
+# Only ignore what's absolutely necessary
+ignored-modules=tkinter,matplotlib
+ignored-classes=StringVar,IntVar,BooleanVar,DoubleVar
+
+[SIMILARITIES]
+# Stricter similarity checking to catch copy-paste code
+min-similarity-lines=4

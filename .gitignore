@@ -1,0 +1,60 @@
+# Build artifacts
+build/
+dist/
+*.spec
+*.exe
+*.msi
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environments - NEVER commit these
+release_env/
+venv/
+env/
+.env/
+.venv/
+Scripts/
+Lib/
+Include/
+pyvenv.cfg
+
+# IDE files
+.vscode/
+.vs/
+.idea/
+*.swp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Installer output
+installer_output/
+
+# Temporary files
+*.tmp
+*.log
+
+# Development/temporary folders - EXCLUDE from builds
+training_data/
+scanned_forms/
+plots/
+data/temp/
+data/cache/
+data/logs/
+bin/
+obj/
+
+# INCLUDE the main database - ignore
+dataviewer.db
+data/dataviewer.db
+
+# Old builds and executable files
+build_old/
+dist_old/
+*.exe.old
+*.msi.old
+backup_builds/

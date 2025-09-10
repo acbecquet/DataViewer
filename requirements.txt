@@ -1,0 +1,57 @@
+# COMPLETE Docker requirements - analyzed from entire codebase
+# This includes ALL dependencies to avoid rebuild cycles
+
+# ===== CORE SCIENTIFIC COMPUTING =====
+matplotlib==3.9.2
+numpy==2.0.0
+pandas==2.2.2
+scipy>=1.10.0
+
+# ===== MACHINE LEARNING & DATA SCIENCE =====
+scikit-learn>=1.3.0
+seaborn>=0.11.0
+statsmodels>=0.13.0
+
+# ===== EXCEL AND OFFICE FILES =====
+openpyxl==3.1.5
+python-pptx==0.6.23
+XlsxWriter==3.2.0
+
+# ===== IMAGE PROCESSING =====
+pillow==10.4.0
+opencv-python-headless>=4.5.0
+
+# ===== GUI COMPONENTS =====
+tkintertable==1.3.3
+tksheet==7.5.14
+
+# ===== NETWORKING AND WEB =====
+requests>=2.25.0
+urllib3>=1.26.0
+
+# ===== DATABASE =====
+sqlalchemy==2.0.27
+
+# ===== SYSTEM UTILITIES =====
+psutil==6.0.0
+packaging>=20.0
+python-dateutil==2.9.0.post0
+pytz==2024.1
+
+# ===== MATHEMATICAL COMPUTING =====
+sympy>=1.11.0
+networkx>=2.8.0
+
+# ===== INTERACTIVE PLOTTING =====
+plotly>=5.0.0
+
+# ===== FILE FORMAT SUPPORT =====
+pyyaml>=6.0.0
+
+# ===== SCIENTIFIC LIBRARY DEPENDENCIES =====
+joblib>=1.2.0
+threadpoolctl>=3.1.0
+
+# ===== ADDITIONAL COMMON DEPENDENCIES =====
+setuptools>=65.0.0
+wheel>=0.37.0

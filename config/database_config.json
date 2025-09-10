@@ -1,0 +1,17 @@
+{
+  "database_type": "remote",
+  "synology_settings": {
+    "host": "your-synology-ip-or-hostname",
+    "port": 5432,
+    "database": "dataviewer",
+    "username": "your_username",
+    "password": "your_password",
+    "connection_timeout": 30
+  },
+  "offline_mode": {
+    "enabled": true,
+    "cache_duration_hours": 24,
+    "essential_functions_only": false
+  },
+  "fallback_behavior": "offline_mode"
+}
