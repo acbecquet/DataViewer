@@ -31,10 +31,10 @@ CACHE_DURATION_HOURS = 24
 
 # Processing Constants
 DEFAULT_PLOT_TYPES = [
-    "TPM (mg)",
-    "Nicotine (mg)", 
-    "Draw Pressure (mmH2O)",
-    "Resistance (mmH2O·s/ml)",
+    "TPM (mg/puff)",
+    "Normalized TPM (mg/s)" 
+    "Draw Pressure (kPa)",
+    "Resistance (Ohm)",
     "Power Efficiency (%)",
     "Usage Efficiency (%)"
 ]
