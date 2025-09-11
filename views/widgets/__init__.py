@@ -12,3 +12,4 @@ from .menu_widget import MenuWidget
 __all__ = ['PlotWidget', 'TableWidget', 'ImageWidget', 'MenuWidget']
 
 print("DEBUG: Views widgets package initialized")
+print(f"DEBUG: Available widgets: {', '.join(__all__)}")
