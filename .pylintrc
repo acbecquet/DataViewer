@@ -15,13 +15,16 @@ disable=
 
 # Everything else stays enabled to catch redundant patterns
 
+[FORMAT]
+max-line-length=240
+
 [DESIGN]
 # Stricter limits to encourage simpler code
 max-args=8
 max-attributes=15
 max-locals=15
 max-statements=50
-max-public-methods=20
+max-public-methods=50
 max-module-lines=1500  # Force you to split large files
 
 [BASIC]

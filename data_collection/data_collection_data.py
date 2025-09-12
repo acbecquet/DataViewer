@@ -3,6 +3,11 @@ data_collection_data.py
 Developed by Charlie Becquet
 Data class for data collection window
 """
+
+# pylint: disable=no-member
+# This module is part of a multiple inheritance structure where attributes
+# are defined in other parent classes (DataCollectionData, DataCollectionHandlers, etc.)
+
 import copy
 import time
 import statistics

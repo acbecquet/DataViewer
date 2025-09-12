@@ -4,6 +4,10 @@ Developed by Charlie Becquet
 Event handlers class for data collection window.
 """
 
+# pylint: disable=no-member
+# This module is part of a multiple inheritance structure where attributes
+# are defined in other parent classes (DataCollectionData, DataCollectionHandlers, etc.)
+
 import tkinter as tk
 from tkinter import messagebox
 import statistics

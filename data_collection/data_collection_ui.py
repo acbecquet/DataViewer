@@ -3,14 +3,20 @@ data_collection_ui.py
 Developed by Charlie Becquet.
 UI modules for data collection window
 """
+
+# pylint: disable=no-member
+# This module is part of a multiple inheritance structure where attributes
+# are defined in other parent classes (DataCollectionData, DataCollectionHandlers, etc.)
+
+import json
+import logging
+import os
+
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 from tksheet import Sheet
-from utils import debug_print
-import datetime
-import logging
-import json
-import os
+
+from utils import debug_print, show_success_message
 
 def load_test_sops():
     """
@@ -18,7 +24,7 @@ def load_test_sops():
     Returns the TEST_SOPS dictionary or default values if file not found.
     """
     debug_print("DEBUG: Loading test SOPs from JSON file")
-    
+
     # Try multiple possible paths for the JSON file
     possible_paths = [
         "test_sops.json",                           # Same directory as script
@@ -26,7 +32,7 @@ def load_test_sops():
         os.path.join("resources", "test_sops.json"), # Resources folder
         os.path.join(os.path.dirname(__file__), "test_sops.json"), # Same directory as this script
     ]
-    
+
     for json_path in possible_paths:
         try:
             if os.path.exists(json_path):
@@ -38,7 +44,7 @@ def load_test_sops():
         except (json.JSONDecodeError, IOError) as e:
             debug_print(f"ERROR: Failed to load SOPs from {json_path}: {e}")
             continue
-    
+
     # Fallback to default SOPs if JSON file not found
     debug_print("WARNING: Could not load test_sops.json, using default fallback SOPs")
     return {
@@ -88,6 +94,17 @@ def setup_logging():
 
 class DataCollectionUI:
     """UI creation and widget management"""
+
+    # pylint: disable=too-many-instance-attributes
+    # This is a mixin class - attributes are defined in other parent classes
+
+    def __init__(self):
+        """Initialize UI-specific attributes."""
+        # UI State attributes
+        self.sop_visible = False
+        self.puff_interval = getattr(self, 'puff_interval',10)
+        self.auto_save_interval = getattr(self, 'auto_save_interval', 300000)
+
     def toggle_sop_visibility(self):
         """Toggle the visibility of the SOP text."""
         if self.sop_visible:
@@ -1163,7 +1180,6 @@ Developed by Charlie Becquet
         # For tksheet, we don't need to explicitly end editing like with treeview
         # This method is kept for compatibility with the save process
         debug_print("DEBUG: Ending any active editing (tksheet)")
-        pass
 
     def update_tpm_in_sheet(self, sheet, sample_id):
         """Update the TPM column in the sheet with calculated values"""
