@@ -9,307 +9,40 @@ from tksheet import Sheet
 from utils import debug_print
 import datetime
 import logging
-
-# Standard Operating Procedures for each test
-TEST_SOPS = {
-    "User Test Simulation": """
-SOP - User Test Simulation:
-
-Day 1: Collect Initial Draw Resistance, TPM for 50 puffs, then use puff per day calculator to determine number of puffs. Make sure to enter initial oil mass.
-
-Days 2-4: 10 puffs TPM after
-
-Day 5: Extended Test, every 20 puffs until device is empty
-
-Day 6: Full Disassembly + Photos
-
-Be sure to take detailed notes while conducting this test.
-
-Key Points:
-- Split testing: Phase 1 (0-50 puffs) and Phase 2 (extended puffs)
-- No resistance measurements during extended testing
-    """,
-
-    "Intense Test": """
-SOP - Intense Test:
-
-Conduct intense testing at a draw pressure of 5kPa. Use either 200mL/3s/30s or 160mL/3s/30s regime.
-Record TPM, draw pressure, and resistance at regular intervals.
-Monitor for device overheating or failure.
-Document any unusual observations in notes.
-
-Key Points:
-- 5kPa draw pressure target
-- Standard 12-column data collection
-- Record all measurements consistently
-    """,
-
-    "User Simulation Test": """
-SOP - User Test Simulation:
-
-Day 1: Collect Initial Draw Resistance, TPM for 50 puffs, then use puff per day calculator to determine number of puffs. Make sure to enter initial oil mass.
-Days 2-4: 10 puffs with TPM, then complete the daily number of puffs.
-Day 5: Extended Test, every 10 puffs until device is empty
-Day 6: Full Disassembly + Photos
-
-Be sure to take detailed notes while conducting this test.
-
-Key Points:
-- Split testing: Phase 1 (0-50 puffs) and Phase 2 (extended puffs)
-- No resistance measurements during extended testing
-    """,
-
-    "Big Headspace High T Test": """
-SOP - Big Headspace High T Test:
-
-Drain device to 30% remaining and then place in the oven at 40C.
-After 1 hour, collect 10 puffs, tracking TPM and draw resistance for each puff. Repeat this 3 times, for 30 total puffs.
-Be sure to take detailed notes on bubbling and any failure modes.
-
-Key Points:
-- 40C big headspace test
-- Monitor for thermal effects
-- Document temperature-related observations
-    """,
-
-    "Big Headspace Serial Test": """
-SOP - Big Headspace Serial Test:
-
-Drain device to 30% remaining and then place in the oven upright at 40C.
-After 1 hour, collect 10 puffs, tracking TPM and draw resistance for each puff. Repeat this 3 times,
-the second time placing the samples horizontal, airway up, and the third placed horizontal, airway down.
-Be sure to take detailed notes on clogging or any other failure modes.
-
-Key Points:
-- 40C big headspace test
-- Monitor for thermal effects
-- Document temperature-related observations
-    """,
-
-    "Big Headspace Low T Test": """
-SOP - Big Headspace Low T Test:
-
-Drain device to 30% remaining and then place in refrigerator at 4C.
-After 1 hour, collect 10 puffs, tracking TPM and draw resistance for each puff. Repeat this 3 times, for 30 total puffs.
-Be sure to take detailed notes on viscosity changes and any failure modes.
-
-Key Points:
-- 4C big headspace test
-- Monitor for cold temperature effects
-- Document viscosity and flow changes
-    """,
-
-    "Extended Test": """
-SOP - Extended Test:
-
-Long-duration testing to assess device lifetime and performance degradation.
-Sessions of 10 puffs with a 60mL/3s/30s puffing regime. Rest 15 minutes between sessions.
-Monitor for performance and consistency over time. Measure initial and final draw resistance,
-and measure TPM every 10 puffs.
-
-Key Points:
-- Extended duration testing
-- Regular measurement intervals
-- Performance degradation monitoring
-- Comprehensive data collection
-    """,
-
-    "Quick Screening Test": """
-SOP - Quick Screening Test:
-
-Rapid assessment of device basic performance.
-Focus on key performance indicators.
-Streamlined testing for initial evaluation.
-
-Key Points:
-- Rapid testing protocol
-- Key performance metrics only
-- Initial device assessment
-- Basic functionality verification
-    """,
-
-    "Lifetime Test": """
-SOP - Lifetime Test:
-
-Evaluation of Performance over a device lifetime. Observe TPM change over time, draw pressure change, and clogging or oil accumulation.
-Monitor device until complete depletion or failure.
-
-Key Points:
-- Full device lifetime assessment
-- Track performance degradation
-- Document failure modes
-- Measure until device end-of-life
-    """,
-
-    "Device Life Test": """
-SOP - Device Life Test:
-
-Comprehensive evaluation of device performance throughout its operational lifetime.
-Test until device failure or oil depletion. Record TPM, draw resistance, and any performance changes.
-Document all failure modes and performance degradation patterns.
-
-Key Points:
-- Complete lifecycle testing
-- Performance tracking over time
-- Failure mode documentation
-- End-of-life characterization
-    """,
-
-    "Horizontal Puffing Test": """
-SOP - Horizontal Puffing Test:
-
-Assessment of device performance while placed horizontally.
-Focus on key performance indicators such as clogging and burn.
-Test device in horizontal position for entire duration.
-
-Key Points:
-- Horizontal orientation testing
-- Monitor for position-related issues
-- Track clogging and burn performance
-- Compare to vertical performance
-    """,
-
-    "Long Puff Test": """
-SOP - Long Puff Test:
-
-Extended puff duration testing to evaluate device performance under prolonged draw conditions.
-Use extended puff durations (5-10 seconds) at standard volume. Monitor for overheating and performance changes.
-Record TPM, draw resistance, and any thermal effects.
-
-Key Points:
-- Extended puff duration protocol
-- Monitor thermal performance
-- Track device response to long draws
-- Document overheating issues
-    """,
-
-    "Rapid Puff Test": """
-SOP - Rapid Puff Test:
-
-High-frequency puffing protocol to stress-test device performance.
-Conduct rapid successive puffs with minimal rest intervals (5-10 seconds between puffs).
-Monitor for overheating, performance degradation, and device failure.
-
-Key Points:
-- High-frequency puffing protocol
-- Minimal rest intervals
-- Stress testing conditions
-- Monitor thermal and performance effects
-    """,
-
-    "Viscosity Compatibility": """
-SOP - Viscosity Compatibility Test:
-
-Test device performance with oils of varying viscosity levels.
-Use oils ranging from low (20-50 cP) to high viscosity (200-500 cP).
-Record TPM, draw resistance, and flow characteristics for each viscosity level.
-
-Key Points:
-- Multiple viscosity levels
-- Flow performance assessment
-- Compatibility evaluation
-- Document viscosity-related issues
-    """,
-
-    "Upside Down Test": """
-SOP - Upside Down Test:
-
-Evaluate device performance when inverted (upside down orientation).
-Test for leakage, flow disruption, and performance changes.
-Monitor for air bubble formation and oil flow issues.
-
-Key Points:
-- Inverted orientation testing
-- Monitor for leakage
-- Assess flow performance
-- Document orientation-related effects
-    """,
-
-    "Big Headspace Pocket Test": """
-SOP - Big Headspace Pocket Test:
-
-Drain device to 30% remaining and simulate pocket storage conditions.
-Subject device to body temperature (37C) and mechanical stress.
-Test performance after exposure to pocket-like conditions.
-
-Key Points:
-- Body temperature exposure
-- Mechanical stress simulation
-- Post-exposure performance testing
-- Document storage-related effects
-    """,
-
-    "Low Temperature Stability": """
-SOP - Low Temperature Stability Test:
-
-Evaluate device performance and oil stability at low temperatures.
-Store device at 4C for extended period, then test performance.
-Monitor for crystallization, viscosity changes, and flow issues.
-
-Key Points:
-- Low temperature storage
-- Oil stability assessment
-- Performance after cold exposure
-- Document temperature-related changes
-    """,
-
-    "Vacuum Test": """
-SOP - Vacuum Test:
-
-Test device performance under reduced atmospheric pressure conditions.
-Simulate high-altitude or vacuum environments.
-Monitor for vapor formation, oil expansion, and performance changes.
-
-Key Points:
-- Reduced pressure conditions
-- Monitor vapor formation
-- Assess performance under vacuum
-- Document pressure-related effects
-    """,
-
-    "Negative Pressure Test": """
-SOP - Negative Pressure Test:
-
-Evaluate device response to negative pressure conditions.
-Test for structural integrity and performance under reduced pressure.
-Monitor for oil expansion, air bubble formation, and flow disruption.
-
-Key Points:
-- Negative pressure conditions
-- Structural integrity assessment
-- Flow performance evaluation
-- Document pressure-related issues
-    """,
-
-    "Various Oil Compatibility": """
-SOP - Various Oil Compatibility Test:
-
-Test device compatibility with different oil formulations and additives.
-Use representative oil types including different carrier oils, viscosity modifiers, and additives.
-Evaluate performance, compatibility, and any material interactions.
-
-Key Points:
-- Multiple oil formulations
-- Compatibility assessment
-- Material interaction evaluation
-- Performance comparison across oils
-    """,
-
-    "Sheet1": """
-SOP - General Test Protocol:
-
-Standard testing protocol for miscellaneous or custom test configurations.
-Follow appropriate measurement procedures based on test objectives.
-Record all relevant data and observations.
-
-Key Points:
-- Flexible test protocol
-- Standard measurement procedures
-- Comprehensive data recording
-- Adapt to specific test requirements
-    """,
-
-    "default": """
+import json
+import os
+
+def load_test_sops():
+    """
+    Load Standard Operating Procedures from JSON file.
+    Returns the TEST_SOPS dictionary or default values if file not found.
+    """
+    debug_print("DEBUG: Loading test SOPs from JSON file")
+    
+    # Try multiple possible paths for the JSON file
+    possible_paths = [
+        "test_sops.json",                           # Same directory as script
+        os.path.join(".", "test_sops.json"),       # Current working directory
+        os.path.join("resources", "test_sops.json"), # Resources folder
+        os.path.join(os.path.dirname(__file__), "test_sops.json"), # Same directory as this script
+    ]
+    
+    for json_path in possible_paths:
+        try:
+            if os.path.exists(json_path):
+                debug_print(f"DEBUG: Found test_sops.json at: {json_path}")
+                with open(json_path, 'r', encoding='utf-8') as f:
+                    test_sops = json.load(f)
+                debug_print(f"DEBUG: Successfully loaded {len(test_sops)} SOPs from JSON")
+                return test_sops
+        except (json.JSONDecodeError, IOError) as e:
+            debug_print(f"ERROR: Failed to load SOPs from {json_path}: {e}")
+            continue
+    
+    # Fallback to default SOPs if JSON file not found
+    debug_print("WARNING: Could not load test_sops.json, using default fallback SOPs")
+    return {
+        "default": """
 SOP - Standard Test Protocol:
 
 Follow standard testing procedures for this test type.
@@ -322,8 +55,8 @@ Key Points:
 - Accurate data recording
 - Proper documentation
 - Consistent test conditions
-    """
-}
+        """.strip()
+    }
 
 def setup_logging():
     """Set up logging with proper error handling and writable directory."""
@@ -953,8 +686,10 @@ Developed by Charlie Becquet
         )
         load_images_button.pack(side="right", padx=(5, 0))
 
+        test_sops = load_test_sops()
+
         # Get the SOP text for the current test
-        sop_text = TEST_SOPS.get(self.test_name, TEST_SOPS["default"])
+        sop_text = test_sops.get(self.test_name, test_sops.get("default", "No SOP available"))
 
         # Create a text widget to display the SOP with centered text
         self.sop_text_widget = tk.Text(
