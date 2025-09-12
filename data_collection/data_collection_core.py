@@ -7,19 +7,45 @@ Interface for rapid test data collection with enhanced saving and menu functiona
 import tkinter as tk
 import logging
 import os
+from tkinter import ttk
 from utils import debug_print
-from data_collection_ui import DataCollectionUI
-from data_collection_handlers import DataCollectionHandlers
-from data_collection_data import DataCollectionData
-from data_collection_file_io import DataCollectionFileIO
+from .data_collection_ui import DataCollectionUI
+from .data_collection_handlers import DataCollectionHandlers
+from .data_collection_data import DataCollectionData
+from .data_collection_file_io import DataCollectionFileIO
 
-# Call the setup function
+def setup_logging():
+    """Set up logging with proper error handling and writable directory."""
+    try:
+        # Use user's home directory for log files (always writable)
+        log_dir = os.path.expanduser("~/.dataviewer")
+        os.makedirs(log_dir, exist_ok=True)
+        log_file = os.path.join(log_dir, 'datacollection.log')
+        
+        # Configure logging with file and console handlers
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.FileHandler(log_file),
+                logging.StreamHandler()
+            ]
+        )
+        debug_print(f"DEBUG: Logging configured successfully. Log file: {log_file}")
+        
+    except Exception as e:
+        # Fallback to console-only logging if file logging fails
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            handlers=[logging.StreamHandler()]
+        )
+        debug_print(f"WARNING: Could not set up file logging ({e}). Using console only.")
+
 setup_logging()
 
 class DataCollectionWindow(DataCollectionUI, DataCollectionHandlers, DataCollectionData, DataCollectionFileIO):
-
-"""Main Data Collection window - coordinates all functionality"""
-
+    """Main Data Collection window - coordinates all functionality"""
     def __init__(self, parent, file_path, test_name, header_data, original_filename=None):
         """
         Initialize the data collection window.

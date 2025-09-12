@@ -2626,12 +2626,12 @@ class FileManager:
 
         try:
             # Show the data collection window directly
-            from data_collection_window import DataCollectionWindow
+            from data_collection import DataCollectionWindow
 
             # Pass the original filename to the data collection window
             original_filename = getattr(self, 'current_original_filename', None)
-            data_collection = DataCollectionWindow(self.gui, file_path, selected_test, header_data, original_filename=original_filename)
-            data_result = data_collection.show()
+            data_collection_window = DataCollectionWindow(self.gui, file_path, selected_test, header_data, original_filename=original_filename)
+            data_result = data_collection_window.show()
 
             if data_result in ["load_file", "cancel"]:
                 debug_print("DEBUG: Data collection completed - data should already be updated in main GUI")
@@ -2782,9 +2782,9 @@ class FileManager:
 
             debug_print("DEBUG: Proceeding to data collection window")
             # Show the data collection window
-            from data_collection_window import DataCollectionWindow
-            data_collection = DataCollectionWindow(self.gui, file_path, selected_test, header_data)
-            data_result = data_collection.show()
+            from data_collection import DataCollectionWindow
+            data_collection_window = DataCollectionWindow(self.gui, file_path, selected_test, header_data)
+            data_result = data_collection_window.show()
 
             if data_result == "load_file":
                 # Load the file for viewing
