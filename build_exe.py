@@ -13,14 +13,14 @@ from pathlib import Path
 def cleanup_previous_builds():
     """Remove previous build artifacts"""
     print("DEBUG: Cleaning up previous builds...")
-    
+
     # Remove previous builds
     dirs_to_remove = ['build', 'dist', '__pycache__']
     for dir_name in dirs_to_remove:
         if os.path.exists(dir_name):
             shutil.rmtree(dir_name)
             print(f"DEBUG: Removed directory: {dir_name}")
-    
+
     # Remove spec files
     spec_files = [f for f in os.listdir('.') if f.endswith('.spec')]
     for spec_file in spec_files:
@@ -30,11 +30,11 @@ def cleanup_previous_builds():
 def verify_main_file():
     """Verify main.py exists and is valid"""
     print("DEBUG: Verifying main.py...")
-    
+
     if not os.path.exists('main.py'):
         print("ERROR: main.py not found!")
         return False
-    
+
     try:
         with open('main.py', 'r') as f:
             content = f.read()
@@ -51,7 +51,7 @@ def verify_main_file():
 def create_executable():
     """Create the executable using PyInstaller"""
     print("DEBUG: Creating executable with PyInstaller...")
-    
+
     # PyInstaller command with comprehensive options
     cmd = [
         sys.executable, '-m', 'PyInstaller',
@@ -75,9 +75,9 @@ def create_executable():
         '--exclude-module=doctest',     # Exclude test modules
         'main.py'
     ]
-    
+
     print(f"DEBUG: Running command: {' '.join(cmd)}")
-    
+
     try:
         result = subprocess.run(cmd, check=True, capture_output=True, text=True)
         print("DEBUG: PyInstaller completed successfully")
@@ -92,31 +92,31 @@ def create_executable():
 def verify_executable():
     """Verify the executable was created and works"""
     print("DEBUG: Verifying executable...")
-    
+
     exe_path = 'dist/TestingGUI.exe'
     if not os.path.exists(exe_path):
         print(f"ERROR: Executable not found at {exe_path}")
         return False
-    
+
     # Check file size (should be substantial for bundled app)
     size_mb = os.path.getsize(exe_path) / (1024 * 1024)
     print(f"DEBUG: Executable size: {size_mb:.1f} MB")
-    
+
     if size_mb < 50:  # Expect at least 50MB for bundled Python app
         print("WARNING: Executable seems too small, might be missing dependencies")
-    
+
     print("DEBUG: Executable created successfully")
     return True
 
 def copy_installer_files():
     """Copy additional files needed for installer"""
     print("DEBUG: Copying files for installer...")
-    
+
     files_to_copy = [
         ('LICENSE.txt', 'dist/LICENSE.txt'),
         ('README.txt', 'dist/README.txt'),
     ]
-    
+
     for src, dst in files_to_copy:
         if os.path.exists(src):
             shutil.copy2(src, dst)
@@ -129,33 +129,33 @@ def main():
     print("=" * 60)
     print("Building TestingGUI Executable")
     print("=" * 60)
-    
+
     # Step 1: Cleanup
     cleanup_previous_builds()
-    
+
     # Step 2: Verify main file
     if not verify_main_file():
         print("FAILED: Cannot proceed without valid main.py")
         return False
-    
+
     # Step 3: Create executable
     if not create_executable():
         print("FAILED: Could not create executable")
         return False
-    
+
     # Step 4: Verify executable
     if not verify_executable():
         print("FAILED: Executable verification failed")
         return False
-    
+
     # Step 5: Copy additional files
     copy_installer_files()
-    
+
     print("=" * 60)
     print("SUCCESS: Executable built successfully!")
     print("Next step: Run build_installer.bat to create the installer")
     print("=" * 60)
-    
+
     return True
 
 if __name__ == "__main__":

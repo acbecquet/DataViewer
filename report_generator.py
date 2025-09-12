@@ -23,72 +23,72 @@ class HeaderSelectorDialog:
         self.parent = parent
         self.result = None
         self.dialog = None
-        
+
         # Default header order - matching your new requirements
         self.default_headers = [
-            "Sample Name", "Media", "Viscosity", "Puffing Regime", 
-            "Voltage, Resistance, Power", "Average TPM", 
+            "Sample Name", "Media", "Viscosity", "Puffing Regime",
+            "Voltage, Resistance, Power", "Average TPM",
             "Standard Deviation", "Normalized TPM", "Draw Pressure","Usage Efficiency", "Initial Oil Mass","Burn", "Clog", "Notes"
         ]
-        
+
         self.header_vars = {}
         self.order_vars = {}
-        
+
     def show(self):
         """Show dialog and return selected headers in order"""
         self.dialog = tk.Toplevel(self.parent)
         self.dialog.title("Select Report Headers")
         self.dialog.geometry("300x500")
         self.dialog.grab_set()
-        
+
         # Instructions - centered
         instruction_frame = ttk.Frame(self.dialog)
         instruction_frame.pack(fill="x", pady=10)
         ttk.Label(instruction_frame, text="Select headers and set order (1=leftmost):").pack()
-        
+
         # Main content frame for centering the scrollable area
         content_frame = ttk.Frame(self.dialog)
         content_frame.pack(fill="both", expand=True, padx=20, pady=(0, 10))
-        
+
         # Scrollable frame with explicit height to prevent button overlap
         canvas = tk.Canvas(content_frame, height=350)
         scrollbar = ttk.Scrollbar(content_frame, orient="vertical", command=canvas.yview)
         scrollable_frame = ttk.Frame(canvas)
-        
+
         # Header selection
         for i, header in enumerate(self.default_headers):
             frame = ttk.Frame(scrollable_frame)
             frame.pack(fill="x", padx=10, pady=2)
-    
+
             # Checkbox - new headers default to unchecked
             default_checked = header not in ["Usage Efficiency", "Initial Oil Mass", "Normalized TPM"]
             var = tk.BooleanVar(value=default_checked)
             ttk.Checkbutton(frame, text=header, variable=var).pack(side="left")
             self.header_vars[header] = var
-            
+
             # Order spinbox
             order_var = tk.StringVar(value=str(i+1))
             ttk.Spinbox(frame, from_=1, to=15, textvariable=order_var, width=5).pack(side="right")
             self.order_vars[header] = order_var
-        
+
         scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
         canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
-        
+
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
-        
+
         # Buttons frame - at the bottom, properly separated from content
         button_frame = ttk.Frame(self.dialog)
         button_frame.pack(side="bottom", fill="x", pady=10)
-        
+
         # Center the buttons using a container frame
         button_container = ttk.Frame(button_frame)
         button_container.pack()
-        
+
         ttk.Button(button_container, text="Cancel", command=self.cancel).pack(side="left", padx=5)
         ttk.Button(button_container, text="OK", command=self.ok).pack(side="left", padx=5)
-        
+
         # Center the dialog window on screen
         self.dialog.update_idletasks()
         width = self.dialog.winfo_width()
@@ -96,10 +96,10 @@ class HeaderSelectorDialog:
         x = (self.dialog.winfo_screenwidth() // 2) - (width // 2)
         y = (self.dialog.winfo_screenheight() // 2) - (height // 2)
         self.dialog.geometry(f"{width}x{height}+{x}+{y}")
-        
+
         self.dialog.wait_window()
         return self.result
-    
+
     def ok(self):
         # Get selected headers with their order
         selected = []
@@ -110,12 +110,12 @@ class HeaderSelectorDialog:
                     selected.append((header, order))
                 except ValueError:
                     continue
-        
+
         # Sort by order and return header names
         selected.sort(key=lambda x: x[1])
         self.result = [header for header, _ in selected]
         self.dialog.destroy()
-    
+
     def cancel(self):
         self.result = None
         self.dialog.destroy()
@@ -134,7 +134,7 @@ class ReportGenerator:
         """
         Generate a full report (Excel and PowerPoint) for all sheets.
         This function assumes that progress reporting is handled externally.
-    
+
         Args:
             filtered_sheets (dict): A dict mapping sheet names to sheet info.
             plot_options (list): The list of plot options.
@@ -146,7 +146,7 @@ class ReportGenerator:
         if not selected_headers:
             debug_print("DEBUG: Header selection cancelled")
             raise ValueError("Header selection cancelled")
-    
+
         debug_print(f"DEBUG: Selected headers for full report: {selected_headers}")
 
         save_path = get_save_path(".xlsx")
@@ -169,19 +169,19 @@ class ReportGenerator:
                         data = sheet_info["data"]  #  Extract the actual DataFrame
                         debug_print(f"DEBUG: Processing sheet: {sheet_name}")
                         debug_print(f"DEBUG: Sheet data shape: {data.shape}")
-                    
+
                         # Special handling for User Test Simulation
                         if sheet_name == "User Test Simulation":
                             debug_print(f"DEBUG: Processing User Test Simulation with 8-column format")
                             debug_print(f"DEBUG: Data columns: {data.columns.tolist()}")
                             debug_print(f"DEBUG: Data preview:\n{data.head()}")
-                    
+
                         is_plotting = plotting_sheet_test(sheet_name, data)
                         debug_print(f"DEBUG: Sheet {sheet_name} is_plotting: {is_plotting}")
-                    
+
                         process_function = processing.get_processing_function(sheet_name)
                         debug_print(f"DEBUG: Using processing function: {process_function.__name__}")
-                    
+
                         if is_plotting:
                             processed_data, _, full_sample_data = process_function(data)
                             debug_print(f"DEBUG: Processed data shape: {processed_data.shape}")
@@ -201,12 +201,12 @@ class ReportGenerator:
                         debug_print(f"DEBUG: Original processed_data columns: {processed_data.columns.tolist()}")
                         processed_data = self.reorder_processed_data(processed_data, selected_headers)
                         debug_print(f"DEBUG: Reordered processed_data columns: {processed_data.columns.tolist()}")
-                        
+
 
                         self.write_excel_report(writer, sheet_name, processed_data, full_sample_data,
                                                   valid_plot_options, images_to_delete)
                         processed_count += 1
-                    
+
                     except Exception as e:
                         debug_print(f"DEBUG: Error processing sheet '{sheet_name}': {e}")
                         import traceback
@@ -222,7 +222,7 @@ class ReportGenerator:
                     return callback
 
                 self.write_powerpoint_report(ppt_save_path, images_to_delete, plot_options, selected_headers, progress_callback=update_ppt_prog())
-        
+
                 # Final progress update
                 self.gui.progress_dialog.update_progress_bar(100)
                 self.gui.root.update_idletasks()
@@ -243,7 +243,7 @@ class ReportGenerator:
     def generate_test_report(self, selected_sheet: str, sheets: dict, plot_options: list) -> None:
         """
         Generate an Excel and PowerPoint report for only the specified sheet.
-    
+
         Args:
             selected_sheet (str): The name of the sheet for the test report.
             sheets (dict): A dict mapping sheet names to raw sheet data.
@@ -252,11 +252,11 @@ class ReportGenerator:
 
         header_dialog = HeaderSelectorDialog(self.gui.root)
         selected_headers = header_dialog.show()
-    
+
         if not selected_headers:
             debug_print("DEBUG: Header selection cancelled")
             return
-    
+
         debug_print(f"DEBUG: Selected headers: {selected_headers}")
 
         save_path = get_save_path(".xlsx")
@@ -271,7 +271,7 @@ class ReportGenerator:
 
             sheet_info = sheets.get(selected_sheet, {})
             data = sheet_info.get("data", pd.DataFrame())  # Ensure it's a DataFrame
-        
+
             debug_print(f"DEBUG: Test report for {selected_sheet}")
             debug_print(f"DEBUG: Data shape: {data.shape}")
 
@@ -286,11 +286,11 @@ class ReportGenerator:
 
             process_function = processing.get_processing_function(selected_sheet)
             debug_print(f"DEBUG: Using processing function: {process_function.__name__}")
-        
+
             processed_data, _, full_sample_data = process_function(data)
             debug_print(f"DEBUG: Test report processed data shape: {processed_data.shape}")
             debug_print(f"DEBUG: Test report full sample data shape: {full_sample_data.shape}")
-        
+
             if processed_data.empty or full_sample_data.empty:
                 messagebox.showwarning("Warning", f"Sheet '{selected_sheet}' did not yield valid processed data.")
                 return
@@ -319,20 +319,20 @@ class ReportGenerator:
     def reorder_processed_data(self, processed_data, selected_headers):
         """
         Reorder processed_data columns based on selected headers.
-    
+
         Args:
             processed_data: DataFrame with original column order
             selected_headers: List of header names in desired order
-    
+
         Returns:
             DataFrame with reordered columns
         """
         debug_print(f"DEBUG: Reordering columns. Original: {processed_data.columns.tolist()}")
         debug_print(f"DEBUG: Selected headers: {selected_headers}")
-    
+
         # Create new DataFrame with selected columns in order
         reordered_data = pd.DataFrame()
-    
+
         for header in selected_headers:
             if header in processed_data.columns:
                 reordered_data[header] = processed_data[header]
@@ -340,7 +340,7 @@ class ReportGenerator:
             else:
                 debug_print(f"DEBUG: Missing column: {header}, adding empty")
                 reordered_data[header] = [''] * len(processed_data)
-    
+
         debug_print(f"DEBUG: Final reordered columns: {reordered_data.columns.tolist()}")
         return reordered_data
 
@@ -350,9 +350,9 @@ class ReportGenerator:
         plot_top = Inches(5.26)
         plot_height = Inches(2.0)
         current_left = plot_start_left
-        
+
         debug_print(f"DEBUG: Starting cascading plot layout at left={plot_start_left}, top={plot_top}, height={plot_height}")
-        
+
         numeric_data = full_sample_data.apply(pd.to_numeric, errors='coerce')
         if numeric_data.isna().all(axis=0).all():
             debug_print(f"No numeric data available for plotting in sheet '{sheet_name}'.")
@@ -365,19 +365,19 @@ class ReportGenerator:
         # Determine if this is User Test Simulation
         is_user_test_simulation = sheet_name in ["User Test Simulation", "User Simulation Test"]
         num_columns_per_sample = 8 if is_user_test_simulation else 12
-    
+
         for i, plot_option in enumerate(valid_plot_options):
             plot_image_path = f"{sheet_name}_{plot_option}_plot.png"
             try:
                 # Correct argument order
                 fig, sample_names_returned = processing.plot_all_samples(numeric_data, plot_option, num_columns_per_sample, sample_names)
-            
+
                 # Calculate plot width based on aspect ratio to maintain proportions
                 if is_user_test_simulation and hasattr(fig, 'is_split_plot') and fig.is_split_plot:
                     # For User Test Simulation split plots
                     plt.savefig(plot_image_path, dpi=150, bbox_inches='tight')
                     debug_print(f"DEBUG: Saved User Test Simulation split plot: {plot_image_path}")
-                    
+
                     # Wider aspect ratio for split plots
                     plot_width = Inches(3.5)  # Maintain aspect ratio for split plots
                     debug_print(f"DEBUG: Split plot {i}: positioning at left={current_left}, width={plot_width}")
@@ -386,17 +386,17 @@ class ReportGenerator:
                     # Standard single plots - maintain current aspect ratio (2.29/1.72 ≈ 1.33)
                     plt.savefig(plot_image_path, dpi=150)
                     debug_print(f"DEBUG: Saved standard plot: {plot_image_path}")
-                    
+
                     # Calculate width to maintain aspect ratio with 2" height
                     aspect_ratio = 2.29 / 1.72  # Current aspect ratio from original code
                     plot_width = plot_height * aspect_ratio  # Maintain aspect ratio
                     debug_print(f"DEBUG: Standard plot {i}: positioning at left={current_left}, width={plot_width}")
                     slide.shapes.add_picture(plot_image_path, current_left, plot_top, plot_width, plot_height)
-                
+
                 # Move to next position for cascade effect
                 current_left += plot_width
                 debug_print(f"DEBUG: Next plot will start at left={current_left}")
-                
+
                 plt.close()
                 if plot_image_path not in images_to_delete:
                     images_to_delete.append(plot_image_path)
@@ -421,35 +421,35 @@ class ReportGenerator:
         # Determine if this is User Test Simulation
         is_user_test_simulation = sheet_name in ["User Test Simulation", "User Simulation Test"]
         num_columns_per_sample = 8 if is_user_test_simulation else 12
-    
+
         for i, plot_option in enumerate(valid_plot_options):
             plot_image_path = f"{sheet_name}_{plot_option}_plot.png"
             try:
                 # FIXED: Correct argument order
                 fig, sample_names_returned = processing.plot_all_samples(numeric_data, plot_option, num_columns_per_sample, sample_names)
-            
+
                 if is_user_test_simulation and hasattr(fig, 'is_split_plot') and fig.is_split_plot:
                     # For User Test Simulation split plots, save with adjusted size and spacing
                     plt.savefig(plot_image_path, dpi=150, bbox_inches='tight')
                     debug_print(f"DEBUG: Saved User Test Simulation split plot: {plot_image_path}")
-                
+
                     # Adjust positioning for split plots (they're wider)
                     plot_x = left_column_x if i % 2 == 0 else right_column_x - Inches(1.0)  # Shift left for wider plots
                     if i % 2 != 0:
                         plot_top += Inches(2.2)  # More vertical spacing for taller plots
-                    
+
                     # Add with larger dimensions for split plots
                     slide.shapes.add_picture(plot_image_path, plot_x, plot_top, Inches(3.5), Inches(2.0))
                 else:
                     # Standard single plots
                     plt.savefig(plot_image_path, dpi=150)
                     debug_print(f"DEBUG: Saved standard plot: {plot_image_path}")
-                
+
                     plot_x = left_column_x if i % 2 == 0 else right_column_x
                     if i % 2 != 0:
                         plot_top += Inches(1.83)
                     slide.shapes.add_picture(plot_image_path, plot_x, plot_top, Inches(2.29), Inches(1.72))
-                
+
                 plt.close()
                 if plot_image_path not in images_to_delete:
                     images_to_delete.append(plot_image_path)
@@ -467,7 +467,7 @@ class ReportGenerator:
             if is_plotting:
                 self.add_plots_to_excel(writer, sheet_name, full_sample_data, images_to_delete, valid_plot_options)
         except Exception as e:
-            print(f"Error writing Excel report for sheet '{sheet_name}': {e}")  
+            print(f"Error writing Excel report for sheet '{sheet_name}': {e}")
             traceback.print_exc()
 
     def write_powerpoint_report_for_test(self, ppt_save_path: str, images_to_delete: list, sheet_name: str, processed_data, full_sample_data, plot_options: list) -> None:
@@ -481,7 +481,7 @@ class ReportGenerator:
 
             # Create main content slide
             main_slide = prs.slides.add_slide(prs.slide_layouts[6])
-        
+
             # Add background and logo
             background_path = get_resource_path("resources/ccell_background.png")
             main_slide.shapes.add_picture(background_path, Inches(0), Inches(0),
@@ -491,7 +491,7 @@ class ReportGenerator:
                                           width=Inches(1.57), height=Inches(0.53))
 
             # Add title
-            title_shape = main_slide.shapes.add_textbox(Inches(0.45), Inches(-0.04), 
+            title_shape = main_slide.shapes.add_textbox(Inches(0.45), Inches(-0.04),
                                                        Inches(10.72), Inches(0.64))
             text_frame = title_shape.text_frame
 
@@ -509,9 +509,9 @@ class ReportGenerator:
 
             # For test reports, ALWAYS use processed data for tables
             table_width = Inches(8.07) if is_plotting else Inches(13.03)
-            self.add_table_to_slide(main_slide, 
+            self.add_table_to_slide(main_slide,
                                    processed_data,  # <-- ALWAYS use processed_data for test reports
-                                   table_width, 
+                                   table_width,
                                    is_plotting)
 
             # Only add plots if it's a plotting sheet AND we have valid plot options
@@ -530,7 +530,7 @@ class ReportGenerator:
             processing.clean_presentation_tables(prs)
             prs.save(ppt_save_path)
             debug_print(f"PowerPoint test report saved to {ppt_save_path}")
-        
+
         except Exception as e:
             print(f"Error generating test PowerPoint: {e}")
             if os.path.exists(ppt_save_path):
@@ -609,7 +609,7 @@ class ReportGenerator:
             logo_path = get_resource_path("resources/ccell_logo_full_white.png")
             cover_slide.shapes.add_picture(logo_path, left=Inches(5.7), top=Inches(6.12),
                                              width=Inches(1.93), height=Inches(0.66))
-        
+
             # start setting up main slides
             background_path = get_resource_path("resources/ccell_background.png")
             logo_path = get_resource_path("resources/ccell_logo_full.png")
@@ -653,7 +653,7 @@ class ReportGenerator:
                                              width=Inches(13.33), height=Inches(7.5))
                     slide.shapes.add_picture(logo_path, left=Inches(11.21), top=Inches(0.43),
                                              width=Inches(1.57), height=Inches(0.53))
-                
+
                     title_shape = slide.shapes.add_textbox(Inches(0.45), Inches(-0.04), Inches(10.72), Inches(0.64))
                     text_frame = title_shape.text_frame
                     text_frame.clear()
@@ -692,7 +692,7 @@ class ReportGenerator:
 
                     if progress_callback:
                         progress_callback(processed_slides, total_slides)
-                
+
                     self._update_ppt_progress(processed_slides, total_slides)
 
                     # Add image slide if images exist
@@ -800,7 +800,7 @@ class ReportGenerator:
             logo_path = get_resource_path("resources/ccell_logo_full_white.png")
             cover_slide.shapes.add_picture(logo_path, left=Inches(5.7), top=Inches(6.12),
                                              width=Inches(1.93), height=Inches(0.66))
-            
+
             # start setting up main slides
 
             background_path = get_resource_path("resources/ccell_background.png")
@@ -837,7 +837,7 @@ class ReportGenerator:
                                              width=Inches(13.33), height=Inches(7.5))
                     slide.shapes.add_picture(logo_path, left=Inches(11.21), top=Inches(0.43),
                                              width=Inches(1.57), height=Inches(0.53))
-                    
+
                     title_shape = slide.shapes.add_textbox(Inches(0.45), Inches(-0.04), Inches(10.72), Inches(0.64)) # hard coded
                     text_frame = title_shape.text_frame
                     text_frame.clear()
@@ -870,12 +870,12 @@ class ReportGenerator:
                         spTree.remove(title_shape._element)
                         spTree.append(title_shape._element)
 
-                    
+
                     processed_slides += 1
 
                     if progress_callback:
                         progress_callback(processed_slides, total_slides)
-                    
+
                     self._update_ppt_progress(processed_slides, total_slides)
 
                     # Add image slide if images exist
@@ -931,22 +931,22 @@ class ReportGenerator:
                 debug_print(f"DEBUG: Extracted sample names from header_data: {sample_names}")
             if numeric_data.isna().all().all():
                 return
-            
+
             # Determine if this is User Test Simulation
             is_user_test_simulation = sheet_name in ["User Test Simulation", "User Simulation Test"]
             num_columns_per_sample = int(8 if is_user_test_simulation else 12)
-        
+
             for i, plot_option in enumerate(valid_plot_options):
                 plot_image_path = f"{sheet_name}_{plot_option}_plot.png"
                 try:
                     # Correct argument order
                     fig, sample_names_returned = processing.plot_all_samples(numeric_data, plot_option, num_columns_per_sample, sample_names)
-                
+
                     if is_user_test_simulation and hasattr(fig, 'is_split_plot') and fig.is_split_plot:
                         # For User Test Simulation split plots, save with higher DPI and better format
                         plt.savefig(plot_image_path, dpi=200, bbox_inches='tight')
                         debug_print(f"DEBUG: Saved User Test Simulation split plot for Excel: {plot_image_path}")
-                    
+
                         # Adjust Excel positioning for wider split plots
                         col_offset = 10 + (i % 2) * 15  # More spacing for wider plots
                         row_offset = 2 + (i // 2) * 25  # More vertical spacing
@@ -954,14 +954,14 @@ class ReportGenerator:
                         # Standard plots
                         plt.savefig(plot_image_path, dpi=300)
                         debug_print(f"DEBUG: Saved standard plot for Excel: {plot_image_path}")
-                    
+
                         col_offset = 10 + (i % 2) * 10
                         row_offset = 2 + (i // 2) * 20
-                
+
                     plt.close()
                     images_to_delete.append(plot_image_path)
                     worksheet.insert_image(row_offset, col_offset, plot_image_path)
-                
+
                 except Exception as e:
                     print(f"Error generating plot '{plot_option}' for sheet '{sheet_name}': {e}")
                     import traceback
@@ -1049,7 +1049,7 @@ class ReportGenerator:
         # Calculate cell dimensions with margins
         horizontal_margin = Inches(0.2)
         vertical_margin = Inches(0.2)
-    
+
         cell_width = (available_width - (cols - 1) * horizontal_margin) / cols
         cell_height = (available_height - (rows - 1) * vertical_margin) / rows
 
@@ -1063,7 +1063,7 @@ class ReportGenerator:
             # Calculate display dimensions
             max_width = cell_width
             max_height = cell_height
-        
+
             # Determine which dimension to constrain
             if (cell_width / cell_height) > aspect_ratio:
                 # Constrain by height
@@ -1079,7 +1079,7 @@ class ReportGenerator:
             col = i % cols
             x_offset = (cell_width - display_width) / 2
             y_offset = (cell_height - display_height) / 2
-        
+
             left = start_left + col * (cell_width + horizontal_margin) + x_offset
             top = start_top + row * (cell_height + vertical_margin) + y_offset
 
@@ -1089,14 +1089,14 @@ class ReportGenerator:
         """Sets up the background, logo, and title for an image slide."""
         # Add background
         background_path = get_resource_path("resources/ccell_background.png")
-        slide.shapes.add_picture(background_path, Inches(0), Inches(0), 
+        slide.shapes.add_picture(background_path, Inches(0), Inches(0),
                                  width=prs.slide_width, height=prs.slide_height)
-    
+
         # Add logo
         logo_path = get_resource_path("resources/ccell_logo_full.png")
-        slide.shapes.add_picture(logo_path, Inches(11.21), Inches(0.43), 
+        slide.shapes.add_picture(logo_path, Inches(11.21), Inches(0.43),
                                  width=Inches(1.57), height=Inches(0.53))
-    
+
         # Add title
         title_shape = slide.shapes.add_textbox(Inches(0.45), Inches(-0.04), Inches(10.72), Inches(0.64))
         text_frame = title_shape.text_frame

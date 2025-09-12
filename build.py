@@ -26,20 +26,20 @@ def clean_build():
 def build_package():
     """Build the package."""
     print("Building package...")
-    
+
     # Build source distribution
     subprocess.run([sys.executable, "setup.py", "sdist"], check=True)
-    
+
     # Build wheel distribution
     subprocess.run([sys.executable, "setup.py", "bdist_wheel"], check=True)
-    
+
     print("Build completed! Check the 'dist' directory for packages.")
 
 def main():
     print("Starting build process...")
     clean_build()
     build_package()
-    
+
     print("\nTo install locally for testing:")
     print("pip install -e .")
     print("\nTo install from wheel:")

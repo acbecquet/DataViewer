@@ -12,7 +12,7 @@ class HeaderDataDialog:
     def __init__(self, parent, file_path, selected_test, edit_mode=False, current_data=None):
         """
         Initialize the header data dialog.
-    
+
         Args:
             parent (tk.Tk): The parent window.
             file_path (str): Path to the created file.
@@ -27,7 +27,7 @@ class HeaderDataDialog:
         self.current_data = current_data
         self.result = None
         self.header_data = {}
-        
+
         self.device_dr_mapping = {
             'T58G': 0.9,
             'EVO': 0.15,
@@ -40,11 +40,11 @@ class HeaderDataDialog:
         debug_print(f"DEBUG: Device dR mapping initialized: {self.device_dr_mapping}")
 
         debug_print(f"DEBUG: HeaderDataDialog initialized - edit_mode: {edit_mode}, has_current_data: {current_data is not None}")
-    
+
         # Initialize references for cleanup
         self.canvas = None
         self.mousewheel_binding_id = None
-    
+
         self.dialog = tk.Toplevel(parent)
         title_text = f"Edit Header Data - {selected_test}" if edit_mode else f"Header Data - {selected_test}"
         self.dialog.title(title_text)
@@ -52,7 +52,7 @@ class HeaderDataDialog:
         self.dialog.grab_set()
         self.dialog.configure(bg=APP_BACKGROUND_COLOR)
         self.dialog.geometry("700x600")  # Increased size for sample-specific fields
-    
+
         # Set up cleanup when dialog is destroyed
         self.dialog.protocol("WM_DELETE_WINDOW", self.cleanup_and_close)
 
@@ -65,10 +65,10 @@ class HeaderDataDialog:
             else:
                 # Load from file (from main GUI)
                 self.load_existing_header_data()
-    
+
         self.create_widgets()
         self.center_window()
-    
+
     def center_window(self):
         """Center the dialog on the screen."""
         self.dialog.update_idletasks()
@@ -77,38 +77,38 @@ class HeaderDataDialog:
         x = (self.dialog.winfo_screenwidth() // 2) - (width // 2)
         y = (self.dialog.winfo_screenheight() // 2) - (height // 2)
         self.dialog.geometry(f"{width}x{height}+{x}+{y}")
-    
+
     def create_widgets(self):
         """Create the dialog widgets."""
         debug_print("DEBUG: Creating widgets for HeaderDataDialog")
-        
+
         # Main container with scrolling capability
         main_container = ttk.Frame(self.dialog)
         main_container.pack(fill="both", expand=True)
-        
+
         # Create a canvas with scrollbar
         self.canvas = tk.Canvas(main_container, bg=APP_BACKGROUND_COLOR)
         scrollbar = ttk.Scrollbar(main_container, orient="vertical", command=self.canvas.yview)
-        
+
         # Pack scrollbar and canvas
         scrollbar.pack(side="right", fill="y")
         self.canvas.pack(side="left", fill="both", expand=True)
         self.canvas.configure(yscrollcommand=scrollbar.set)
-        
+
         # Frame to hold the form
         self.form_frame = ttk.Frame(self.canvas, padding=20)
-        
+
         # Add the form frame to the canvas
         canvas_frame = self.canvas.create_window((0, 0), window=self.form_frame, anchor="nw")
-        
+
         # Configure canvas scrolling
         def configure_canvas(event):
             self.canvas.configure(scrollregion=self.canvas.bbox("all"))
             self.canvas.itemconfig(canvas_frame, width=event.width)
-        
+
         self.form_frame.bind("<Configure>", configure_canvas)
         self.canvas.bind("<Configure>", lambda e: self.canvas.itemconfig(canvas_frame, width=e.width))
-        
+
         # Add mouse wheel scrolling with proper error handling
         def _on_mousewheel(event):
             # Check if canvas still exists and is valid
@@ -122,15 +122,15 @@ class HeaderDataDialog:
             else:
                 debug_print("DEBUG: Canvas no longer exists, cleaning up mousewheel binding")
                 self.cleanup_mousewheel_binding()
-        
+
         # Use bind instead of bind_all to limit scope to this canvas
         self.canvas.bind("<MouseWheel>", _on_mousewheel)
-        
+
         # Also bind to the dialog to capture mousewheel when over the dialog
         self.dialog.bind("<MouseWheel>", _on_mousewheel)
-        
+
         debug_print("DEBUG: Canvas and mousewheel binding created successfully")
-        
+
         # Header
         header_label = ttk.Label(
             self.form_frame,
@@ -140,38 +140,38 @@ class HeaderDataDialog:
             background=APP_BACKGROUND_COLOR
         )
         header_label.grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 20))
-        
+
         # === COMMON FIELDS SECTION ===
         common_frame = ttk.LabelFrame(self.form_frame, text="Common Information", padding=10)
         common_frame.grid(row=1, column=0, columnspan=4, sticky="ew", pady=(0, 20))
-        
+
         # Tester
         ttk.Label(
-            common_frame, 
-            text="Tester:", 
+            common_frame,
+            text="Tester:",
             foreground="black",
             background=APP_BACKGROUND_COLOR
         ).grid(row=0, column=0, sticky="w", pady=5)
-        
+
         self.tester_var = tk.StringVar()
         ttk.Entry(common_frame, textvariable=self.tester_var, width=30).grid(
             row=0, column=1, sticky="ew", padx=(10, 0), pady=5
         )
-        
+
         # Number of Samples
         ttk.Label(
-            common_frame, 
-            text="Number of Samples:", 
+            common_frame,
+            text="Number of Samples:",
             foreground="black",
             background=APP_BACKGROUND_COLOR
         ).grid(row=1, column=0, sticky="w", pady=5)
-        
+
         # Device Type selection
         ttk.Label(common_frame, text="Device Type:").grid(row=0, column=2, sticky="w", padx=5, pady=5)
         self.device_type_var = tk.StringVar(value="EVO")  # Default to EVO
         device_type_combo = ttk.Combobox(
-            common_frame, 
-            textvariable=self.device_type_var, 
+            common_frame,
+            textvariable=self.device_type_var,
             values=['T58G', 'EVO', 'EVOMAX', 'T28', 'T51', 'other'],
             state="readonly",
             width=15
@@ -181,25 +181,25 @@ class HeaderDataDialog:
 
         self.num_samples_var = tk.IntVar(value=1)
         samples_spinbox = ttk.Spinbox(
-            common_frame, 
-            from_=1, 
-            to=10, 
-            textvariable=self.num_samples_var, 
+            common_frame,
+            from_=1,
+            to=10,
+            textvariable=self.num_samples_var,
             width=5,
             command=self.update_sample_fields
         )
         samples_spinbox.grid(row=1, column=1, sticky="w", padx=(10, 0), pady=5)
-        
+
         # Configure grid for common frame
         common_frame.columnconfigure(1, weight=1)
-        
+
         # === SAMPLE-SPECIFIC FIELDS SECTION ===
         self.samples_frame = ttk.Frame(self.form_frame)
         self.samples_frame.grid(row=2, column=0, columnspan=4, sticky="ew", pady=10)
-        
+
         # Configure grid
         self.form_frame.columnconfigure(0, weight=1)
-        
+
         # Initialize sample field variables
         self.sample_id_vars = []
         self.sample_media_vars = []
@@ -209,30 +209,30 @@ class HeaderDataDialog:
         self.sample_oil_mass_vars = []
         self.resistance_vars = []
         self.update_sample_fields()
-        
+
         # Populate existing data if in edit mode
         if self.edit_mode and hasattr(self, 'existing_data'):
             # Use after_idle to ensure all widgets are created first
             self.dialog.after_idle(self.populate_existing_data)
-        
+
         # Buttons
         button_frame = ttk.Frame(self.form_frame)
         button_frame.grid(row=3, column=0, columnspan=4, sticky="ew", pady=(20, 0))
-        
+
         ttk.Button(button_frame, text="Cancel", command=self.on_cancel).pack(side="right")
-        
+
         button_text = "Update" if self.edit_mode else "Continue"
         ttk.Button(button_frame, text=button_text, command=self.on_continue).pack(side="right", padx=(0, 5))
-        
+
         debug_print("DEBUG: All widgets created successfully")
-    
+
     def populate_existing_data(self):
         """Populate form fields with existing data."""
         if not hasattr(self, 'existing_data') or not self.existing_data:
             return
-        
+
         debug_print("DEBUG: Populating form with existing data")
-    
+
         if 'common' in self.existing_data:
             # Data collection format
             common_data = self.existing_data.get('common', {})
@@ -251,13 +251,13 @@ class HeaderDataDialog:
             self.device_type_var.set('EVO')  # Default for Excel files
             samples_data = self.existing_data.get('samples', [])
             debug_print("DEBUG: Excel file format detected, defaulting device type to 'EVO'")
-        
+
         # Set number of samples and populate sample data
         num_existing_samples = len(samples_data)
         if num_existing_samples > 0:
             self.num_samples_var.set(num_existing_samples)
             self.update_sample_fields()
-            
+
             # Populate sample-specific data
             for i, sample_data in enumerate(samples_data):
                 if i < len(self.sample_id_vars):
@@ -268,7 +268,7 @@ class HeaderDataDialog:
                     self.sample_voltage_vars[i].set(sample_data.get('voltage', ''))
                     self.sample_puffing_regime_vars[i].set(sample_data.get('puffing_regime', '60mL/3s/30s'))
                     self.sample_oil_mass_vars[i].set(sample_data.get('oil_mass', ''))
-        
+
         debug_print("DEBUG: Form populated with existing data")
 
     def load_existing_header_data(self):
@@ -277,19 +277,19 @@ class HeaderDataDialog:
         try:
             import openpyxl
             wb = openpyxl.load_workbook(self.file_path)
-            
+
             if self.selected_test not in wb.sheetnames:
                 debug_print(f"DEBUG: Sheet {self.selected_test} not found in file")
                 return
-                
+
             ws = wb[self.selected_test]
-            
+
             # Load existing data from known positions
             self.existing_data = {
                 'tester': ws.cell(row=1, column=1).value or "",
                 'samples': []
             }
-            
+
             # Load sample data (assuming max 10 samples)
             for i in range(10):
                 col_offset = i * 12
@@ -299,7 +299,7 @@ class HeaderDataDialog:
                 viscosity = ws.cell(row=3, column=2 + col_offset).value
                 voltage = ws.cell(row=2, column=6 + col_offset).value
                 oil_mass = ws.cell(row=2, column=8 + col_offset).value
-                
+
                 if sample_id:  # Only add if sample ID exists
                     self.existing_data['samples'].append({
                         'id': str(sample_id),
@@ -310,9 +310,9 @@ class HeaderDataDialog:
                         'puffing_regime': "60mL/3s/30s",  # Default value
                         'oil_mass': str(oil_mass) if oil_mass else ""
                     })
-            
+
             debug_print(f"DEBUG: Loaded existing data: {len(self.existing_data['samples'])} samples")
-            
+
         except Exception as e:
             debug_print(f"DEBUG: Error loading existing header data: {e}")
             self.existing_data = None
@@ -325,20 +325,20 @@ class HeaderDataDialog:
                 debug_print("DEBUG: Canvas mousewheel binding cleaned up")
         except tk.TclError:
             debug_print("DEBUG: Canvas already destroyed, binding cleanup not needed")
-        
+
         try:
             if self.dialog and self.dialog.winfo_exists():
                 self.dialog.unbind("<MouseWheel>")
                 debug_print("DEBUG: Dialog mousewheel binding cleaned up")
         except tk.TclError:
             debug_print("DEBUG: Dialog already destroyed, binding cleanup not needed")
-    
+
     def cleanup_and_close(self):
         """Clean up resources and close the dialog when window is closed."""
         debug_print("DEBUG: Window close button clicked - cleaning up HeaderDataDialog resources")
         self.cleanup_mousewheel_binding()
         self.on_cancel()
-    
+
     def update_sample_fields(self):
         """Update the sample-specific fields with all required fields per sample."""
         debug_print(f"DEBUG: Updating sample fields for {self.num_samples_var.get()} samples")
@@ -369,21 +369,21 @@ class HeaderDataDialog:
             # Row 0: Sample ID and Resistance
             ttk.Label(sample_frame, text="Sample ID:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
             ttk.Entry(sample_frame, textvariable=self.sample_id_vars[i], width=20).grid(row=0, column=1, padx=5, pady=2)
-            
+
             ttk.Label(sample_frame, text="Resistance (Ω):").grid(row=0, column=2, sticky="w", padx=5, pady=2)
             ttk.Entry(sample_frame, textvariable=self.resistance_vars[i], width=20).grid(row=0, column=3, padx=5, pady=2)
 
             # Row 1: Media and Viscosity
             ttk.Label(sample_frame, text="Media:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
             ttk.Entry(sample_frame, textvariable=self.sample_media_vars[i], width=20).grid(row=1, column=1, padx=5, pady=2)
-            
+
             ttk.Label(sample_frame, text="Viscosity (cP):").grid(row=1, column=2, sticky="w", padx=5, pady=2)
             ttk.Entry(sample_frame, textvariable=self.sample_viscosity_vars[i], width=20).grid(row=1, column=3, padx=5, pady=2)
 
             # Row 2: Voltage and Puffing Regime
             ttk.Label(sample_frame, text="Voltage (V):").grid(row=2, column=0, sticky="w", padx=5, pady=2)
             ttk.Entry(sample_frame, textvariable=self.sample_voltage_vars[i], width=20).grid(row=2, column=1, padx=5, pady=2)
-            
+
             ttk.Label(sample_frame, text="Puffing Regime:").grid(row=2, column=2, sticky="w", padx=5, pady=2)
             ttk.Entry(sample_frame, textvariable=self.sample_puffing_regime_vars[i], width=20).grid(row=2, column=3, padx=5, pady=2)
 
@@ -392,23 +392,23 @@ class HeaderDataDialog:
             ttk.Entry(sample_frame, textvariable=self.sample_oil_mass_vars[i], width=20).grid(row=3, column=1, padx=5, pady=2)
 
         debug_print(f"DEBUG: Created sample-specific fields for {num_samples} samples")
-    
+
     def validate_data(self):
         """Validate the header data."""
         debug_print("DEBUG: Validating header data")
-        
+
         # Check for empty required fields
         if not self.tester_var.get().strip():
             messagebox.showerror("Validation Error", "Tester name is required.")
             return False
-            
+
         # Check sample-specific fields
         num_samples = self.num_samples_var.get()
         for i in range(num_samples):
             if not self.sample_id_vars[i].get().strip():
                 messagebox.showerror("Validation Error", f"Sample {i+1} ID is required.")
                 return False
-                
+
             # Validate numeric fields for each sample
             try:
                 if self.sample_viscosity_vars[i].get().strip():
@@ -422,10 +422,10 @@ class HeaderDataDialog:
             except ValueError:
                 messagebox.showerror("Validation Error", f"Numeric fields for Sample {i+1} must be valid numbers.")
                 return False
-        
+
         debug_print("DEBUG: Header data validation successful")
         return True
-    
+
     def collect_header_data(self):
         """Collect and return the header data with proper structure."""
         debug_print("DEBUG: Collecting header data")
@@ -446,7 +446,7 @@ class HeaderDataDialog:
             voltage_str = self.sample_voltage_vars[i].get().strip()
             resistance_str = self.resistance_vars[i].get().strip()
             device_type = self.device_type_var.get()
-    
+
             # Calculate power using P = V^2 / (R + dR)
             calculated_power = ""
             try:
@@ -454,19 +454,19 @@ class HeaderDataDialog:
                     voltage = float(voltage_str)
                     resistance = float(resistance_str)
                     dr_value = self.device_dr_mapping.get(device_type, 0.0)
-            
+
                     # For backwards compatibility, if device_type is None, use dR = 0
                     if device_type == 'None' or device_type is None:
                         dr_value = 0.0
                         debug_print(f"DEBUG: Using dR = 0 for backwards compatibility (device_type: {device_type})")
-            
+
                     power = (voltage ** 2) / (resistance + dr_value)
                     calculated_power = f"{power:.3f}"
                     debug_print(f"DEBUG: Sample {i+1} power calculation: V={voltage}, R={resistance}, dR={dr_value}, P={calculated_power}")
             except (ValueError, TypeError) as e:
                 debug_print(f"DEBUG: Could not calculate power for sample {i+1}: {e}")
                 calculated_power = ""
-    
+
             sample_data = {
                 "id": self.sample_id_vars[i].get().strip(),
                 "resistance": self.resistance_vars[i].get().strip(),
@@ -482,28 +482,28 @@ class HeaderDataDialog:
 
         debug_print(f"DEBUG: Collected header data: {header_data}")
         return header_data
-    
+
     def on_continue(self):
         """Handle Continue button click."""
         debug_print("DEBUG: Continue button clicked")
-        
+
         if self.validate_data():
             self.header_data = self.collect_header_data()
             self.result = True
             self.cleanup_mousewheel_binding()
             self.dialog.destroy()
             debug_print("DEBUG: Header data collection completed successfully")
-    
+
     def on_cancel(self):
         """Handle Cancel button click."""
         debug_print("DEBUG: Dialog cancelled - setting result to False")
         self.result = False
         self.dialog.destroy()
-    
+
     def show(self):
         """
         Show the dialog and wait for user input.
-        
+
         Returns:
             tuple: (result, header_data) where result is True if Continue was clicked,
                    and header_data is a dictionary of header data.

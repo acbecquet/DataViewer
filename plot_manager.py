@@ -72,7 +72,7 @@ class PlotManager:
             self.parent.line_labels = []
         return self.parent.line_labels
 
-    @line_labels.setter  
+    @line_labels.setter
     def line_labels(self, value):
         """Set line labels."""
         self.parent.line_labels = value
@@ -83,7 +83,7 @@ class PlotManager:
         Enhanced to handle User Test Simulation split plots.
         """
         plt, FigureCanvasTkAgg, NavigationToolbar2Tk, CheckButtons = self.get_matplotlib_components()
-    
+
         # Error handling
         if not plt or not FigureCanvasTkAgg or not NavigationToolbar2Tk:
             print("ERROR: Could not load matplotlib components in embed_plot_in_frame")
@@ -99,14 +99,14 @@ class PlotManager:
 
         # Create a container frame for the plot
         plot_container = ttk.Frame(frame)
-        plot_container.pack(fill='both', expand=True, pady=(0, 0))  
+        plot_container.pack(fill='both', expand=True, pady=(0, 0))
 
         if self.figure:
             plt.close(self.figure)
 
         # Check if this is a split plot and adjust margins accordingly
         is_split_plot = hasattr(fig, 'is_split_plot') and fig.is_split_plot
-    
+
         if is_split_plot:
             # For split plots, adjust margins to accommodate checkboxes for both plots
             fig.subplots_adjust(right=0.80)
@@ -126,7 +126,7 @@ class PlotManager:
 
         # Save references to the figure and its axes
         self.figure = fig
-    
+
         if is_split_plot:
             # For split plots, we have multiple axes
             self.axes = fig.axes  # List of axes
@@ -155,7 +155,7 @@ class PlotManager:
         if not hasattr(self.figure, 'phase1_lines') or not hasattr(self.figure, 'phase2_lines'):
             debug_print("DEBUG: No phase lines found on figure")
             return
-    
+
         # Get the original label from the wrapped label
         original_label = self.label_mapping.get(wrapped_label)
         if original_label is None:
@@ -169,21 +169,21 @@ class PlotManager:
         except ValueError:
             debug_print(f"DEBUG: Could not find index for label: {original_label}")
             return
-    
+
         # Get the corresponding lines from both plots
         if index < len(self.figure.phase1_lines) and index < len(self.figure.phase2_lines):
             phase1_line = self.figure.phase1_lines[index]
             phase2_line = self.figure.phase2_lines[index]
-    
+
             # Toggle visibility for both lines
             is_visible = phase1_line.get_visible()
             new_visibility = not is_visible
-    
+
             phase1_line.set_visible(new_visibility)
             phase2_line.set_visible(new_visibility)
-    
+
             debug_print(f"DEBUG: Toggled sample '{original_label}' visibility to {new_visibility} in both plots")
-    
+
             # Redraw the canvas
             if self.canvas:
                 self.canvas.draw_idle()
@@ -200,7 +200,7 @@ class PlotManager:
         if not hasattr(self.figure, 'phase1_bars') or not hasattr(self.figure, 'phase2_bars'):
             debug_print("DEBUG: No phase bars found on figure")
             return
-    
+
         # Get the original label from the wrapped label
         original_label = self.label_mapping.get(wrapped_label)
         if original_label is None:
@@ -214,21 +214,21 @@ class PlotManager:
         except ValueError:
             debug_print(f"DEBUG: Could not find index for label: {original_label}")
             return
-    
+
         # Get the corresponding bars from both plots
         if index < len(self.figure.phase1_bars) and index < len(self.figure.phase2_bars):
             phase1_bar = self.figure.phase1_bars[index]
             phase2_bar = self.figure.phase2_bars[index]
-    
+
             # Toggle visibility for both bars
             is_visible = phase1_bar.get_visible()
             new_visibility = not is_visible
-    
+
             phase1_bar.set_visible(new_visibility)
             phase2_bar.set_visible(new_visibility)
-    
+
             debug_print(f"DEBUG: Toggled sample '{original_label}' bar visibility to {new_visibility} in both plots")
-    
+
             # Redraw the canvas
             if self.canvas:
                 self.canvas.draw_idle()
@@ -248,42 +248,42 @@ class PlotManager:
         if not pd:
             print("ERROR: Could not load pandas in plot_all_samples")
             return None
-        
+
         if not plt:
             print("ERROR: Could not load matplotlib in plot_all_samples")
             return None
-    
+
         # Validate that full_sample_data is actually a DataFrame (optional safety check)
         if not hasattr(full_sample_data, 'empty') or not hasattr(full_sample_data, 'shape'):
             print("ERROR: full_sample_data is not a valid DataFrame-like object")
             return None
         debug_print(f"DEBUG: plot_all_samples called with data shape: {full_sample_data.shape}")
-    
+
         # Clear frame contents
         for widget in frame.winfo_children():
             widget.pack_forget()
-        
+
         # Check if data is empty or invalid
         if full_sample_data.empty:
             debug_print("DEBUG: Data is completely empty - showing placeholder for data collection")
             self.show_empty_plot_placeholder(frame, "No data loaded yet.\nUse 'Collect Data' to add measurements.")
             return
-        
+
         # Check if data contains only NaN values
         if full_sample_data.isna().all().all():
             debug_print("DEBUG: Data contains only NaN values - showing placeholder for data collection")
             self.show_empty_plot_placeholder(frame, "No measurement data available yet.\nUse 'Collect Data' to add measurements.")
             return
-        
+
         # Check if there's any numeric data for plotting
         numeric_data = full_sample_data.apply(pd.to_numeric, errors='coerce')
         if numeric_data.isna().all().all():
             debug_print("DEBUG: No numeric data available for plotting - showing placeholder")
             self.show_empty_plot_placeholder(frame, "No numeric data available for plotting.\nUse 'Collect Data' to add measurement values.")
             return
-        
+
         debug_print("DEBUG: Data appears valid for plotting, proceeding with plot generation")
-    
+
         # Extract sample names from the processed data if available
         sample_names = None
         try:
@@ -295,31 +295,31 @@ class PlotManager:
                     debug_print(f"DEBUG: Extracted sample names from processed data: {sample_names}")
         except Exception as e:
             debug_print(f"DEBUG: Could not extract sample names from processed data: {e}")
-    
+
         try:
             # Correct argument order - plot_type comes second, then num_columns_per_sample, then sample_names
             result = processing.plot_all_samples(
-                full_sample_data, 
-                self.selected_plot_type.get(), 
-                num_columns_per_sample, 
+                full_sample_data,
+                self.selected_plot_type.get(),
+                num_columns_per_sample,
                 sample_names
             )
-        
+
             if isinstance(result, tuple):
                 fig, extracted_sample_names = result
             else:
                 fig, extracted_sample_names = result, None
-            
+
             debug_print("DEBUG: Plot generated successfully, embedding in frame")
-        
+
             # Embed the figure
             self.canvas = self.embed_plot_in_frame(fig, frame)
-        
+
             # Add checkboxes using the extracted sample names
             self.add_checkboxes(sample_names=extracted_sample_names)
-        
+
             debug_print("DEBUG: Plot embedded and checkboxes added successfully")
-        
+
         except Exception as e:
             debug_print(f"ERROR: Failed to generate or embed plot: {e}")
             import traceback
@@ -330,21 +330,21 @@ class PlotManager:
     def show_empty_plot_placeholder(self, frame: ttk.Frame, message: str) -> None:
         """
         Show a placeholder message in the plot frame when no data is available.
-        
+
         Args:
             frame (ttk.Frame): The frame to display the placeholder in
             message (str): The message to display
         """
         print(f"DEBUG: Showing empty plot placeholder with message: {message}")
-        
+
         # Clear any existing widgets
         for widget in frame.winfo_children():
             widget.destroy()
-            
+
         # Create a frame for the placeholder content
         placeholder_frame = ttk.Frame(frame)
         placeholder_frame.pack(fill="both", expand=True)
-        
+
         # Add the placeholder message
         placeholder_label = tk.Label(
             placeholder_frame,
@@ -355,7 +355,7 @@ class PlotManager:
             wraplength=300  # Wrap text for better readability
         )
         placeholder_label.pack(expand=True)
-        
+
         # Add a small instruction
         instruction_label = tk.Label(
             placeholder_frame,
@@ -365,7 +365,7 @@ class PlotManager:
             justify="center"
         )
         instruction_label.pack(pady=(10, 0))
-        
+
         debug_print("DEBUG: Empty plot placeholder displayed successfully")
 
     def update_plot(self, full_sample_data, num_columns_per_sample, frame=None):
@@ -386,19 +386,19 @@ class PlotManager:
         if not hasattr(self, 'dropdown_frame') or not self.dropdown_frame.winfo_exists():
             self.dropdown_frame = ttk.Frame(frame)
             self.dropdown_frame.pack(side='bottom', fill='x', pady=5)
-    
+
         # Clear existing widgets
         for widget in self.dropdown_frame.winfo_children():
             widget.destroy()
-    
+
         # Create a container frame to center the dropdown components
         center_frame = ttk.Frame(self.dropdown_frame)
         center_frame.pack(side="top", fill="x")
-    
+
         # Use pack with expand=True to center the content
         label_frame = ttk.Frame(center_frame)
         label_frame.pack(side="top", fill="none", expand=True)
-    
+
         # Create the dropdown label
         dropdown_label = ttk.Label(
             label_frame,
@@ -406,7 +406,7 @@ class PlotManager:
             font=('Arial', 10), foreground = 'white'
         )
         dropdown_label.pack(side="left", padx=(0, 5))
-    
+
         # Create the dropdown with no background styling
         self.plot_dropdown = ttk.Combobox(
             label_frame,
@@ -417,19 +417,19 @@ class PlotManager:
             width=15
         )
         self.plot_dropdown.pack(side="left")
-    
+
         # Remove ALL background styling
         style = ttk.Style()
         style.map('TCombobox', fieldbackground=[('readonly', 'white')])
         style.map('TCombobox', selectbackground=[('readonly', 'white')])
         style.configure('TCombobox', background='white')
-    
+
         # Additional styling to ensure no blue background
         self.plot_dropdown.configure(background='white')
-    
+
         # Bind event handler
         self.plot_dropdown.bind("<<ComboboxSelected>>", self.update_plot_from_dropdown)
-    
+
         # Set default value if needed
         if self.selected_plot_type.get() not in self.plot_options:
             self.selected_plot_type.set(self.plot_options[0])
@@ -456,21 +456,21 @@ class PlotManager:
             # Process data for the selected plot option.
             process_function = processing.get_processing_function(current_sheet_name)
             processed_data, _, full_sample_data = process_function(sheet_data)
-        
+
             # Use the correct number of columns per sample
             num_columns = getattr(self.parent, 'num_columns_per_sample', 12)
             debug_print(f"DEBUG: update_plot_from_dropdown using {num_columns} columns per sample")
-        
+
             # Update the plot
             self.plot_all_samples(self.parent.plot_frame, full_sample_data, num_columns)
-        
+
             # Refresh the dropdown in case it was recreated.
             if not self.plot_dropdown or not self.plot_dropdown.winfo_exists():
                 self.add_plot_dropdown(self.parent.plot_frame)
             else:
                 self.plot_dropdown["values"] = self.parent.plot_options  # Use parent's plot options
                 self.plot_dropdown.set(selected_plot)
-        
+
         except Exception as e:
             print(f"ERROR: Error in update_plot_from_dropdown: {e}")
             messagebox.showerror("Error", f"An error occurred while updating the plot: {e}")
@@ -480,7 +480,7 @@ class PlotManager:
         Clear the plot area and release Matplotlib resources.
         """
         plt, FigureCanvasTkAgg, NavigationToolbar2Tk, CheckButtons = self.get_matplotlib_components()
-        
+
         if not plt:
             print("ERROR: Could not load matplotlib")
             return None
@@ -528,7 +528,7 @@ class PlotManager:
         Enhanced to handle User Test Simulation split plots and split bar charts.
         """
         plt, FigureCanvasTkAgg, NavigationToolbar2Tk, CheckButtons = self.get_matplotlib_components()
-        
+
         if not plt:
             print("ERROR: Could not load matplotlib")
             return None
@@ -564,7 +564,7 @@ class PlotManager:
 
             # Store original data for both phases (bar charts use different data structure)
             phase1_data = [(bar.get_x(), bar.get_height()) for bar in self.figure.phase1_bars]
-            phase2_data = [(bar.get_x(), bar.get_height()) for bar in self.figure.phase2_bars] 
+            phase2_data = [(bar.get_x(), bar.get_height()) for bar in self.figure.phase2_bars]
             self.parent.original_lines_data = list(zip(phase1_data, phase2_data))
             debug_print(f"DEBUG: Split bar chart - stored data for {len(self.parent.line_labels)} samples")
         elif is_split_plot and hasattr(self.figure, 'phase1_lines'):
@@ -618,9 +618,9 @@ class PlotManager:
             0.95,              # Width relative to axis
             0.96,             # Height relative to axis - increased to fit content
             transform=checkbox_ax.transAxes,
-            facecolor='none', 
-            edgecolor='black', 
-            linewidth=1.5, 
+            facecolor='none',
+            edgecolor='black',
+            linewidth=1.5,
             zorder=10
         )
         checkbox_ax.add_patch(rect)
@@ -639,12 +639,12 @@ class PlotManager:
         border_height = 0.065
 
         self.figure.add_artist(plt.Rectangle(
-            (title_border_x, title_border_y), 
-            border_width, 
+            (title_border_x, title_border_y),
+            border_width,
             border_height,
-            edgecolor='black', 
-            facecolor='white', 
-            lw=1, 
+            edgecolor='black',
+            facecolor='white',
+            lw=1,
             zorder=2
         ))
 

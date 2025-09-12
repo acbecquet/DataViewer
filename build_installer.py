@@ -7,7 +7,7 @@ from pathlib import Path
 def build_for_platform():
     """Build platform-specific packages."""
     platform = sys.platform
-    
+
     if platform == "win32":
         # Windows: Create MSI installer
         subprocess.run([

@@ -28,14 +28,14 @@ class ImageLoader:
         self.canvas = None
         self.scrollbar = None
         self.scrollable_frame = None
-        
+
         self.processed_image_cache = {}
         self.processing_status = {}
 
         # Initialize Claude API client if available
         self.claude_client = None
         self._init_claude_api()
-        
+
         if not self.parent or not self.parent.winfo_exists():
             print("ERROR: Parent frame does not exist! Skipping UI setup.")
             return
@@ -99,32 +99,32 @@ class ImageLoader:
             # Clear any existing widgets first
             for widget in self.parent.winfo_children():
                 widget.destroy()
-                
+
             self.frame = Frame(self.parent)
             self.frame.pack(fill="both", expand=True, padx=5, pady=5)
-            
+
             self.canvas = Canvas(self.frame, height=140, bg="white")
             self.scrollbar = Scrollbar(self.frame, orient="vertical", command=self.canvas.yview)
             self.scrollable_frame = Frame(self.canvas, bg="white")
 
             # Create window and store its ID
             self.scrollable_frame_id = self.canvas.create_window(
-                (0, 0), 
-                window=self.scrollable_frame, 
+                (0, 0),
+                window=self.scrollable_frame,
                 anchor="nw"
             )
-            
+
             # Update canvas scroll region and frame width on resize
             def on_canvas_configure(event):
                 self.canvas.itemconfig(self.scrollable_frame_id, width=event.width)
                 self.canvas.configure(scrollregion=self.canvas.bbox("all"))
-            
+
             self.canvas.bind("<Configure>", on_canvas_configure)
             self.canvas.configure(yscrollcommand=self.scrollbar.set)
-            
+
             self.canvas.pack(side="left", fill="both", expand=True)
             self.scrollbar.pack(side="right", fill="y")
-            
+
             debug_print("DEBUG: UI setup completed")
         except Exception as e:
             print(f"CRITICAL: UI setup failed - {str(e)}")
@@ -136,7 +136,7 @@ class ImageLoader:
         if not (self.parent and self.parent.winfo_exists()):
             print("ERROR: Parent frame no longer exists. Cannot load images.")
             return
-        
+
         if not self.frame:  # Reinitialize UI if frame is missing
             print("WARNING: Frame missing, reinitializing UI")
             self.setup_ui()
@@ -150,7 +150,7 @@ class ImageLoader:
             ("PDF Files", "*.pdf"),
             ("All Files", "*.*")
         ]
-        
+
         new_files = filedialog.askopenfilenames(title="Select Images", filetypes=file_types)
         if not new_files:
             debug_print("DEBUG: No new images selected")
@@ -158,7 +158,7 @@ class ImageLoader:
 
         # Capture crop state at time of loading
         crop_state = self.main_gui.crop_enabled.get() if self.main_gui else False
-        
+
         # Add new files and set their crop states
         for file in new_files:
             if file not in self.image_files:
@@ -168,7 +168,7 @@ class ImageLoader:
         # Store images in main GUI
         if self.main_gui:
             self.main_gui.store_images(self.main_gui.selected_sheet.get(), self.image_files)
-        
+
         debug_print(f"DEBUG: Selected image files: {self.image_files}")
         debug_print(f"DEBUG: Crop states: {self.image_crop_states}")
 
@@ -188,20 +188,20 @@ class ImageLoader:
         if not self.claude_client:
             debug_print("DEBUG: Claude API not available, falling back to basic crop")
             return self.smart_crop_fallback(img_path)
-    
+
         try:
             debug_print(f"DEBUG: Using Claude API for intelligent cropping: {img_path}")
-        
+
             # Prepare image for Claude API
             Image, _, _, _, _, _ = _lazy_import_pil()
             if Image is None:
                 return self.smart_crop_fallback(img_path)
-        
+
             with Image.open(img_path) as img:
                 # Convert to RGB if necessary
                 if img.mode != 'RGB':
                     img = img.convert('RGB')
-            
+
                 # Resize if too large for API
                 max_size = 1568
                 original_size = img.size
@@ -211,12 +211,12 @@ class ImageLoader:
                     new_size = (int(img.width * scale_factor), int(img.height * scale_factor))
                     img = img.resize(new_size, Image.Resampling.LANCZOS)
                     debug_print(f"DEBUG: Resized image to {new_size} for API processing (scale: {scale_factor})")
-            
+
                 # Convert to base64
                 buffer = io.BytesIO()
                 img.save(buffer, format='JPEG', quality=90)
                 image_data = base64.b64encode(buffer.getvalue()).decode('utf-8')
-            
+
                 # Create prompt for Claude - VERY specific about bottoms
                 prompt = f"""
                 Analyze this image and find the COMPLETE boundaries of the entire device/object for tight cropping.
@@ -275,7 +275,7 @@ class ImageLoader:
 
                 CRITICAL: Make absolutely sure you've followed the device shape to its absolute bottom edge!
                 """
-            
+
                 # Send request to Claude
                 response = self.claude_client.messages.create(
                     model="claude-3-5-sonnet-20241022",
@@ -300,59 +300,59 @@ class ImageLoader:
                         }
                     ]
                 )
-            
+
                 # Parse response
                 response_text = response.content[0].text
                 debug_print(f"DEBUG: Claude response: {response_text}")
-            
+
                 # Extract JSON from response
                 import json
                 start_idx = response_text.find('{')
                 end_idx = response_text.rfind('}') + 1
-            
+
                 if start_idx == -1 or end_idx == 0:
                     debug_print("DEBUG: No JSON found in Claude response, using fallback")
                     return self.smart_crop_fallback(img_path)
-            
+
                 crop_data = json.loads(response_text[start_idx:end_idx])
                 confidence = crop_data.get('confidence', 0)
-            
+
                 if confidence < 60:  # Lowered threshold since we want to try harder
                     debug_print(f"DEBUG: Claude confidence too low ({confidence}), using fallback")
                     return self.smart_crop_fallback(img_path)
-            
+
                 # Extract detailed analysis
                 device_analysis = crop_data.get('device_analysis', {})
                 boundaries = crop_data.get('complete_boundaries', {})
                 measurements = crop_data.get('measurements', {})
                 crop_box = crop_data['crop_box']
-            
+
                 debug_print(f"DEBUG: Device analysis: {device_analysis}")
                 debug_print(f"DEBUG: Boundaries detected: {boundaries}")
                 debug_print(f"DEBUG: Measurements: {measurements}")
-            
+
                 # VALIDATION: Check if the height seems reasonable
                 height_width_ratio = measurements.get('height_to_width_ratio', 0)
                 device_height = measurements.get('total_device_height', 0)
                 device_width = measurements.get('total_device_width', 0)
-            
+
                 debug_print(f"DEBUG: Height/Width ratio: {height_width_ratio}")
-            
+
                 # If the device seems too short (likely missing bottom), extend it
                 if height_width_ratio < 1.2:  # Most electronic devices are taller than wide
                     debug_print("WARNING: Device appears too short - likely missing bottom portion")
                     debug_print("DEBUG: Attempting to extend bottom boundary")
-                
+
                     # Extend bottom by 20% of current height or at least 50 pixels
                     extension = max(int(device_height * 0.2), 50)
                     original_bottom = boundaries.get('bottom_pixel', crop_box.get('bottom', 0) + 15)
                     extended_bottom = original_bottom + extension
-                
+
                     # Update the crop box
                     crop_box['bottom'] = min(extended_bottom + 15, img.height - 1)
                     debug_print(f"DEBUG: Extended bottom from {original_bottom} to {extended_bottom}")
                     debug_print(f"DEBUG: New crop bottom: {crop_box['bottom']}")
-            
+
                 # Convert coordinates, accounting for any scaling done for API
                 with Image.open(img_path) as original_img:
                     if scale_factor != 1.0:
@@ -367,21 +367,21 @@ class ImageLoader:
                         top = crop_box['top']
                         right = crop_box['right']
                         bottom = crop_box['bottom']
-                
+
                     # Ensure coordinates are valid
                     width, height = original_img.size
                     left = max(0, min(left, width - 1))
                     top = max(0, min(top, height - 1))
                     right = max(left + 1, min(right, width))
                     bottom = max(top + 1, min(bottom, height))
-                
+
                     debug_print(f"DEBUG: Final validated crop box: ({left}, {top}, {right}, {bottom})")
                     debug_print(f"DEBUG: Final crop dimensions: {right - left} x {bottom - top} pixels")
-                
+
                     cropped_img = original_img.crop((left, top, right, bottom))
                     debug_print(f"DEBUG: Cropped image created with size: {cropped_img.size}")
                     return cropped_img
-            
+
         except Exception as e:
             print(f"ERROR: Claude intelligent crop failed: {e}")
             return self.smart_crop_fallback(img_path)
@@ -392,14 +392,14 @@ class ImageLoader:
             Image, _, _, _, _, _ = _lazy_import_pil()
             cv2 = _lazy_import_cv2()
             np = _lazy_import_numpy()
-            
+
             if Image is None:
                 debug_print("DEBUG: PIL not available for fallback crop")
                 return Image.open(img_path)
-                
+
             with Image.open(img_path) as img:
                 debug_print(f"DEBUG: Using fallback crop for {img_path}")
-                
+
                 if cv2 is None or np is None:
                     debug_print("DEBUG: OpenCV/numpy not available, returning center crop")
                     # Simple center crop as last resort
@@ -408,45 +408,45 @@ class ImageLoader:
                     left = (width - crop_size) // 2
                     top = (height - crop_size) // 2
                     return img.crop((left, top, left + crop_size, top + crop_size))
-                
+
                 # Convert to numpy array for OpenCV processing
                 img_array = np.array(img)
                 gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
-                
+
                 # Apply multiple edge detection techniques
                 edges1 = cv2.Canny(gray, 50, 150)
                 edges2 = cv2.Canny(gray, 100, 200)
                 edges = cv2.bitwise_or(edges1, edges2)
-                
+
                 # Find contours
                 contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                
+
                 if not contours:
                     debug_print("DEBUG: No contours found, returning center crop")
                     width, height = img.size
                     margin = min(width, height) * 0.1
                     return img.crop((margin, margin, width - margin, height - margin))
-                
+
                 # Find the most significant contour (largest area)
                 largest_contour = max(contours, key=cv2.contourArea)
                 x, y, w, h = cv2.boundingRect(largest_contour)
-                
+
                 # Add margin
                 margin_percent = 5
                 width, height = img.size
                 margin_x = int(width * margin_percent / 100)
                 margin_y = int(height * margin_percent / 100)
-                
+
                 crop_box = (
                     max(0, x - margin_x),
                     max(0, y - margin_y),
                     min(width, x + w + margin_x),
                     min(height, y + h + margin_y)
                 )
-                
+
                 debug_print(f"DEBUG: Fallback crop box: {crop_box}")
                 return img.crop(crop_box)
-                
+
         except Exception as e:
             print(f"ERROR: Fallback crop failed: {e}")
             try:
@@ -468,27 +468,27 @@ class ImageLoader:
             if Image is None:
                 print("ERROR: PIL not available")
                 return None
-                
+
             debug_print(f"DEBUG: Processing image: {img_path}")
-            
+
             should_crop = self.image_crop_states.get(img_path, False)
-            
+
             # Create a cache key based on image path and crop state
             cache_key = f"{img_path}_{should_crop}"
-            
+
             # Check if we already have this processed image in cache
             if cache_key in self.processed_image_cache:
                 debug_print(f"DEBUG: Using cached processed image for {os.path.basename(img_path)}")
                 cached_img = self.processed_image_cache[cache_key]
-                
+
                 # Resize for display (this is cheap so we can do it every time)
                 max_height = 135
                 scaling_factor = max_height / cached_img.height
                 new_width = int(cached_img.width * scaling_factor)
-                
+
                 debug_print(f"DEBUG: Resizing cached image to: ({new_width}, {max_height})")
                 return cached_img.resize((new_width, max_height), Image.Resampling.LANCZOS)
-            
+
             # Image not in cache - process it
             if should_crop:
                 debug_print(f"DEBUG: Auto-Crop ENABLED - Processing with Claude API (FIRST TIME): {os.path.basename(img_path)}")
@@ -499,22 +499,22 @@ class ImageLoader:
             else:
                 debug_print(f"DEBUG: Auto-Crop DISABLED - Loading original image: {os.path.basename(img_path)}")
                 processed_img = Image.open(img_path)
-            
+
             # Store the processed image in cache (at full resolution before display resizing)
             self.processed_image_cache[cache_key] = processed_img.copy()
             self.processing_status[img_path] = should_crop
             debug_print(f"DEBUG: Cached processed image for {os.path.basename(img_path)} (crop={should_crop})")
-            
+
             debug_print(f"DEBUG: Final processed image size: {processed_img.size}")
-            
+
             # Resize for display
             max_height = 135
             scaling_factor = max_height / processed_img.height
             new_width = int(processed_img.width * scaling_factor)
-            
+
             debug_print(f"DEBUG: Resizing processed image to: ({new_width}, {max_height})")
             return processed_img.resize((new_width, max_height), Image.Resampling.LANCZOS)
-            
+
         except Exception as e:
             print(f"ERROR: Failed to process image {img_path}: {e}")
             return None
@@ -522,30 +522,30 @@ class ImageLoader:
     def remove_image(self, path_to_remove):
         """Remove an image from the list and refresh display"""
         debug_print(f"DEBUG: Removing image: {path_to_remove}")
-        
+
         # Filter out the removed path
         self.image_files = [p for p in self.image_files if p != path_to_remove]
-        
+
         # Remove from crop states
         if path_to_remove in self.image_crop_states:
             del self.image_crop_states[path_to_remove]
-        
+
         # IMPORTANT: Clean up cache entries for this image
         cache_keys_to_remove = [key for key in self.processed_image_cache.keys() if key.startswith(path_to_remove)]
         for cache_key in cache_keys_to_remove:
             del self.processed_image_cache[cache_key]
             debug_print(f"DEBUG: Removed cache entry: {cache_key}")
-        
+
         if path_to_remove in self.processing_status:
             del self.processing_status[path_to_remove]
-    
+
         # Update parent storage if callback exists
         if self.on_images_selected:
             self.on_images_selected(self.image_files)
-        
+
         # Redraw images with updated list (will use cached images for remaining ones)
         self.display_images()
-        
+
         debug_print(f"DEBUG: Image removed. Remaining: {len(self.image_files)} images")
 
     def clear_cache(self):
@@ -571,18 +571,18 @@ class ImageLoader:
         if not self.canvas or not self.scrollable_frame:
             debug_print("DEBUG: Canvas or scrollable_frame not initialized")
             return
-            
+
         prev_pos = (0, 0)
         try:
             prev_pos = self.canvas.yview()
         except:
             pass
-            
+
         debug_print("DEBUG: Clearing previous image widgets...")
         for widget in self.scrollable_frame.winfo_children():
             debug_print(f"DEBUG: Destroying widget {widget}")
             widget.destroy()
-        
+
         self.image_widgets.clear()
         self.close_buttons.clear()
         self.image_references = []
@@ -600,7 +600,7 @@ class ImageLoader:
         # Ensure parent has updated size before calculating max width
         self.parent.update_idletasks()
         max_height = 135
-        
+
         debug_print(f"DEBUG: Total images to process: {len(self.image_files)}")
 
         # Calculate positions
@@ -608,7 +608,7 @@ class ImageLoader:
         current_x = padding
         current_y = padding
         max_row_height = 0
-        
+
         # Get frame width, with fallback
         try:
             frame_width = self.scrollable_frame.winfo_width()
@@ -619,7 +619,7 @@ class ImageLoader:
 
         for img_index, img_path in enumerate(self.image_files):
             debug_print(f"DEBUG: Processing image {img_index + 1}/{len(self.image_files)}: {os.path.basename(img_path)}")
-            
+
             # Create container frame for image + close button
             container = Frame(self.scrollable_frame, bg="white", relief="solid", bd=1)
             container.pack_propagate(False)
@@ -639,13 +639,13 @@ class ImageLoader:
                     img_tk = ImageTk.PhotoImage(img)
                     label = Label(container, image=img_tk, bg="white")
                     label.pack(padx=2, pady=2)
-                    
+
                     self.image_references.append(img_tk)
                     item_width = img.width + 4  # Add padding
                     item_height = img.height + 4
-                    
+
                     debug_print(f"DEBUG: Image {img_index + 1} processed successfully: {item_width}x{item_height}")
-                    
+
                 except Exception as e:
                     print(f"ERROR: Failed to process image {img_path}: {str(e)}")
                     continue
@@ -688,7 +688,7 @@ class ImageLoader:
         # Update scrolling area
         total_height = current_y + max_row_height + padding
         self.scrollable_frame.configure(height=total_height)
-        
+
         try:
             self.canvas.configure(scrollregion=self.canvas.bbox("all"))
             self.parent.update_idletasks()
@@ -696,7 +696,7 @@ class ImageLoader:
                 self.canvas.yview_moveto(prev_pos[0])
         except Exception as e:
             debug_print(f"DEBUG: Error updating scroll region: {e}")
-        
+
         debug_print(f"DEBUG: Display completed. Total height: {total_height}")
 
     # Add this method to your ImageLoader class
@@ -705,12 +705,12 @@ class ImageLoader:
         """
         Get the best available version of an image for report generation.
         Returns the processed (cropped) version if available, otherwise the original.
-    
+
         Args:
             img_path: Path to the original image
             target_width: Optional target width for the returned image
             target_height: Optional target height for the returned image
-    
+
         Returns:
             PIL Image object (processed version if available, otherwise original)
         """
@@ -718,24 +718,24 @@ class ImageLoader:
             Image, _, _, _, _, _ = _lazy_import_pil()
             if Image is None:
                 return None
-            
+
             debug_print(f"DEBUG: Getting image for report: {os.path.basename(img_path)}")
-        
+
             # Check if we have a processed version in cache
             should_crop = self.image_crop_states.get(img_path, False)
             cache_key = f"{img_path}_{should_crop}"
-        
+
             if cache_key in self.processed_image_cache:
                 debug_print(f"DEBUG: Using processed version for report: {os.path.basename(img_path)} (cropped={should_crop})")
                 img = self.processed_image_cache[cache_key].copy()
             else:
                 debug_print(f"DEBUG: Using original image for report: {os.path.basename(img_path)}")
                 img = Image.open(img_path)
-        
+
             # Resize if target dimensions are specified
             if target_width or target_height:
                 original_width, original_height = img.size
-            
+
                 if target_width and target_height:
                     # Both dimensions specified - use them directly
                     img = img.resize((target_width, target_height), Image.Resampling.LANCZOS)
@@ -749,11 +749,11 @@ class ImageLoader:
                     ratio = target_height / original_height
                     new_width = int(original_width * ratio)
                     img = img.resize((new_width, target_height), Image.Resampling.LANCZOS)
-            
+
                 debug_print(f"DEBUG: Resized image for report to: {img.size}")
-        
+
             return img
-        
+
         except Exception as e:
             print(f"ERROR: Failed to get image for report {img_path}: {e}")
             try:
@@ -770,26 +770,26 @@ class ImageLoader:
         """
         try:
             debug_print(f"DEBUG: save_image_for_report called for {os.path.basename(img_path)}")
-        
+
             img = self.get_image_for_report(img_path, target_width, target_height)
             if img is None:
                 debug_print(f"DEBUG: Failed to get image for {img_path}")
                 return False
-            
+
             # Ensure output directory exists
             output_dir = os.path.dirname(output_path)
             if not os.path.exists(output_dir):
                 os.makedirs(output_dir, exist_ok=True)
                 debug_print(f"DEBUG: Created output directory: {output_dir}")
-        
+
             # Save as JPEG for reports (good compression, universal support)
             if img.mode != 'RGB':
                 img = img.convert('RGB')
-        
+
             img.save(output_path, 'JPEG', quality=95)
             debug_print(f"DEBUG: Successfully saved report image to: {output_path}")
             debug_print(f"DEBUG: Saved image size: {img.size}")
-        
+
             # Verify the file was created
             if os.path.exists(output_path):
                 file_size = os.path.getsize(output_path)
@@ -798,7 +798,7 @@ class ImageLoader:
             else:
                 debug_print(f"ERROR: File was not created: {output_path}")
                 return False
-        
+
         except Exception as e:
             print(f"ERROR: Failed to save image for report {img_path}: {e}")
             import traceback
@@ -814,17 +814,17 @@ class ImageLoader:
             if Image is None:
                 debug_print("ERROR: PIL not available for get_image_for_report")
                 return None
-            
+
             debug_print(f"DEBUG: Getting image for report: {os.path.basename(img_path)}")
-        
+
             # Check if we have a processed version in cache
             should_crop = self.image_crop_states.get(img_path, False)
             cache_key = f"{img_path}_{should_crop}"
-        
+
             debug_print(f"DEBUG: Image crop state for {os.path.basename(img_path)}: {should_crop}")
             debug_print(f"DEBUG: Looking for cache key: {cache_key}")
             debug_print(f"DEBUG: Available cache keys: {list(self.processed_image_cache.keys())}")
-        
+
             if cache_key in self.processed_image_cache:
                 debug_print(f"DEBUG: FOUND processed version in cache for {os.path.basename(img_path)} (cropped={should_crop})")
                 img = self.processed_image_cache[cache_key].copy()
@@ -833,11 +833,11 @@ class ImageLoader:
                 debug_print(f"DEBUG: NO processed version found, using original for {os.path.basename(img_path)}")
                 img = Image.open(img_path)
                 debug_print(f"DEBUG: Original image size: {img.size}")
-        
+
             # Resize if target dimensions are specified
             if target_width or target_height:
                 original_width, original_height = img.size
-            
+
                 if target_width and target_height:
                     img = img.resize((target_width, target_height), Image.Resampling.LANCZOS)
                 elif target_width:
@@ -848,11 +848,11 @@ class ImageLoader:
                     ratio = target_height / original_height
                     new_width = int(original_width * ratio)
                     img = img.resize((new_width, target_height), Image.Resampling.LANCZOS)
-            
+
                 debug_print(f"DEBUG: Resized image for report to: {img.size}")
-        
+
             return img
-        
+
         except Exception as e:
             print(f"ERROR: Failed to get image for report {img_path}: {e}")
             import traceback

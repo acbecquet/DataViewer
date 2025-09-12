@@ -23,7 +23,7 @@ def debug_print(*args, **kwargs):
     """
     Global debug print function that can be imported by all modules.
     Only prints if DEBUG_ENABLED is True.
-    
+
     Usage:
         from utils import debug_print
         debug_print("This is a debug message")
@@ -35,7 +35,7 @@ def debug_print(*args, **kwargs):
 def set_debug_mode(enabled):
     """
     Enable or disable debug mode globally.
-    
+
     Args:
         enabled (bool): True to enable debug output, False to disable
     """
@@ -46,7 +46,7 @@ def set_debug_mode(enabled):
 def is_debug_enabled():
     """
     Check if debug mode is currently enabled.
-    
+
     Returns:
         bool: True if debug is enabled, False otherwise
     """
@@ -121,7 +121,7 @@ def clean_columns(data):
     """
     print(f"DEBUG: clean_columns starting with {len(data.columns)} columns")
     print(f"DEBUG: Original columns: {list(data.columns)}")
-    
+
     # Step 1: Replace NaN headers with column index (1-based)
     new_column_names = []
     for i, col in enumerate(data.columns):
@@ -129,7 +129,7 @@ def clean_columns(data):
             new_column_names.append(str(i + 1))
         else:
             new_column_names.append(str(col))
-    
+
     data.columns = new_column_names
     data.columns = data.columns.astype(str)
     print(f"DEBUG: After renaming NaN headers: {list(data.columns)}")
@@ -138,26 +138,26 @@ def clean_columns(data):
     columns_to_keep = []
     for i, col in enumerate(data.columns):
         is_unnamed = col.isdigit() or col.startswith('Unnamed')
-        
+
         # Fix: Ensure each condition returns a single boolean value
         try:
             column_data = data.iloc[:, i]
             is_all_na = bool(column_data.isna().all())
             is_all_empty_string = bool((column_data == '').all())
             is_all_zero = bool((column_data == 0).all())
-            
+
             is_completely_empty = is_all_na or is_all_empty_string or is_all_zero
         except Exception as e:
             print(f"DEBUG: Error checking column {i} ({col}), keeping it: {e}")
             is_completely_empty = False
-        
+
         # Keep column if it's named OR if it has any data
         if not (is_unnamed and is_completely_empty):
             columns_to_keep.append(i)
             #print(f"DEBUG: Keeping column {i} ({col}): unnamed={is_unnamed}, empty={is_completely_empty}")
         else:
             print(f"DEBUG: Removing column {i} ({col}): unnamed={is_unnamed}, empty={is_completely_empty}")
-    
+
     data = data.iloc[:, columns_to_keep]
     print(f"DEBUG: After removing empty unnamed columns: {list(data.columns)}")
 
@@ -177,7 +177,7 @@ def clean_columns(data):
             cleaned_col = ''
             print(f"DEBUG: Cleaned column name: '{col}' -> '{cleaned_col}'")
         final_columns.append(cleaned_col)
-    
+
     data.columns = final_columns
 
     # Step 5: Replace NaN values with empty strings
@@ -201,19 +201,19 @@ def wrap_text(text, max_width=None):
         button_width = axes_width * 0.12  # Fraction of the figure allocated to checkboxes (from `add_axes`)
         char_width = 8  # Approximate width of a character in pixels (adjust as needed)
         max_width = int(button_width / char_width)
-    
+
     if len(text) <= max_width:
         return text
-    
+
     # Word-preserving wrapping
     words = text.split()
     lines = []
     current_line = ""
-    
+
     for word in words:
         # Check if adding this word would exceed the line length
         test_line = current_line + " " + word if current_line else word
-        
+
         if len(test_line) <= max_width:
             # Word fits, add it to current line
             current_line = test_line
@@ -233,11 +233,11 @@ def wrap_text(text, max_width=None):
                     current_line = word if word else ""
                 else:
                     current_line = word
-    
+
     # Add the last line if it's not empty
     if current_line:
         lines.append(current_line)
-    
+
     return '\n'.join(lines)
 
 def autofit_columns_in_excel(file_path):
@@ -265,30 +265,30 @@ def autofit_columns_in_excel(file_path):
 def is_standard_file(file_path: str) -> bool:
     """
     Determine if the file is standard by checking if it meets legacy file criteria.
-    
+
     Legacy files are ONLY detected if:
     1. The file contains exactly 1 sheet, AND
     2. That sheet has the default name 'Sheet1'
-    
+
     All other files are considered standard files.
-    
+
     Args:
         file_path (str): Path to the Excel file.
-    
+
     Returns:
-        bool: True if the file is standard (should use standard processing), 
+        bool: True if the file is standard (should use standard processing),
               False if it is legacy (meets the specific legacy criteria).
     """
     try:
         print(f"DEBUG: Checking file format for: {file_path}")
-        
+
         # Load all sheet names to check structure
         sheets_dict = pd.read_excel(file_path, sheet_name=None, header=None, nrows=1)
         sheet_names = list(sheets_dict.keys())
         num_sheets = len(sheet_names)
-        
+
         debug_print(f"DEBUG: File contains {num_sheets} sheet(s): {sheet_names}")
-        
+
         # Check for legacy file criteria
         # Legacy file MUST have exactly 1 sheet AND that sheet must be named 'Sheet1'
         if num_sheets == 1 and sheet_names[0] == 'Sheet1':
@@ -302,7 +302,7 @@ def is_standard_file(file_path: str) -> bool:
             elif num_sheets == 1:
                 debug_print(f"DEBUG: Single sheet found but name is '{sheet_names[0]}' (not 'Sheet1'), treating as standard")
             return True   # Return True for standard files
-            
+
     except Exception as e:
         print(f"ERROR: Exception while checking file format: {e}")
         debug_print(f"DEBUG: Traceback: {traceback.format_exc()}")
@@ -347,7 +347,7 @@ def extract_meta_data(worksheet, patterns):
             for key, pattern in patterns.items():
                 if re.search(pattern, cell_value, re.IGNORECASE):
                     meta_data[key] = worksheet.cell(
-                        row=row, 
+                        row=row,
                         column=col+1
                     ).value  # Get value from next cell
                     break
@@ -418,10 +418,10 @@ def load_excel_file_with_formulas(file_path):
     """
     try:
         debug_print(f"DEBUG: Loading Excel file with formula evaluation: {file_path}")
-        
+
         # First, try to force Excel to recalculate by opening and saving the file
         wb = openpyxl.load_workbook(file_path, data_only=False)
-        
+
         # Force calculation of all formulas
         for sheet_name in wb.sheetnames:
             ws = wb[sheet_name]
@@ -430,35 +430,35 @@ def load_excel_file_with_formulas(file_path):
                     if cell.value and isinstance(cell.value, str) and cell.value.startswith('='):
                         # This is a formula - we need to force evaluation
                         debug_print(f"DEBUG: Found formula in {cell.coordinate}: {cell.value}")
-        
+
         wb.close()
-        
+
         # Now load with data_only=True to get calculated values
         wb_calc = openpyxl.load_workbook(file_path, data_only=True)
         sheets = {}
-        
+
         for sheet_name in wb_calc.sheetnames:
             debug_print(f"DEBUG: Processing sheet: {sheet_name}")
             ws = wb_calc[sheet_name]
-            
+
             # Convert worksheet to DataFrame row by row
             data = []
             for row in ws.iter_rows(values_only=True):
                 data.append(row)
-            
+
             if data:
                 # Create DataFrame with proper column handling
                 df = pd.DataFrame(data)
-                
+
                 # Set the first row as headers if it contains strings
                 if len(df) > 0:
                     # Use first row as headers
                     df.columns = [f"Unnamed: {i}" if pd.isna(col) else str(col) for i, col in enumerate(df.iloc[0])]
                     df = df[1:].reset_index(drop=True)
-                
+
                 sheets[sheet_name] = df
                 debug_print(f"DEBUG: Sheet {sheet_name} loaded with shape: {df.shape}")
-                
+
                 # Debug: Check specific cells that should contain usage efficiency
                 if len(df) > 1 and len(df.columns) > 8:
                     debug_print(f"DEBUG: Sample usage efficiency values in row 1:")
@@ -469,11 +469,11 @@ def load_excel_file_with_formulas(file_path):
             else:
                 sheets[sheet_name] = pd.DataFrame()
                 debug_print(f"DEBUG: Sheet {sheet_name} is empty")
-        
+
         wb_calc.close()
         debug_print(f"DEBUG: Successfully loaded {len(sheets)} sheets with enhanced formula evaluation")
         return sheets
-        
+
     except Exception as e:
         print(f"ERROR: Failed to load Excel file with formula evaluation: {e}")
         # Fallback to original method
@@ -487,27 +487,27 @@ def load_excel_file_with_formulas(file_path):
 def read_sheet_with_values_standards(file_path: str, sheet_name: Optional[str] = None):
     """Read Excel sheet with values exactly as they appear, evaluating formulas."""
     debug_print(f"DEBUG: Reading sheet with formula evaluation: {sheet_name}")
-    
+
     # Use openpyxl with data_only=True to evaluate formulas
     wb = load_workbook(file_path, data_only=True)
     if sheet_name:
         ws = wb[sheet_name]
     else:
         ws = wb.active
-    
+
     # Convert to DataFrame
     data = []
     for row in ws.iter_rows(values_only=True):
         data.append(row)
-    
+
     if not data:
         return pd.DataFrame()
-    
+
     # Create DataFrame and set first row as header
     df = pd.DataFrame(data)
     df.columns = df.iloc[0]
     df = df[1:].reset_index(drop=True)
-    
+
     wb.close()
     debug_print(f"DEBUG: Successfully read sheet {sheet_name} with formula evaluation")
     return df
@@ -515,28 +515,28 @@ def read_sheet_with_values_standards(file_path: str, sheet_name: Optional[str] =
 def unmerge_all_cells(ws: Worksheet) -> None:
     """
     Unmerge all merged cells in the given worksheet.
-    
+
     For each merged range, this function:
       - Retrieves the value from the top-left (master) cell.
       - Unmerges the range.
       - Sets every cell in the range to the retrieved value.
-    
+
     Args:
         ws (Worksheet): The Openpyxl worksheet to process.
     """
     # Create a list of merged ranges to avoid modifying the collection while iterating.
     merged_ranges = list(ws.merged_cells.ranges)
-    
+
     for merged_range in merged_ranges:
         # Get the bounds of the merged range.
         min_row, min_col, max_row, max_col = merged_range.min_row, merged_range.min_col, merged_range.max_row, merged_range.max_col
-        
+
         # Retrieve the value from the top-left (master) cell.
         master_value = ws.cell(row=min_row, column=min_col).value
-        
+
         # Unmerge the cells.
         ws.unmerge_cells(str(merged_range))
-        
+
         # Fill every cell in the previously merged range with the master value.
         for row in range(min_row, max_row + 1):
             for col in range(min_col, max_col + 1):
@@ -563,10 +563,10 @@ def is_valid_excel_file(filename: str) -> bool:
     """
     Checks if the given filename is a valid Excel file that should be processed.
     Excludes temporary Excel files which often start with '~$'.
-    
+
     Args:
         filename (str): The name of the file.
-    
+
     Returns:
         bool: True if valid, False otherwise.
     """
@@ -637,15 +637,15 @@ def is_sheet_empty_or_zero(data: pd.DataFrame) -> bool:
         return True  # The sheet is considered empty or all zero
     else:
         return False  # There is some valid data in the specified range
-    
+
 def header_matches(cell_value, pattern: str) -> bool:
     """
     Check if the given cell value matches the regex pattern.
-    
+
     Args:
         cell_value: The value from the cell.
         pattern (str): The regex pattern to search for.
-    
+
     Returns:
         bool: True if the pattern is found, False otherwise.
     """
@@ -658,7 +658,7 @@ def clean_display_suffixes(data):
     Remove pandas-generated suffixes (.1, .2, .3, etc.) from data for display purposes,
     but preserve actual decimal numbers.
     """
-    
+
     def is_pandas_suffix(value_str):
         """
         Check if a string ends with a pandas-generated suffix.
@@ -668,12 +668,12 @@ def clean_display_suffixes(data):
         suffix_match = re.search(r'\.(\d+)$', value_str)
         if not suffix_match:
             return False
-        
+
         # Get the part before the suffix
         base_part = value_str[:suffix_match.start()]
         suffix_part = suffix_match.group(1)
-        
-        # If the suffix is a single digit and the base part is not purely numeric, 
+
+        # If the suffix is a single digit and the base part is not purely numeric,
         # it's likely a pandas suffix
         if len(suffix_part) == 1:  # Single digit suffix
             try:
@@ -683,24 +683,24 @@ def clean_display_suffixes(data):
             except ValueError:
                 # Base part is not a number, so .1, .2, etc. is likely a pandas suffix
                 return True
-        
+
         return False
-    
+
     def clean_cell_value(value):
         if pd.isna(value) or value == "":
             return value
-        
+
         value_str = str(value).strip()
-        
+
         # Only remove if it looks like a pandas suffix
         if is_pandas_suffix(value_str):
             # Remove the suffix
             cleaned_value = re.sub(r'\.\d+$', '', value_str)
             print(f"DEBUG: Cleaned pandas suffix: '{value_str}' -> '{cleaned_value}'")
             return cleaned_value
-        
+
         return value
-    
+
     # Clean column names
     if hasattr(data, 'columns'):
         cleaned_columns = []
@@ -713,11 +713,11 @@ def clean_display_suffixes(data):
             else:
                 cleaned_columns.append(col_str)
         data.columns = cleaned_columns
-    
+
     # Clean cell values
     for col in data.columns:
         data[col] = data[col].apply(clean_cell_value)
-    
+
     return data
 
 
@@ -725,50 +725,50 @@ def show_success_message(title, message, parent=None):
     """Show a success message without system sound."""
     import tkinter as tk
     from tkinter import ttk
-    
+
     # Create a custom dialog
     success_dialog = tk.Toplevel(parent) if parent else tk.Toplevel()
     success_dialog.title(title)
     success_dialog.resizable(False, False)
     success_dialog.transient(parent) if parent else None
     success_dialog.grab_set()
-    
+
     # Hide initially to prevent stutter
     success_dialog.withdraw()
-    
+
     # Create main frame
     main_frame = ttk.Frame(success_dialog, padding="20")
     main_frame.pack(fill="both", expand=True)
-    
+
     # Success icon (using Unicode checkmark)
     icon_label = ttk.Label(main_frame, text="✓", font=("Arial", 24), foreground="green")
     icon_label.pack(pady=(0, 10))
-    
+
     # Title
     title_label = ttk.Label(main_frame, text=title, font=("Arial", 12, "bold"))
     title_label.pack(pady=(0, 5))
-    
+
     # Message
-    message_label = ttk.Label(main_frame, text=message, font=("Arial", 10), 
+    message_label = ttk.Label(main_frame, text=message, font=("Arial", 10),
                              wraplength=400, justify="center")
     message_label.pack(pady=(0, 15))
-    
+
     # OK button
     def on_ok():
         success_dialog.destroy()
-    
+
     ok_button = ttk.Button(main_frame, text="OK", command=on_ok)
     ok_button.pack()
-    
+
     # Bind Enter key to OK
     success_dialog.bind('<Return>', lambda e: on_ok())
     success_dialog.bind('<Escape>', lambda e: on_ok())
-    
+
     # Center and show the dialog
     success_dialog.update_idletasks()
     width = success_dialog.winfo_reqwidth()
     height = success_dialog.winfo_reqheight()
-    
+
     if parent:
         # Center relative to parent
         parent_x = parent.winfo_rootx()
@@ -783,9 +783,9 @@ def show_success_message(title, message, parent=None):
         screen_height = success_dialog.winfo_screenheight()
         x = (screen_width - width) // 2
         y = (screen_height - height) // 2
-    
+
     success_dialog.geometry(f"{width}x{height}+{x}+{y}")
     success_dialog.deiconify()
-    
+
     # Focus the OK button
     ok_button.focus_set()

@@ -75,17 +75,17 @@ def main():
     # Configure logging based on what worked
     if log_file:
         logging.basicConfig(
-            filename=str(log_file), 
-            level=logging.DEBUG, 
+            filename=str(log_file),
+            level=logging.DEBUG,
             format='%(asctime)s:%(levelname)s:%(message)s'
         )
     else:
         # Console-only logging
         logging.basicConfig(
-            level=logging.DEBUG, 
+            level=logging.DEBUG,
             format='%(asctime)s:%(levelname)s:%(message)s'
         )
-    
+
     logging.info('Application started')
     log_timing_checkpoint("Logging setup complete")
 
