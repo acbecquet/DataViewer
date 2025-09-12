@@ -1108,3 +1108,55 @@ class ReportGenerator:
         run.font.name = "Montserrat"
         run.font.size = Pt(32)
         run.font.bold = True
+
+    def clean_presentation_tables(presentation):
+        """
+        Clean all tables in the given PowerPoint presentation by:
+        - Removing rows where all cells are empty.
+        - Removing columns where all cells, including the header, are empty.
+
+        Args:
+            presentation (pptx.Presentation): The PowerPoint presentation to process.
+        """
+        for slide in presentation.slides:
+            for shape in slide.shapes:
+                if not shape.has_table:
+                    continue  # Skip if the shape is not a table
+
+                table = shape.table
+
+                # Get the number of rows and columns
+                num_rows = len(table.rows)
+                num_cols = len(table.columns)
+
+                # Step 1: Remove empty rows
+                rows_to_keep = []
+                for row_idx in range(num_rows):
+                    is_empty_row = all(
+                        not cell.text.strip() for cell in table.rows[row_idx].cells
+                    )
+                    if not is_empty_row:
+                        rows_to_keep.append(row_idx)
+
+                # Keep only the non-empty rows
+                for row_idx in reversed(range(num_rows)):
+                    if row_idx not in rows_to_keep:
+                        table._tbl.remove(table.rows[row_idx]._tr)  # Remove row from XML
+
+                # Step 2: Remove empty columns
+                num_rows = len(table.rows)  # Updated number of rows after cleaning
+                cols_to_keep = []
+                for col_idx in range(num_cols):
+                    # Check if all cells in the column (including the header) are empty or 'nan'
+                    is_empty_col = all(
+                        not table.cell(row_idx, col_idx).text.strip() or table.cell(row_idx, col_idx).text.strip() == "nan"
+                        for row_idx in range(num_rows)
+                    )
+                    if not is_empty_col:
+                        cols_to_keep.append(col_idx)
+
+                # Keep only the non-empty columns
+                for col_idx in reversed(range(num_cols)):
+                    if col_idx not in cols_to_keep:
+                        for row in table.rows:
+                            row._tr.remove(row.cells[col_idx]._tc)  # Remove column cell from XML
