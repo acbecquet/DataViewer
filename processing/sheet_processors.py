@@ -13,14 +13,10 @@ from utils import (
     remove_empty_columns,
     round_values
 )
+
 from .core_processing import (
     process_generic_sheet, 
     process_plot_sheet,
-    create_empty_plot_structure,
-    create_empty_user_test_simulation_structure
-)
-
-from .plot_utilities import (
     create_empty_plot_structure,
     create_empty_user_test_simulation_structure
 )
@@ -492,83 +488,62 @@ def process_user_test_simulation(data):
         debug_print(f"DEBUG: process_plot_sheet - samples count: {len(samples) if samples else 0}")
         return create_empty_user_test_simulation_structure(data)
 
-def create_empty_user_test_simulation_structure(data):
+def get_processing_function(sheet_name):
     """
-    Create an empty structure for User Test Simulation data collection.
-    """
-    debug_print("DEBUG: Creating empty User Test Simulation structure for data collection")
-
-    # Create minimal processed data structure
-    processed_data = pd.DataFrame([{
-        "Sample Name": "Sample 1",
-        "Media": "",
-        "Viscosity": "",
-        "Voltage, Resistance, Power": "",
-        "Average TPM": "No data",
-        "Standard Deviation": "No data",
-        "Initial Oil Mass": "",
-        "Usage Efficiency": "",
-        "Test Type": "User Test Simulation"
-    }])
-
-    # Empty sample arrays
-    sample_arrays = {}
-
-    # Use original data or create minimal structure
-    num_columns_per_sample = 8  # User Test Simulation uses 8 columns
-    if data.empty:
-        # Create a minimal data structure
-        full_sample_data = pd.DataFrame(
-            index=range(10),  # 10 rows for basic structure
-            columns=range(num_columns_per_sample)  # 8 columns for User Test Simulation
-        )
-    else:
-        full_sample_data = data
-
-    debug_print(f"DEBUG: Created empty User Test Simulation structure - processed: {processed_data.shape}, full: {full_sample_data.shape}")
-    return processed_data, sample_arrays, full_sample_data
-        
-def create_empty_plot_structure(data, headers_row=3, num_columns_per_sample=12):
-    """
-    Create an empty structure for data collection when sheet has minimal data.
+    Get the appropriate processing function for a sheet based on its name.
 
     Args:
-        data (pd.DataFrame): Original data
-        headers_row (int): Row index for headers
-        num_columns_per_sample (int): Number of columns per sample
+        sheet_name (str): Name of the sheet.
 
     Returns:
-        tuple: (processed_data, sample_arrays, full_sample_data)
+        callable: Function to process the sheet.
     """
-    debug_print("DEBUG: Creating empty plot structure for data collection")
+    functions = get_processing_functions()
+    if "legacy" in sheet_name.lower():
+        return process_legacy_test
+    return functions.get(sheet_name, functions["default"])
 
-    # Create minimal processed data structure
-    processed_data = pd.DataFrame([{
-        "Sample Name": "Sample 1",
-        "Media": "",
-        "Viscosity": "",
-        "Voltage, Resistance, Power": "",
-        "Average TPM": "No data",
-        "Standard Deviation": "No data",
-        "Initial Oil Mass": "",
-        "Usage Efficiency": "",
-        "Burn?": "",
-        "Clog?": "",
-        "Leak?": ""
-    }])
+def get_processing_functions():
+    """
+    Get a dictionary mapping sheet names to their processing functions.
 
-    # Empty sample arrays
-    sample_arrays = {}
-
-    # Use original data or create minimal structure
-    if data.empty:
-        # Create a minimal data structure
-        full_sample_data = pd.DataFrame(
-            index=range(10),  # 10 rows for basic structure
-            columns=range(num_columns_per_sample)  # Standard column count
-        )
-    else:
-        full_sample_data = data
-
-    debug_print(f"DEBUG: Created empty structure - processed: {processed_data.shape}, full: {full_sample_data.shape}")
-    return processed_data, sample_arrays, full_sample_data
+    Returns:
+        dict: Map of sheet names to processing functions.
+    """
+    # Import here to avoid circular imports
+    
+    return {
+        "Test Plan": process_test_plan,
+        "Initial State Inspection": process_initial_state_inspection,
+        "Quick Screening Test": process_quick_screening_test,
+        "Lifetime Test": process_device_life_test,
+        "Device Life Test": process_device_life_test,
+        "Aerosol Temperature": process_aerosol_temp_test,
+        "User Test - Full Cycle": process_user_test,
+        "User Test Simulation": process_user_test_simulation,
+        "User Simulation Test": process_user_test_simulation,
+        "Horizontal Puffing Test": process_horizontal_test,
+        "Extended Test": process_extended_test,
+        "Long Puff Test": process_long_puff_test,
+        "Rapid Puff Test": process_rapid_puff_test,
+        "Intense Test": process_intense_test,
+        "Big Headspace Low T Test": process_big_head_low_t_test,
+        "Big Headspace Serial Test": process_big_head_serial_test,
+        "Anti-Burn Protection Test": process_burn_protection_test,
+        "Big Headspace High T Test": process_big_head_high_t_test,
+        "Upside Down Test": process_upside_down_test,
+        "Big Headspace Pocket Test": process_pocket_test,
+        "Temperature Cycling Test": process_temperature_cycling_test,
+        "High T High Humidity Test": process_high_t_high_humidity_test,
+        "Low Temperature Stability": process_cold_storage_test,
+        "Vacuum Test": process_vacuum_test,
+        "Negative Pressure Test": process_vacuum_test,
+        "Viscosity Compatibility": process_viscosity_compatibility_test,
+        "Various Oil Compatibility": process_various_oil_test,
+        "Quick Sensory Test": process_quick_sensory_test,
+        "Off-odor Score": process_off_odor_score,
+        "Sensory Consistency": process_sensory_consistency,
+        "Heavy Metal Leaching Test": process_leaching_test,
+        "Sheet1": process_sheet1,
+        "default": process_generic_sheet
+    }

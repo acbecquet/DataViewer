@@ -13,75 +13,12 @@ from utils import (
     round_values
 )
 
-from .sheet_processors import create_empty_plot_structure, create_empty_user_test_simulation_structure
-
 from .data_extraction import updated_extracted_data_function_with_raw_data
 
 # Module constants
 DEFAULT_HEADERS_ROW = 3
 DEFAULT_DATA_START_ROW = 4
 DEFAULT_COLUMNS_PER_SAMPLE = 12
-
-def get_processing_function(sheet_name):
-    """
-    Get the appropriate processing function for a sheet based on its name.
-
-    Args:
-        sheet_name (str): Name of the sheet.
-
-    Returns:
-        callable: Function to process the sheet.
-    """
-    functions = get_processing_functions()
-    if "legacy" in sheet_name.lower():
-        return process_legacy_test
-    return functions.get(sheet_name, functions["default"])
-
-def get_processing_functions():
-    """
-    Get a dictionary mapping sheet names to their processing functions.
-
-    Returns:
-        dict: Map of sheet names to processing functions.
-    """
-    # Import here to avoid circular imports
-    from . import sheet_processors as sp
-    
-    return {
-        "Test Plan": sp.process_test_plan,
-        "Initial State Inspection": sp.process_initial_state_inspection,
-        "Quick Screening Test": sp.process_quick_screening_test,
-        "Lifetime Test": sp.process_device_life_test,
-        "Device Life Test": sp.process_device_life_test,
-        "Aerosol Temperature": sp.process_aerosol_temp_test,
-        "User Test - Full Cycle": sp.process_user_test,
-        "User Test Simulation": sp.process_user_test_simulation,
-        "User Simulation Test": sp.process_user_test_simulation,
-        "Horizontal Puffing Test": sp.process_horizontal_test,
-        "Extended Test": sp.process_extended_test,
-        "Long Puff Test": sp.process_long_puff_test,
-        "Rapid Puff Test": sp.process_rapid_puff_test,
-        "Intense Test": sp.process_intense_test,
-        "Big Headspace Low T Test": sp.process_big_head_low_t_test,
-        "Big Headspace Serial Test": sp.process_big_head_serial_test,
-        "Anti-Burn Protection Test": sp.process_burn_protection_test,
-        "Big Headspace High T Test": sp.process_big_head_high_t_test,
-        "Upside Down Test": sp.process_upside_down_test,
-        "Big Headspace Pocket Test": sp.process_pocket_test,
-        "Temperature Cycling Test": sp.process_temperature_cycling_test,
-        "High T High Humidity Test": sp.process_high_t_high_humidity_test,
-        "Low Temperature Stability": sp.process_cold_storage_test,
-        "Vacuum Test": sp.process_vacuum_test,
-        "Negative Pressure Test": sp.process_vacuum_test,
-        "Viscosity Compatibility": sp.process_viscosity_compatibility_test,
-        "Various Oil Compatibility": sp.process_various_oil_test,
-        "Quick Sensory Test": sp.process_quick_sensory_test,
-        "Off-odor Score": sp.process_off_odor_score,
-        "Sensory Consistency": sp.process_sensory_consistency,
-        "Heavy Metal Leaching Test": sp.process_leaching_test,
-        "Sheet1": sp.process_sheet1,
-        "default": process_generic_sheet
-    }
         
 def get_valid_plot_options(plot_options: List[str], full_sample_data: pd.DataFrame) -> List[str]:
     """
@@ -450,3 +387,84 @@ def process_sheet(data, headers_row=3, data_start_row=4):
     table_data = table_data.replace(0, np.nan)
     processed_data = pd.DataFrame(table_data.values, columns=headers)
     return processed_data, table_data
+
+def create_empty_user_test_simulation_structure(data):
+    """
+    Create an empty structure for User Test Simulation data collection.
+    """
+    debug_print("DEBUG: Creating empty User Test Simulation structure for data collection")
+
+    # Create minimal processed data structure
+    processed_data = pd.DataFrame([{
+        "Sample Name": "Sample 1",
+        "Media": "",
+        "Viscosity": "",
+        "Voltage, Resistance, Power": "",
+        "Average TPM": "No data",
+        "Standard Deviation": "No data",
+        "Initial Oil Mass": "",
+        "Usage Efficiency": "",
+        "Test Type": "User Test Simulation"
+    }])
+
+    # Empty sample arrays
+    sample_arrays = {}
+
+    # Use original data or create minimal structure
+    num_columns_per_sample = 8  # User Test Simulation uses 8 columns
+    if data.empty:
+        # Create a minimal data structure
+        full_sample_data = pd.DataFrame(
+            index=range(10),  # 10 rows for basic structure
+            columns=range(num_columns_per_sample)  # 8 columns for User Test Simulation
+        )
+    else:
+        full_sample_data = data
+
+    debug_print(f"DEBUG: Created empty User Test Simulation structure - processed: {processed_data.shape}, full: {full_sample_data.shape}")
+    return processed_data, sample_arrays, full_sample_data
+        
+def create_empty_plot_structure(data, headers_row=3, num_columns_per_sample=12):
+    """
+    Create an empty structure for data collection when sheet has minimal data.
+
+    Args:
+        data (pd.DataFrame): Original data
+        headers_row (int): Row index for headers
+        num_columns_per_sample (int): Number of columns per sample
+
+    Returns:
+        tuple: (processed_data, sample_arrays, full_sample_data)
+    """
+    debug_print("DEBUG: Creating empty plot structure for data collection")
+
+    # Create minimal processed data structure
+    processed_data = pd.DataFrame([{
+        "Sample Name": "Sample 1",
+        "Media": "",
+        "Viscosity": "",
+        "Voltage, Resistance, Power": "",
+        "Average TPM": "No data",
+        "Standard Deviation": "No data",
+        "Initial Oil Mass": "",
+        "Usage Efficiency": "",
+        "Burn?": "",
+        "Clog?": "",
+        "Leak?": ""
+    }])
+
+    # Empty sample arrays
+    sample_arrays = {}
+
+    # Use original data or create minimal structure
+    if data.empty:
+        # Create a minimal data structure
+        full_sample_data = pd.DataFrame(
+            index=range(10),  # 10 rows for basic structure
+            columns=range(num_columns_per_sample)  # Standard column count
+        )
+    else:
+        full_sample_data = data
+
+    debug_print(f"DEBUG: Created empty structure - processed: {processed_data.shape}, full: {full_sample_data.shape}")
+    return processed_data, sample_arrays, full_sample_data

@@ -44,7 +44,8 @@ from utils import (
     APP_BACKGROUND_COLOR,
     load_excel_file_with_formulas,
     debug_print,
-    show_success_message
+    show_success_message,
+    plotting_sheet_test
 )
 from database_manager import DatabaseManager
 
@@ -408,7 +409,7 @@ class FileManager:
 
             # Store sheet metadata
             for sheet_name, sheet_info in self.gui.filtered_sheets.items():
-                is_plotting = processing.plotting_sheet_test(sheet_name, sheet_info["data"])
+                is_plotting = plotting_sheet_test(sheet_name, sheet_info["data"])
                 is_empty = sheet_info.get("is_empty", False)
 
                 sheet_id = self.db_manager.store_sheet_info(

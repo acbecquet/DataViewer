@@ -6,12 +6,12 @@ Developed by Charlie Becquet.
 
 # Import core processing functions - these are the main public interface
 from .core_processing import (
-    get_processing_function,
-    get_processing_functions,
     get_valid_plot_options,
     get_y_data_for_plot_type,
     process_generic_sheet,
-    process_plot_sheet
+    process_plot_sheet,
+    create_empty_plot_structure,
+    create_empty_user_test_simulation_structure
 )
 
 # import plot utilities
@@ -57,8 +57,8 @@ from .sheet_processors import (
     process_user_test_simulation,
     process_off_odor_score,
     process_sensory_consistency,
-    create_empty_plot_structure,
-    create_empty_user_test_simulation_structure
+    get_processing_function,
+    get_processing_functions
 )
 
 # Import legacy processing functions
