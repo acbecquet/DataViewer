@@ -11,9 +11,18 @@ from .core_processing import (
     get_valid_plot_options,
     get_y_data_for_plot_type,
     process_generic_sheet,
-    process_plot_sheet,
-    create_empty_plot_structure,
-    create_empty_user_test_simulation_structure
+    process_plot_sheet
+)
+
+# import plot utilities
+from .plot_utilities import (
+    get_y_label_for_plot_type,
+    plot_user_test_simulation_samples,
+    plot_user_test_simulation_bar_chart,
+    plot_all_samples,
+    plot_tpm_bar_chart,
+    prevent_x_label_overlap,
+    plot_aggregate_trends
 )
 
 # Import all sheet processors - these are used by the dispatcher
@@ -47,7 +56,9 @@ from .sheet_processors import (
     process_sheet1,
     process_user_test_simulation,
     process_off_odor_score,
-    process_sensory_consistency
+    process_sensory_consistency,
+    create_empty_plot_structure,
+    create_empty_user_test_simulation_structure
 )
 
 # Import legacy processing functions
@@ -58,7 +69,11 @@ from .legacy_processing import (
     detect_template_format,
     convert_legacy_file_using_template,
     convert_legacy_file_using_template_v2,
-    convert_cart_format_to_template
+    convert_cart_format_to_template,
+    convert_legacy_standards_using_template,
+    extract_samples_from_old_file_v2,
+    is_legacy_sample_empty,
+    filter_legacy_samples
 )
 
 # Import data extraction utilities
@@ -85,21 +100,73 @@ __all__ = [
     'process_generic_sheet',
     'process_plot_sheet',
     
-    # Sheet processors (most commonly used)
+    # Plot utilities
+    'get_y_label_for_plot_type',
+    'plot_user_test_simulation_samples',
+    'plot_user_test_simulation_bar_chart',
+    'plot_all_samples',
+    'plot_tpm_bar_chart',
+    'prevent_x_label_overlap',
+    'plot_aggregate_trends',
+    
+    # Sheet processors
     'process_test_plan',
     'process_initial_state_inspection',
     'process_quick_screening_test',
     'process_device_life_test',
+    'process_aerosol_temp_test',
+    'process_user_test',
+    'process_horizontal_test',
+    'process_extended_test',
+    'process_long_puff_test',
+    'process_rapid_puff_test',
+    'process_intense_test',
+    'process_legacy_test',
+    'process_big_head_low_t_test',
+    'process_burn_protection_test',
+    'process_big_head_high_t_test',
+    'process_big_head_serial_test',
+    'process_upside_down_test',
+    'process_pocket_test',
+    'process_temperature_cycling_test',
+    'process_high_t_high_humidity_test',
+    'process_cold_storage_test',
+    'process_vacuum_test',
+    'process_viscosity_compatibility_test',
+    'process_various_oil_test',
+    'process_quick_sensory_test',
+    'process_leaching_test',
+    'process_sheet1',
     'process_user_test_simulation',
+    'process_off_odor_score',
+    'process_sensory_consistency',
+    'create_empty_plot_structure',
+    'create_empty_user_test_simulation_structure'
     
     # Legacy processing
     'extract_samples_from_old_file',
+    'extract_samples_from_cart_format',
     'process_legacy_file_auto_detect',
+    'detect_template_format',
+    'convert_legacy_file_using_template',
+    'convert_legacy_file_using_template_v2',
+    'convert_cart_format_to_template',
+    'convert_legacy_standards_using_template',
+    'extract_samples_from_old_file_v2',
+    'is_legacy_sample_empty',
+    'filter_legacy_samples',
     
     # Data extraction
     'aggregate_sheet_metrics',
     'extract_burn_clog_leak_from_raw_data',
-    'no_efficiency_extracted_data'
+    'no_efficiency_extracted_data',
+    'updated_extracted_data_function_with_raw_data',
+    'updated_extracted_data_function_with_raw_data_old',
+    'calculate_normalized_tpm_for_sample',
+    'calculate_usage_efficiency_for_sample',
+    'extract_initial_oil_mass',
+    'get_y_data_for_user_test_simulation_plot_type',
+    'fix_x_axis_sequence'
 ]
 
 # Package metadata

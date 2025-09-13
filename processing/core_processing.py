@@ -13,6 +13,10 @@ from utils import (
     round_values
 )
 
+from .sheet_processors import create_empty_plot_structure, create_empty_user_test_simulation_structure
+
+from .data_extraction import updated_extracted_data_function_with_raw_data
+
 # Module constants
 DEFAULT_HEADERS_ROW = 3
 DEFAULT_DATA_START_ROW = 4

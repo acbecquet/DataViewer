@@ -19,6 +19,12 @@ from .core_processing import (
     create_empty_plot_structure,
     create_empty_user_test_simulation_structure
 )
+
+from .plot_utilities import (
+    create_empty_plot_structure,
+    create_empty_user_test_simulation_structure
+)
+
 from .data_extraction import (
     no_efficiency_extracted_data,
     updated_extracted_data_function_with_raw_data
