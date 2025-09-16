@@ -1109,7 +1109,7 @@ class ReportGenerator:
         run.font.size = Pt(32)
         run.font.bold = True
 
-    def clean_presentation_tables(presentation):
+    def clean_presentation_tables(self,presentation):
         """
         Clean all tables in the given PowerPoint presentation by:
         - Removing rows where all cells are empty.
