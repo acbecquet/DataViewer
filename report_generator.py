@@ -527,7 +527,7 @@ class ReportGenerator:
                 self.setup_image_slide(prs, img_slide, sheet_name)
                 self.add_images_to_slide(img_slide, image_paths)
 
-            processing.clean_presentation_tables(prs)
+            clean_presentation_tables(prs)
             prs.save(ppt_save_path)
             debug_print(f"PowerPoint test report saved to {ppt_save_path}")
 
@@ -714,7 +714,7 @@ class ReportGenerator:
                     processed_slides += 1
                     traceback.print_exc()
                     continue
-            processing.clean_presentation_tables(prs)
+            clean_presentation_tables(prs)
             prs.save(ppt_save_path)
             debug_print(f"PowerPoint report saved successfully at {ppt_save_path}.")
         except Exception as e:
@@ -899,7 +899,7 @@ class ReportGenerator:
                     processed_slides += 1
                     traceback.print_exc()
                     continue
-            processing.clean_presentation_tables(prs)
+            clean_presentation_tables(prs)
             prs.save(ppt_save_path)
             debug_print(f"PowerPoint report saved successfully at {ppt_save_path}.")
         except Exception as e:
