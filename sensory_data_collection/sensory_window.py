@@ -42,12 +42,12 @@ class SensoryDataCollectionWindow:
         self.parent = parent
         self.close_callback = close_callback
         self.window = None
-        
+    
         # Core data structures - these remain in main class as they're shared across modules
         self.data = {}
         self.samples = {}
         self.current_sample = None
-        
+    
         # Sensory metrics
         self.metrics = [
             "Burnt Taste",
@@ -72,37 +72,49 @@ class SensoryDataCollectionWindow:
 
         # SOP text
         self.sop_text = """
-SENSORY EVALUATION STANDARD OPERATING PROCEDURE
+    SENSORY EVALUATION STANDARD OPERATING PROCEDURE
 
-1. PREPARATION:
-   - Ensure all cartridges are at room temperature
-   - Use clean, odor-free environment, ideally in a fume hood
+    1. PREPARATION:
+       - Ensure all cartridges are at room temperature
+       - Use clean, odor-free environment, ideally in a fume hood
 
-2. EVALUATION:
-   - Take 2-3 moderate puffs per sample
-   - Be sure to compare flavor with original oil if available
-   - Rate each attribute on 1-9 scale (1=poor, 9=excellent)
+    2. EVALUATION:
+       - Take 2-3 moderate puffs per sample
+       - Be sure to compare flavor with original oil if available
+       - Rate each attribute on 1-9 scale (1=poor, 9=excellent)
 
-3. SCALE INTERPRETATION:
-   - Burnt Taste: 1=Very Burnt, 9=No Burnt Taste
-   - Vapor Volume: 1=Very Low, 9=Very High
-   - Overall Flavor: 1=Poor, 9=Excellent
-   - Smoothness: 1=Very Harsh, 9=Very Smooth
-   - Overall Liking: 1=Dislike Extremely, 9=Like Extremely
+    3. SCALE INTERPRETATION:
+       - Burnt Taste: 1=Very Burnt, 9=No Burnt Taste
+       - Vapor Volume: 1=Very Low, 9=Very High
+       - Overall Flavor: 1=Poor, 9=Excellent
+       - Smoothness: 1=Very Harsh, 9=Very Smooth
+       - Overall Liking: 1=Dislike Extremely, 9=Like Extremely
 
-4. NOTES:
-   - Record any unusual observations
-   - Note any technical issues with samples
-        """
+    4. NOTES:
+       - Record any unusual observations
+       - Note any technical issues with samples
+            """
 
-        # Initialize manager classes
+        # Initialize base manager classes (no cross-dependencies)
         self.session_manager = SessionManager(self)
         self.sample_manager = SampleManager(self)
         self.ui_layout = UILayoutManager(self)
         self.plot_manager = PlotManager(self)
-        self.mode_manager = ModeManager(self)
-        self.file_io = FileIOManager(self)
-        self.export_manager = ExportManager(self)
+
+        # Add cross-references for base managers
+        self.session_manager.sample_manager = self.sample_manager
+        self.session_manager.plot_manager = self.plot_manager
+        self.sample_manager.plot_manager = self.plot_manager
+        self.ui_layout.session_manager = self.session_manager
+        self.ui_layout.plot_manager = self.plot_manager
+
+        # Initialize managers with cross-dependencies
+        self.mode_manager = ModeManager(self, self.session_manager, self.plot_manager)
+        self.file_io = FileIOManager(self, self.session_manager, self.sample_manager)
+        self.export_manager = ExportManager(self, self.sample_manager, self.plot_manager)
+
+        # Final cross-reference
+        self.plot_manager.mode_manager = self.mode_manager
 
         # Initialize ML components if available
         if ML_AVAILABLE:
@@ -254,3 +266,67 @@ SENSORY EVALUATION STANDARD OPERATING PROCEDURE
     def current_session_id(self, value):
         """Set current session ID through session manager."""
         self.session_manager.current_session_id = value
+
+    # Session manager delegations
+    def add_new_session(self):
+        return self.session_manager.add_new_session()
+
+    def merge_sessions_from_files(self):
+        return self.session_manager.merge_sessions_from_files()
+
+    # File I/O delegations
+    def load_session(self):
+        return self.file_io.load_session()
+
+    def save_session(self):
+        return self.file_io.save_session()
+
+    def export_to_excel(self):
+        return self.file_io.export_to_excel()
+
+    # Sample manager delegations
+    def add_sample(self):
+        return self.sample_manager.add_sample()
+
+    def remove_sample(self):
+        return self.sample_manager.remove_sample()
+
+    def clear_current_sample(self):
+        return self.sample_manager.clear_current_sample()
+
+    def rename_current_sample(self):
+        return self.sample_manager.rename_current_sample()
+
+    def batch_rename_samples(self):
+        return self.sample_manager.batch_rename_samples()
+
+    def on_sample_changed(self, event=None):
+        return self.sample_manager.on_sample_changed(event)
+
+    def auto_save_and_update(self):
+        return self.sample_manager.auto_save_and_update()
+
+    # Export manager delegations
+    def save_plot_as_image(self):
+        return self.export_manager.save_plot_as_image()
+
+    def save_table_as_image(self):
+        return self.export_manager.save_table_as_image()
+
+    def generate_powerpoint_report(self):
+        return self.export_manager.generate_powerpoint_report()
+
+    # Plot manager delegations
+    def update_plot(self):
+        return self.plot_manager.update_plot()
+
+    # Mode manager delegations  
+    def toggle_mode(self):
+        return self.mode_manager.toggle_mode()
+
+    # UI Layout delegations
+    def setup_layout(self):
+        return self.ui_layout.setup_layout()
+
+    def center_window(self):
+        return self.ui_layout.center_window()

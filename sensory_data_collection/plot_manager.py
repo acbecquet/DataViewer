@@ -10,63 +10,64 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.patches import Circle
 import math
 import numpy as np
-from utils import debug_print
+from utils import debug_print, FONT
 
 
 class PlotManager:
     """Manages sensory profile plotting and visualization."""
     
-    def __init__(self, sensory_window):
+    def __init__(self, sensory_window, mode_manager=None):
         """Initialize the plot manager with reference to main window."""
         self.sensory_window = sensory_window
+        self.mode_manager = mode_manager
         
     def on_window_resize_plot(self, event):
         """Handle window resize events to update plot size dynamically - ENHANCED DEBUG VERSION."""
-        debug_print(f"DEBUG: RESIZE EVENT DETECTED - Widget: {event.widget}, Window: {self.window}")
+        debug_print(f"DEBUG: RESIZE EVENT DETECTED - Widget: {event.widget}, Window: {self.sensory_window.window}")
         debug_print(f"DEBUG: Event widget type: {type(event.widget)}")
-        debug_print(f"DEBUG: Window type: {type(self.window)}")
-        debug_print(f"DEBUG: Event widget == window? {event.widget == self.window}")
-        debug_print(f"DEBUG: Event widget is window? {event.widget is self.window}")
+        debug_print(f"DEBUG: Window type: {type(self.sensory_window.window)}")
+        debug_print(f"DEBUG: Event widget == window? {event.widget == self.sensory_window.window}")
+        debug_print(f"DEBUG: Event widget is window? {event.widget is self.sensory_window.window}")
 
         # Only handle main window resize events, not child widgets
-        if event.widget != self.window:
+        if event.widget != self.sensory_window.window:
             debug_print(f"DEBUG: Ignoring resize event from child widget: {event.widget}")
             return
 
         debug_print("DEBUG: MAIN WINDOW RESIZE CONFIRMED - Processing...")
 
         # Get current window dimensions for verification
-        current_width = self.window.winfo_width()
-        current_height = self.window.winfo_height()
+        current_width = self.sensory_window.window.winfo_width()
+        current_height = self.sensory_window.window.winfo_height()
         debug_print(f"DEBUG: Current window dimensions: {current_width}x{current_height}")
 
         # Debounce rapid resize events
         if hasattr(self, '_resize_timer'):
-            self.window.after_cancel(self._resize_timer)
+            self.sensory_window.window.after_cancel(self._resize_timer)
             debug_print("DEBUG: Cancelled previous resize timer")
 
         # Schedule plot size update with a small delay to avoid excessive updates
-        self._resize_timer = self.window.after(1000, self.update_plot_size_for_resize)
+        self._resize_timer = self.sensory_window.window.after(1000, self.update_plot_size_for_resize)
         debug_print("DEBUG: Scheduled plot resize update in 150ms")
 
     def update_plot_size_for_resize(self):
         """Update plot size with artifact prevention and frame validation."""
         try:
             # Check if we have the necessary components
-            if not hasattr(self, 'canvas_frame') or not self.canvas_frame.winfo_exists():
+            if not hasattr(self, 'canvas_frame') or not self.sensory_window.canvas_frame.winfo_exists():
                 return
 
-            if not hasattr(self, 'fig') or not self.fig:
+            if not hasattr(self, 'fig') or not self.sensory_window.fig:
                 return
 
             # Wait for frame geometry to stabilize
-            self.window.update_idletasks()
+            self.sensory_window.window.update_idletasks()
 
             # Use the actual plot container for sizing
-            if hasattr(self, 'plot_container') and self.plot_container.winfo_exists():
-                parent_for_sizing = self.plot_container
+            if hasattr(self, 'plot_container') and self.sensory_window.plot_container.winfo_exists():
+                parent_for_sizing = self.sensory_window.plot_container
             else:
-                parent_for_sizing = self.canvas_frame.master
+                parent_for_sizing = self.sensory_window.canvas_frame.master
 
             parent_for_sizing.update_idletasks()
 
@@ -82,7 +83,7 @@ class PlotManager:
             new_width, new_height = self.calculate_dynamic_plot_size(parent_for_sizing)
 
             # Get current figure size for comparison
-            current_width, current_height = self.fig.get_size_inches()
+            current_width, current_height = self.sensory_window.fig.get_size_inches()
 
             # Only update if change is significant
             width_diff = abs(new_width - current_width)
@@ -93,9 +94,9 @@ class PlotManager:
                 debug_print(f"DEBUG: Significant size change detected - updating plot")
 
                 # Apply the new size
-                self.fig.set_size_inches(new_width, new_height)
+                self.sensory_window.fig.set_size_inches(new_width, new_height)
 
-                self.canvas.draw_idle()
+                self.sensory_window.canvas.draw_idle()
             else:
                 debug_print("DEBUG: Size change below threshold, skipping update to prevent artifacts")
 
@@ -108,7 +109,7 @@ class PlotManager:
         """Setup the right panel for spider plot visualization with proper resizing."""
 
         # Create the main plot frame with proper expansion settings
-        plot_frame = ttk.LabelFrame(self.right_frame, text="Sensory Profile Comparison", padding=10)
+        plot_frame = ttk.LabelFrame(self.sensory_window.right_frame, text="Sensory Profile Comparison", padding=10)
         plot_frame.pack(fill='both', expand=True, padx=5, pady=5)
 
         # Sample selection for plotting (fixed height)
@@ -118,17 +119,18 @@ class PlotManager:
         ttk.Label(control_frame, text="Select Samples to Display:", font=FONT).pack(anchor='w')
 
         # Checkboxes frame (will be populated when samples are added)
-        self.checkbox_frame = ttk.Frame(control_frame)
-        self.checkbox_frame.pack(fill='x', pady=5)
+        self.sensory_window.checkbox_frame = ttk.Frame(control_frame)
+        self.sensory_window.checkbox_frame.pack(fill='x', pady=5)
 
-        self.sample_checkboxes = {}
+        self.sensory_window.checkbox_frame = ttk.Frame(control_frame)
+        self.sensory_window.checkbox_frame.pack(fill='x', pady=5)
 
         # Canvas container frame (expandable)
         canvas_container = ttk.Frame(plot_frame)
         canvas_container.pack(side='top', fill='both', expand=True)
 
         # Store reference to the container for proper sizing
-        self.plot_container = canvas_container
+        self.sensory_window.plot_container = canvas_container
 
         # Plot canvas (pass the expandable container)
         self.setup_plot_canvas(canvas_container)
@@ -140,20 +142,20 @@ class PlotManager:
         dynamic_width, dynamic_height = self.calculate_dynamic_plot_size(parent)
 
         # Create figure with calculated responsive sizing
-        self.fig, self.ax = plt.subplots(figsize=(dynamic_width, dynamic_height), subplot_kw=dict(projection='polar'))
-        self.fig.patch.set_facecolor('white')
-        self.fig.subplots_adjust(left=0.1, right=0.9, top=0.85, bottom=0.1)
+        self.sensory_window.fig, self.sensory_window.ax = plt.subplots(figsize=(dynamic_width, dynamic_height), subplot_kw=dict(projection='polar'))
+        self.sensory_window.fig.patch.set_facecolor('white')
+        self.sensory_window.fig.subplots_adjust(left=0.1, right=0.9, top=0.85, bottom=0.1)
 
         # Create canvas with proper expansion configuration
         canvas_frame = ttk.Frame(parent)
         canvas_frame.pack(fill='both', expand=True)
 
         # Store reference to canvas_frame for resize handling
-        self.canvas_frame = canvas_frame
+        self.sensory_window.canvas_frame = canvas_frame
 
         # Create canvas
-        self.canvas = FigureCanvasTkAgg(self.fig, canvas_frame)
-        canvas_widget = self.canvas.get_tk_widget()
+        self.sensory_window.canvas = FigureCanvasTkAgg(self.sensory_window.fig, canvas_frame)
+        canvas_widget = self.sensory_window.canvas.get_tk_widget()
         canvas_widget.pack(fill='both', expand=True)
 
         # Add toolbar for additional functionality
@@ -163,20 +165,20 @@ class PlotManager:
         self.update_plot()
 
         # Bind window resize events to update plot size
-        self.window.bind('<Configure>', self.on_window_resize_plot, add=True)
+        self.sensory_window.window.bind('<Configure>', self.on_window_resize_plot, add=True)
 
     def ensure_canvas_expansion(self):
         """Ensure canvas frame expands to use full available height."""
-        if hasattr(self, 'canvas_frame') and self.canvas_frame.winfo_exists():
+        if hasattr(self, 'canvas_frame') and self.sensory_window.canvas_frame.winfo_exists():
             # Force the canvas frame to expand
-            self.canvas_frame.update_idletasks()
+            self.sensory_window.canvas_frame.update_idletasks()
 
             # Get parent dimensions
-            parent = self.canvas_frame.master
+            parent = self.sensory_window.canvas_frame.master
             parent_height = parent.winfo_height()
 
             # Check if canvas is using full height
-            canvas_height = self.canvas_frame.winfo_height()
+            canvas_height = self.sensory_window.canvas_frame.winfo_height()
             debug_print(f"DEBUG: Canvas frame height: {canvas_height}px, Parent height: {parent_height}px")
 
             if canvas_height < parent_height - 100:  # If significantly smaller
@@ -190,19 +192,19 @@ class PlotManager:
         from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk
 
         # Create a hidden toolbar to access the navigation functions
-        self.hidden_toolbar = NavigationToolbar2Tk(self.canvas, canvas_widget.master)
-        self.hidden_toolbar.pack_forget()  # Hide the toolbar but keep functionality
+        self.sensory_window.hidden_toolbar = NavigationToolbar2Tk(self.sensory_window.canvas, canvas_widget.master)
+        self.sensory_window.hidden_toolbar.pack_forget()  # Hide the toolbar but keep functionality
 
         def show_context_menu(event):
             """Show simplified right-click context menu with essential plot options."""
-            context_menu = tk.Menu(self.window, tearoff=0)
+            context_menu = tk.Menu(self.sensory_window.window, tearoff=0)
 
             # Essential options only
             context_menu.add_command(label="⚙️ Configure Plot",
-                                   command=self.hidden_toolbar.configure_subplots)
+                                   command=self.sensory_window.hidden_toolbar.configure_subplots)
             context_menu.add_separator()
             context_menu.add_command(label="💾 Save Plot...",
-                                   command=self.hidden_toolbar.save_figure)
+                                   command=self.sensory_window.hidden_toolbar.save_figure)
 
             try:
                 context_menu.tk_popup(event.x_root, event.y_root)
@@ -218,11 +220,11 @@ class PlotManager:
         debug_print("DEBUG: Starting SIMPLE dynamic plot size calculation")
 
         # Force geometry update to get current dimensions
-        self.window.update_idletasks()
+        self.sensory_window.window.update_idletasks()
 
 
-        if hasattr(self, 'plot_container') and self.plot_container.winfo_exists():
-            parent_frame = self.plot_container
+        if hasattr(self, 'plot_container') and self.sensory_window.plot_container.winfo_exists():
+            parent_frame = self.sensory_window.plot_container
             parent_frame.update_idletasks()
 
         # Get the actual dimensions
@@ -270,7 +272,7 @@ class PlotManager:
         debug_print("DEBUG: Initializing plot size after window render")
 
         # Give window time to fully render
-        self.window.update_idletasks()
+        self.sensory_window.window.update_idletasks()
 
         # Force canvas updates
         if hasattr(self, 'right_canvas'):
@@ -284,42 +286,43 @@ class PlotManager:
 
     def create_spider_plot(self):
         """Create a spider/radar plot of sensory data."""
-        self.ax.clear()
+        self.sensory_window.ax.clear()
 
         # Check if we have any data to plot
-        if not self.samples:
-            self.ax.text(0.5, 0.5, 'No samples to display\nAdd samples to begin evaluation',
-                        transform=self.ax.transAxes, ha='center', va='center',
+        if not self.sensory_window.samples:
+            self.sensory_window.ax.text(0.5, 0.5, 'No samples to display\nAdd samples to begin evaluation',
+                        transform=self.sensory_window.ax.transAxes, ha='center', va='center',
                         fontsize=12, color='gray')
-            self.canvas.draw()
+            self.sensory_window.canvas.draw()
             return
 
         # Get selected samples for plotting
         selected_samples = []
-        for sample_name, checkbox_var in self.sample_checkboxes.items():
-            if checkbox_var.get() and sample_name in self.samples:
-                selected_samples.append(sample_name)
+        if hasattr(self, 'sample_manager') and hasattr(self.sample_manager, 'sample_checkboxes'):
+            for sample_name, checkbox_var in self.sample_manager.sample_checkboxes.items():
+                if checkbox_var.get() and sample_name in self.sensory_window.samples:
+                    selected_samples.append(sample_name)
 
         if not selected_samples:
-            self.ax.text(0.5, 0.5, 'No samples selected\nUse checkboxes to select samples',
-                        transform=self.ax.transAxes, ha='center', va='center',
+            self.sensory_window.ax.text(0.5, 0.5, 'No samples selected\nUse checkboxes to select samples',
+                        transform=self.sensory_window.ax.transAxes, ha='center', va='center',
                         fontsize=12, color='gray')
-            self.canvas.draw()
+            self.sensory_window.canvas.draw()
             return
 
         # Setup the spider plot
-        num_metrics = len(self.metrics)
+        num_metrics = len(self.sensory_window.metrics)
         angles = np.linspace(0, 2 * np.pi, num_metrics, endpoint=False).tolist()
         angles += angles[:1]  # Complete the circle
 
         # Set up the plot
-        self.ax.set_theta_offset(np.pi / 2)
-        self.ax.set_theta_direction(-1)
-        self.ax.set_thetagrids(np.degrees(angles[:-1]), self.metrics, fontsize=10)
-        self.ax.set_ylim(0, 9)
-        self.ax.set_yticks(range(1, 10))
-        self.ax.set_yticklabels(range(1, 10))
-        self.ax.grid(True, alpha=0.3)
+        self.sensory_window.ax.set_theta_offset(np.pi / 2)
+        self.sensory_window.ax.set_theta_direction(-1)
+        self.sensory_window.ax.set_thetagrids(np.degrees(angles[:-1]), self.sensory_window.metrics, fontsize=10)
+        self.sensory_window.ax.set_ylim(0, 9)
+        self.sensory_window.ax.set_yticks(range(1, 10))
+        self.sensory_window.ax.set_yticklabels(range(1, 10))
+        self.sensory_window.ax.grid(True, alpha=0.3)
 
         # Colors for different samples
         colors = ['red', 'green', 'blue', 'orange', 'purple', 'brown', 'pink', 'cyan', 'magenta', 'lime']
@@ -327,30 +330,30 @@ class PlotManager:
 
         # Plot each selected sample
         for i, sample_name in enumerate(selected_samples):
-            sample_data = self.samples[sample_name]
-            values = [sample_data.get(metric, 5) for metric in self.metrics]  # Default to 5 if no data
+            sample_data = self.sensory_window.samples[sample_name]
+            values = [sample_data.get(metric, 5) for metric in self.sensory_window.metrics]  # Default to 5 if no data
             values += values[:1]  # Complete the circle
 
             color = colors[i % len(colors)]
             line_style = line_styles[i % len(line_styles)]
 
             # Plot the line and markers
-            self.ax.plot(angles, values, 'o', linewidth=2.5, label=sample_name,
+            self.sensory_window.ax.plot(angles, values, 'o', linewidth=2.5, label=sample_name,
                         color=color, linestyle=line_style, markersize=8, alpha=0.8)
             # Fill the area
-            self.ax.fill(angles, values, alpha=0.1, color=color)
+            self.sensory_window.ax.fill(angles, values, alpha=0.1, color=color)
 
         # Add legend
         if selected_samples:
-            self.ax.legend(loc='upper right', bbox_to_anchor=(1.1, 1.2), fontsize=8)
+            self.sensory_window.ax.legend(loc='upper right', bbox_to_anchor=(1.1, 1.2), fontsize=8)
 
         # Set title
-        self.ax.set_title('Sensory Profile Comparison', fontsize=12, fontweight='bold', pad=15, ha = 'center', y = 1.08)
+        self.sensory_window.ax.set_title('Sensory Profile Comparison', fontsize=12, fontweight='bold', pad=15, ha = 'center', y = 1.08)
 
         # Force canvas update
-        self.canvas.draw_idle()
+        self.sensory_window.canvas.draw_idle()
 
     def update_plot(self):
         """Update the spider plot."""
         self.create_spider_plot()
-        self.bring_to_front()
+        self.mode_manager.bring_to_front()

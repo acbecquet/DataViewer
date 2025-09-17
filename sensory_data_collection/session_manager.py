@@ -14,9 +14,11 @@ from utils import debug_print, show_success_message, FONT
 class SessionManager:
     """Manages sensory data collection sessions."""
     
-    def __init__(self, sensory_window):
+    def __init__(self, sensory_window, sample_manager=None, plot_manager=None):
         """Initialize the session manager with reference to main window."""
         self.sensory_window = sensory_window
+        self.sample_manager = sample_manager
+        self.plot_manager = plot_manager
         self.sessions = {}
         self.current_session_id = None
         self.session_counter = 1
@@ -32,7 +34,7 @@ class SessionManager:
 
         # Create new session structure
         self.sessions[session_name] = {
-            'header': {field: var.get() for field, var in self.header_vars.items()},
+            'header': {field: var.get() for field, var in self.sensory_window.header_vars.items()},
             'samples': {},
             'timestamp': datetime.now().isoformat(),
             'source_image': source_image or ''
@@ -40,15 +42,15 @@ class SessionManager:
 
         # Switch to new session
         self.current_session_id = session_name
-        self.samples = self.sessions[session_name]['samples']
+        self.sensory_window.samples = self.sessions[session_name]['samples']
 
         debug_print(f"DEBUG: Session created successfully")
         debug_print(f"DEBUG: Current session ID: {self.current_session_id}")
         debug_print(f"DEBUG: Session structure: {self.sessions[session_name]}")
 
         self.update_session_combo()
-        self.update_sample_combo()
-        self.update_sample_checkboxes()
+        self.sample_manager.update_sample_combo()
+        self.sample_manager.update_sample_checkboxes()
 
         return session_name
 
@@ -62,17 +64,17 @@ class SessionManager:
 
         # Save current session data before switching
         if self.current_session_id and self.current_session_id in self.sessions:
-            self.sessions[self.current_session_id]['samples'] = self.samples
-            self.sessions[self.current_session_id]['header'] = {field: var.get() for field, var in self.header_vars.items()}
-            debug_print(f"DEBUG: Saved {len(self.samples)} samples to previous session")
+            self.sessions[self.current_session_id]['samples'] = self.sensory_window.samples
+            self.sessions[self.current_session_id]['header'] = {field: var.get() for field, var in self.sensory_window.header_vars.items()}
+            debug_print(f"DEBUG: Saved {len(self.sensory_window.samples)} samples to previous session")
 
         # Switch to new session
         self.current_session_id = session_id
-        self.samples = self.sessions[session_id]['samples']
+        self.sensory_window.samples = self.sessions[session_id]['samples']
 
         # Update header fields with session data
         session_header = self.sessions[session_id]['header']
-        for field, var in self.header_vars.items():
+        for field, var in self.sensory_window.header_vars.items():
             if field in session_header:
                 var.set(session_header[field])
             else:
@@ -81,23 +83,23 @@ class SessionManager:
                 else:
                     var.set('')
 
-        debug_print(f"DEBUG: Switched to session {session_id} with {len(self.samples)} samples")
+        debug_print(f"DEBUG: Switched to session {session_id} with {len(self.sensory_window.samples)} samples")
 
         # Update UI components
-        self.update_sample_combo()
-        self.update_sample_checkboxes()
+        self.sample_manager.update_sample_combo()
+        self.sample_manager.update_sample_checkboxes()
 
         # Select first sample if available
-        if self.samples:
-            first_sample = list(self.samples.keys())[0]
-            self.sample_var.set(first_sample)
-            self.load_sample_data(first_sample)
+        if self.sensory_window.samples:
+            first_sample = list(self.sensory_window.samples.keys())[0]
+            self.sensory_window.sample_var.set(first_sample)
+            self.sample_manager.load_sample_data(first_sample)
             self.refresh_value_displays()
         else:
-            self.sample_var.set('')
-            self.clear_form()
+            self.sensory_window.sample_var.set('')
+            self.sample_manager.clear_form()
 
-        self.update_plot()
+        self.plot_manager.update_plot()
         debug_print("DEBUG: Session switch completed with display refresh")
         return True
 
@@ -105,7 +107,7 @@ class SessionManager:
         """Update the session selection combo box."""
         session_names = list(self.sessions.keys())
         if hasattr(self, 'session_combo'):
-            self.session_combo['values'] = session_names
+            self.sensory_window.session_combo['values'] = session_names
 
     def setup_session_selector(self, parent_frame):
         """Add session selector to the interface."""
@@ -125,11 +127,11 @@ class SessionManager:
         session_label = ttk.Label(top_frame, text="Current Session:", font=FONT)
         session_label.pack(side='left', padx=(0, 5))
 
-        self.session_var = tk.StringVar()
-        self.session_combo = ttk.Combobox(top_frame, textvariable=self.session_var,
+        self.sensory_window.session_var = tk.StringVar()
+        self.sensory_window.session_combo = ttk.Combobox(top_frame, textvariable=self.sensory_window.session_var,
                                          font=FONT, state='readonly', width=15)
-        self.session_combo.pack(side='left', padx=(0, 10))
-        self.session_combo.bind('<<ComboboxSelected>>', self.on_session_selected)
+        self.sensory_window.session_combo.pack(side='left', padx=(0, 10))
+        self.sensory_window.session_combo.bind('<<ComboboxSelected>>', self.on_session_selected)
         debug_print("DEBUG: Session dropdown centered on top row")
 
         # Second row - Session management buttons centered
@@ -148,7 +150,7 @@ class SessionManager:
 
     def on_session_selected(self, event=None):
         """Handle session selection change."""
-        selected_session = self.session_var.get()
+        selected_session = self.sensory_window.session_var.get()
         if selected_session and selected_session != self.current_session_id:
             debug_print(f"DEBUG: Session selection changed to: {selected_session}")
             self.switch_to_session(selected_session)
@@ -164,8 +166,8 @@ class SessionManager:
 
             debug_print(f"DEBUG: Creating new session: {session_name}")
             self.create_new_session(session_name)
-            self.session_var.set(session_name)
-            show_success_message("Success", f"Created new session: {session_name}", self.window)
+            self.sensory_window.session_var.set(session_name)
+            show_success_message("Success", f"Created new session: {session_name}", self.sensory_window.window)
 
     def delete_current_session(self):
         """Delete the current session."""
@@ -194,20 +196,20 @@ class SessionManager:
             self.update_session_combo()
 
             debug_print(f"DEBUG: Session {session_to_delete} deleted successfully")
-            show_success_message("Success", f"Session '{session_to_delete}' deleted.", self.window)
+            show_success_message("Success", f"Session '{session_to_delete}' deleted.", self.sensory_window.window)
 
     def show_combine_sessions_dialog(self):
         """Show dialog to select and combine multiple sessions."""
         if len(self.sessions) < 2:
             show_success_message("Insufficient Sessions",
-                              "Need at least 2 sessions to combine.", self.window)
+                              "Need at least 2 sessions to combine.", self.sensory_window.window)
             return
 
         # Create dialog window
-        combine_window = tk.Toplevel(self.window)
+        combine_window = tk.Toplevel(self.sensory_window.window)
         combine_window.title("Combine Sessions")
         combine_window.geometry("400x300")
-        combine_window.transient(self.window)
+        combine_window.transient(self.sensory_window.window)
         combine_window.grab_set()
 
         # Instructions
@@ -288,13 +290,13 @@ class SessionManager:
             # Create new combined session
             self.create_new_session(new_session_name)
             self.sessions[new_session_name]['samples'] = combined_samples
-            self.samples = combined_samples
+            self.sensory_window.samples = combined_samples
 
             # Update UI
-            self.session_var.set(new_session_name)
-            self.update_sample_combo()
-            self.update_sample_checkboxes()
-            self.update_plot()
+            self.sensory_window.session_var.set(new_session_name)
+            self.sample_manager.update_sample_combo()
+            self.sample_manager.update_sample_checkboxes()
+            self.plot_manager.update_plot()
 
             combine_window.destroy()
 
@@ -303,7 +305,7 @@ class SessionManager:
 
             show_success_message("Success",
                               f"Combined {len(selected_sessions)} sessions into '{new_session_name}'!\n"
-                              f"Total samples: {total_sample_count}", self.window)
+                              f"Total samples: {total_sample_count}", self.sensory_window.window)
 
         ttk.Button(button_frame, text="Combine Sessions",
                    command=combine_selected_sessions).pack(side='left', padx=5)
@@ -325,7 +327,7 @@ class SessionManager:
 
         if not filenames or len(filenames) < 2:
             show_success_message("Insufficient Files",
-                              "Please select at least 2 session files to merge.", self.window)
+                              "Please select at least 2 session files to merge.", self.sensory_window.window)
             return
 
         debug_print(f"DEBUG: Selected {len(filenames)} files for merging")
@@ -398,7 +400,7 @@ class SessionManager:
                 return False
 
             # Check for expected metrics (at least some should be present)
-            metrics_found = sum(1 for metric in self.metrics if metric in sample_data)
+            metrics_found = sum(1 for metric in self.sensory_window.metrics if metric in sample_data)
             if metrics_found == 0:
                 debug_print(f"DEBUG: No valid metrics found in sample {sample_name}")
                 return False
@@ -410,10 +412,10 @@ class SessionManager:
         """Show dialog to configure session merging."""
 
         # Create dialog window
-        merge_window = tk.Toplevel(self.window)
+        merge_window = tk.Toplevel(self.sensory_window.window)
         merge_window.title("Merge Session Files")
         merge_window.geometry("600x500")
-        merge_window.transient(self.window)
+        merge_window.transient(self.sensory_window.window)
         merge_window.grab_set()
 
         # Main frame
@@ -560,7 +562,7 @@ class SessionManager:
                 merge_window.destroy()
                 show_success_message("Merge Complete",
                                   f"Successfully merged {len(selected_sessions)} sessions!\n"
-                                  f"New session: {new_session_name}", self.window)
+                                  f"New session: {new_session_name}", self.sensory_window.window)
 
         def select_all():
             for session_info in session_vars.values():
@@ -620,28 +622,28 @@ class SessionManager:
                 self.sessions[new_session_name] = merged_session
                 self.switch_to_session(new_session_name)
                 if hasattr(self, 'session_var'):
-                    self.session_var.set(new_session_name)
+                    self.sensory_window.session_var.set(new_session_name)
                 self.update_session_combo()
             else:
                 # Fallback to old structure
-                self.samples = merged_samples
+                self.sensory_window.samples = merged_samples
 
                 # Update header fields
                 for field, value in merged_session['header'].items():
-                    if field in self.header_vars:
-                        self.header_vars[field].set(value)
+                    if field in self.sensory_window.header_vars:
+                        self.sensory_window.header_vars[field].set(value)
 
             # Update UI
-            self.update_sample_combo()
-            self.update_sample_checkboxes()
+            self.sample_manager.update_sample_combo()
+            self.sample_manager.update_sample_checkboxes()
 
             # Select first sample if available
             if merged_samples:
                 first_sample = list(merged_samples.keys())[0]
-                self.sample_var.set(first_sample)
-                self.load_sample_data(first_sample)
+                self.sensory_window.sample_var.set(first_sample)
+                self.sample_manager.load_sample_data(first_sample)
 
-            self.update_plot()
+            self.plot_manager.update_plot()
 
             # Log merge details
             total_samples = len(merged_samples)

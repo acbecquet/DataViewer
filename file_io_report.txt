@@ -1,0 +1,2 @@
+************* Module sensory_data_collection.file_io
+sensory_data_collection\file_io.py:1:0: F0010: error while code parsing: Wrong or no encoding specified for C:\Users\Alexander Becquet\Documents\Python\Python\TPM Data Processing Python Scripts\Standardized Testing GUI\git testing\DataViewer\sensory_data_collection\file_io.py. (parse-error)

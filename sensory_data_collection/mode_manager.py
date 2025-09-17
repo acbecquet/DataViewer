@@ -14,13 +14,15 @@ from utils import debug_print, show_success_message
 class ModeManager:
     """Manages collection vs comparison mode switching and operations."""
     
-    def __init__(self, sensory_window):
+    def __init__(self, sensory_window, session_manager, plot_manager):
         """Initialize the mode manager with reference to main window."""
         self.sensory_window = sensory_window
+        self.session_manager = session_manager
+        self.plot_manager = plot_manager
         
     def toggle_mode(self):
         """Toggle between collection mode and comparison mode."""
-        if self.current_mode == "collection":
+        if self.sensory_window.current_mode == "collection":
             # Switch to comparison mode
             self.switch_to_comparison_mode()
         else:
@@ -31,8 +33,8 @@ class ModeManager:
         """Switch to comparison mode - show averages across users."""
         debug_print("DEBUG: Switching to comparison mode")
 
-        self.current_mode = "comparison"
-        self.mode_button.config(text="Switch to Collection Mode")
+        self.sensory_window.current_mode = "comparison"
+        self.sensory_window.mode_button.config(text="Switch to Collection Mode")
 
         # Add comparison title
         self.setup_comparison_title()
@@ -41,7 +43,7 @@ class ModeManager:
         self.disable_sensory_evaluation()
 
         # Load multiple sessions if needed
-        if not self.all_sessions_data:
+        if not self.sensory_window.all_sessions_data:
             self.load_multiple_sessions()
 
         # Calculate averages
@@ -54,14 +56,14 @@ class ModeManager:
         self.bring_to_front()
 
         debug_print("Switched to comparison mode - showing averaged data across users")
-        show_success_message("Comparison Mode", "Now showing averaged data across multiple users.\nSensory evaluation is disabled in this mode.", self.window)
+        show_success_message("Comparison Mode", "Now showing averaged data across multiple users.\nSensory evaluation is disabled in this mode.", self.sensory_window.window)
 
     def switch_to_collection_mode(self):
         """Switch to collection mode - normal single user operation."""
         debug_print("DEBUG: Switching to collection mode")
 
-        self.current_mode = "collection"
-        self.mode_button.config(text="Switch to Comparison Mode")
+        self.sensory_window.current_mode = "collection"
+        self.sensory_window.mode_button.config(text="Switch to Comparison Mode")
 
         # Remove comparison title if it exists
         if hasattr(self, 'comparison_title_frame'):
@@ -71,18 +73,18 @@ class ModeManager:
         self.enable_sensory_evaluation()
 
         # Update plot with current user's data
-        self.update_plot()
+        self.plot_manager.update_plot()
 
         # Bring to front after mode switch
         self.bring_to_front()
 
         debug_print("Switched to collection mode - showing single user data")
-        show_success_message("Collection Mode", "Now showing single user data collection mode.\nSensory evaluation is enabled.", self.window)
+        show_success_message("Collection Mode", "Now showing single user data collection mode.\nSensory evaluation is enabled.", self.sensory_window.window)
 
     def disable_sensory_evaluation(self):
         """Gray out and disable all sensory evaluation controls."""
         # Find the sensory evaluation frame and disable all children
-        for widget in self.left_frame.winfo_children():
+        for widget in self.sensory_window.left_frame.winfo_children():
             if isinstance(widget, ttk.LabelFrame) and widget.cget('text') == 'Sensory Evaluation':
                 self.set_widget_state(widget, 'disabled')
                 widget.configure(style='Disabled.TLabelframe')
@@ -91,7 +93,7 @@ class ModeManager:
     def enable_sensory_evaluation(self):
         """Re-enable all sensory evaluation controls."""
         # Find the sensory evaluation frame and enable all children
-        for widget in self.left_frame.winfo_children():
+        for widget in self.sensory_window.left_frame.winfo_children():
             if isinstance(widget, ttk.LabelFrame) and widget.cget('text') == 'Sensory Evaluation':
                 self.set_widget_state(widget, 'normal')
                 widget.configure(style='TLabelframe')
@@ -99,9 +101,9 @@ class ModeManager:
 
     def bring_to_front(self):
         """Bring the sensory window to front after user actions."""
-        if self.window and self.window.winfo_exists():
-            self.window.lift()
-            self.window.focus_set()
+        if self.sensory_window.window and self.sensory_window.window.winfo_exists():
+            self.sensory_window.window.lift()
+            self.sensory_window.window.focus_set()
             debug_print("DEBUG: Brought sensory window to front")
 
     def set_widget_state(self, parent, state):
@@ -147,12 +149,12 @@ class ModeManager:
                 # Ensure unique session name
                 counter = 1
                 original_name = session_name
-                while session_name in self.sessions:
+                while session_name in self.session_manager.sessions:
                     session_name = f"{original_name}_{counter}"
                     counter += 1
 
                 # Create new session with loaded data
-                self.sessions[session_name] = {
+                self.session_manager.sessions[session_name] = {
                     'header': session_data.get('header', {}),
                     'samples': session_data.get('samples', {}),
                     'timestamp': session_data.get('timestamp', datetime.now().isoformat()),
@@ -160,7 +162,7 @@ class ModeManager:
                 }
 
                 successful_loads += 1
-                debug_print(f"DEBUG: Successfully loaded session {session_name} with {len(self.sessions[session_name]['samples'])} samples")
+                debug_print(f"DEBUG: Successfully loaded session {session_name} with {len(self.session_manager.sessions[session_name]['samples'])} samples")
 
             except Exception as e:
                 debug_print(f"DEBUG: Error loading session from {filename}: {e}")
@@ -168,7 +170,7 @@ class ModeManager:
 
         if successful_loads >= 2:
             debug_print(f"DEBUG: Successfully loaded {successful_loads} sessions for comparison")
-            show_success_message("Success", f"Loaded {successful_loads} sessions for comparison.", self.window)
+            show_success_message("Success", f"Loaded {successful_loads} sessions for comparison.", self.sensory_window.window)
             return True
         else:
             messagebox.showerror("Error", "Failed to load enough sessions for comparison (minimum 2 required).")
@@ -180,14 +182,14 @@ class ModeManager:
         """Calculate averages for each sample across all loaded sessions."""
         debug_print("DEBUG: Calculating sample averages across all sessions")
 
-        if len(self.sessions) < 2:
+        if len(self.session_manager.sessions) < 2:
             debug_print("DEBUG: Not enough sessions for comparison")
             return
 
         sample_data = {}
 
         # Collect all values for each sample/metric combination
-        for session_name, session_info in self.sessions.items():
+        for session_name, session_info in self.session_manager.sessions.items():
             samples = session_info.get('samples', {})
             header = session_info.get('header', {})
             assessor_name = header.get('Assessor Name', session_name)
@@ -196,12 +198,12 @@ class ModeManager:
 
             for sample_name, sample_values in samples.items():
                 if sample_name not in sample_data:
-                    sample_data[sample_name] = {metric: [] for metric in self.metrics}
+                    sample_data[sample_name] = {metric: [] for metric in self.sensory_window.metrics}
                     sample_data[sample_name]['comments'] = []
                     sample_data[sample_name]['assessors'] = []
 
                 # Collect metric values
-                for metric in self.metrics:
+                for metric in self.sensory_window.metrics:
                     if metric in sample_values and sample_values[metric] is not None:
                         try:
                             value = float(sample_values[metric])
@@ -220,7 +222,7 @@ class ModeManager:
         for sample_name, data in sample_data.items():
             self.average_samples[sample_name] = {}
 
-            for metric in self.metrics:
+            for metric in self.sensory_window.metrics:
                 if data[metric]:  # If we have values
                     avg_value = sum(data[metric]) / len(data[metric])
                     self.average_samples[sample_name][metric] = round(avg_value, 1)
@@ -232,7 +234,7 @@ class ModeManager:
             self.average_samples[sample_name]['comments'] = '\n'.join(data['comments'])
             self.average_samples[sample_name]['assessor_count'] = len(set(data['assessors']))
 
-        debug_print(f"DEBUG: Calculated averages for {len(self.average_samples)} samples across {len(self.sessions)} sessions")
+        debug_print(f"DEBUG: Calculated averages for {len(self.average_samples)} samples across {len(self.session_manager.sessions)} sessions")
 
     def update_comparison_plot(self):
         """Update plot to show averaged data across users."""
@@ -240,23 +242,23 @@ class ModeManager:
             return
 
         # Temporarily replace samples with averages for plotting
-        original_samples = self.samples.copy()
-        original_checkboxes = self.sample_checkboxes.copy()
+        original_samples = self.sensory_window.samples.copy()
+        original_checkboxes = self.sample_manager.sample_checkboxes.copy()
 
         # Set up average samples for plotting
-        self.samples = self.average_samples.copy()
+        self.sensory_window.samples = self.average_samples.copy()
 
         # Update sample checkboxes to show average samples
-        self.sample_checkboxes = {}
+        self.sample_manager.sample_checkboxes = {}
         for sample_name in self.average_samples.keys():
             var = tk.BooleanVar(value=True)  # Show all by default
-            self.sample_checkboxes[sample_name] = var
+            self.sample_manager.sample_checkboxes[sample_name] = var
 
         # Update the checkbox display
-        self.update_sample_checkboxes()
+        self.sample_manager.update_sample_checkboxes()
 
         # Update the plot
-        self.create_spider_plot()
+        self.plot_manager.create_spider_plot()
 
         debug_print("Updated plot with averaged comparison data")
 
@@ -268,9 +270,9 @@ class ModeManager:
         if hasattr(self, 'comparison_title_frame'):
             self.comparison_title_frame.destroy()
 
-        if self.current_mode == "comparison":
+        if self.sensory_window.current_mode == "comparison":
             # Create title frame at the top of the window
-            self.comparison_title_frame = ttk.Frame(self.window)
+            self.comparison_title_frame = ttk.Frame(self.sensory_window.window)
             self.comparison_title_frame.pack(side='top', fill='x', pady=10)
 
             # Add the title label with white background
@@ -283,7 +285,7 @@ class ModeManager:
             title_label.pack(expand=True)
 
             # Ensure window stays on top after adding title
-            self.window.update_idletasks()
+            self.sensory_window.window.update_idletasks()
             self.bring_to_front()
 
             debug_print("DEBUG: Added comparison mode title with white background and brought to front")

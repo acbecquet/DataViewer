@@ -8,18 +8,19 @@ from tkinter import ttk
 from datetime import datetime
 from utils import APP_BACKGROUND_COLOR, BUTTON_COLOR, FONT, debug_print
 
-
 class UILayoutManager:
     """Manages UI layout and window operations."""
     
-    def __init__(self, sensory_window):
+    def __init__(self, sensory_window, session_manager=None, plot_manager=None):
         """Initialize the UI layout manager with reference to main window."""
         self.sensory_window = sensory_window
+        self.session_manager = session_manager
+        self.plot_manager = plot_manager
         
     def setup_layout(self):
         """Create the main layout with proper canvas sizing."""
         # Create main paned window
-        main_paned = tk.PanedWindow(self.window, orient='horizontal', sashrelief='raised', sashwidth=4)
+        main_paned = tk.PanedWindow(self.sensory_window.window, orient='horizontal', sashrelief='raised', sashwidth=4)
         main_paned.pack(fill='both', expand=True, padx=5, pady=5)
 
         # Store reference to main_paned for resize handling
@@ -28,12 +29,12 @@ class UILayoutManager:
         left_canvas = tk.Canvas(main_paned, bg=APP_BACKGROUND_COLOR, highlightthickness=0)
         self.left_canvas = left_canvas
         left_scrollbar = ttk.Scrollbar(main_paned, orient="vertical", command=left_canvas.yview)
-        self.left_frame = ttk.Frame(left_canvas)
+        self.sensory_window.left_frame = ttk.Frame(left_canvas)
 
         # Better scroll configuration
         def configure_left_scroll(event=None):
             """Configure scroll region and handle resizing."""
-            self.left_frame.update_idletasks()
+            self.sensory_window.left_frame.update_idletasks()
 
             # Update scroll region
             left_canvas.configure(scrollregion=left_canvas.bbox("all"))
@@ -44,10 +45,10 @@ class UILayoutManager:
                 # Configure the interior frame to fill the canvas width
                 left_canvas.itemconfig(left_canvas.find_all()[0], width=canvas_width-4)
 
-        self.left_frame.bind("<Configure>", configure_left_scroll)
+        self.sensory_window.left_frame.bind("<Configure>", configure_left_scroll)
 
         # Create the canvas window
-        left_canvas.create_window((0, 0), window=self.left_frame, anchor="nw")
+        left_canvas.create_window((0, 0), window=self.sensory_window.left_frame, anchor="nw")
         left_canvas.configure(yscrollcommand=left_scrollbar.set)
 
         # Better canvas resize handling
@@ -74,14 +75,14 @@ class UILayoutManager:
 
         right_canvas = tk.Canvas(main_paned, bg=APP_BACKGROUND_COLOR, highlightthickness=0)
         right_scrollbar = ttk.Scrollbar(main_paned, orient="vertical", command=right_canvas.yview)
-        self.right_frame = ttk.Frame(right_canvas)
+        self.sensory_window.right_frame = ttk.Frame(right_canvas)
 
         self.right_canvas = right_canvas
 
         # Right panel configuration
         def configure_right_scroll(event=None):
             """Configure right scroll region."""
-            self.right_frame.update_idletasks()
+            self.sensory_window.right_frame.update_idletasks()
             bbox = right_canvas.bbox("all")
             if bbox:
                 right_canvas.configure(scrollregion=bbox)
@@ -94,9 +95,9 @@ class UILayoutManager:
                         right_canvas.configure(height=paned_height)
                         debug_print(f"DEBUG: Set right canvas height to match paned window: {paned_height}px")
 
-        self.right_frame.bind("<Configure>", configure_right_scroll)
+        self.sensory_window.right_frame.bind("<Configure>", configure_right_scroll)
 
-        self.right_canvas_window = right_canvas.create_window((0, 0), window=self.right_frame, anchor="nw")
+        self.right_canvas_window = right_canvas.create_window((0, 0), window=self.sensory_window.right_frame, anchor="nw")
         right_canvas.configure(yscrollcommand=right_scrollbar.set)
 
         def on_right_canvas_configure(event):
@@ -108,14 +109,14 @@ class UILayoutManager:
 
                 if canvas_width > 50 and canvas_height > 50:
                     right_canvas.itemconfig(self.right_canvas_window, width=canvas_width-4, height=canvas_height-4)
-                    self.right_frame.configure(width=canvas_width-4, height=canvas_height-4)
+                    self.sensory_window.right_frame.configure(width=canvas_width-4, height=canvas_height-4)
 
                     # Force update of all children
-                    self.right_frame.update_idletasks()
+                    self.sensory_window.right_frame.update_idletasks()
 
                     # Trigger plot resize after canvas updates (only if we have valid dimensions)
                     if hasattr(self, 'update_plot_size_for_resize') and canvas_width > 200 and canvas_height > 200:
-                        self.window.after(1000, self.update_plot_size_for_resize)
+                        self.sensory_window.window.after(1000, self.update_plot_size_for_resize)
 
         right_canvas.bind('<Configure>', on_right_canvas_configure)
 
@@ -130,14 +131,14 @@ class UILayoutManager:
         # Store the sash position function
         def set_initial_sash_position():
             try:
-                window_width = self.window.winfo_width()
+                window_width = self.sensory_window.window.winfo_width()
                 if window_width > 100:
                     sash_position = int(window_width * 0.40)
                     main_paned.sash_place(0, sash_position, 0)
                     debug_print(f"DEBUG: Set sash position to {sash_position}")
 
                     # Force canvas height update after sash positioning
-                    self.window.after(50, self.equalize_canvas_heights)
+                    self.sensory_window.window.after(50, self.equalize_canvas_heights)
             except Exception as e:
                 debug_print(f"DEBUG: Sash positioning failed: {e}")
 
@@ -146,21 +147,21 @@ class UILayoutManager:
         debug_print("DEBUG: Enhanced layout setup complete")
 
         # Add session management and panels
-        self.setup_session_selector(self.left_frame)
+        self.session_manager.setup_session_selector(self.sensory_window.left_frame)
         self.setup_data_entry_panel()
-        self.setup_plot_panel()
+        self.plot_manager.setup_plot_panel()
 
         # Apply sizing optimization after content is added
-        self.window.after(100, self.optimize_window_size)
+        self.sensory_window.window.after(100, self.optimize_window_size)
 
         # Initialize default session
-        if not self.sessions:
-            self.create_new_session("Default_Session")
+        if not self.sensory_window.sessions:
+            self.session_manager.create_new_session("Default_Session")
 
     def setup_data_entry_panel(self):
         """Setup the left panel for data entry."""
         # Header section
-        header_frame = ttk.LabelFrame(self.left_frame, text="Session Information", padding=10)
+        header_frame = ttk.LabelFrame(self.sensory_window.left_frame, text="Session Information", padding=10)
         header_frame.pack(fill='x', padx=5, pady=5)
 
         # Configure header_frame for 2x2 + button layout
@@ -210,13 +211,13 @@ class UILayoutManager:
         mode_button_frame = ttk.Frame(header_frame)
         mode_button_frame.grid(row=2, column=0, columnspan=4, pady=10)
 
-        self.mode_button = ttk.Button(mode_button_frame, text="Switch to Comparison Mode",
-                                     command=self.toggle_mode, width=25)
-        self.mode_button.pack()
+        self.sensory_window.mode_button = ttk.Button(mode_button_frame, text="Switch to Comparison Mode",
+                                     command=self.sensory_window.toggle_mode, width=25)
+        self.sensory_window.mode_button.pack()
         debug_print("Added mode switch button to header section")
 
         # Sample management sectionG
-        sample_frame = ttk.LabelFrame(self.left_frame, text="Sample Management", padding=10)
+        sample_frame = ttk.LabelFrame(self.sensory_window.left_frame, text="Sample Management", padding=10)
         sample_frame.pack(fill='x', padx=5, pady=5)
 
         debug_print("Setting up sample management with simple centering")
@@ -229,11 +230,11 @@ class UILayoutManager:
         sample_select_frame.pack(expand=True)
 
         ttk.Label(sample_select_frame, text="Current Sample:", font=FONT).pack(side='left')
-        self.sample_var = tk.StringVar()
-        self.sample_combo = ttk.Combobox(sample_select_frame, textvariable=self.sample_var,
+        self.sensory_window.sample_var = tk.StringVar()
+        self.sensory_window.sample_combo = ttk.Combobox(sample_select_frame, textvariable=self.sensory_window.sample_var,
                                         state="readonly", width=15)
-        self.sample_combo.pack(side='left', padx=5)
-        self.sample_combo.bind('<<ComboboxSelected>>', self.on_sample_changed)
+        self.sensory_window.sample_combo.pack(side='left', padx=5)
+        self.sensory_window.sample_combo.bind('<<ComboboxSelected>>', self.sensory_window.on_sample_changed)
 
         debug_print("Sample selection centered with expand=True")
 
@@ -245,23 +246,23 @@ class UILayoutManager:
         button_frame.pack(expand=True)
 
         ttk.Button(button_frame, text="Add Sample",
-                  command=self.add_sample).pack(side='left', padx=2)
+                  command=self.sensory_window.add_sample).pack(side='left', padx=2)
         ttk.Button(button_frame, text="Remove Sample",
-                  command=self.remove_sample).pack(side='left', padx=2)
+                  command=self.sensory_window.remove_sample).pack(side='left', padx=2)
         ttk.Button(button_frame, text="Clear Data",
-                  command=self.clear_current_sample).pack(side='left', padx=2)
+                  command=self.sensory_window.clear_current_sample).pack(side='left', padx=2)
 
         debug_print("Buttons centered with expand=True")
 
         # Sensory evaluation section
-        eval_frame = ttk.LabelFrame(self.left_frame, text="Sensory Evaluation", padding=10)
+        eval_frame = ttk.LabelFrame(self.sensory_window.left_frame, text="Sensory Evaluation", padding=10)
         eval_frame.pack(fill='both', expand=True, padx=5, pady=5)
 
         # Create rating scales for each metric
-        self.rating_vars = {}
-        self.value_labels = {}
+        self.sensory_window.rating_vars = {}
+        self.sensory_window.value_labels = {}
 
-        for i, metric in enumerate(self.metrics):
+        for i, metric in enumerate(self.sensory_window.metrics):
             metric_container = ttk.Frame(eval_frame)
             metric_container.pack(fill='x', pady=4)
 
@@ -275,9 +276,9 @@ class UILayoutManager:
             scale_container.pack(side='left', padx=5)
 
             # Rating scale (1-9)
-            self.rating_vars[metric] = tk.IntVar(value=5)
+            self.sensory_window.rating_vars[metric] = tk.IntVar(value=5)
             scale = tk.Scale(scale_container, from_=1, to=9, orient='horizontal',
-                           variable=self.rating_vars[metric], font=FONT,
+                           variable=self.sensory_window.rating_vars[metric], font=FONT,
                            length=300, showvalue=0, tickinterval=1,
                            sliderlength=20, sliderrelief='raised', width=15)
             scale.pack(side='left')
@@ -287,13 +288,13 @@ class UILayoutManager:
             value_label = ttk.Label(metric_frame, text="5", width=2)
             value_label.pack(side='left', padx=(10, 0))
 
-            self.value_labels[metric] = value_label
+            self.sensory_window.value_labels[metric] = value_label
             debug_print(f"DEBUG: Stored reference to value label for {metric}")
 
             # Update value display AND plot when scale changes (LIVE UPDATES)
-            def update_live(val, label=value_label, var=self.rating_vars[metric], metric_name=metric):
+            def update_live(val, label=value_label, var=self.sensory_window.rating_vars[metric], metric_name=metric):
                 label.config(text=str(var.get()))
-                self.auto_save_and_update()
+                self.sensory_window.auto_save_and_update()
             scale.config(command=update_live)
             debug_print(f"DEBUG: Centered scale for {metric} configured with smaller pointer and tickmarks from 1-9")
 
@@ -302,41 +303,41 @@ class UILayoutManager:
         comments_frame.pack(fill='x', pady=10)
 
         ttk.Label(comments_frame, text="Additional Comments:", font=FONT).pack(anchor='w')
-        self.comments_text = tk.Text(comments_frame, height=4, font=FONT)
-        self.comments_text.pack(fill='x', pady=2)
+        self.sensory_window.comments_text = tk.Text(comments_frame, height=4, font=FONT)
+        self.sensory_window.comments_text.pack(fill='x', pady=2)
 
         # Auto-save comments when user types
         def on_comment_change(event=None):
             """Auto-save comments when user types."""
-            current_sample = self.sample_var.get()
-            if current_sample and current_sample in self.samples:
-                comments = self.comments_text.get('1.0', tk.END).strip()
-                self.samples[current_sample]['comments'] = comments
+            current_sample = self.sensory_window.sample_var.get()
+            if current_sample and current_sample in self.sensory_window.samples:
+                comments = self.sensory_window.comments_text.get('1.0', tk.END).strip()
+                self.sensory_window.samples[current_sample]['comments'] = comments
                 debug_print(f"DEBUG: Auto-saved comments for {current_sample}: '{comments[:50]}...'")
 
         # Bind to text change events
-        self.comments_text.bind('<KeyRelease>', on_comment_change)
-        self.comments_text.bind('<FocusOut>', on_comment_change)
-        self.comments_text.bind('<Button-1>', lambda e: self.window.after(100, on_comment_change))
+        self.sensory_window.comments_text.bind('<KeyRelease>', on_comment_change)
+        self.sensory_window.comments_text.bind('<FocusOut>', on_comment_change)
+        self.sensory_window.comments_text.bind('<Button-1>', lambda e: self.sensory_window.window.after(100, on_comment_change))
 
     def center_window(self):
         """Center the window on screen."""
-        self.window.update_idletasks()
-        width = self.window.winfo_width()
-        height = self.window.winfo_height()
-        x = (self.window.winfo_screenwidth() // 2) - (width // 2)
-        y = (self.window.winfo_screenheight() // 2) - (height // 2)
-        self.window.geometry(f"{width}x{height}+{x}+{y}")
+        self.sensory_window.window.update_idletasks()
+        width = self.sensory_window.window.winfo_width()
+        height = self.sensory_window.window.winfo_height()
+        x = (self.sensory_window.window.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.sensory_window.window.winfo_screenheight() // 2) - (height // 2)
+        self.sensory_window.window.geometry(f"{width}x{height}+{x}+{y}")
 
     def on_window_resize(self, event):
         """Handle general window resize events with dynamic sash positioning."""
         # Only process if this is the main window resize, not child widgets
-        if event.widget != self.window:
+        if event.widget != self.sensory_window.window:
             return
 
         # Get current window dimensions
-        window_width = self.window.winfo_width()
-        window_height = self.window.winfo_height()
+        window_width = self.sensory_window.window.winfo_width()
+        window_height = self.sensory_window.window.winfo_height()
 
         if hasattr(self, 'main_paned'):
             # Force geometry update first
@@ -362,7 +363,7 @@ class UILayoutManager:
 
         # Force all frames to update their geometry
         debug_print("DEBUG: Forcing frame geometry updates...")
-        self.window.update_idletasks()
+        self.sensory_window.window.update_idletasks()
 
         # Equalize canvas heights
         self.equalize_canvas_heights()
@@ -376,7 +377,7 @@ class UILayoutManager:
         # Trigger plot-specific resize with a slight delay to allow frame updates
         if hasattr(self, 'on_window_resize_plot'):
             # Add a small delay to let the sash repositioning complete
-            self.window.after(50, lambda: self.on_window_resize_plot(event))
+            self.sensory_window.window.after(50, lambda: self.on_window_resize_plot(event))
 
     def equalize_canvas_heights(self):
         """Ensure both canvases have the same height."""
@@ -398,22 +399,22 @@ class UILayoutManager:
         """Calculate window size based on actual frame dimensions after layout."""
 
         # Force complete layout update
-        self.window.update_idletasks()
-        self.window.update()
+        self.sensory_window.window.update_idletasks()
+        self.sensory_window.window.update()
 
         # Measure what the left_frame actually uses after layout
-        self.left_frame.update_idletasks()
-        actual_left_frame_height = self.left_frame.winfo_reqheight()
+        self.sensory_window.left_frame.update_idletasks()
+        actual_left_frame_height = self.sensory_window.left_frame.winfo_reqheight()
 
         # Also measure right frame actual height for comparison
-        self.right_frame.update_idletasks()
-        actual_right_frame_height = self.right_frame.winfo_reqheight()
+        self.sensory_window.right_frame.update_idletasks()
+        actual_right_frame_height = self.sensory_window.right_frame.winfo_reqheight()
 
         debug_print(f"DEBUG: Actual frame heights - Left: {actual_left_frame_height}px, Right: {actual_right_frame_height}px")
 
         # Width calculations (existing logic)
-        left_frame_width = self.left_frame.winfo_reqwidth()
-        right_frame_width = self.right_frame.winfo_reqwidth()
+        left_frame_width = self.sensory_window.left_frame.winfo_reqwidth()
+        right_frame_width = self.sensory_window.right_frame.winfo_reqwidth()
 
         min_plot_width = 500
         optimal_left_width = max(left_frame_width + 40, 450)
@@ -428,8 +429,8 @@ class UILayoutManager:
         debug_print(f"DEBUG: Window sized for actual frame height: {governing_content_height}px")
 
         # Screen constraints
-        screen_width = self.window.winfo_screenwidth()
-        screen_height = self.window.winfo_screenheight()
+        screen_width = self.sensory_window.window.winfo_screenwidth()
+        screen_height = self.sensory_window.window.winfo_screenheight()
 
         max_usable_width = int(screen_width * 0.9)
         max_usable_height = int(screen_height * 0.85)
@@ -446,26 +447,26 @@ class UILayoutManager:
         debug_print(f"DEBUG: Final window size matching actual content: {final_width}x{final_height}")
 
         # Apply the sizing
-        self.window.geometry(f"{final_width}x{final_height}")
+        self.sensory_window.window.geometry(f"{final_width}x{final_height}")
 
         # Pass the actual required height, not the full window height
         available_height = governing_content_height
-        self.window.after(50, lambda: self.configure_canvas_sizing(available_height))
+        self.sensory_window.window.after(50, lambda: self.configure_canvas_sizing(available_height))
 
         self.center_window()
 
         if hasattr(self, 'set_initial_sash_position'):
-            self.window.after(200, self.set_initial_sash_position)
+            self.sensory_window.window.after(200, self.set_initial_sash_position)
 
     def configure_canvas_sizing(self, available_content_height):
         """Configure canvas sizing using the frame's actual rendered size."""
         debug_print(f"DEBUG: Configuring canvas sizing")
 
-        self.window.update_idletasks()
+        self.sensory_window.window.update_idletasks()
 
         # Get the required height of the left frame content
-        self.left_frame.update_idletasks()
-        required_frame_height = self.left_frame.winfo_reqheight()
+        self.sensory_window.left_frame.update_idletasks()
+        required_frame_height = self.sensory_window.left_frame.winfo_reqheight()
 
         debug_print(f"DEBUG: left_frame required height: {required_frame_height}px")
 
@@ -490,7 +491,7 @@ class UILayoutManager:
 
         # Left Panel Strategy: Optimize scrolling behavior
         # If content fits, disable scrolling; if not, optimize scroll region
-        left_content_height = self.left_frame.winfo_reqheight()
+        left_content_height = self.sensory_window.left_frame.winfo_reqheight()
 
         if left_content_height <= available_panel_height:
             # Content fits! Set canvas to exact content height to eliminate gray space
@@ -506,7 +507,7 @@ class UILayoutManager:
             self.left_canvas.configure(height=optimal_left_height)
 
         # Right Panel Strategy: Ensure plot area uses available space efficiently
-        right_content_height = self.right_frame.winfo_reqheight()
+        right_content_height = self.sensory_window.right_frame.winfo_reqheight()
 
         if right_content_height < available_panel_height:
             # Right panel has extra space - we could expand plot or center it
@@ -518,12 +519,12 @@ class UILayoutManager:
     def setup_interface(self):
         """Set up the main interface with session management."""
         # Create main frames
-        main_frame = ttk.Frame(self.window)
+        main_frame = ttk.Frame(self.sensory_window.window)
         main_frame.pack(fill='both', expand=True, padx=10, pady=10)
 
         # Add session management at the top
-        self.setup_session_selector(main_frame)
+        self.session_manager.setup_session_selector(main_frame)
 
         # Initialize with default session
-        if not self.sessions:
-            self.create_new_session("Default_Session")
+        if not self.sensory_window.sessions:
+            self.session_manager.create_new_session("Default_Session")

@@ -15,15 +15,17 @@ from utils import debug_print, show_success_message
 class ExportManager:
     """Manages export operations for sensory data."""
     
-    def __init__(self, sensory_window):
+    def __init__(self, sensory_window, sample_manager, plot_manager):
         """Initialize the export manager with reference to main window."""
         self.sensory_window = sensory_window
+        self.sample_manager = sample_manager
+        self.plot_manager = plot_manager
         
     def save_plot_as_image(self):
         """Save the current spider plot as an image file."""
         debug_print("DEBUG: Starting plot image save")
 
-        if not self.samples:
+        if not self.sensory_window.samples:
             messagebox.showwarning("Warning", "No samples to save! Please add samples first.")
             return
 
@@ -42,14 +44,14 @@ class ExportManager:
 
             if filename:
                 # Ensure we have the latest plot
-                self.update_plot()
+                self.plot_manager.update_plot()
 
                 # Save the figure with high DPI for quality
-                self.fig.savefig(filename, dpi=300, bbox_inches='tight',
+                self.sensory_window.fig.savefig(filename, dpi=300, bbox_inches='tight',
                                facecolor='white', edgecolor='none')
 
                 debug_print(f"DEBUG: Plot saved successfully to {filename}")
-                show_success_message("Success", f"Plot saved successfully as {os.path.basename(filename)}", self.window)
+                show_success_message("Success", f"Plot saved successfully as {os.path.basename(filename)}", self.sensory_window.window)
 
         except Exception as e:
             debug_print(f"DEBUG: Error saving plot: {e}")
@@ -59,7 +61,7 @@ class ExportManager:
         """Save the sensory data table as an image."""
         debug_print("DEBUG: Starting table image save with comments")
 
-        if not self.samples:
+        if not self.sensory_window.samples:
             messagebox.showwarning("Warning", "No data to save! Please add samples first.")
             return
 
@@ -80,13 +82,13 @@ class ExportManager:
                 table_data = []
 
                 # Header row with attributes + comments
-                headers = ["Sample"] + self.metrics + ["Additional Comments"]
+                headers = ["Sample"] + self.sensory_window.metrics + ["Additional Comments"]
                 table_data.append(headers)
 
                 # Data rows - one per sample
-                for sample_name, sample_data in self.samples.items():
+                for sample_name, sample_data in self.sensory_window.samples.items():
                     row = [sample_name]
-                    for metric in self.metrics:
+                    for metric in self.sensory_window.metrics:
                         row.append(str(sample_data.get(metric, "N/A")))
                     # Add comments - get from sample data or leave blank if empty
                     comments = sample_data.get("comments", "").strip()
@@ -94,7 +96,7 @@ class ExportManager:
                     table_data.append(row)
 
                 # Create figure for table with wider width to accommodate comments
-                fig, ax = plt.subplots(figsize=(16, max(6, len(self.samples) * 0.5)))
+                fig, ax = plt.subplots(figsize=(16, max(6, len(self.sensory_window.samples) * 0.5)))
                 ax.axis('tight')
                 ax.axis('off')
 
@@ -127,7 +129,7 @@ class ExportManager:
                 plt.close(fig)
 
                 debug_print(f"DEBUG: Table with comments saved successfully to {filename}")
-                show_success_message("Success", f"Table saved successfully as {os.path.basename(filename)}", self.window)
+                show_success_message("Success", f"Table saved successfully as {os.path.basename(filename)}", self.sensory_window.window)
 
         except Exception as e:
             debug_print(f"DEBUG: Error saving table: {e}")
@@ -139,7 +141,7 @@ class ExportManager:
         """Generate a PowerPoint report using the same template as generate_test_report."""
         debug_print("DEBUG: Starting PowerPoint report generation")
 
-        if not self.samples:
+        if not self.sensory_window.samples:
             messagebox.showwarning("Warning", "No data to export! Please add samples first.")
             return
 
@@ -202,18 +204,18 @@ class ExportManager:
 
             # Create table data with proper structure (attributes as headers + comments)
             table_data = []
-            headers = ["Sample"] + self.metrics + ["Additional Comments"]
+            headers = ["Sample"] + self.sensory_window.metrics + ["Additional Comments"]
 
             # Add header data if available
             header_info = []
-            for field in self.header_fields:
-                if field in self.header_vars and self.header_vars[field].get():
-                    header_info.append(f"{field}: {self.header_vars[field].get()}")
+            for field in self.sensory_window.header_fields:
+                if field in self.sensory_window.header_vars and self.sensory_window.header_vars[field].get():
+                    header_info.append(f"{field}: {self.sensory_window.header_vars[field].get()}")
 
             # Add data rows with current comments (including any just typed)
-            for sample_name, sample_data in self.samples.items():
+            for sample_name, sample_data in self.sensory_window.samples.items():
                 row = [sample_name]
-                for metric in self.metrics:
+                for metric in self.sensory_window.metrics:
                     row.append(str(sample_data.get(metric, "N/A")))
                 # Include current comments
                 comments = sample_data.get("comments", "").strip()
@@ -263,24 +265,25 @@ class ExportManager:
 
                 # Get selected samples for plotting
                 selected_samples = []
-                for sample_name, checkbox_var in self.sample_checkboxes.items():
-                    if checkbox_var.get() and sample_name in self.samples:
-                        selected_samples.append(sample_name)
+                if hasattr(self.sample_manager, 'sample_checkboxes'):
+                    for sample_name, checkbox_var in self.sample_manager.sample_checkboxes.items():
+                        if checkbox_var.get() and sample_name in self.sensory_window.samples:
+                            selected_samples.append(sample_name)
 
                 # If no samples selected, select all
                 if not selected_samples:
-                    selected_samples = list(self.samples.keys())
+                    selected_samples = list(self.sensory_window.samples.keys())
 
                 if selected_samples:
                     # Setup the spider plot
-                    num_metrics = len(self.metrics)
+                    num_metrics = len(self.sensory_window.metrics)
                     angles = np.linspace(0, 2 * np.pi, num_metrics, endpoint=False).tolist()
                     angles += angles[:1]  # Complete the circle
 
                     # Set up the plot
                     ax_ppt.set_theta_offset(np.pi / 2)
                     ax_ppt.set_theta_direction(-1)
-                    ax_ppt.set_thetagrids(np.degrees(angles[:-1]), self.metrics, fontsize=10)
+                    ax_ppt.set_thetagrids(np.degrees(angles[:-1]), self.sensory_window.metrics, fontsize=10)
                     ax_ppt.set_ylim(0, 9)
                     ax_ppt.set_yticks(range(1, 10))
                     ax_ppt.set_yticklabels(range(1, 10))
@@ -292,8 +295,8 @@ class ExportManager:
 
                     # Plot each selected sample
                     for i, sample_name in enumerate(selected_samples):
-                        sample_data = self.samples[sample_name]
-                        values = [sample_data.get(metric, 5) for metric in self.metrics]
+                        sample_data = self.sensory_window.samples[sample_name]
+                        values = [sample_data.get(metric, 5) for metric in self.sensory_window.metrics]
                         values += values[:1]  # Complete the circle
 
                         color = colors[i % len(colors)]
@@ -340,7 +343,7 @@ class ExportManager:
             # Save the presentation
             prs.save(filename)
             debug_print(f"DEBUG: PowerPoint saved successfully to {filename}")
-            show_success_message("Success", f"PowerPoint report saved successfully as {os.path.basename(filename)}", self.window)
+            show_success_message("Success", f"PowerPoint report saved successfully as {os.path.basename(filename)}", self.sensory_window.window)
 
         except Exception as e:
             debug_print(f"DEBUG: Error generating PowerPoint report: {e}")
