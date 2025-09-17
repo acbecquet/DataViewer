@@ -39,7 +39,7 @@ class DataCollectionIntegration:
                         self.gui.save_with_sample_images()
 
                 # Load the file for viewing
-                self.load_file(data_collection_window.file_path)
+                self.file_manager.load_file(data_collection_window.file_path)
 
             # Restore main window visibility
             if hasattr(data_collection_window, 'main_window_was_visible') and data_collection_window.main_window_was_visible:

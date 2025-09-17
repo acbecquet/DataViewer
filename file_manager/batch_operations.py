@@ -210,7 +210,7 @@ class BatchOperations:
                     debug_print(f"DEBUG: Loading file: {file_path}")
 
                     # Load the file - this stores in database by default
-                    self.load_excel_file(file_path, force_reload=True)
+                    self.file_manager.load_excel_file(file_path, force_reload=True)
 
                     # Store the loaded file data
                     if hasattr(self.gui, 'filtered_sheets') and self.gui.filtered_sheets:
@@ -271,13 +271,13 @@ class BatchOperations:
             # Update UI after successful batch loading
             if loaded_files:
                 debug_print("DEBUG: Updating UI after batch loading")
-                self.update_file_dropdown()
+                self.file_manager.update_file_dropdown()
 
                 # Set the last loaded file as active
                 if self.gui.all_filtered_sheets:
                     last_file = self.gui.all_filtered_sheets[-1]
-                    self.set_active_file(last_file["file_name"])
-                    self.update_ui_for_current_file()
+                    self.file_manager.set_active_file(last_file["file_name"])
+                    self.file_manager.update_ui_for_current_file()
 
             # Show completion summary
             self._show_batch_loading_summary(loaded_files, failed_files, skipped_files, total_files)

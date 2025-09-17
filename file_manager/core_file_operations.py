@@ -347,7 +347,7 @@ class CoreFileOperations:
                     debug_print(f"DEBUG: Found .vap3 file in loaded files: {file_name}")
                     try:
                         self.set_active_file(file_name)
-                        self.update_ui_for_current_file()
+                        self.file_manager.update_ui_for_current_file()
                         return True
                     except Exception as e:
                         debug_print(f"ERROR: Failed to set active .vap3 file: {e}")
@@ -388,7 +388,7 @@ class CoreFileOperations:
             debug_print("DEBUG: File already in UI state, just updating active file")
             try:
                 self.set_active_file(existing_entry["file_name"])
-                self.update_ui_for_current_file()
+                self.file_manager.update_ui_for_current_file()
                 return True
             except Exception as e:
                 debug_print(f"ERROR: Failed to set active file: {e}")
@@ -406,9 +406,9 @@ class CoreFileOperations:
                     "filtered_sheets": copy.deepcopy(self.gui.filtered_sheets)
                 })
 
-                self.update_file_dropdown()
+                self.file_manager.update_file_dropdown()
                 self.set_active_file(file_name)
-                self.update_ui_for_current_file()
+                self.file_manager.update_ui_for_current_file()
                 debug_print(f"DEBUG: Successfully added file {file_name} to UI")
                 return True
 

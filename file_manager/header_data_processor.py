@@ -6,6 +6,7 @@ from Excel files and loaded sheet data, supporting both old and new formats.
 """
 
 # Standard library imports
+import os
 import re
 import traceback
 

@@ -123,9 +123,9 @@ class TestWorkflow:
             debug_print("DEBUG: Attempting to extract existing header data from file/loaded data")
 
             # Try to extract existing header data
-            existing_header_data = self.extract_existing_header_data(file_path, selected_test)
+            existing_header_data = self.file_manager.extract_existing_header_data(file_path, selected_test)
 
-            if existing_header_data and self.validate_header_data(existing_header_data):
+            if existing_header_data and self.file_manager.validate_header_data(existing_header_data):
                 debug_print("DEBUG: Found complete header data - skipping header dialog and going directly to data collection")
                 # Go directly to data collection with existing header data
                 self.start_data_collection_with_header_data(file_path, selected_test, existing_header_data)
@@ -138,7 +138,7 @@ class TestWorkflow:
             debug_print("DEBUG: Viewing raw file requested")
             # Load the file for viewing if not already loaded
             if not hasattr(self.gui, 'file_path') or self.gui.file_path != file_path:
-                self.load_file(file_path)
+                self.file_manager.load_file(file_path)
         else:
             debug_print("DEBUG: Test start menu was cancelled or closed")
 
@@ -151,7 +151,7 @@ class TestWorkflow:
         try:
             if hasattr(self.gui, 'filtered_sheets') and selected_test in self.gui.filtered_sheets:
                 sheet_data = self.gui.filtered_sheets[selected_test]['data']
-                initial_sample_count = self.determine_sample_count_from_data(sheet_data, selected_test)
+                initial_sample_count = self.file_manager.determine_sample_count_from_data(sheet_data, selected_test)
                 debug_print(f"DEBUG: Determined {initial_sample_count} samples from existing data")
         except Exception as e:
             debug_print(f"DEBUG: Could not determine sample count from data: {e}")
@@ -182,7 +182,7 @@ class TestWorkflow:
         if result:
             debug_print("DEBUG: Header data dialog completed successfully")
             # Apply header data to the file
-            self.apply_header_data_to_file(file_path, header_data)
+            self.file_manager.apply_header_data_to_file(file_path, header_data)
 
             debug_print("DEBUG: Proceeding to data collection window")
             # Show the data collection window
@@ -192,10 +192,10 @@ class TestWorkflow:
 
             if data_result == "load_file":
                 # Load the file for viewing
-                self.load_file(file_path)
+                self.file_manager.load_file(file_path)
             elif data_result == "cancel":
                 # User cancelled data collection, just load the file
-                self.load_file(file_path)
+                self.file_manager.load_file(file_path)
         else:
             debug_print("DEBUG: Header data dialog was cancelled")
 

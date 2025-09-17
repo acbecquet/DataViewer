@@ -119,8 +119,8 @@ class Vap3FileHandler:
 
             if existing_file:
                 # File already loaded, just make it active
-                self.set_active_file(existing_file["file_name"])
-                self.update_ui_for_current_file()
+                self.file_manager.set_active_file(existing_file["file_name"])
+                self.file_manager.update_ui_for_current_file()
                 debug_print(f"DEBUG: Switched to existing file: {existing_file['file_name']}")
             else:
                 # New file, add it to the collection
@@ -172,8 +172,8 @@ class Vap3FileHandler:
                     debug_print(f"DEBUG: Replaced file collection with single file")
 
                 # Update UI
-                self.update_file_dropdown()
-                self.update_ui_for_current_file()
+                self.file_manager.update_file_dropdown()
+                self.file_manager.update_ui_for_current_file()
 
             self.gui.progress_dialog.update_progress_bar(100)
             self.root.update_idletasks()
