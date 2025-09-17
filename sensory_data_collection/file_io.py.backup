@@ -173,7 +173,7 @@ class FileIOManager:
 
             # Create success message
             success_msg = f"Successfully loaded {successful_loads} session(s):\n"
-            success_msg += "\n".join([f"â€¢ {name}" for name in loaded_session_names])
+            success_msg += "\n".join([f"• {name}" for name in loaded_session_names])
             success_msg += f"\n\nCurrently viewing: {last_session}"
             success_msg += "\nUse session selector to switch between sessions."
 
@@ -183,7 +183,7 @@ class FileIOManager:
         # Report any failures
         if failed_loads:
             failure_msg = f"Failed to load {len(failed_loads)} file(s):\n"
-            failure_msg += "\n".join([f"â€¢ {fail}" for fail in failed_loads])
+            failure_msg += "\n".join([f"• {fail}" for fail in failed_loads])
             debug_print(f"DEBUG: Failed to load {len(failed_loads)} files")
             messagebox.showwarning("Load Errors", failure_msg)
 

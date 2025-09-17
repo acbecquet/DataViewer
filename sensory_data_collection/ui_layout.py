@@ -171,7 +171,7 @@ class UILayoutManager:
         header_frame.grid_columnconfigure(3, weight=1)
         debug_print("DEBUG: Configured header_frame for optimized 2x2 layout")
 
-        self.header_vars = {}
+        self.sensory_window.header_vars = {}
 
         # Row 0: Assessor Name and Media
         ttk.Label(header_frame, text="Assessor Name:", font=FONT).grid(
@@ -179,7 +179,7 @@ class UILayoutManager:
         assessor_var = tk.StringVar()
         ttk.Entry(header_frame, textvariable=assessor_var, font=FONT, width=15).grid(
             row=0, column=1, sticky='w', padx=5, pady=2)
-        self.header_vars["Assessor Name"] = assessor_var
+        self.sensory_window.header_vars["Assessor Name"] = assessor_var
         debug_print("DEBUG: Added Assessor Name to row 0, column 0-1")
 
         ttk.Label(header_frame, text="Media:", font=FONT).grid(
@@ -187,7 +187,7 @@ class UILayoutManager:
         media_var = tk.StringVar()
         ttk.Entry(header_frame, textvariable=media_var, font=FONT, width=15).grid(
             row=0, column=3, sticky='w', padx=5, pady=2)
-        self.header_vars["Media"] = media_var
+        self.sensory_window.header_vars["Media"] = media_var
         debug_print("DEBUG: Added Media to row 0, column 2-3")
 
         # Row 1: Puff Length and Date
@@ -196,7 +196,7 @@ class UILayoutManager:
         puff_var = tk.StringVar()
         ttk.Entry(header_frame, textvariable=puff_var, font=FONT, width=15).grid(
             row=1, column=1, sticky='w', padx=5, pady=2)
-        self.header_vars["Puff Length"] = puff_var
+        self.sensory_window.header_vars["Puff Length"] = puff_var
         debug_print("DEBUG: Added Puff Length to row 1, column 0-1")
 
         ttk.Label(header_frame, text="Date:", font=FONT).grid(
@@ -204,7 +204,7 @@ class UILayoutManager:
         date_var = tk.StringVar(value=datetime.now().strftime("%Y-%m-%d"))
         ttk.Entry(header_frame, textvariable=date_var, font=FONT, width=15).grid(
             row=1, column=3, sticky='w', padx=5, pady=2)
-        self.header_vars["Date"] = date_var
+        self.sensory_window.header_vars["Date"] = date_var
         debug_print("DEBUG: Added Date to row 1, column 2-3")
 
         # Row 2: Mode switch button (centered across all columns)
