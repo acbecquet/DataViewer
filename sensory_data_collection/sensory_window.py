@@ -108,6 +108,9 @@ class SensoryDataCollectionWindow:
         self.ui_layout.session_manager = self.session_manager
         self.ui_layout.plot_manager = self.plot_manager
 
+        self.plot_manager.sample_manager = self.sample_manager
+        self.mode_manager.sample_manager = self.sample_manager
+
         # Initialize managers with cross-dependencies
         self.mode_manager = ModeManager(self, self.session_manager, self.plot_manager)
         self.file_io = FileIOManager(self, self.session_manager, self.sample_manager)

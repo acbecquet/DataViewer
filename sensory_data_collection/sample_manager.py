@@ -274,10 +274,9 @@ class SampleManager:
 
     def update_sample_checkboxes(self):
         """Update the checkboxes for sample selection in plotting."""
-        if not self.plot_manager or not hasattr(self.plot_manager, 'checkbox_frame'):
+        if not hasattr(self.sensory_window, 'checkbox_frame') or not self.sensory_window.checkbox_frame:
+            debug_print("DEBUG: No checkbox frame available for sample checkboxes")
             return
-        
-        checkbox_frame = self.plot_manager.checkbox_frame
 
         # Clear existing checkboxes
         for widget in self.sensory_window.checkbox_frame.winfo_children():
@@ -328,7 +327,7 @@ class SampleManager:
                 self.sensory_window.rating_vars[metric].set(value)
 
                 # Manually update the display label
-                if hasattr(self, 'value_labels') and metric in self.sensory_window.value_labels:
+                if hasattr(self.sensory_window, 'value_labels') and metric in self.sensory_window.value_labels:
                     self.sensory_window.value_labels[metric].config(text=str(value))
                     debug_print(f"DEBUG: Updated display label for {metric} to {value}")
                 else:
@@ -348,7 +347,7 @@ class SampleManager:
         """Refresh all value display labels to match current slider values."""
         debug_print("DEBUG: Refreshing all value displays")
 
-        if not hasattr(self, 'value_labels'):
+        if not hasattr(self.sensory_window, 'value_labels'):
             debug_print("DEBUG: No value labels found, skipping refresh")
             return
 
@@ -389,7 +388,7 @@ class SampleManager:
             self.sensory_window.rating_vars[metric].set(5)
 
             # Also update the display labels
-            if hasattr(self, 'value_labels') and metric in self.sensory_window.value_labels:
+            if hasattr(self.sensory_window, 'value_labels') and metric in self.sensory_window.value_labels:
                 self.sensory_window.value_labels[metric].config(text="5")
                 debug_print(f"DEBUG: Reset {metric} display to 5")
 

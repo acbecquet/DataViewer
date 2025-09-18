@@ -94,7 +94,7 @@ class SessionManager:
             first_sample = list(self.sensory_window.samples.keys())[0]
             self.sensory_window.sample_var.set(first_sample)
             self.sample_manager.load_sample_data(first_sample)
-            self.refresh_value_displays()
+            self.sample_manager.refresh_value_displays()
         else:
             self.sensory_window.sample_var.set('')
             self.sample_manager.clear_form()

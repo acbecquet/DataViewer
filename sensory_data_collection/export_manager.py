@@ -4,6 +4,7 @@ Handles export operations including plot images, table images, and PowerPoint re
 """
 
 import tkinter as tk
+import numpy as np
 from tkinter import messagebox, filedialog
 import matplotlib.pyplot as plt
 import os
@@ -24,6 +25,14 @@ class ExportManager:
     def save_plot_as_image(self):
         """Save the current spider plot as an image file."""
         debug_print("DEBUG: Starting plot image save")
+
+        if not hasattr(self, 'plot_manager') or not self.plot_manager:
+            messagebox.showerror("Error", "Plot manager not available")
+            return
+
+        if not hasattr(self.sensory_window, 'fig') or not self.sensory_window.fig:
+            messagebox.showerror("Error", "No plot available to save")
+            return
 
         if not self.sensory_window.samples:
             messagebox.showwarning("Warning", "No samples to save! Please add samples first.")

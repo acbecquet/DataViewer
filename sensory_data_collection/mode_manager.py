@@ -19,6 +19,7 @@ class ModeManager:
         self.sensory_window = sensory_window
         self.session_manager = session_manager
         self.plot_manager = plot_manager
+        self.average_samples = {}
         
     def toggle_mode(self):
         """Toggle between collection mode and comparison mode."""
@@ -108,79 +109,109 @@ class ModeManager:
 
     def set_widget_state(self, parent, state):
         """Recursively set state of all child widgets."""
+        if not parent or not parent.winfo_exists():
+            return
+        
         try:
             parent.configure(state=state)
-        except:
-            pass  # Some widgets don't support state
+        except Exception as e:
+            debug_print(f"DEBUG: Could not set state for widget {parent}: {e}")
 
-        for child in parent.winfo_children():
-            self.set_widget_state(child, state)
+        try:
+            for child in parent.winfo_children():
+                self.set_widget_state(child, state)
+        except Exception as e:
+            debug_print(f"DEBUG: Error setting child widget states: {e}")
 
     def load_multiple_sessions(self):
-        """Enhanced method to load multiple session files for comparison."""
+        """enhanced method to load multiple session files for comparison"""
         debug_print("DEBUG: Loading multiple sessions for comparison mode")
 
-        filenames = filedialog.askopenfilenames(
-            title="Select Session Files for Comparison",
-            filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
-        )
+        try:
+            filenames = filedialog.askopenfilenames(
+                title="Select Session Files for Comparison",
+                filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
+            )
 
-        if not filenames:
-            debug_print("DEBUG: No files selected for comparison")
+            if not filenames:
+                debug_print("DEBUG: No files selected for comparison")
+                return False
+
+            if len(filenames) < 2:
+                messagebox.showwarning("Warning", "Please select at least 2 session files for comparison.")
+                return False
+
+
+            if not hasattr(self, 'session_manager') or not self.session_manager:
+                messagebox.showerror("Error", "Session manager not available")
+                return False
+
+            successful_loads = 0
+
+            for filename in filenames:
+                try:
+                    debug_print(f"DEBUG: Loading session file: {filename}")
+
+                    with open(filename, 'r') as f:
+                        session_data = json.load(f)
+
+                    # Create session name from filename
+                    base_filename = os.path.splitext(os.path.basename(filename))[0]
+                    session_name = base_filename
+
+                    # Ensure unique session name
+                    counter = 1
+                    original_name = session_name
+                    while session_name in self.session_manager.sessions:
+                        session_name = f"{original_name}_{counter}"
+                        counter += 1
+
+                    # Create new session with loaded data
+                    self.session_manager.sessions[session_name] = {
+                        'header': session_data.get('header', {}),
+                        'samples': session_data.get('samples', {}),
+                        'timestamp': session_data.get('timestamp', datetime.now().isoformat()),
+                        'source_file': filename
+                    }
+
+                    successful_loads += 1
+                    debug_print(f"DEBUG: Successfully loaded session {session_name} with {len(self.session_manager.sessions[session_name]['samples'])} samples")
+
+                except Exception as e:
+                    debug_print(f"DEBUG: Error loading session from {filename}: {e}")
+                    messagebox.showerror("Error", f"Failed to load session from {os.path.basename(filename)}: {e}")
+
+            if successful_loads >= 2:
+                debug_print(f"DEBUG: Successfully loaded {successful_loads} sessions for comparison")
+                show_success_message("Success", f"Loaded {successful_loads} sessions for comparison.", self.sensory_window.window)
+                return True
+            else:
+                messagebox.showerror("Error", "Failed to load enough sessions for comparison (minimum 2 required).")
+                return False
+
+        except Exception as e:
+            debug_print(f"CRITICAL ERROR in load_multiple_sessions: {e}")
+            messagebox.showerror("Error", f"Failed to load sessions: {e}")
             return False
 
-        if len(filenames) < 2:
-            messagebox.showwarning("Warning", "Please select at least 2 session files for comparison.")
-            return False
-
-        successful_loads = 0
-
-        for filename in filenames:
-            try:
-                debug_print(f"DEBUG: Loading session file: {filename}")
-
-                with open(filename, 'r') as f:
-                    session_data = json.load(f)
-
-                # Create session name from filename
-                base_filename = os.path.splitext(os.path.basename(filename))[0]
-                session_name = base_filename
-
-                # Ensure unique session name
-                counter = 1
-                original_name = session_name
-                while session_name in self.session_manager.sessions:
-                    session_name = f"{original_name}_{counter}"
-                    counter += 1
-
-                # Create new session with loaded data
-                self.session_manager.sessions[session_name] = {
-                    'header': session_data.get('header', {}),
-                    'samples': session_data.get('samples', {}),
-                    'timestamp': session_data.get('timestamp', datetime.now().isoformat()),
-                    'source_file': filename
-                }
-
-                successful_loads += 1
-                debug_print(f"DEBUG: Successfully loaded session {session_name} with {len(self.session_manager.sessions[session_name]['samples'])} samples")
-
-            except Exception as e:
-                debug_print(f"DEBUG: Error loading session from {filename}: {e}")
-                messagebox.showerror("Error", f"Failed to load session from {os.path.basename(filename)}: {e}")
-
-        if successful_loads >= 2:
-            debug_print(f"DEBUG: Successfully loaded {successful_loads} sessions for comparison")
-            show_success_message("Success", f"Loaded {successful_loads} sessions for comparison.", self.sensory_window.window)
-            return True
-        else:
-            messagebox.showerror("Error", "Failed to load enough sessions for comparison (minimum 2 required).")
-            return False
-
-        self.bring_to_front()
+        finally:
+            self.bring_to_front()
 
     def calculate_sample_averages(self):
         """Calculate averages for each sample across all loaded sessions."""
         debug_print("DEBUG: Calculating sample averages across all sessions")
+
+        if not hasattr(self, 'session_manager') or not self.session_manager:
+            debug_print("ERROR: No session_manager available")
+            return
+        
+        if not hasattr(self.session_manager, 'sessions'):
+            debug_print("ERROR: No sessions available in session_manager")
+            return
+
+        if len(self.session_manager.sessions) < 2:
+            debug_print("DEBUG: Not enough sessions for comparison")
+            return
 
         if len(self.session_manager.sessions) < 2:
             debug_print("DEBUG: Not enough sessions for comparison")
@@ -238,7 +269,12 @@ class ModeManager:
 
     def update_comparison_plot(self):
         """Update plot to show averaged data across users."""
-        if not self.average_samples:
+        if not hasattr(self, 'average_samples') or not self.average_samples:
+            debug_print("DEBUG: No average samples available for comparison plot")
+            return
+
+        if not hasattr(self, 'sample_manager') or not self.sample_manager:
+            debug_print("ERROR: No sample_manager available for plot update")
             return
 
         # Temporarily replace samples with averages for plotting
