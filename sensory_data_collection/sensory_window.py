@@ -47,6 +47,15 @@ class SensoryDataCollectionWindow:
         self.data = {}
         self.samples = {}
         self.current_sample = None
+        self.header_vars = {}
+        self.sample_var = tk.StringVar()
+        self.session_var = tk.StringVar()
+        self.session_combo = None
+        self.fig = None
+        self.ax = None
+        self.canvas = None
+        self.left_frame = None
+        self.right_frame = None
     
         # Sensory metrics
         self.metrics = [
@@ -109,7 +118,7 @@ class SensoryDataCollectionWindow:
         self.ui_layout.plot_manager = self.plot_manager
 
         self.plot_manager.sample_manager = self.sample_manager
-        self.mode_manager.sample_manager = self.sample_manager
+
 
         # Initialize managers with cross-dependencies
         self.mode_manager = ModeManager(self, self.session_manager, self.plot_manager)
@@ -118,6 +127,7 @@ class SensoryDataCollectionWindow:
 
         # Final cross-reference
         self.plot_manager.mode_manager = self.mode_manager
+        self.mode_manager.sample_manager = self.sample_manager
 
         # Initialize ML components if available
         if ML_AVAILABLE:
@@ -329,6 +339,12 @@ class SensoryDataCollectionWindow:
 
     # UI Layout delegations
     def setup_layout(self):
+        """Create the main layout with proper canvas sizing."""
+        # Initialize header variables if not already done
+        if not self.header_vars:
+            for field in self.header_fields:
+                self.header_vars[field] = tk.StringVar()
+            
         return self.ui_layout.setup_layout()
 
     def center_window(self):
