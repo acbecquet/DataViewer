@@ -59,6 +59,171 @@ APP_BACKGROUND_COLOR = '#D3D3D3'
 BUTTON_COLOR = '#4169E1'
 PLOT_CHECKBOX_TITLE = "Click Checkbox to \nAdd/Remove Item \nFrom Plot"
 
+def is_empty_sample(sample_data):
+    """
+    Check if a sample is empty based only on plotting data:
+    - No TPM data
+    - No Average TPM
+    - No Draw Pressure
+    - No Resistance
+
+    Args:
+        sample_data (dict or pd.Series): Sample data to check
+
+    Returns:
+        bool: True if sample is empty, False otherwise
+    """
+    try:
+        # Convert to dict if it's a pandas Series
+        if hasattr(sample_data, 'to_dict'):
+            sample_dict = sample_data.to_dict()
+        else:
+            sample_dict = sample_data
+
+        # Only check these plotting fields
+        plotting_fields = ['Average TPM', 'Draw Pressure', 'Resistance']
+
+        for field in plotting_fields:
+            value = str(sample_dict.get(field, '')).strip()
+            #debug_print(f"DEBUG: Checking field '{field}': '{value}'")
+
+            # Skip completely empty values
+            if not value or value in ['', 'nan', 'No data', 'None']:
+                continue
+
+            # Check if it's a meaningful numeric value
+            try:
+                numeric_val = float(value)
+                # Remove pd.isna() call and use math.isnan() or simple check
+                import math
+                if numeric_val != 0 and not math.isnan(numeric_val):
+                    #debug_print(f"DEBUG: Sample has plotting data in '{field}': {numeric_val}")
+                    return False  # Has data, not empty
+            except (ValueError, TypeError):
+                # If it's not numeric but has meaningful content, it's not empty
+                if len(value) > 0 and value not in ['nan', 'None', 'No data', '']:
+                    #debug_print(f"DEBUG: Sample has non-numeric plotting data in '{field}': '{value}'")
+                    return False
+
+
+        debug_print("DEBUG: Sample has no plotting data - is empty")
+        return True  # No plotting data found
+
+    except Exception as e:
+        debug_print(f"DEBUG: Error checking sample: {e}")
+        return False  # If error, assume not empty
+
+def filter_empty_samples_from_dataframe(df):
+    """
+    Filter out samples with no plotting data from processed DataFrame.
+    """
+    if df.empty:
+        debug_print("DEBUG: DataFrame is already empty")
+        return df
+
+    try:
+        debug_print(f"DEBUG: Checking {len(df)} samples for plotting data")
+
+        # Create mask for samples with plotting data
+        has_data_mask = []
+
+        for index, row in df.iterrows():
+            is_empty = is_empty_sample(row)
+            has_data_mask.append(not is_empty)
+            debug_print(f"DEBUG: Sample {index} ({'empty' if is_empty else 'has data'}): {row.get('Sample Name', 'Unknown')}")
+
+        # Filter the dataframe
+        filtered_df = df[has_data_mask].reset_index(drop=True)
+
+        debug_print(f"DEBUG: Filtered from {len(df)} to {len(filtered_df)} samples with plotting data")
+        return filtered_df
+
+    except Exception as e:
+        debug_print(f"DEBUG: Error filtering samples: {e}")
+        import traceback
+        traceback.print_exc()
+        return df
+
+def filter_empty_samples_from_full_data(full_sample_data, num_columns_per_sample=12):
+    """
+    Filter out samples with no TPM plotting data from full sample data.
+    """
+    if not pd or full_sample_data.empty:
+        debug_print("DEBUG: No pandas or empty full_sample_data")
+        return full_sample_data
+
+    try:
+        debug_print(f"DEBUG: Full data shape: {full_sample_data.shape}, columns per sample: {num_columns_per_sample}")
+
+        # For User Test Simulation (8 columns), we need to match the processed data filtering
+        if num_columns_per_sample == 8:
+            debug_print("DEBUG: User Test Simulation detected - preserving all data since processed data was already filtered")
+            # The processed data filtering already removed empty samples
+            # So we keep the full data as-is for User Test Simulation
+            return full_sample_data
+
+        # For regular tests (12 columns), do the normal filtering
+        num_samples = full_sample_data.shape[1] // num_columns_per_sample
+        debug_print(f"DEBUG: Checking {num_samples} samples in full plotting data")
+
+        if num_samples == 0:
+            return full_sample_data
+
+        # Find samples with actual TPM data
+        samples_with_data = []
+
+        for i in range(num_samples):
+            start_col = i * num_columns_per_sample
+            end_col = start_col + num_columns_per_sample
+            sample_data = full_sample_data.iloc[:, start_col:end_col]
+
+            debug_print(f"DEBUG: Checking sample {i+1} columns {start_col}-{end_col-1}")
+
+            # Check TPM column (usually column 8 in 12-column format)
+            has_tpm_data = False
+            if num_columns_per_sample >= 9:
+                tpm_col_idx = 8 if num_columns_per_sample == 12 else min(8, num_columns_per_sample - 1)
+                if sample_data.shape[1] > tpm_col_idx and sample_data.shape[0] > 3:
+                    # Get TPM data from row 3 onwards
+                    tpm_data = sample_data.iloc[3:, tpm_col_idx]
+
+                    # Convert to numeric and check for real values
+                    numeric_tpm = pd.to_numeric(tpm_data, errors='coerce')
+                    valid_tpm = numeric_tpm.dropna()
+
+                    if len(valid_tpm) > 0 and (valid_tpm > 0).any():
+                        has_tpm_data = True
+                        debug_print(f"DEBUG: Sample {i+1} has TPM data: {valid_tpm.head().tolist()}")
+
+            if has_tpm_data:
+                samples_with_data.append(i)
+
+        debug_print(f"DEBUG: Found {len(samples_with_data)} samples with TPM data out of {num_samples}")
+
+        # If no samples have data, return empty DataFrame
+        if not samples_with_data:
+            debug_print("DEBUG: No samples with plotting data, returning empty DataFrame")
+            return pd.DataFrame()
+
+        # Reconstruct with only samples that have data
+        filtered_columns = []
+        for sample_idx in samples_with_data:
+            start_col = sample_idx * num_columns_per_sample
+            end_col = start_col + num_columns_per_sample
+            sample_cols = list(range(start_col, min(end_col, full_sample_data.shape[1])))
+            filtered_columns.extend(sample_cols)
+            debug_print(f"DEBUG: Including sample {sample_idx+1} columns {start_col}-{end_col-1}")
+
+        filtered_data = full_sample_data.iloc[:, filtered_columns]
+        debug_print(f"DEBUG: Filtered plotting data from {full_sample_data.shape[1]} to {filtered_data.shape[1]} columns")
+        return filtered_data
+
+    except Exception as e:
+        debug_print(f"DEBUG: Error filtering plotting data: {e}")
+        import traceback
+        traceback.print_exc()
+        return full_sample_data
+
 def round_values(value, decimals=2):
     """Round the values to a specified number of decimal places."""
     try:

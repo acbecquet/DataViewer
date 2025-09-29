@@ -15,262 +15,25 @@ import time
 import tkinter as tk
 from typing import Optional, Dict, List, Any
 from tkinter import ttk, messagebox, Toplevel
-from utils import debug_print, wrap_text
+from utils import debug_print, wrap_text, is_empty_sample, filter_empty_samples_from_dataframe, filter_empty_samples_from_full_data
 
-# Lazy loading helper functions
-def lazy_import_pandas():
-    """Lazy import pandas when needed."""
-    try:
-        import pandas as pd
-        return pd
-    except ImportError as e:
-        debug_print(f"Error importing pandas: {e}")
-        return None
-
-def lazy_import_numpy():
-    """Lazy import numpy when needed."""
-    try:
-        import numpy as np
-        return np
-    except ImportError as e:
-        debug_print(f"Error importing numpy: {e}")
-        return None
-
-def lazy_import_matplotlib():
-    """Lazy import matplotlib when needed."""
-    try:
-        import matplotlib
-        matplotlib.use('TkAgg')
-        return matplotlib
-    except ImportError as e:
-        debug_print(f"Error importing matplotlib: {e}")
-        return None
-
-def lazy_import_tkintertable():
-    """Lazy import tkintertable when needed."""
-    try:
-        from tkintertable import TableCanvas, TableModel
-        return TableCanvas, TableModel
-    except ImportError as e:
-        debug_print(f"Error importing tkintertable: {e}")
-        return None, None
-
-def lazy_import_tksheet():
-    """Lazy import tksheet when needed."""
-    try:
-        from tksheet import Sheet
-        return Sheet
-    except ImportError as e:
-        debug_print(f"Error importing tksheet: {e}")
-        return None
-
-def lazy_import_requests():
-    """Lazy import requests when needed."""
-    try:
-        import requests
-        return requests
-    except ImportError as e:
-        debug_print(f"Error importing requests: {e}")
-        return None
-
-def lazy_import_packaging():
-    """Lazy import packaging when needed."""
-    try:
-        from packaging import version
-        return version
-    except ImportError as e:
-        debug_print(f"Error importing packaging: {e}")
-        return None
-
-def _lazy_import_processing():
-    """Lazy import processing module."""
-    try:
-        import processing
-        from processing import get_valid_plot_options
-        return processing, get_valid_plot_options
-    except ImportError as e:
-        debug_print(f"Error importing processing: {e}")
-        return None, None
-
-def lazy_import_viscosity_gui():
-    """Lazy import viscosity GUI when needed."""
-    try:
-        from viscosity_gui import ViscosityGUI
-        return ViscosityGUI
-    except ImportError as e:
-        debug_print(f"Error importing viscosity GUI: {e}")
-        return None
+from import_manager import (
+    lazy_import_pandas,
+    lazy_import_numpy,
+    lazy_import_matplotlib,
+    lazy_import_tkintertable,
+    lazy_import_tksheet,
+    lazy_import_requests,
+    lazy_import_packaging,
+    _lazy_import_processing,
+    lazy_import_viscosity_gui
+)
 
 # Import utilities after lazy imports
 from utils import FONT, clean_columns, get_save_path, is_standard_file, plotting_sheet_test, APP_BACKGROUND_COLOR, BUTTON_COLOR, PLOT_CHECKBOX_TITLE, clean_display_suffixes, show_success_message
 from resource_utils import get_resource_path
 from update_checker import UpdateChecker
-
-def is_empty_sample(sample_data):
-    """
-    Check if a sample is empty based only on plotting data:
-    - No TPM data
-    - No Average TPM
-    - No Draw Pressure
-    - No Resistance
-
-    Args:
-        sample_data (dict or pd.Series): Sample data to check
-
-    Returns:
-        bool: True if sample is empty, False otherwise
-    """
-    try:
-        # Convert to dict if it's a pandas Series
-        if hasattr(sample_data, 'to_dict'):
-            sample_dict = sample_data.to_dict()
-        else:
-            sample_dict = sample_data
-
-        # Only check these plotting fields
-        plotting_fields = ['Average TPM', 'Draw Pressure', 'Resistance']
-
-        for field in plotting_fields:
-            value = str(sample_dict.get(field, '')).strip()
-            #debug_print(f"DEBUG: Checking field '{field}': '{value}'")
-
-            # Skip completely empty values
-            if not value or value in ['', 'nan', 'No data', 'None']:
-                continue
-
-            # Check if it's a meaningful numeric value
-            try:
-                numeric_val = float(value)
-                # Remove pd.isna() call and use math.isnan() or simple check
-                import math
-                if numeric_val != 0 and not math.isnan(numeric_val):
-                    #debug_print(f"DEBUG: Sample has plotting data in '{field}': {numeric_val}")
-                    return False  # Has data, not empty
-            except (ValueError, TypeError):
-                # If it's not numeric but has meaningful content, it's not empty
-                if len(value) > 0 and value not in ['nan', 'None', 'No data', '']:
-                    #debug_print(f"DEBUG: Sample has non-numeric plotting data in '{field}': '{value}'")
-                    return False
-
-
-        debug_print("DEBUG: Sample has no plotting data - is empty")
-        return True  # No plotting data found
-
-    except Exception as e:
-        debug_print(f"DEBUG: Error checking sample: {e}")
-        return False  # If error, assume not empty
-
-def filter_empty_samples_from_dataframe(df):
-    """
-    Filter out samples with no plotting data from processed DataFrame.
-    """
-    if df.empty:
-        debug_print("DEBUG: DataFrame is already empty")
-        return df
-
-    try:
-        debug_print(f"DEBUG: Checking {len(df)} samples for plotting data")
-
-        # Create mask for samples with plotting data
-        has_data_mask = []
-
-        for index, row in df.iterrows():
-            is_empty = is_empty_sample(row)
-            has_data_mask.append(not is_empty)
-            debug_print(f"DEBUG: Sample {index} ({'empty' if is_empty else 'has data'}): {row.get('Sample Name', 'Unknown')}")
-
-        # Filter the dataframe
-        filtered_df = df[has_data_mask].reset_index(drop=True)
-
-        debug_print(f"DEBUG: Filtered from {len(df)} to {len(filtered_df)} samples with plotting data")
-        return filtered_df
-
-    except Exception as e:
-        debug_print(f"DEBUG: Error filtering samples: {e}")
-        import traceback
-        traceback.print_exc()
-        return df
-
-def filter_empty_samples_from_full_data(full_sample_data, num_columns_per_sample=12):
-    """
-    Filter out samples with no TPM plotting data from full sample data.
-    """
-    pd = lazy_import_pandas()
-    if not pd or full_sample_data.empty:
-        debug_print("DEBUG: No pandas or empty full_sample_data")
-        return full_sample_data
-
-    try:
-        debug_print(f"DEBUG: Full data shape: {full_sample_data.shape}, columns per sample: {num_columns_per_sample}")
-
-        # For User Test Simulation (8 columns), we need to match the processed data filtering
-        if num_columns_per_sample == 8:
-            debug_print("DEBUG: User Test Simulation detected - preserving all data since processed data was already filtered")
-            # The processed data filtering already removed empty samples
-            # So we keep the full data as-is for User Test Simulation
-            return full_sample_data
-
-        # For regular tests (12 columns), do the normal filtering
-        num_samples = full_sample_data.shape[1] // num_columns_per_sample
-        debug_print(f"DEBUG: Checking {num_samples} samples in full plotting data")
-
-        if num_samples == 0:
-            return full_sample_data
-
-        # Find samples with actual TPM data
-        samples_with_data = []
-
-        for i in range(num_samples):
-            start_col = i * num_columns_per_sample
-            end_col = start_col + num_columns_per_sample
-            sample_data = full_sample_data.iloc[:, start_col:end_col]
-
-            debug_print(f"DEBUG: Checking sample {i+1} columns {start_col}-{end_col-1}")
-
-            # Check TPM column (usually column 8 in 12-column format)
-            has_tpm_data = False
-            if num_columns_per_sample >= 9:
-                tpm_col_idx = 8 if num_columns_per_sample == 12 else min(8, num_columns_per_sample - 1)
-                if sample_data.shape[1] > tpm_col_idx and sample_data.shape[0] > 3:
-                    # Get TPM data from row 3 onwards
-                    tpm_data = sample_data.iloc[3:, tpm_col_idx]
-
-                    # Convert to numeric and check for real values
-                    numeric_tpm = pd.to_numeric(tpm_data, errors='coerce')
-                    valid_tpm = numeric_tpm.dropna()
-
-                    if len(valid_tpm) > 0 and (valid_tpm > 0).any():
-                        has_tpm_data = True
-                        debug_print(f"DEBUG: Sample {i+1} has TPM data: {valid_tpm.head().tolist()}")
-
-            if has_tpm_data:
-                samples_with_data.append(i)
-
-        debug_print(f"DEBUG: Found {len(samples_with_data)} samples with TPM data out of {num_samples}")
-
-        # If no samples have data, return empty DataFrame
-        if not samples_with_data:
-            debug_print("DEBUG: No samples with plotting data, returning empty DataFrame")
-            return pd.DataFrame()
-
-        # Reconstruct with only samples that have data
-        filtered_columns = []
-        for sample_idx in samples_with_data:
-            start_col = sample_idx * num_columns_per_sample
-            end_col = start_col + num_columns_per_sample
-            sample_cols = list(range(start_col, min(end_col, full_sample_data.shape[1])))
-            filtered_columns.extend(sample_cols)
-            debug_print(f"DEBUG: Including sample {sample_idx+1} columns {start_col}-{end_col-1}")
-
-        filtered_data = full_sample_data.iloc[:, filtered_columns]
-        debug_print(f"DEBUG: Filtered plotting data from {full_sample_data.shape[1]} to {filtered_data.shape[1]} columns")
-        return filtered_data
-
-    except Exception as e:
-        debug_print(f"DEBUG: Error filtering plotting data: {e}")
-        import traceback
-        traceback.print_exc()
-        return full_sample_data
+from ui_manager import UIManager
 
 class DataViewer:
     """Main GUI class for the Standardized Testing application."""
@@ -422,6 +185,7 @@ Would you like to download and install the update?"""
         self.plot_manager = PlotManager(self)
         self.report_generator = ReportGenerator(self)
         self.progress_dialog = ProgressDialog(self.root)
+        self.ui_manager = UIManager(self)
 
         self._managers_initialized = True
 
@@ -476,13 +240,13 @@ Would you like to download and install the update?"""
         self.root.iconphoto(False, tk.PhotoImage(file=icon_path))
 
         # Basic UI setup
-        self.set_app_colors()
+        self.ui_manager.set_app_colors()
         self.root.state('zoomed')
-        self.set_window_size(1, 1)
+        self.ui_manager.set_window_size(1, 1)
         self.root.minsize(1200,800)
 
         # Create frames
-        self.create_static_frames()
+        self.ui_manager.create_static_frames()
 
         # Create menu immediately - needed for basic functionality
         self.add_menu()
@@ -491,126 +255,9 @@ Would you like to download and install the update?"""
         self.file_manager.add_or_update_file_dropdown()
 
         # Add static controls
-        self.add_static_controls()
+        self.ui_manager.add_static_controls()
 
-    def add_static_controls(self) -> None:
-        """Add static controls (Add Data and Trend Analysis buttons) to the top_frame."""
-        if not hasattr(self, 'controls_frame') or not self.controls_frame:
-            self.controls_frame = ttk.Frame(self.top_frame)
-            self.controls_frame.pack(side="right", fill="x", padx=5, pady=5)
 
-    def create_static_frames(self) -> None:
-        """Create persistent (static) frames that remain for the lifetime of the UI."""
-        # Create top_frame for dropdowns and control buttons.
-        if not hasattr(self, 'top_frame') or not self.top_frame:
-            self.top_frame = ttk.Frame(self.root,height = 30)
-            self.top_frame.pack(side="top", fill="x", pady=(10, 0), padx=10)
-            self.top_frame.pack_propagate(False)
-
-        # Create bottom_frame to hold the image button and image display area.
-        if not hasattr(self, 'bottom_frame') or not self.bottom_frame:
-            self.bottom_frame = ttk.Frame(self.root, height = 150)
-            self.bottom_frame.pack(side="bottom", fill = "x", padx=10, pady=(0,10))
-            self.bottom_frame.pack_propagate(False)
-            self.bottom_frame.grid_propagate(False)
-
-        # Create a static frame for the Load Images button within bottom_frame.
-        if not hasattr(self, 'image_button_frame') or not self.image_button_frame:
-            self.image_button_frame = ttk.Frame(self.bottom_frame)
-            self.image_button_frame.pack(side="left", fill="y", padx=5, pady=5)
-
-            self.crop_enabled = tk.BooleanVar(value=False)
-            self.crop_checkbox = ttk.Checkbutton(
-                self.image_button_frame,
-                text = "Auto-Crop (experimental)",
-                variable = self.crop_enabled
-            )
-
-            self.crop_checkbox.pack(side = "top", padx = 5, pady = 5)
-
-            load_image_button = ttk.Button(
-                self.image_button_frame,
-                text="Load Images",
-                command=lambda: self.image_loader.add_images() if self.image_loader else None
-            )
-            load_image_button.pack(side="left", padx=5, pady=5)
-
-        # Create the dynamic image display frame within bottom_frame.
-        if not hasattr(self, 'image_frame') or not self.image_frame:
-            self.image_frame = ttk.Frame(self.bottom_frame, height = 150)
-            self.image_frame.pack(side="left", fill="both", expand=True)
-            self.image_frame.pack_propagate(False)
-            self.image_frame.grid_propagate(False)
-
-        # Create display_frame for the table/plot area.
-        if not hasattr(self, 'display_frame') or not self.display_frame:
-            self.display_frame = ttk.Frame(self.root)
-            self.display_frame.pack(fill="both", expand=True, padx=10, pady=5)
-
-        # Create a dynamic subframe inside display_frame for table and plot content.
-        if not hasattr(self, 'dynamic_frame') or not self.dynamic_frame:
-            self.dynamic_frame = ttk.Frame(self.display_frame)
-            self.dynamic_frame.pack(fill="both", expand=True)
-
-    def clear_dynamic_frame(self) -> None:
-        """Clear all children widgets from the dynamic frame."""
-        for widget in self.dynamic_frame.winfo_children():
-            widget.destroy()
-
-    def on_window_resize(self, event):
-        """Handle window resize events to maintain layout proportions."""
-        if event.widget == self.root:
-            self.constrain_plot_width()
-
-    def setup_dynamic_frames(self, is_plotting_sheet: bool = False) -> None:
-        """Create frames inside the dynamic_frame based on sheet type."""
-        # Clear previous widgets
-        for widget in self.dynamic_frame.winfo_children():
-            widget.destroy()
-
-        # Get dynamic frame height
-        window_height = self.root.winfo_height()
-        top_height = self.top_frame.winfo_height()
-        bottom_height = self.bottom_frame.winfo_height()
-        padding = 20
-        display_height = window_height - top_height - bottom_height - padding
-        display_height = max(display_height, 100)
-
-        if is_plotting_sheet:
-            # Use grid layout for precise control of width proportions
-            self.dynamic_frame.columnconfigure(0, weight=5)  # Table column
-            self.dynamic_frame.columnconfigure(1, weight=5)  # Plot column
-
-            self.dynamic_frame.rowconfigure(0, weight=1)
-
-            # LEFT SIDE: Table area split into top (table) and bottom (notes)
-            left_side_frame = ttk.Frame(self.dynamic_frame)
-            left_side_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 5), pady=5)
-
-            # Create a PanedWindow to split table and notes vertically
-            left_paned = ttk.PanedWindow(left_side_frame, orient="vertical")
-            left_paned.pack(fill="both", expand=True)
-
-            # Top pane: Table (60% of height)
-            self.table_frame = ttk.Frame(left_paned)
-            left_paned.add(self.table_frame, weight=3)
-
-            # Bottom pane: Sample Notes (40% of height)
-            self.notes_frame = ttk.LabelFrame(left_paned, text="Test Sample Notes", padding=5)
-            left_paned.add(self.notes_frame, weight=2)
-
-            # Configure the notes display area
-            self.create_notes_display_area()
-
-            # RIGHT SIDE: Plot takes remaining 50% width
-            self.plot_frame = ttk.Frame(self.dynamic_frame)
-            self.plot_frame.grid(row=0, column=1, sticky="nsew", padx=(5, 0), pady=5)
-
-            self.constrain_plot_width()
-        else:
-            # Non-plotting sheets use the full space (no changes here)
-            self.table_frame = ttk.Frame(self.dynamic_frame, height=display_height)
-            self.table_frame.pack(fill="both", expand=True, padx=5, pady=5)
 
     def create_notes_display_area(self):
         """Create the notes display area for plotting sheets."""
@@ -781,21 +428,7 @@ Would you like to download and install the update?"""
             import traceback
             traceback.print_exc()
 
-    def constrain_plot_width(self):
-        """Ensure the plot doesn't exceed 50% of the window width."""
-        if not hasattr(self, 'plot_frame') or not self.plot_frame:
-            return
 
-        window_width = self.root.winfo_width()
-        max_plot_width = window_width // 2
-
-        if max_plot_width > 50:
-            self.plot_frame.config(width=max_plot_width)
-            self.plot_frame.grid_propagate(False)
-
-            if hasattr(self, 'table_frame') and self.table_frame:
-                self.table_frame.config(width=max_plot_width)
-                self.table_frame.grid_propagate(False)
 
     def show_startup_menu(self) -> None:
         """Display a startup menu with 'New' and 'Load' options."""
@@ -836,18 +469,9 @@ Would you like to download and install the update?"""
         )
         load_excel_button.pack(side="left", padx=5)
 
-        self.center_window(startup_menu)
+        self.ui_manager.center_window(startup_menu)
 
-    def center_window(self, window: tk.Toplevel, width: Optional[int] = None, height: Optional[int] = None) -> None:
-        """Center a given Tkinter window on the screen."""
-        window.update_idletasks()
-        window_width = width or window.winfo_width()
-        window_height = height or window.winfo_height()
-        screen_width = window.winfo_screenwidth()
-        screen_height = window.winfo_screenheight()
-        position_x = (screen_width - window_width) // 2
-        position_y = (screen_height - window_height) // 2
-        window.geometry(f"{window_width}x{window_height}+{position_x}+{position_y}")
+
 
     def populate_or_update_sheet_dropdown(self) -> None:
         """Populate or update the dropdown for sheet selection."""
@@ -1282,30 +906,9 @@ Would you like to download and install the update?"""
         """Display about dialog."""
         show_success_message("About", "SDR DataViewer Beta Version 3.0\nDeveloped by Charlie Becquet", self.root)
 
-    def set_app_colors(self) -> None:
-        """Set consistent color theme and fonts for the application."""
-        style = ttk.Style()
-        self.root.configure(bg=APP_BACKGROUND_COLOR)
-        style.configure('TLabel', background=APP_BACKGROUND_COLOR, font=FONT)
-        style.configure('TButton', background=BUTTON_COLOR, font=FONT, padding=6)
-        style.configure('TCombobox', font=FONT)
-        style.map('TCombobox', background=[('readonly', APP_BACKGROUND_COLOR)])
 
-        for widget in self.root.winfo_children():
-            try:
-                widget.configure(bg='#EFEFEF')
-            except Exception:
-                continue
 
-    def set_window_size(self, width_ratio: float, height_ratio: float) -> None:
-        """Set the window size as a percentage of the screen dimensions."""
-        screen_width = self.root.winfo_screenwidth()
-        screen_height = self.root.winfo_screenheight()
-        window_width = int(screen_width * width_ratio)
-        window_height = int(screen_height * height_ratio)
-        position_x = (screen_width - window_width) // 2
-        position_y = (screen_height - window_height) // 2
-        self.root.geometry(f"{window_width}x{window_height}+{position_x}+{position_y}")
+
 
     def add_report_buttons(self, parent_frame: ttk.Frame) -> None:
         """Add buttons for generating reports and align them in the parent frame."""
@@ -1317,21 +920,7 @@ Would you like to download and install the update?"""
         test_report_btn = ttk.Button(parent_frame, text="Generate Test Report", command=self.generate_test_report)
         test_report_btn.pack(side="left", padx=(5, 5), pady=(5, 5))
 
-    def adjust_window_size(self, fixed_width=1500):
-        """Adjust the window height dynamically to fit the content while keeping the width constant."""
-        if not isinstance(self.root, (tk.Tk, tk.Toplevel)):
-            raise ValueError("Expected 'self.root' to be a tk.Tk or tk.Toplevel instance")
 
-        self.root.update_idletasks()
-        required_height = self.root.winfo_reqheight()
-        screen_height = self.root.winfo_screenheight()
-        screen_width = self.root.winfo_screenwidth()
-        final_height = min(required_height, screen_height)
-
-        current_x = self.root.winfo_x()
-        current_y = self.root.winfo_y()
-
-        self.root.geometry(f"{fixed_width}x{final_height}+{current_x}+{current_y}")
 
     def update_displayed_sheet(self, sheet_name: str) -> None:
         """Update the displayed sheet and dynamically manage the plot options and plot type dropdown."""
@@ -1378,8 +967,8 @@ Would you like to download and install the update?"""
         """Finish sheet update in main thread."""
         try:
             # Clear and rebuild frames
-            self.clear_dynamic_frame()
-            self.setup_dynamic_frames(is_plotting_sheet)
+            self.ui_manager.clear_dynamic_frame()
+            self.ui_manager.setup_dynamic_frames(is_plotting_sheet)
 
             # Handle ImageLoader setup
             self._setup_image_loader(sheet_name, is_plotting_sheet)
@@ -1891,7 +1480,7 @@ Would you like to download and install the update?"""
             print("DEBUG: Main window restored to fullscreen/zoomed state")
 
             # Restore app colors and styling
-            self.set_app_colors()
+            self.ui_manager.set_app_colors()
             print("DEBUG: App colors and styling restored")
 
             # Bring window to front and focus
@@ -2481,4 +2070,4 @@ Would you like to download and install the update?"""
             self.selected_sheet.set(first_sheet)
             self.update_displayed_sheet(first_sheet)
         else:
-            self.clear_dynamic_frame()
+            self.ui_manager.clear_dynamic_frame()
