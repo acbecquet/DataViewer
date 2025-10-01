@@ -32,8 +32,7 @@ from import_manager import (
 # Import utilities after lazy imports
 from utils import FONT, clean_columns, get_save_path, is_standard_file, plotting_sheet_test, APP_BACKGROUND_COLOR, BUTTON_COLOR, PLOT_CHECKBOX_TITLE, clean_display_suffixes, show_success_message
 from resource_utils import get_resource_path
-from update_checker import UpdateChecker
-from ui_manager import UIManager
+#from update_checker import UpdateChecker
 
 class DataViewer:
     """Main GUI class for the Standardized Testing application."""
@@ -47,6 +46,12 @@ class DataViewer:
         self.root.title("DataViewer")
         self.report_thread = None
         self.report_queue = queue.Queue()
+
+        self._file_manager = None
+        self._plot_manager = None
+        self._report_generator = None
+        self._progress_dialog = None
+        self._ui_manager = None
 
         # Initialize variables first
         self.initialize_variables()
@@ -170,24 +175,24 @@ Would you like to download and install the update?"""
             self._tksheet = lazy_import_tksheet()
         return self._tksheet
 
-    def lazy_init_managers(self):
-        """Initialize manager classes only when needed."""
-        if hasattr(self, '_managers_initialized') and self._managers_initialized:
-            return
+    #def lazy_init_managers(self):
+        #"""Initialize manager classes only when needed."""
+        #if hasattr(self, '_managers_initialized') and self._managers_initialized:
+        #    return
 
         # Import and initialize managers
-        from plot_manager import PlotManager
-        from file_manager import FileManager
-        from report_generator import ReportGenerator
-        from progress_dialog import ProgressDialog
+        #from plot_manager import PlotManager
+        #from file_manager import FileManager
+        #from report_generator import ReportGenerator
+        #from progress_dialog import ProgressDialog
 
-        self.file_manager = FileManager(self)
-        self.plot_manager = PlotManager(self)
-        self.report_generator = ReportGenerator(self)
-        self.progress_dialog = ProgressDialog(self.root)
-        self.ui_manager = UIManager(self)
+        #self.file_manager = FileManager(self)
+        #self.plot_manager = PlotManager(self)
+        #self.report_generator = ReportGenerator(self)
+        #self.progress_dialog = ProgressDialog(self.root)
+        #self.ui_manager = UIManager(self)
 
-        self._managers_initialized = True
+        #self._managers_initialized = True
 
     # Initialization and Configuration
     def initialize_variables(self) -> None:
@@ -231,7 +236,83 @@ Would you like to download and install the update?"""
         self.crop_enable = tk.BooleanVar(value=False)
 
         # Initialize managers - create basic ones immediately for core functionality
-        self.lazy_init_managers()
+        #self.lazy_init_managers()
+        self._managers_initialized = False
+
+    @property
+    def file_manager(self):
+        """Lazy load file_manager on first access."""
+        if self._file_manager is None:
+            print("DEBUG: Lazy loading FileManager...")
+            start = time.time()
+            from file_manager import FileManager
+            self._file_manager = FileManager(self)
+            print(f"DEBUG: FileManager loaded in {time.time() - start:.3f}s")
+        return self._file_manager
+
+    @file_manager.setter
+    def file_manager(self, value):
+        self._file_manager = value
+
+    @property
+    def plot_manager(self):
+        """Lazy load plot_manager on first access."""
+        if self._plot_manager is None:
+            print("DEBUG: Lazy loading PlotManager...")
+            start = time.time()
+            from plot_manager import PlotManager
+            self._plot_manager = PlotManager(self)
+            print(f"DEBUG: PlotManager loaded in {time.time() - start:.3f}s")
+        return self._plot_manager
+
+    @plot_manager.setter
+    def plot_manager(self, value):
+        self._plot_manager = value
+
+    @property
+    def report_generator(self):
+        """Lazy load report_generator on first access."""
+        if self._report_generator is None:
+            print("DEBUG: Lazy loading ReportGenerator...")
+            start = time.time()
+            from report_generator import ReportGenerator
+            self._report_generator = ReportGenerator(self)
+            print(f"DEBUG: ReportGenerator loaded in {time.time() - start:.3f}s")
+        return self._report_generator
+
+    @report_generator.setter
+    def report_generator(self, value):
+        self._report_generator = value
+
+    @property
+    def progress_dialog(self):
+        """Lazy load progress_dialog on first access."""
+        if self._progress_dialog is None:
+            print("DEBUG: Lazy loading ProgressDialog...")
+            start = time.time()
+            from progress_dialog import ProgressDialog
+            self._progress_dialog = ProgressDialog(self.root)
+            print(f"DEBUG: ProgressDialog loaded in {time.time() - start:.3f}s")
+        return self._progress_dialog
+
+    @progress_dialog.setter
+    def progress_dialog(self, value):
+        self._progress_dialog = value
+
+    @property
+    def ui_manager(self):
+        """Lazy load ui_manager on first access."""
+        if self._ui_manager is None:
+            print("DEBUG: Lazy loading UIManager...")
+            start = time.time()
+            from ui_manager import UIManager
+            self._ui_manager = UIManager(self)
+            print(f"DEBUG: UIManager loaded in {time.time() - start:.3f}s")
+        return self._ui_manager
+
+    @ui_manager.setter
+    def ui_manager(self, value):
+        self._ui_manager = value
 
     def configure_ui(self) -> None:
         """Configure the UI appearance and set application properties."""
