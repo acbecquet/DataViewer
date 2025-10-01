@@ -86,6 +86,10 @@ class FileManager:
         """Delegate to core operations."""
         return self.core_ops.ensure_file_is_loaded_in_ui(file_path)
 
+    def close_current_file(self):
+        """Delegate to core operations."""
+        return self.core_ops.close_current_file()
+
     # ==================== DATABASE OPERATIONS ====================
     
     def _store_file_in_database(self, *args, **kwargs):

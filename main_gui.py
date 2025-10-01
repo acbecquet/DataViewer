@@ -648,6 +648,8 @@ Would you like to download and install the update?"""
         filemenu.add_separator()
         filemenu.add_command(label="Save As VAP3", command=self.save_as_vap3)
         filemenu.add_separator()
+        filemenu.add_command(label="Close Current File", command=self.file_manager.close_current_file)  # NEW LINE
+        filemenu.add_separator()
         filemenu.add_command(label="Update Database", accelerator="Ctrl+U", command=self.update_database)
         filemenu.add_separator()
         filemenu.add_command(label="Exit", command=self.on_app_close)

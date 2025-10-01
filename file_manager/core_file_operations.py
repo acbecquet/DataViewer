@@ -416,3 +416,66 @@ class CoreFileOperations:
                 debug_print(f"ERROR: Failed to load file into UI: {e}")
                 traceback.print_exc()
                 return False
+
+    def close_current_file(self):
+        """Close the currently active file and remove it from the session."""
+        if not self.gui.current_file:
+            messagebox.showinfo("No File", "No file is currently loaded.")
+            return
+    
+        current_file = self.gui.current_file
+    
+        # Confirm before closing
+        confirm = messagebox.askyesno(
+            "Confirm Close",
+            f"Close '{current_file}'?\n\nAny unsaved changes will be lost."
+        )
+    
+        if not confirm:
+            return
+    
+        debug_print(f"DEBUG: Closing file: {current_file}")
+    
+        # Remove from all_filtered_sheets
+        self.gui.all_filtered_sheets = [
+            file_data for file_data in self.gui.all_filtered_sheets 
+            if file_data["file_name"] != current_file
+        ]
+    
+        # Remove from sheet_images if present
+        if hasattr(self.gui, 'sheet_images') and current_file in self.gui.sheet_images:
+            del self.gui.sheet_images[current_file]
+    
+        # Clear current state
+        self.gui.filtered_sheets = {}
+        self.gui.sheets = {}
+        self.gui.current_file = None
+        self.gui.file_path = None
+        self.gui.selected_sheet.set("")  # Clear selected sheet
+    
+        # Clear UI
+        self.gui.ui_manager.clear_dynamic_frame()
+    
+        # Clear sheet dropdown - ADD THIS BACK
+        if hasattr(self.gui, 'drop_down_menu') and self.gui.drop_down_menu:
+            self.gui.drop_down_menu['values'] = []
+            self.gui.drop_down_menu.set('')
+            debug_print("DEBUG: Cleared sheet dropdown")
+    
+        # Update file dropdown
+        self.file_manager.ui_manager.update_file_dropdown()
+    
+        # If other files exist, switch to the last one
+        if self.gui.all_filtered_sheets:
+            last_file = self.gui.all_filtered_sheets[-1]
+            self.file_manager.set_active_file(last_file["file_name"])
+            self.file_manager.ui_manager.update_ui_for_current_file()
+            debug_print(f"DEBUG: Switched to file: {last_file['file_name']}")
+        else:
+            # No files left - clear file dropdown selection too
+            if hasattr(self.gui, 'file_dropdown_var'):
+                self.gui.file_dropdown_var.set('')
+            debug_print("DEBUG: No files remaining, showing startup menu")
+            self.gui.show_startup_menu()
+    
+        show_success_message("File Closed", f"'{current_file}' has been closed.", self.gui.root)

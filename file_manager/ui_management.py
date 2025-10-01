@@ -106,7 +106,10 @@ class UIManager:
         self.gui.file_dropdown["values"] = file_names
         if file_names:
             self.gui.file_dropdown_var.set(file_names[-1])
-            self.gui.file_dropdown.update_idletasks()
+        else:
+            # Clear the dropdown when no files remain
+            self.gui.file_dropdown_var.set('')
+        self.gui.file_dropdown.update_idletasks()
 
     def add_or_update_file_dropdown(self) -> None:
         """Add a file selection dropdown or update its values if it already exists."""
