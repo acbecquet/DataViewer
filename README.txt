@@ -1,4 +1,4 @@
-Standardized Testing GUI v3.0.0
+Standardized Testing GUI v0.0.14
 
 Welcome to the Standardized Testing GUI - Professional Data Analysis Software
 
@@ -29,7 +29,6 @@ FILE SUPPORT:
 
 SUPPORT:
 For technical support, documentation, and updates:
-- Website: https://your-website.com
-- Email: support@your-website.com
+- Email: becquetcharlie@gmail.com
 
 Copyright © 2025 Charlie Becquet. All rights reserved.
