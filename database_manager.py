@@ -19,7 +19,7 @@ def get_database_path():
     import os
 
     # CONFIGURATION
-    SYNOLOGY_IP = "192.168.222.10"  # Your confirmed working IP
+    SYNOLOGY_IP = "192.168.222.10"  # confirmed working IP
     DATABASE_RELATIVE_PATH = r"SDR\Device Group\Database"
     DATABASE_FILENAME = "dataviewer.db"
 
@@ -27,10 +27,16 @@ def get_database_path():
 
     # Method 1: PRIORITIZE your working local Synology Drive setup
     if platform.system() == "Windows":
+        # Get user home directory
+        user_home = os.path.expanduser("~")
         # Check your known working locations first
         priority_locations = [
-            r"C:\Synology2024",  # Your confirmed working setup
-            r"C:\SynologyDrive"  # Alternative found location
+            r"C:\Synology2024",  # confirmed working setup (root level)
+            r"C:\SynologyDrive",  # Alternative found location (root level)
+            os.path.join(user_home, "SynologyDrive"),  # User directory location
+            os.path.join(user_home, "Synology2024"),  # User directory alternative 1
+            os.path.join(user_home, "Synology2025"),  # User directory alternative 2
+            os.path.join(user_home, "Synology"),  # User directory alternative 3
         ]
 
         for base_path in priority_locations:
