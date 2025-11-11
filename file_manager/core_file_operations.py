@@ -40,7 +40,7 @@ from utils import (
     show_success_message,
     plotting_sheet_test
 )
-
+from excel_image_extractor import extract_and_load_excel_images
 
 class CoreFileOperations:
     """Handles core file operations like loading, reloading, and file state management."""
@@ -92,6 +92,19 @@ class CoreFileOperations:
                 raise ValueError(f"Invalid Excel file selected: {file_path}")
 
             debug_print(f"DEBUG: {'Force reloading' if force_reload else 'Loading'} file from disk: {file_path}")
+
+            # extract embedded images from Excel file
+            debug_print("DEBUG: Checking for embedded images in Excel file")
+            try:
+                num_images = extract_and_load_excel_images(self.gui, file_path,current_sheet=None)
+                if num_images > 0:
+                    debug_print(f"DEBUG: Successfully extracted {num_images} embedded images from Excel")
+                    show_success_message("Images Extracted", f"Found and loaded {num_images} embedded images from the Excel file.", self.gui.root)
+            except Exception as img_error:
+                debug_print(f"DEBUG: Failed to extract images from Excel: {img_error}")
+                # don't fail the entire load if image extraction fails
+                pass
+
             debug_print(f"DEBUG: Checking if file is standard format: {file_path}")
 
             if not is_standard_file(file_path):

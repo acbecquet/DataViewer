@@ -32,7 +32,8 @@ from import_manager import (
 # Import utilities after lazy imports
 from utils import FONT, clean_columns, get_save_path, is_standard_file, plotting_sheet_test, APP_BACKGROUND_COLOR, BUTTON_COLOR, PLOT_CHECKBOX_TITLE, clean_display_suffixes, show_success_message
 from resource_utils import get_resource_path
-#from update_checker import UpdateChecker
+from enhanced_notes_manager import EnhancedNotesManager, bind_table_double_click
+from excel_image_extractor import ExcelImageExtractor, extract_and_load_excel_images
 
 class DataViewer:
     """Main GUI class for the Standardized Testing application."""
@@ -64,6 +65,14 @@ class DataViewer:
 
         self.image_loader = None
         self.root.protocol("WM_DELETE_WINDOW", self.on_app_close)
+
+        # Initialize enhanced notes manager
+        self.notes_manager = EnhancedNotesManager(self)
+        debug_print("DEBUG: Initialize Enhanced Notes Manager")
+
+        # Initialize Excel image extractor
+        self.excel_image_extractor = None # Lazy loaded
+        debug_print("DEBUG: Excel Image Extractor ready for lazy loading")
 
         # Setup update checking - disable when no internet!
         #self.update_checker = UpdateChecker(current_version="3.0.0")
@@ -174,25 +183,6 @@ Would you like to download and install the update?"""
         if not hasattr(self, '_tksheet'):
             self._tksheet = lazy_import_tksheet()
         return self._tksheet
-
-    #def lazy_init_managers(self):
-        #"""Initialize manager classes only when needed."""
-        #if hasattr(self, '_managers_initialized') and self._managers_initialized:
-        #    return
-
-        # Import and initialize managers
-        #from plot_manager import PlotManager
-        #from file_manager import FileManager
-        #from report_generator import ReportGenerator
-        #from progress_dialog import ProgressDialog
-
-        #self.file_manager = FileManager(self)
-        #self.plot_manager = PlotManager(self)
-        #self.report_generator = ReportGenerator(self)
-        #self.progress_dialog = ProgressDialog(self.root)
-        #self.ui_manager = UIManager(self)
-
-        #self._managers_initialized = True
 
     # Initialization and Configuration
     def initialize_variables(self) -> None:
@@ -345,16 +335,10 @@ Would you like to download and install the update?"""
         if not hasattr(self, 'notes_frame') or not self.notes_frame.winfo_exists():
             return
 
-        # Clear existing notes widgets
-        for widget in self.notes_frame.winfo_children():
-            widget.destroy()
-
-        # Create a notebook for different samples' notes
-        self.notes_notebook = ttk.Notebook(self.notes_frame)
-        self.notes_notebook.pack(fill="both", expand=True)
-
-        # Initially empty - will be populated when data is loaded
-        self.notes_text_widgets = {}
+        if hasattr(self, 'notes_manager'):
+            self.notes_manager.create_interactive_notes_display()
+        else:
+            debug_print("ERROR: notes_manager not initialized")
 
     def update_notes_display(self, sheet_name):
         """Update the notes display area with sample notes from the current sheet."""
@@ -363,115 +347,24 @@ Would you like to download and install the update?"""
 
         debug_print(f"DEBUG: Updating notes display for sheet: {sheet_name}")
 
-        # Get the sheet info
-        sheet_info = self.filtered_sheets.get(sheet_name)
-        if not sheet_info:
-            debug_print(f"DEBUG: No sheet info found for {sheet_name}")
-            return
-        print(f"DEBUG: Sheet info:{sheet_info}")
-        # Get header data which contains sample notes
-        header_data = sheet_info.get('header_data')
-        if not header_data:
-            debug_print(f"DEBUG: No header data found for {sheet_name}")
-            # Create empty display
-            self.create_empty_notes_display()
-            return
-
-        samples_data = header_data.get('samples', [])
-        if not samples_data:
-            debug_print(f"DEBUG: No samples data found in header_data for {sheet_name}")
-            self.create_empty_notes_display()
-            return
-
-        debug_print(f"DEBUG: Found {len(samples_data)} samples with potential notes")
-
-        # Clear existing notebook tabs
-        for tab in self.notes_notebook.tabs():
-            self.notes_notebook.forget(tab)
-
-        self.notes_text_widgets.clear()
-
-        # Create tabs for each sample with notes
-        for i, sample_data in enumerate(samples_data):
-            sample_id = sample_data.get('id', f'Sample {i+1}')
-            sample_notes = sample_data.get('sample_notes', '')
-
-            if sample_notes or i < 4:  # Show first 4 samples or any with notes
-                # Create tab for this sample
-                tab_frame = ttk.Frame(self.notes_notebook)
-                self.notes_notebook.add(tab_frame, text=f"Sample {i+1}")
-
-                # Create text widget with scrollbar for notes
-                notes_container = ttk.Frame(tab_frame)
-                notes_container.pack(fill="both", expand=True, padx=5, pady=5)
-
-                # Sample info at the top
-                info_frame = ttk.Frame(notes_container)
-                info_frame.pack(fill="x", pady=(0, 5))
-
-                sample_info_label = ttk.Label(info_frame, text=f"Sample: {sample_id}",
-                                            font=('Arial', 10, 'bold'))
-                sample_info_label.pack(anchor='w')
-
-                # Additional sample info
-                if sample_data.get('media'):
-                    media_label = ttk.Label(info_frame, text=f"Media: {sample_data.get('media', 'N/A')}")
-                    media_label.pack(anchor='w')
-
-                if sample_data.get('viscosity'):
-                    viscosity_label = ttk.Label(info_frame, text=f"Viscosity: {sample_data.get('viscosity', 'N/A')}")
-                    viscosity_label.pack(anchor='w')
-
-                # Notes text area
-                text_frame = ttk.Frame(notes_container)
-                text_frame.pack(fill="both", expand=True)
-
-                notes_text = tk.Text(text_frame, wrap='word', font=('Arial', 9),
-                                   state='disabled', bg='#f8f8f8')
-                notes_scrollbar = ttk.Scrollbar(text_frame, orient='vertical',
-                                              command=notes_text.yview)
-                notes_text.configure(yscrollcommand=notes_scrollbar.set)
-
-                notes_text.pack(side='left', fill='both', expand=True)
-                notes_scrollbar.pack(side='right', fill='y')
-
-                # Insert the notes content
-                notes_text.config(state='normal')
-                if sample_notes:
-                    notes_text.insert('1.0', sample_notes)
-                else:
-                    notes_text.insert('1.0', "No test notes available for this sample.")
-                notes_text.config(state='disabled')
-
-                # Store reference for potential updates
-                self.notes_text_widgets[f"Sample {i+1}"] = notes_text
-
-                debug_print(f"DEBUG: Created notes tab for Sample {i+1} with {len(sample_notes)} characters")
-
-        # If no tabs were created, show empty display
-        if not self.notes_notebook.tabs():
-            self.create_empty_notes_display()
-
-        debug_print(f"DEBUG: Notes display updated with {len(self.notes_notebook.tabs())} tabs")
+        # use enhanced notes manager for interactive display
+        if hasattr(self, 'notes_manager'):
+            self.notes_manager.update_interactive_notes_display(sheet_name)
+        else:
+            debug_print("ERROR: notes_manager not initialized")
 
     def create_empty_notes_display(self):
         """Create an empty notes display when no sample notes are available."""
         if not hasattr(self, 'notes_notebook'):
             return
 
-        # Clear existing tabs
-        for tab in self.notes_notebook.tabs():
-            self.notes_notebook.forget(tab)
+        debug_print("DEBUG: Creating empty editable notes display")
 
-        # Create a single tab with empty message
-        empty_frame = ttk.Frame(self.notes_notebook)
-        self.notes_notebook.add(empty_frame, text="No Notes")
-
-        empty_label = ttk.Label(empty_frame,
-                              text="No sample test notes available.\nUse the Data Collection window to add notes.",
-                              font=('Arial', 10),
-                              justify='center')
-        empty_label.pack(expand=True, pady=20)
+        # Use enhanced notes manager
+        if hasattr(self, 'notes_manager'):
+            self.notes_manager.create_empty_editable_notes()
+        else:
+            debug_print("ERROR: notes_manager not initialized")
 
     def process_pending_sample_notes(self):
         """Process pending sample notes transferred from data collection window."""
@@ -508,8 +401,6 @@ Would you like to download and install the update?"""
             debug_print(f"ERROR: Failed to process pending sample notes: {e}")
             import traceback
             traceback.print_exc()
-
-
 
     def show_startup_menu(self) -> None:
         """Display a startup menu with 'New' and 'Load' options."""
@@ -551,8 +442,6 @@ Would you like to download and install the update?"""
         load_excel_button.pack(side="left", padx=5)
 
         self.ui_manager.center_window(startup_menu)
-
-
 
     def populate_or_update_sheet_dropdown(self) -> None:
         """Populate or update the dropdown for sheet selection."""
@@ -625,6 +514,10 @@ Would you like to download and install the update?"""
     def on_app_close(self):
         """Handle application shutdown."""
         try:
+            # cleanup extracted images
+            if hasattr(self, 'excel_image_extractor') and self.excel_image_extractor:
+                self.excel_image_extractor.cleanup_temp_directory()
+
             for thread in self.threads:
                 if thread.is_alive():
                     pass
@@ -648,7 +541,7 @@ Would you like to download and install the update?"""
         filemenu.add_separator()
         filemenu.add_command(label="Save As VAP3", command=self.save_as_vap3)
         filemenu.add_separator()
-        filemenu.add_command(label="Close Current File", command=self.file_manager.close_current_file)  # NEW LINE
+        filemenu.add_command(label="Close Current File", command=self.file_manager.close_current_file)
         filemenu.add_separator()
         filemenu.add_command(label="Update Database", accelerator="Ctrl+U", command=self.update_database)
         filemenu.add_separator()
@@ -1982,6 +1875,10 @@ Would you like to download and install the update?"""
             if not hasattr(self, 'current_sheet_widget'):
                 self.current_sheet_widget = {}
             self.current_sheet_widget[sheet_name] = sheet
+
+            # bind double-click event to switch notes tabs
+            bind_table_double_click(self)
+            debug_print("DEBUG: tksheet table displayed with double-click binding.")
 
         except Exception as table_error:
             debug_print(f"ERROR: Failed to create tksheet table: {table_error}")
