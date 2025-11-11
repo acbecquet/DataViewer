@@ -566,7 +566,7 @@ class ImageLoader:
 
     def display_images(self):
         """
-        Loads and displays the selected images in the GUI with additional debugging.
+        Loads and displays the selected images in the GUI with sample labels.
         """
         if not self.canvas or not self.scrollable_frame:
             debug_print("DEBUG: Canvas or scrollable_frame not initialized")
@@ -596,12 +596,17 @@ class ImageLoader:
             print("ERROR: PIL modules not available for display")
             return
 
-
         # Ensure parent has updated size before calculating max width
         self.parent.update_idletasks()
         max_height = 135
 
         debug_print(f"DEBUG: Total images to process: {len(self.image_files)}")
+
+        # Get sample mapping from GUI level (persists across ImageLoader recreations)
+        image_sample_mapping = {}
+        if hasattr(self.main_gui, 'image_sample_mapping'):
+            image_sample_mapping = self.main_gui.image_sample_mapping
+            debug_print(f"DEBUG: Loaded sample mapping from GUI: {len(image_sample_mapping)} entries")
 
         # Calculate positions
         padding = 5
@@ -612,8 +617,8 @@ class ImageLoader:
         # Get frame width, with fallback
         try:
             frame_width = self.scrollable_frame.winfo_width()
-            if frame_width <= 1:  # Frame not properly initialized
-                frame_width = 800  # Default width
+            if frame_width <= 1:
+                frame_width = 800
         except:
             frame_width = 800
 
@@ -624,10 +629,23 @@ class ImageLoader:
             container = Frame(self.scrollable_frame, bg="white", relief="solid", bd=1)
             container.pack_propagate(False)
 
+            # Add sample label if mapping exists for this image
+            if img_path in image_sample_mapping:
+                sample_num = image_sample_mapping[img_path]
+                sample_label = Label(
+                    container,
+                    text=f"(Sample {sample_num})",
+                    font=('Arial', 9, 'bold'),
+                    bg='white',
+                    fg='blue'
+                )
+                sample_label.pack(pady=(2, 0))
+                debug_print(f"DEBUG: Added sample label: Sample {sample_num}")
+
             if img_path.lower().endswith(".pdf"):
                 label = Label(container, text=f"PDF: {os.path.basename(img_path)}", bg="white")
                 label.pack(padx=5, pady=5)
-                item_width = 200  # Fixed width for PDF labels
+                item_width = 200
                 item_height = 50
             else:
                 try:
@@ -641,8 +659,12 @@ class ImageLoader:
                     label.pack(padx=2, pady=2)
 
                     self.image_references.append(img_tk)
-                    item_width = img.width + 4  # Add padding
+                    item_width = img.width + 4
                     item_height = img.height + 4
+                
+                    # Add extra height for sample label if present
+                    if img_path in image_sample_mapping:
+                        item_height += 20
 
                     debug_print(f"DEBUG: Image {img_index + 1} processed successfully: {item_width}x{item_height}")
 
@@ -698,8 +720,6 @@ class ImageLoader:
             debug_print(f"DEBUG: Error updating scroll region: {e}")
 
         debug_print(f"DEBUG: Display completed. Total height: {total_height}")
-
-    # Add this method to your ImageLoader class
 
     def get_image_for_report(self, img_path, target_width=None, target_height=None):
         """

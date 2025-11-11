@@ -278,55 +278,69 @@ class EnhancedNotesManager:
     
     def _save_sample_notes(self, sample_index):
         """Save sample notes to the data structure.
-        
+    
         Args:
             sample_index: Index of the sample to save notes for
         """
         try:
             widget_key = f"Sample_{sample_index}"
-            
+        
             if widget_key not in self.notes_text_widgets:
                 debug_print(f"DEBUG: No text widget found for {widget_key}")
                 return
-            
+        
             text_widget = self.notes_text_widgets[widget_key]
             content = text_widget.get('1.0', 'end-1c').strip()
-            
+        
             # Skip if content unchanged
             if widget_key in self.last_saved_content:
                 if content == self.last_saved_content[widget_key]:
                     return
-            
+        
             # Remove placeholder text from save
             if content == "Enter test notes for this sample here...":
                 content = ""
-            
+        
             debug_print(f"DEBUG: Auto-saving notes for Sample {sample_index+1}: {len(content)} characters")
-            
+        
             # Update filtered_sheets with notes
             if not self.current_sheet_name:
                 debug_print("DEBUG: No current sheet name set")
                 return
-            
+        
             sheet_info = self.gui.filtered_sheets.get(self.current_sheet_name)
             if not sheet_info:
                 debug_print(f"DEBUG: No sheet info for {self.current_sheet_name}")
                 return
-            
-            # Ensure header_data structure exists
-            if 'header_data' not in sheet_info:
+        
+            # Initialize header_data if it doesn't exist or is None
+            # This is expected - notes are added via GUI, not from Excel
+            if 'header_data' not in sheet_info or sheet_info['header_data'] is None:
+                debug_print(f"DEBUG: Initializing header_data structure for {self.current_sheet_name}")
                 sheet_info['header_data'] = {'samples': []}
-            
+        
             header_data = sheet_info['header_data']
-            
-            # Ensure samples list is long enough
+        
+            # Double-check header_data is valid
+            if header_data is None:
+                debug_print(f"ERROR: header_data still None after initialization")
+                header_data = {'samples': []}
+                sheet_info['header_data'] = header_data
+        
+            # Ensure samples list exists
+            if 'samples' not in header_data:
+                debug_print(f"DEBUG: Creating samples list in header_data")
+                header_data['samples'] = []
+        
+            # Expand samples list to accommodate this sample index
             while len(header_data['samples']) <= sample_index:
+                debug_print(f"DEBUG: Expanding samples list to index {sample_index}")
                 header_data['samples'].append({})
-            
+        
             # Save the notes
             header_data['samples'][sample_index]['sample_notes'] = content
             self.last_saved_content[widget_key] = content
-            
+        
             # Mark file as modified
             if hasattr(self.gui, 'all_filtered_sheets'):
                 for file_data in self.gui.all_filtered_sheets:
@@ -334,9 +348,10 @@ class EnhancedNotesManager:
                         file_data['is_modified'] = True
                         debug_print(f"DEBUG: Marked file as modified")
                         break
-            
+        
             debug_print(f"DEBUG: Successfully saved notes for Sample {sample_index+1}")
-            
+            debug_print(f"DEBUG: header_data now has {len(header_data['samples'])} sample entries")
+        
         except Exception as e:
             debug_print(f"ERROR: Failed to save sample notes: {e}")
             import traceback

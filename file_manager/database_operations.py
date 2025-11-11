@@ -117,6 +117,22 @@ class DatabaseOperations:
 
             debug_print(f"DEBUG: Total sample images for database storage: {len(sample_images)} samples")
 
+            if hasattr(self.gui, 'sheet_images'):
+                current_file = getattr(self.gui, 'current_file', None) or original_file_path
+                if current_file in self.gui.sheet_images:
+                    debug_print(f"DEBUG: Checking for embedded Excel images in sheet_images")
+                    # Sheet images contain the embedded images extracted from Excel
+                    # We need to preserve these when storing to database
+                    for sheet_name, image_paths in self.gui.sheet_images[current_file].items():
+                        if image_paths:
+                            debug_print(f"DEBUG: Found {len(image_paths)} embedded images for sheet: {sheet_name}")
+                            # These images are already in the correct format and will be
+                            # included via the sheet_images parameter in save_to_vap3
+
+            debug_print(f"DEBUG: Total sample images for database storage: {len(sample_images)} samples")
+            if sample_images:
+                debug_print(f"DEBUG: Sample image groups: {list(sample_images.keys())}")
+
             # Extract and construct the display filename
             if display_filename is None:
                 if original_file_path.endswith('.vap3'):
@@ -146,7 +162,7 @@ class DatabaseOperations:
 
             debug_print("DEBUG: VAP3 file created successfully with sample images")
 
-            # MODIFY: Store metadata about the original file (ADD sample_notes to metadata)
+            # Store metadata about the original file (ADD sample_notes to metadata)
             meta_data = {
                 'display_filename': display_filename,
                 'original_filename': os.path.basename(original_file_path),
@@ -157,7 +173,7 @@ class DatabaseOperations:
                 'plot_settings': plot_settings,
                 'has_sample_images': bool(sample_images),
                 'sample_count': len(sample_images),
-                'sample_notes': sample_notes_data  # ADD THIS LINE
+                'sample_notes': sample_notes_data 
             }
 
             debug_print(f"DEBUG: Metadata to store: {meta_data}")
