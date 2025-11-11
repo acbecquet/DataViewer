@@ -51,6 +51,11 @@ class Vap3FileHandler:
                 'selected_plot_type': self.gui.selected_plot_type.get() if hasattr(self.gui, 'selected_plot_type') else None
             }
 
+            # Collect image sample mapping
+            if hasattr(self.gui, 'image_sample_mapping') and self.gui.image_sample_mapping:
+                plot_settings['image_sample_mapping'] = self.gui.image_sample_mapping.copy()
+                debug_print(f"DEBUG: Collected image sample mapping for save: {len(self.gui.image_sample_mapping)} entries")
+
             # Get image crop states
             image_crop_states = getattr(self.gui, 'image_crop_states', {})
             if hasattr(self.gui, 'image_loader') and self.gui.image_loader:
@@ -130,12 +135,76 @@ class Vap3FileHandler:
                 self.gui.filtered_sheets = result['filtered_sheets']
                 self.gui.sheets = {name: sheet_info['data'] for name, sheet_info in result['filtered_sheets'].items()}
 
+                # Store old image sample mapping temporarily
+                old_image_sample_mapping = {}
+                if 'plot_settings' in result and result['plot_settings']:
+                    if 'image_sample_mapping' in result['plot_settings']:
+                        old_image_sample_mapping = result['plot_settings']['image_sample_mapping']
+                        debug_print(f"DEBUG: Found image sample mapping in VAP3: {len(old_image_sample_mapping)} entries")
+
                 # Handle sheet images - need to be careful about file-specific images
                 if 'sheet_images' in result and result['sheet_images']:
                     if not hasattr(self.gui, 'sheet_images'):
                         self.gui.sheet_images = {}
-                    self.gui.sheet_images[current_file_name] = result['sheet_images'].get(current_file_name, {})
-                    debug_print(f"DEBUG: Loaded sheet images for {current_file_name}")
+                    
+                    if result['sheet_images']:
+                        vap3_key = list(result['sheet_images'].keys())[0]
+                        self.gui.sheet_images[current_file_name] = result['sheet_images'][vap3_key]
+                        debug_print(f"DEBUG: Loaded sheet images for {current_file_name} (from VAP3 key: {vap3_key})")
+                        debug_print(f"DEBUG: Sheets with images: {list(self.gui.sheet_images[current_file_name].keys())}")
+                        for sheet_name, imgs in self.gui.sheet_images[current_file_name].items():
+                            debug_print(f"DEBUG: Sheet {sheet_name}: {len(imgs)} images")
+
+                        # Initialize image_sample_mapping if needed
+                        if not hasattr(self.gui, 'image_sample_mapping'):
+                            self.gui.image_sample_mapping = {}
+
+                        # Rebuild image sample mapping with new temporary paths
+                        if old_image_sample_mapping:
+                            # Create mapping of old basenames to sample numbers
+                            basename_to_sample = {}
+                            for old_path, sample_num in old_image_sample_mapping.items():
+                                basename = os.path.basename(old_path)
+                                basename_to_sample[basename] = sample_num
+                                debug_print(f"DEBUG: Old mapping: {basename} -> Sample {sample_num}")
+                            
+                            # Map new temporary paths to sample numbers using basenames
+                            for sheet_name, new_image_paths in self.gui.sheet_images[current_file_name].items():
+                                for new_path in new_image_paths:
+                                    new_basename = os.path.basename(new_path)
+                                    if new_basename in basename_to_sample:
+                                        sample_num = basename_to_sample[new_basename]
+                                        self.gui.image_sample_mapping[new_path] = sample_num
+                                        debug_print(f"DEBUG: Mapped new path to Sample {sample_num}: {new_basename}")
+                            
+                            debug_print(f"DEBUG: Rebuilt image sample mapping with {len(self.gui.image_sample_mapping)} entries")
+                        else:
+                            # FALLBACK: Try to reconstruct mapping from image filenames
+                            # Excel embedded images often have predictable names
+                            debug_print(f"DEBUG: No saved mapping found, attempting reconstruction from filenames")
+                            
+                            import re
+                            for sheet_name, new_image_paths in self.gui.sheet_images[current_file_name].items():
+                                # Sort images to ensure consistent ordering
+                                sorted_paths = sorted(new_image_paths)
+                                for idx, img_path in enumerate(sorted_paths):
+                                    basename = os.path.basename(img_path)
+                                    
+                                    # Try to extract sample number from filename patterns
+                                    # Pattern 1: image_0.jpeg, image_1.jpeg, etc.
+                                    match = re.search(r'image[_\s-]*(\d+)', basename, re.IGNORECASE)
+                                    if match:
+                                        sample_num = int(match.group(1)) + 1  # Convert 0-based to 1-based
+                                        self.gui.image_sample_mapping[img_path] = sample_num
+                                        debug_print(f"DEBUG: Reconstructed mapping from filename: {basename} -> Sample {sample_num}")
+                                    else:
+                                        # Pattern 2: If no number found, use order-based assignment
+                                        sample_num = idx + 1
+                                        self.gui.image_sample_mapping[img_path] = sample_num
+                                        debug_print(f"DEBUG: Assigned by order: {basename} -> Sample {sample_num}")
+                            
+                            if self.gui.image_sample_mapping:
+                                debug_print(f"DEBUG: Reconstructed {len(self.gui.image_sample_mapping)} mappings from filenames")
 
                 # Handle image crop states
                 if 'image_crop_states' in result and result['image_crop_states']:

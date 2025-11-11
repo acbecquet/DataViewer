@@ -40,18 +40,15 @@ class DatabaseOperations:
         """
         debug_print(f"DEBUG: Checking if file {original_file_path} needs database storage")
 
-        # Check if already stored
         if original_file_path in self.file_manager.stored_files_cache:
             debug_print("DEBUG: File already stored in database, skipping")
             return
 
         try:
             debug_print("DEBUG: Storing new file in database...")
-            # Show progress dialog
             self.gui.progress_dialog.show_progress_bar("Storing file in database...")
             self.gui.root.update_idletasks()
 
-            # CREATE: Collect sample notes from current filtered_sheets (ADD THIS SECTION)
             sample_notes_data = {}
             for sheet_name, sheet_info in self.gui.filtered_sheets.items():
                 header_data = sheet_info.get('header_data')
@@ -66,89 +63,85 @@ class DatabaseOperations:
                         sample_notes_data[sheet_name] = sheet_notes
                         debug_print(f"DEBUG: Collected notes for sheet {sheet_name}: {len(sheet_notes)} samples")
 
-            # Create a temporary VAP3 file
             with tempfile.NamedTemporaryFile(suffix='.vap3', delete=False) as temp_file:
                 temp_vap3_path = temp_file.name
                 debug_print(f"DEBUG: Created temporary VAP3 file: {temp_vap3_path}")
 
-            # Save current state as VAP3
             from vap_file_manager import VapFileManager
             vap_manager = VapFileManager()
 
-            # Collect plot settings safely
             plot_settings = {}
             if hasattr(self.gui, 'selected_plot_type'):
                 plot_settings['selected_plot_type'] = self.gui.selected_plot_type.get()
 
             debug_print(f"DEBUG: Plot settings: {plot_settings}")
 
-            # Get image crop states safely
             image_crop_states = getattr(self.gui, 'image_crop_states', {})
             if hasattr(self.gui, 'image_loader') and self.gui.image_loader:
                 image_crop_states.update(getattr(self.gui.image_loader, 'image_crop_states', {}))
 
             debug_print(f"DEBUG: Image crop states: {len(image_crop_states)} items")
 
-            # Collect sample images for database storage
             sample_images = {}
             sample_image_crop_states = {}
             sample_header_data = {}
 
-            # Check if we have pending sample images
             if hasattr(self.gui, 'pending_sample_images'):
                 sample_images = getattr(self.gui, 'pending_sample_images', {})
                 sample_image_crop_states = getattr(self.gui, 'pending_sample_image_crop_states', {})
                 sample_header_data = getattr(self.gui, 'pending_sample_header_data', {})
                 debug_print(f"DEBUG: Found pending sample images: {len(sample_images)} samples")
 
-            # Also check sample_image_metadata structure for all files/sheets
             if hasattr(self.gui, 'sample_image_metadata'):
                 current_file = getattr(self.gui, 'current_file', None)
                 if current_file and current_file in self.gui.sample_image_metadata:
                     for sheet_name, metadata in self.gui.sample_image_metadata[current_file].items():
                         sheet_sample_images = metadata.get('sample_images', {})
                         if sheet_sample_images:
-                            # Merge with existing sample images
                             sample_images.update(sheet_sample_images)
                             sample_image_crop_states.update(metadata.get('sample_image_crop_states', {}))
-                            if not sample_header_data:  # Use first header data found
+                            if not sample_header_data:
                                 sample_header_data = metadata.get('header_data', {})
                             debug_print(f"DEBUG: Found sample images in metadata for {sheet_name}: {len(sheet_sample_images)} samples")
-
-            debug_print(f"DEBUG: Total sample images for database storage: {len(sample_images)} samples")
-
-            if hasattr(self.gui, 'sheet_images'):
-                current_file = getattr(self.gui, 'current_file', None) or original_file_path
-                if current_file in self.gui.sheet_images:
-                    debug_print(f"DEBUG: Checking for embedded Excel images in sheet_images")
-                    # Sheet images contain the embedded images extracted from Excel
-                    # We need to preserve these when storing to database
-                    for sheet_name, image_paths in self.gui.sheet_images[current_file].items():
-                        if image_paths:
-                            debug_print(f"DEBUG: Found {len(image_paths)} embedded images for sheet: {sheet_name}")
-                            # These images are already in the correct format and will be
-                            # included via the sheet_images parameter in save_to_vap3
 
             debug_print(f"DEBUG: Total sample images for database storage: {len(sample_images)} samples")
             if sample_images:
                 debug_print(f"DEBUG: Sample image groups: {list(sample_images.keys())}")
 
-            # Extract and construct the display filename
             if display_filename is None:
                 if original_file_path.endswith('.vap3'):
                     display_filename = os.path.basename(original_file_path)
                 else:
-                    # For Excel files, create .vap3 extension
                     base_name = os.path.splitext(os.path.basename(original_file_path))[0]
                     display_filename = f"{base_name}.vap3"
 
             debug_print(f"DEBUG: Using display filename: {display_filename}")
 
-            # Save the VAP3 file with sample images included
+            current_file_sheet_images = {}
+            if hasattr(self.gui, 'sheet_images'):
+                current_file = getattr(self.gui, 'current_file', None) or original_file_path
+                if current_file in self.gui.sheet_images:
+                    current_file_sheet_images[display_filename] = self.gui.sheet_images[current_file]
+                    debug_print(f"DEBUG: Extracted sheet images for file {current_file}: {len(self.gui.sheet_images[current_file])} sheets")
+                    for sheet_name, imgs in self.gui.sheet_images[current_file].items():
+                        debug_print(f"DEBUG: Sheet {sheet_name} has {len(imgs)} images")
+
+            debug_print(f"DEBUG: Sheet images to save with key '{display_filename}': {list(current_file_sheet_images.keys())}")
+
+            # Collect image sample mapping
+            image_sample_mapping = {}
+            if hasattr(self.gui, 'image_sample_mapping'):
+                image_sample_mapping = self.gui.image_sample_mapping.copy()
+                debug_print(f"DEBUG: Collected image sample mapping: {len(image_sample_mapping)} entries")
+        
+            # Add to plot_settings for storage
+            if image_sample_mapping:
+                plot_settings['image_sample_mapping'] = image_sample_mapping
+
             success = vap_manager.save_to_vap3(
                 temp_vap3_path,
                 self.gui.filtered_sheets,
-                getattr(self.gui, 'sheet_images', {}),
+                current_file_sheet_images,
                 getattr(self.gui, 'plot_options', []),
                 image_crop_states,
                 plot_settings,
@@ -162,7 +155,6 @@ class DatabaseOperations:
 
             debug_print("DEBUG: VAP3 file created successfully with sample images")
 
-            # Store metadata about the original file (ADD sample_notes to metadata)
             meta_data = {
                 'display_filename': display_filename,
                 'original_filename': os.path.basename(original_file_path),
@@ -178,11 +170,9 @@ class DatabaseOperations:
 
             debug_print(f"DEBUG: Metadata to store: {meta_data}")
 
-            # Store the VAP3 file in the database with the proper display filename
             file_id = self.db_manager.store_vap3_file(temp_vap3_path, meta_data)
             debug_print(f"DEBUG: File stored with ID: {file_id}")
 
-            # Store sheet metadata
             for sheet_name, sheet_info in self.gui.filtered_sheets.items():
                 is_plotting = plotting_sheet_test(sheet_name, sheet_info["data"])
                 is_empty = sheet_info.get("is_empty", False)
@@ -195,7 +185,6 @@ class DatabaseOperations:
                 )
                 debug_print(f"DEBUG: Stored sheet '{sheet_name}' with ID: {sheet_id}")
 
-            # Store associated images
             if hasattr(self.gui, 'sheet_images') and hasattr(self.gui, 'current_file') and self.gui.current_file in self.gui.sheet_images:
                 current_file = self.gui.current_file
                 for sheet_name, image_paths in self.gui.sheet_images[current_file].items():
@@ -205,13 +194,11 @@ class DatabaseOperations:
                             self.db_manager.store_image(file_id, sheet_name, image_path, crop_enabled)
                             debug_print(f"DEBUG: Stored image for sheet {sheet_name}: {os.path.basename(image_path)}")
 
-            # Clean up temporary file
             try:
                 os.unlink(temp_vap3_path)
             except:
                 pass
 
-            # Add to cache to prevent re-storing
             self.file_manager.stored_files_cache.add(original_file_path)
 
             debug_print("DEBUG: File stored in database successfully")

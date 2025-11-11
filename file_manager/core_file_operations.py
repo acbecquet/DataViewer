@@ -99,7 +99,6 @@ class CoreFileOperations:
                 num_images = extract_and_load_excel_images(self.gui, file_path,current_sheet=None)
                 if num_images > 0:
                     debug_print(f"DEBUG: Successfully extracted {num_images} embedded images from Excel")
-                    show_success_message("Images Extracted", f"Found and loaded {num_images} embedded images from the Excel file.", self.gui.root)
             except Exception as img_error:
                 debug_print(f"DEBUG: Failed to extract images from Excel: {img_error}")
                 # don't fail the entire load if image extraction fails
