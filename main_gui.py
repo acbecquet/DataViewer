@@ -983,15 +983,9 @@ Would you like to download and install the update?"""
 
                 self.current_sheet_data = processed_data
 
-                # Handle User Test Simulation
-                if sheet_name in ["User Test Simulation", "User Simulation Test"]:
-                    self.plot_options = self.user_test_simulation_plot_options
-                    self.is_user_test_simulation = True
-                    self.num_columns_per_sample = 8
-                else:
-                    self.plot_options = self.standard_plot_options
-                    self.is_user_test_simulation = False
-                    self.num_columns_per_sample = 12
+                self.plot_options = self.standard_plot_options
+                self.is_user_test_simulation = False
+                self.num_columns_per_sample = 12
 
             except Exception as e:
                 debug_print(f"ERROR: Processing function failed for {sheet_name}: {e}")
