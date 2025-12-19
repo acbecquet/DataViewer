@@ -42,12 +42,34 @@ class TestWorkflow:
         if not file_path:
             return None
 
-        # Get template path
-        template_path = get_resource_path("resources/Standardized Test Template - LATEST VERSION - 2025 Jan.xlsx")
+        # Try to find new template first, fall back to old template
+        new_template_path = get_resource_path("resources/Standardized Test Template - December 2025.xlsx")
+        old_template_path = get_resource_path("resources/Standardized Test Template - LATEST VERSION - 2025 Jan.xlsx")
+    
+        # Check which templates exist
+        new_template_exists = os.path.exists(new_template_path)
+        old_template_exists = os.path.exists(old_template_path)
+    
+        debug_print(f"DEBUG: New template exists: {new_template_exists} at {new_template_path}")
+        debug_print(f"DEBUG: Old template exists: {old_template_exists} at {old_template_path}")
+    
+        # Prefer new template if available, otherwise use old
+        if new_template_exists:
+            template_path = new_template_path
+            template_version = "new"
+            debug_print("DEBUG: Using new template (December 2025)")
+        elif old_template_exists:
+            template_path = old_template_path
+            template_version = "old"
+            debug_print("DEBUG: Using old template (January 2025)")
+        else:
+            messagebox.showerror("Error", "No template file found! Please ensure template is in resources folder.")
+            return None
 
         # Load template to get available tests
         wb = openpyxl.load_workbook(template_path)
         available_tests = [sheet for sheet in wb.sheetnames if sheet != "Sheet1"]
+        debug_print(f"DEBUG: Available tests in template: {available_tests}")
 
         # Show test selection dialog
         test_dialog = TestSelectionDialog(self.gui.root, available_tests)
@@ -64,9 +86,11 @@ class TestWorkflow:
             # Remove unselected tests
             for sheet_name in list(new_wb.sheetnames):
                 if sheet_name not in selected_tests and sheet_name != "Sheet1":
+                    debug_print(f"DEBUG: Removing unselected sheet: {sheet_name}")
                     del new_wb[sheet_name]
 
             new_wb.save(file_path)
+            debug_print(f"DEBUG: Saved new file with selected tests: {file_path}")
 
             # Close parent window if provided
             if parent_window and parent_window.winfo_exists():
@@ -77,6 +101,9 @@ class TestWorkflow:
 
             return file_path
         except Exception as e:
+            debug_print(f"ERROR: Error creating file: {e}")
+            import traceback
+            traceback.print_exc()
             messagebox.showerror("Error", f"An error occurred while creating the file: {str(e)}")
             if os.path.exists(file_path):
                 try:

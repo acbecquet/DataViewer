@@ -363,8 +363,23 @@ class ReportGenerator:
             debug_print(f"DEBUG: Extracted sample names from header_data: {sample_names}")
 
         # Determine if this is User Test Simulation
-        is_user_test_simulation = sheet_name in ["User Test Simulation", "User Simulation Test"]
-        num_columns_per_sample = 8 if is_user_test_simulation else 12
+        if sheet_name in ["User Test Simulation", "User Simulation Test"]:
+            # Detect format from data structure
+            total_cols = numeric_data.shape[1]
+            potential_samples_8 = total_cols // 8
+            potential_samples_12 = total_cols // 12
+            remainder_8 = total_cols % 8
+            remainder_12 = total_cols % 12
+    
+            # Use format with better fit
+            if remainder_12 <= 5 and (remainder_8 > 5 or potential_samples_12 > 0):
+                num_columns_per_sample = 12
+                debug_print(f"DEBUG: Using 12-column format for User Test Simulation (new template)")
+            else:
+                num_columns_per_sample = 8
+                debug_print(f"DEBUG: Using 8-column format for User Test Simulation (old template)")
+        else:
+            num_columns_per_sample = 12
 
         for i, plot_option in enumerate(valid_plot_options):
             plot_image_path = f"{sheet_name}_{plot_option}_plot.png"

@@ -59,6 +59,73 @@ APP_BACKGROUND_COLOR = '#D3D3D3'
 BUTTON_COLOR = '#4169E1'
 PLOT_CHECKBOX_TITLE = "Click Checkbox to \nAdd/Remove Item \nFrom Plot"
 
+def detect_template_version(file_path):
+    """
+    Detect which template version a file uses based on sheet names and structure.
+    
+    Args:
+        file_path (str): Path to the Excel file
+        
+    Returns:
+        str: Either 'old' (Jan 2025) or 'new' (December 2025)
+    """
+    debug_print(f"DEBUG: Detecting template version for: {file_path}")
+    
+    try:
+        from openpyxl import load_workbook
+        wb = load_workbook(file_path, read_only=True)
+        sheet_names = wb.sheetnames
+        debug_print(f"DEBUG: Found sheet names: {sheet_names}")
+        
+        # New template indicators
+        new_template_indicators = [
+            'Long Puff Lifetime Test',
+            'Rapid Puff Lifetime Test',
+            'Temperature Cycling Test #1',
+            'Temperature Cycling Test #2'
+        ]
+        
+        # Check for new template sheets
+        new_indicator_count = sum(1 for indicator in new_template_indicators if indicator in sheet_names)
+        debug_print(f"DEBUG: New template indicators found: {new_indicator_count}")
+        
+        # If we find any new template sheets, it's the new template
+        if new_indicator_count > 0:
+            debug_print("DEBUG: Detected new template (December 2025)")
+            return 'new'
+        
+        # Check for User Test Simulation to determine format based on structure
+        if 'User Test Simulation' in sheet_names:
+            ws = wb['User Test Simulation']
+            # Check the structure to determine if it's 8 or 12 column format
+            # In new template, User Test Simulation has 12 columns per sample like other tests
+            # We can check this by looking at the header structure
+            
+            # Get first few cells of row 4 (header row is typically row 3, 0-indexed as row 2)
+            try:
+                # Check if we have standard 12-column indicators
+                # New template has more standardized columns
+                row_4_vals = [str(ws.cell(row=4, column=i).value or '') for i in range(1, 15)]
+                debug_print(f"DEBUG: User Test Simulation row 4 values: {row_4_vals[:10]}")
+                
+                # In the old template, column structure is different (8 columns)
+                # In new template, structure matches standard tests (12 columns)
+                # Check for presence of additional columns that indicate 12-column format
+                if any('Consistency' in str(val) or 'Average TPM' in str(val) for val in row_4_vals[8:]):
+                    debug_print("DEBUG: Detected 12-column User Test Simulation (new template)")
+                    return 'new'
+            except Exception as e:
+                debug_print(f"DEBUG: Error checking User Test Simulation structure: {e}")
+        
+        # Default to old template
+        debug_print("DEBUG: Detected old template (January 2025)")
+        return 'old'
+        
+    except Exception as e:
+        debug_print(f"ERROR: Error detecting template version: {e}")
+        # Default to old template on error
+        return 'old'
+
 def is_empty_sample(sample_data):
     """
     Check if a sample is empty based only on plotting data:
@@ -552,10 +619,10 @@ def get_plot_sheet_names():
         list: List of plot sheet names.
     """
     return [
-        "Quick Screening Test", "Lifetime Test", "Device Life Test", "Horizontal Puffing Test", "Extended Test", "Long Puff Test",
+        "Quick Screening Test", "Lifetime Test", "Device Life Test", "Horizontal Puffing Test", "Extended Test", "Long Puff Test", "Long Puff Lifetime Test", "Rapid Puff Lifetime Test",
         "Rapid Puff Test", "Intense Test", "Big Headspace Low T Test", "Big Headspace High T Test", "Big Headspace Serial Test",
         "Viscosity Compatibility", "Upside Down Test", "Big Headspace Pocket Test",
-        "Low Temperature Stability","Vacuum Test", "Negative Pressure Test", "Viscosity Compatibility", "User Test Simulation", "User Simulation Test","Various Oil Compatibility", "Sheet1"
+        "Low Temperature Stability","Vacuum Test", "Negative Pressure Test", "Viscosity Compatibility", "User Test Simulation", "User Simulation Test","Various Oil Compatibility", "Temperature Cycling Test #2", "Sheet1"
     ]
 
 def read_sheet_with_values(file_path: str, sheet_name: Optional[str] = None):

@@ -118,8 +118,19 @@ class CoreFileOperations:
                 legacy_sheetnames = legacy_wb.sheetnames
                 debug_print(f"DEBUG: Legacy file sheets: {legacy_sheetnames}")
 
-                template_path_default = os.path.join(os.path.abspath("."), "resources",
+                new_template_path_default = os.path.join(os.path.abspath("."), "resources",
+                                         "Standardized Test Template - December 2025.xlsx")
+                old_template_path_default = os.path.join(os.path.abspath("."), "resources",
                                          "Standardized Test Template - LATEST VERSION - 2025 Jan.xlsx")
+
+                if os.path.exists(new_template_path_default):
+                    template_path_default = new_template_path_default
+                    debug_print("DEBUG: Using new template (December 2025)")
+                elif os.path.exists(old_template_path_default):
+                    template_path_default = old_template_path_default
+                    debug_print("DEBUG: Using old template (January 2025)")
+                else:
+                    raise FileNotFoundError("No template file found")
 
                 if not os.path.exists(template_path_default):
                     raise FileNotFoundError(f"Template file not found: {template_path_default}")

@@ -464,8 +464,20 @@ def convert_legacy_file_using_template(legacy_file_path: str, template_path: str
     """
     # Determine the template path.
     if template_path is None:
-        template_path = os.path.join(os.path.abspath("."), "resources",
-                                        "Standardized Test Template - LATEST VERSION - 2025 Jan.xlsx")
+        # Try new template first, fall back to old
+        new_template_path = os.path.join(os.path.abspath("."), "resources",
+                                            "Standardized Test Template - December 2025.xlsx")
+        old_template_path = os.path.join(os.path.abspath("."), "resources",
+                                            "Standardized Test Template - LATEST VERSION - 2025 Jan.xlsx")
+    
+        if os.path.exists(new_template_path):
+            template_path = new_template_path
+            print("DEBUG: Using new template for legacy conversion")
+        elif os.path.exists(old_template_path):
+            template_path = old_template_path
+            print("DEBUG: Using old template for legacy conversion")
+        else:
+            raise FileNotFoundError("No template file found")
 
     template_sheet = "Intense Test"
     wb = load_workbook(template_path)
@@ -602,8 +614,20 @@ def convert_legacy_standards_using_template(legacy_file_path: str, template_path
     from openpyxl.cell.cell import MergedCell
 
     if template_path is None:
-        template_path = os.path.join(os.path.abspath("."), "resources",
-                                    "Standardized Test Template - LATEST VERSION - 2025 Jan.xlsx")
+        # Try new template first, fall back to old
+        new_template_path = os.path.join(os.path.abspath("."), "resources",
+                                            "Standardized Test Template - December 2025.xlsx")
+        old_template_path = os.path.join(os.path.abspath("."), "resources",
+                                            "Standardized Test Template - LATEST VERSION - 2025 Jan.xlsx")
+    
+        if os.path.exists(new_template_path):
+            template_path = new_template_path
+            print("DEBUG: Using new template for legacy conversion")
+        elif os.path.exists(old_template_path):
+            template_path = old_template_path
+            print("DEBUG: Using old template for legacy conversion")
+        else:
+            raise FileNotFoundError("No template file found")
 
     wb_template = load_workbook(template_path, read_only=False)
     legacy_wb = load_workbook(legacy_file_path, read_only=False)
@@ -964,8 +988,20 @@ def convert_legacy_file_using_template_v2(legacy_file_path: str, template_path: 
 
     # Determine the template path
     if template_path is None:
-        template_path = os.path.join(os.path.abspath("."), "resources",
-                                        "Standardized Test Template - LATEST VERSION - 2025 Jan.xlsx")
+        # Try new template first, fall back to old
+        new_template_path = os.path.join(os.path.abspath("."), "resources",
+                                            "Standardized Test Template - December 2025.xlsx")
+        old_template_path = os.path.join(os.path.abspath("."), "resources",
+                                            "Standardized Test Template - LATEST VERSION - 2025 Jan.xlsx")
+    
+        if os.path.exists(new_template_path):
+            template_path = new_template_path
+            print("DEBUG: Using new template for legacy conversion")
+        elif os.path.exists(old_template_path):
+            template_path = old_template_path
+            print("DEBUG: Using old template for legacy conversion")
+        else:
+            raise FileNotFoundError("No template file found")
 
     template_sheet = "Intense Test"
     wb = load_workbook(template_path)
@@ -1108,8 +1144,20 @@ def convert_cart_format_to_template(legacy_file_path: str, template_path: str = 
 
     # Determine template path
     if template_path is None:
-        template_path = os.path.join(os.path.abspath("."), "resources",
-                                        "Standardized Test Template - LATEST VERSION - 2025 Jan.xlsx")
+        # Try new template first, fall back to old
+        new_template_path = os.path.join(os.path.abspath("."), "resources",
+                                            "Standardized Test Template - December 2025.xlsx")
+        old_template_path = os.path.join(os.path.abspath("."), "resources",
+                                            "Standardized Test Template - LATEST VERSION - 2025 Jan.xlsx")
+    
+        if os.path.exists(new_template_path):
+            template_path = new_template_path
+            print("DEBUG: Using new template for legacy conversion")
+        elif os.path.exists(old_template_path):
+            template_path = old_template_path
+            print("DEBUG: Using old template for legacy conversion")
+        else:
+            raise FileNotFoundError("No template file found")
 
     template_sheet = "Intense Test"
     wb = load_workbook(template_path)

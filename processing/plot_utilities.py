@@ -358,12 +358,6 @@ def plot_all_samples(full_sample_data: pd.DataFrame, plot_type: str, num_columns
         print(f"ERROR: Could not convert num_columns_per_sample to int: {e}")
         raise ValueError(f"num_columns_per_sample must be convertible to int, got: {num_columns_per_sample} (type: {type(num_columns_per_sample)})")
 
-
-    # Check if this is User Test Simulation (8 columns per sample)
-    if num_columns_per_sample == 8:
-        debug_print("DEBUG: Detected User Test Simulation - using split plotting")
-        return plot_user_test_simulation_samples(full_sample_data, num_columns_per_sample, plot_type, sample_names)
-
     # Original logic for standard tests (12 columns per sample)
     num_samples = full_sample_data.shape[1] // num_columns_per_sample
     full_sample_data = full_sample_data.replace(0, np.nan)
@@ -407,8 +401,22 @@ def plot_all_samples(full_sample_data: pd.DataFrame, plot_type: str, num_columns
                     sample_name = sample_names[i]
                     debug_print(f"DEBUG: Using provided sample name: '{sample_name}'")
                 else:
-                    sample_name = sample_data.columns[5]
-                    debug_print(f"DEBUG: Using extracted sample name: '{sample_name}'")
+                    # Extract sample name from column 5
+                    if len(sample_data.columns) > 5:
+                        sample_name_candidate = sample_data.columns[5]
+            
+                        # Check if valid: not empty, not NaN, and doesn't start with 'Unnamed'
+                        if (pd.notna(sample_name_candidate) and 
+                            str(sample_name_candidate).strip() and 
+                            not str(sample_name_candidate).lower().startswith('unnamed')):
+                            sample_name = str(sample_name_candidate).strip()
+                            debug_print(f"DEBUG: Using extracted sample name: '{sample_name}'")
+                        else:
+                            sample_name = f"Sample {i+1}"
+                            debug_print(f"DEBUG: Using default sample name: '{sample_name}'")
+                    else:
+                        sample_name = f"Sample {i+1}"
+                        debug_print(f"DEBUG: Using default sample name (column index out of range): '{sample_name}'")
 
                 ax.plot(x_data, y_data, marker='o', label=sample_name)
                 extracted_sample_names.append(sample_name)

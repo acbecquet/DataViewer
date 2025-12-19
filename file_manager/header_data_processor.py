@@ -122,11 +122,6 @@ class HeaderDataProcessor:
 
                 # Extract sample-specific data for each sample - each sample gets its own values
                 for i in range(sample_count):
-                    # Determine column offset based on test type
-                    if selected_test in ["User Test Simulation", "User Simulation Test"]:
-                        col_offset = 1 + (i * 8)  # User simulation: 8 columns per sample
-                    else:
-                        col_offset = 5 + (i * 12)  # Standard: 12 columns per sample, starting after 5 header columns
 
                     sample_data = {
                         'id': f'Sample {i+1}',
@@ -817,12 +812,8 @@ class HeaderDataProcessor:
         try:
             total_columns = len(sheet_data.columns)
             debug_print(f"DEBUG: Total columns in data: {total_columns}")
-
-            # Determine columns per sample based on test type
-            if test_name in ["User Test Simulation", "User Simulation Test"]:
-                columns_per_sample = 8  # User simulation format
-            else:
-                columns_per_sample = 12  # Standard format
+                
+            columns_per_sample = 12  # Standard format
 
             debug_print(f"DEBUG: Using {columns_per_sample} columns per sample for test type")
 

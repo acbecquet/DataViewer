@@ -325,11 +325,13 @@ def updated_extracted_data_function_with_raw_data(sample_data, raw_data, sample_
             sample_name_candidate = sample_data.columns[5]
             if pd.notna(sample_name_candidate):
                 sample_name_str = str(sample_name_candidate).strip()
-                if sample_name_str and sample_name_str.lower() not in ['nan', 'none', '', 'unnamed: 5']:
+                if (sample_name_str and 
+                    sample_name_str.lower() not in ['nan', 'none', ''] and 
+                    not sample_name_str.lower().startswith('unnamed')):
                     sample_name = sample_name_str
                     print(f"DEBUG: Extracted sample name from columns[5]: '{sample_name}'")
                 else:
-                    print(f"DEBUG: Sample name at columns[5] was invalid: '{sample_name_str}', using default")
+                    print(f"DEBUG: Sample name at columns[5] was invalid: '{sample_name_str}', using default '{sample_name}'")
             else:
                 print(f"DEBUG: Sample name at columns[5] was NaN, using default")
         else:
@@ -378,7 +380,7 @@ def updated_extracted_data_function_with_raw_data(sample_data, raw_data, sample_
         power = round_values(sample_data.iloc[0, 5])
         voltage_resistance_power = f"{voltage} V, {resistance} ohm, {power} W"
 
-    # NEW: Calculate the three missing fields
+    # Calculate the three missing fields
     initial_oil_mass = extract_initial_oil_mass(sample_data)
     usage_efficiency = calculate_usage_efficiency_for_sample(sample_data)
     normalized_tpm = calculate_normalized_tpm_for_sample(sample_data, tpm_data)
